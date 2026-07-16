@@ -134,6 +134,14 @@ designs away from:
    this class of problem by construction — one of the reasons "web UI" isn't just a portability choice
    here, it's also a performance one.
 
+### Development environment
+Development happens inside a Podman-backed VS Code devcontainer (`.devcontainer/`), not directly on the
+host. The host machine for this project is Bazzite, an immutable/atomic OS not meant for ad hoc package
+installs — `pip install --break-system-packages` or similar host mutations are avoided by construction,
+not by discipline. The devcontainer defines the actual toolchain (Python, `uv`); reopening the workspace
+in it relocates the whole VS Code extension host — including agent sessions — into the container, so this
+isn't just a CI convenience, it's how day-to-day (and agent-driven) development happens here.
+
 ### Testing strategy
 - `legacy/Chummer.Tests/TestFiles/*.chum5` (34 real characters) used as golden-output regression fixtures:
   build the same character (metatype/priorities/qualities/skills) through the new engine, diff computed

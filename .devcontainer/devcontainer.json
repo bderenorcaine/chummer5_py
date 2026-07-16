@@ -1,0 +1,17 @@
+{
+  "name": "chummer5-python",
+  "build": {
+    "dockerfile": "Containerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspace",
+  "postCreateCommand": "uv sync",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff"
+      ]
+    }
+  }
+}
