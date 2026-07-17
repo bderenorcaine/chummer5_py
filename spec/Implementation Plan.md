@@ -183,7 +183,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Depends on: WP10.
   Acceptance: round-trip tests (build → save → load → equal).
 
-- [ ] **WP12 — Legacy `.chum5` import.**
+- [x] **WP12 — Legacy `.chum5` import.**
   Goal: bring a real legacy character into the new engine, for MVP-covered content only.
   Deliverables: extends WP4's parser into a real import path for mundane, priority-built,
   MVP-feature-only legacy saves.

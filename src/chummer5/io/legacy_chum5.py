@@ -119,6 +119,10 @@ class LegacyCharacter:
     qualities: tuple[LegacyQuality, ...]
     contacts: tuple[LegacyContact, ...]
     contact_points_budget: int  # <contactpoints>: cached CHA*3 free-contact-point budget (WP9)
+    has_cyberware: bool  # <cyberwares> has any children (WP12) -- Cyberware *and* Bioware entries
+    # both live under this one wrapper element (`<improvementsource>` distinguishes them, not the
+    # element name), so a single presence flag covers both without needing to parse individual
+    # entries MVP has no use for otherwise. See spec/worklogs/WP12.md.
     karma_remaining: int
     build_karma: int
     nuyen_remaining: float
@@ -229,6 +233,10 @@ def _parse_contacts(elem: ET.Element | None) -> tuple[LegacyContact, ...]:
     return tuple(_parse_contact(c) for c in elem.findall("contact"))
 
 
+def _has_children(elem: ET.Element | None) -> bool:
+    return elem is not None and len(elem) > 0
+
+
 def _parse_priorities(root: ET.Element) -> PrioritySelections:
     # <priorityskills> appears twice at the same level with different shapes: a scalar
     # "<letter>,<n>" value (the Skills category, like its four siblings) and a list wrapper
@@ -260,8 +268,10 @@ def load_chum5(path: Path) -> LegacyCharacter:
 
     Deliberately excludes knowledge skills (out of MVP scope per WP3's precedent). Contacts (WP9)
     are now included: every `<contact>` entry plus the character-level `<contactpoints>` cached
-    free-budget value (see `spec/worklogs/WP9.md`). Cyberware/vehicles/gear/spells/magic/matrix/etc.
-    remain untouched — this parser only extracts what WP6-WP10's engine needs to validate against.
+    free-budget value (see `spec/worklogs/WP9.md`). Cyberware/bioware presence is now flagged (WP12,
+    `has_cyberware`) since it's a real blocking condition for import -- see `spec/worklogs/WP12.md`.
+    Vehicles/gear/spells/magic/matrix/etc. remain untouched — this parser only extracts what
+    WP6-WP12's engine and import path need to validate against.
     """
     root = ET.parse(path).getroot()
     newskills_elem = root.find("newskills")
@@ -280,6 +290,7 @@ def load_chum5(path: Path) -> LegacyCharacter:
         qualities=_parse_qualities(root.find("qualities")),
         contacts=_parse_contacts(root.find("contacts")),
         contact_points_budget=int(root.findtext("contactpoints", "0")),
+        has_cyberware=_has_children(root.find("cyberwares")),
         karma_remaining=int(root.findtext("karma", "0")),
         build_karma=int(root.findtext("buildkarma", "0")),
         nuyen_remaining=float(root.findtext("nuyen", "0")),

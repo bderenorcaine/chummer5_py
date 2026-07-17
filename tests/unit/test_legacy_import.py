@@ -1,0 +1,183 @@
+"""Synthetic tests for `chummer5.io.legacy_import`'s blocking-reason checks and the
+excluded-vs-blocking split for qualities/skills -- proven against hand-built `LegacyCharacter`s
+before any real fixture touches it, the same "prove the mechanism in isolation first" pattern WP5
+used for the Improvement engine. The real end-to-end import path (against `Yeti-#ffffff2.chum5`) is
+covered in `tests/integration/test_legacy_import.py`.
+"""
+
+from __future__ import annotations
+
+from types import MappingProxyType
+
+import pytest
+
+from chummer5.data.metatypes import load_metatypes
+from chummer5.data.priorities import load_priorities
+from chummer5.data.qualities import BonusSupport, load_qualities
+from chummer5.data.skills import load_skills
+from chummer5.io.legacy_chum5 import LegacyCharacter, LegacyQuality, LegacySkill, PrioritySelections
+from chummer5.io.legacy_import import (
+    UnsupportedLegacyCharacterError,
+    import_legacy_character,
+)
+
+METATYPES = load_metatypes()
+PRIORITIES = load_priorities()
+SKILLS = load_skills()
+QUALITIES = load_qualities()
+
+
+def _priorities(
+    heritage: str = "D", attributes: str = "A", skills: str = "C", resources: str = "B"
+) -> PrioritySelections:
+    return PrioritySelections(
+        heritage=f"{heritage},1",
+        attributes=f"{attributes},1",
+        talent="E,0",
+        skills=f"{skills},1",
+        resources=f"{resources},1",
+        talent_codename="Mundane",
+        talent_bonus_skills=(),
+    )
+
+
+def _legacy_character(**overrides: object) -> LegacyCharacter:
+    defaults: dict[str, object] = dict(
+        metatype="Human",
+        metatype_category="Metahuman",
+        metavariant=None,
+        build_method="Priority",
+        game_option="Standard",
+        magic_enabled=False,
+        resonance_enabled=False,
+        priorities=_priorities(),
+        attributes=MappingProxyType({}),
+        skills=(),
+        skill_groups=(),
+        qualities=(),
+        contacts=(),
+        contact_points_budget=0,
+        has_cyberware=False,
+        karma_remaining=0,
+        build_karma=25,
+        nuyen_remaining=0.0,
+        starting_nuyen=6000,
+    )
+    defaults.update(overrides)
+    return LegacyCharacter(**defaults)  # type: ignore[arg-type]
+
+
+def _import(legacy: LegacyCharacter) -> None:
+    import_legacy_character(
+        legacy, metatypes=METATYPES, priorities=PRIORITIES, skills=SKILLS, qualities=QUALITIES
+    )
+
+
+def test_valid_mundane_priority_character_imports_without_error() -> None:
+    _import(_legacy_character())  # no exception
+
+
+def test_rejects_sumtoten_build_method() -> None:
+    with pytest.raises(UnsupportedLegacyCharacterError, match="not Priority-built"):
+        _import(_legacy_character(build_method="SumtoTen"))
+
+
+def test_rejects_non_standard_gameplay_option() -> None:
+    with pytest.raises(UnsupportedLegacyCharacterError, match="not Standard"):
+        _import(_legacy_character(game_option="Prime Runner"))
+
+
+def test_rejects_magic_enabled() -> None:
+    with pytest.raises(UnsupportedLegacyCharacterError, match="Magic is enabled"):
+        _import(_legacy_character(magic_enabled=True))
+
+
+def test_rejects_cyberware() -> None:
+    with pytest.raises(UnsupportedLegacyCharacterError, match="cyberware/bioware"):
+        _import(_legacy_character(has_cyberware=True))
+
+
+def test_rejects_metavariant() -> None:
+    with pytest.raises(UnsupportedLegacyCharacterError, match="metavariant"):
+        _import(_legacy_character(metavariant="Oni"))
+
+
+def test_does_not_reject_resonance_enabled() -> None:
+    """Resonance/Technomancer content is deliberately not blocking -- see module docstring for why
+    (Yeti-#ffffff2.chum5, this project's own Priority-build golden fixture, is itself a
+    Technomancer).
+    """
+    _import(_legacy_character(resonance_enabled=True))  # no exception
+
+
+def test_itemizes_every_blocking_reason_in_one_pass() -> None:
+    legacy = _legacy_character(build_method="SumtoTen", magic_enabled=True, has_cyberware=True)
+    with pytest.raises(UnsupportedLegacyCharacterError) as exc_info:
+        _import(legacy)
+    assert len(exc_info.value.reasons) == 3
+    assert any("Priority-built" in r for r in exc_info.value.reasons)
+    assert any("Magic is enabled" in r for r in exc_info.value.reasons)
+    assert any("cyberware/bioware" in r for r in exc_info.value.reasons)
+
+
+def test_unsupported_quality_is_dropped_and_reported_not_fatal() -> None:
+    unsupported = next(q for q in QUALITIES if q.bonus_support == BonusSupport.NOT_YET_SUPPORTED)
+    legacy_quality = LegacyQuality(
+        id=unsupported.id,
+        name=unsupported.name,
+        extra="",
+        karma=unsupported.karma,
+        quality_type=unsupported.category,
+        source=unsupported.source,
+    )
+    result = import_legacy_character(
+        _legacy_character(qualities=(legacy_quality,)),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+    )
+    assert result.dropped_qualities == (unsupported.name,)
+    assert result.save.quality_ids == ()
+
+
+def test_mvp_offered_quality_is_imported() -> None:
+    catlike = next(q for q in QUALITIES if q.name == "Catlike")
+    legacy_quality = LegacyQuality(
+        id=catlike.id,
+        name=catlike.name,
+        extra="",
+        karma=catlike.karma,
+        quality_type=catlike.category,
+        source=catlike.source,
+    )
+    result = import_legacy_character(
+        _legacy_character(qualities=(legacy_quality,)),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+    )
+    assert result.dropped_qualities == ()
+    assert result.save.quality_ids == (catlike.id,)
+    assert catlike.id in {q.id for q in result.built.quality_selection.qualities}
+
+
+def test_unresolvable_skill_suid_is_dropped_and_reported_not_fatal() -> None:
+    legacy_skill = LegacySkill(
+        suid="not-a-real-suid",
+        category="Combat Active",
+        base=3,
+        karma=0,
+        bought_with_karma=False,
+        specializations=(),
+    )
+    result = import_legacy_character(
+        _legacy_character(skills=(legacy_skill,)),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+    )
+    assert result.dropped_skills == ("not-a-real-suid",)
+    assert result.save.skill_points == {}
