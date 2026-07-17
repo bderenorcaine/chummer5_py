@@ -144,7 +144,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Acceptance: tests against WP4's mundane fixture set (attribute totals) and specifically against
   `Yeti-#ffffff2.chum5` (allocation budget/spend logic).
 
-- [ ] **WP7 — Skill allocation & dice pools.**
+- [x] **WP7 — Skill allocation & dice pools.**
   Goal: active skills, groups, specializations, and the dice pool formula.
   Deliverables: `src/chummer5/engine/skills.py` — Skills-priority-letter → point pools; dice pool =
   attribute + rating (+2 specialization).

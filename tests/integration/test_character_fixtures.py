@@ -26,6 +26,7 @@ from tests.fixtures.mundane_chum5 import (
 
 from chummer5.data.metatypes import Metatype, load_metatypes
 from chummer5.data.priorities import load_priorities
+from chummer5.data.skills import load_skills
 from chummer5.engine.character import (
     ALLOCATABLE_ATTRIBUTES,
     Character,
@@ -34,10 +35,12 @@ from chummer5.engine.character import (
     sr5_metatypes,
 )
 from chummer5.engine.improvements import ImprovementIndex
+from chummer5.engine.skills import create_skill_allocation, skill_rating
 from chummer5.io.legacy_chum5 import load_chum5, priority_letter
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
+SKILLS = load_skills()
 
 
 def test_yeti_priority_build_matches_engine_end_to_end() -> None:
@@ -69,6 +72,79 @@ def test_yeti_priority_build_matches_engine_end_to_end() -> None:
 
     for code in ALLOCATABLE_ATTRIBUTES:
         assert character.attribute_value(code) == legacy.attributes[code].total_value, code
+
+
+def test_yeti_skill_allocation_matches_engine_end_to_end() -> None:
+    """Validates WP7's priority-allocation path (budgets, group-vs-individual rating) against the
+    same fixture WP6 used for attributes. There's no stored "computed dice pool" in `.chum5` to
+    cross-check the dice pool formula itself against -- see `spec/worklogs/WP7.md` -- so this test
+    covers allocation/rating only; the dice pool formula is covered by synthetic tests in
+    `tests/unit/test_skill_allocation.py`, mirroring WP5's precedent for the Improvement engine.
+    """
+    legacy = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    skills_letter = priority_letter(legacy.priorities.skills)
+    assert skills_letter == "C"
+
+    # Only skills.xml skill ids/groups are cross-referenced -- <newskills> also carries a handful of
+    # Resonance/knowledge-adjacent entries whose <suid> may not resolve to an in-scope active skill;
+    # none of Yeti's nonzero-base entries fall in that gap (checked below via `checked_nonzero`).
+    skills_by_id = {s.id: s for s in SKILLS}
+    bought_groups = {g.name: g.base for g in legacy.skill_groups if g.base > 0}
+
+    skill_points: dict[str, int] = {}
+    checked_nonzero = 0
+    for legacy_skill in legacy.skills:
+        if legacy_skill.base <= 0:
+            continue
+        skill = skills_by_id.get(legacy_skill.suid)
+        if skill is None or (skill.skill_group is not None and skill.skill_group in bought_groups):
+            # Skipped deliberately: a skill whose group is bought never carries its own base points
+            # in the legacy data either (see module docstring) -- nothing to feed as skill_points.
+            continue
+        skill_points[skill.id] = legacy_skill.base
+        checked_nonzero += 1
+
+    assert checked_nonzero > 0  # sanity: the fixture actually exercises this path
+
+    allocation = create_skill_allocation(
+        letter=skills_letter,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        skill_points=skill_points,
+        group_points=bought_groups,
+    )
+
+    budget = PRIORITIES.skills[skills_letter]
+    assert sum(allocation.skill_points.values()) <= budget.skills
+    assert sum(allocation.group_points.values()) == budget.skill_groups  # Yeti spends both exactly
+
+    heritage_letter = priority_letter(legacy.priorities.heritage)
+    attributes_letter = priority_letter(legacy.priorities.attributes)
+    heritage = PRIORITIES.heritage[heritage_letter]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    character = create_character(
+        metatype_choice=human_choice,
+        heritage_letter=heritage_letter,
+        attributes_letter=attributes_letter,
+        priorities=PRIORITIES,
+        attribute_points={
+            code: legacy.attributes[code].base + legacy.attributes[code].karma
+            for code in ALLOCATABLE_ATTRIBUTES
+        },
+    )
+
+    # A skill in a bought group (Firearms) picks up the group's rating, not its own (zero) base.
+    automatics = next(s for s in SKILLS if s.name == "Automatics")
+    assert automatics.skill_group == "Firearms"
+    assert skill_rating(character, allocation, automatics) == bought_groups["Firearms"]
+
+    # A skill with its own base points, in an unbought group (Cracking), uses its own points.
+    hacking = next(s for s in SKILLS if s.name == "Hacking")
+    assert hacking.skill_group == "Cracking"
+    assert "Cracking" not in bought_groups
+    assert skill_rating(character, allocation, hacking) == 2
 
 
 def test_cross_corpus_attribute_value_matches_when_unaugmented() -> None:
