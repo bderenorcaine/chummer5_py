@@ -72,7 +72,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 
 ### Phase B — Static rules data
 
-- [ ] **WP2 — Metatype & priority data loader.**
+- [x] **WP2 — Metatype & priority data loader.**
   Goal: load metatype and priority-table rules data as typed Python structures.
   Deliverables: `src/chummer5/data/metatypes.py` parsing `legacy/Chummer/data/metatypes.xml` (attribute
   min/max/aug per metatype + metavariants) into frozen dataclasses; `src/chummer5/data/priorities.py`
