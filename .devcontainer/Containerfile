@@ -1,8 +1,12 @@
 FROM python:3.12-slim
 
+# poppler-utils isn't an app dependency; it lets an AI agent render/extract text from the SR5
+# core rulebook PDF kept locally under spec/rulebooks/ (gitignored, not app code) as a rules
+# reference.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
         build-essential \
+        poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir uv
