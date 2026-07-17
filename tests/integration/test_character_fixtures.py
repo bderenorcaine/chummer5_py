@@ -35,9 +35,23 @@ from chummer5.engine.character import (
     metatype_choices,
     sr5_metatypes,
 )
+from chummer5.engine.derived import (
+    initiative_dice,
+    initiative_value,
+    mental_limit,
+    physical_condition_monitor,
+    physical_limit,
+    social_limit,
+    stun_condition_monitor,
+)
 from chummer5.engine.improvements import ImprovementIndex, ImprovementType
 from chummer5.engine.qualities import apply_quality_improvements, create_quality_selection
-from chummer5.engine.resources import Contact, create_contact_selection, starting_nuyen
+from chummer5.engine.resources import (
+    Contact,
+    create_contact_selection,
+    create_resources_selection,
+    starting_nuyen,
+)
 from chummer5.engine.skills import create_skill_allocation, skill_rating
 from chummer5.io.legacy_chum5 import load_chum5, priority_letter
 
@@ -287,6 +301,98 @@ def test_yeti_contacts_match_engine_end_to_end() -> None:
     assert selection.free_points == legacy.contact_points_budget
     assert selection.points_spent == 15
     assert selection.karma_cost == 0
+
+
+def test_yeti_full_character_regression_end_to_end() -> None:
+    """WP10's headless-MVP milestone test: build `Yeti-#ffffff2.chum5` through every engine module
+    (metatype/attributes, skills, contacts, resources, and WP10's own derived stats) in one pass,
+    diffing every field that has real legacy-computed ground truth to diff against.
+
+    Qualities are deliberately not part of this build: Yeti's own quality list (Technomancer,
+    Infirm, Impassive, Paranoia, Faceless, Data Anomaly -- see spec/worklogs/WP9.md) contains none
+    of WP8's 3 MVP-offered (`FLAT_BONUS`) qualities, so there is nothing constructible from it --
+    `test_blindfire_catlike_quality_matches_engine_end_to_end` above already covers the one real
+    fixture that does exercise a quality build.
+
+    The derived-stat formulas themselves (initiative, the three Limits, both condition monitors)
+    have no stored `.chum5` field to diff against (see `chummer5.engine.derived`'s module
+    docstring and `spec/worklogs/WP10.md`) -- they're checked here against hand-computed values
+    built directly from Yeti's own recorded, legacy-computed attribute totals (BOD 4, REA 2, STR 2,
+    CHA 5, INT 5, LOG 6, WIL 5), the same "real numbers, hand-verified arithmetic" standard used
+    everywhere else in this test module.
+    """
+    legacy = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    heritage_letter = priority_letter(legacy.priorities.heritage)
+    attributes_letter = priority_letter(legacy.priorities.attributes)
+    heritage = PRIORITIES.heritage[heritage_letter]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    character = create_character(
+        metatype_choice=human_choice,
+        heritage_letter=heritage_letter,
+        attributes_letter=attributes_letter,
+        priorities=PRIORITIES,
+        attribute_points={
+            code: legacy.attributes[code].base + legacy.attributes[code].karma
+            for code in ALLOCATABLE_ATTRIBUTES
+        },
+    )
+    for code in ALLOCATABLE_ATTRIBUTES:
+        assert character.attribute_value(code) == legacy.attributes[code].total_value, code
+
+    # Skills: same allocation build as test_yeti_skill_allocation_matches_engine_end_to_end above.
+    skills_letter = priority_letter(legacy.priorities.skills)
+    skills_by_id = {s.id: s for s in SKILLS}
+    bought_groups = {g.name: g.base for g in legacy.skill_groups if g.base > 0}
+    skill_points = {
+        skill.id: legacy_skill.base
+        for legacy_skill in legacy.skills
+        if legacy_skill.base > 0
+        for skill in [skills_by_id.get(legacy_skill.suid)]
+        if skill is not None
+        and not (skill.skill_group is not None and skill.skill_group in bought_groups)
+    }
+    allocation = create_skill_allocation(
+        letter=skills_letter,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        skill_points=skill_points,
+        group_points=bought_groups,
+    )
+    automatics = next(s for s in SKILLS if s.name == "Automatics")
+    assert skill_rating(character, allocation, automatics) == bought_groups["Firearms"]
+
+    # Contacts.
+    contacts = tuple(
+        Contact(name=c.name, connection=c.connection, loyalty=c.loyalty, free=c.free)
+        for c in legacy.contacts
+    )
+    contact_selection = create_contact_selection(character, contacts)
+    assert contact_selection.free_points == legacy.contact_points_budget
+    assert contact_selection.points_spent == 15
+    assert contact_selection.karma_cost == 0
+
+    # Starting resources -- Yeti's own gear purchases aren't reconstructable from the minimal
+    # starter-gear stub (see spec/worklogs/WP9.md), so only the nuyen budget itself is checked.
+    resources_letter = priority_letter(legacy.priorities.resources)
+    assert starting_nuyen(resources_letter, PRIORITIES) == legacy.starting_nuyen
+    resources_selection = create_resources_selection(resources_letter, PRIORITIES, gear_names=())
+    assert resources_selection.nuyen_budget == legacy.starting_nuyen
+
+    # Derived stats -- hand-computed from Yeti's own recorded attribute totals (see docstring).
+    assert (character.attribute_value("BOD"), character.attribute_value("REA")) == (4, 2)
+    assert (character.attribute_value("STR"), character.attribute_value("CHA")) == (2, 5)
+    assert (character.attribute_value("INT"), character.attribute_value("LOG")) == (5, 6)
+    assert character.attribute_value("WIL") == 5
+
+    assert initiative_value(character) == 7  # REA 2 + INT 5
+    assert initiative_dice(character) == 1
+    assert physical_limit(character) == 4  # ceil((2*2 + 4 + 2) / 3) = ceil(10/3)
+    assert mental_limit(character) == 8  # ceil((6*2 + 5 + 5) / 3) = ceil(22/3)
+    assert social_limit(character) == 7  # ceil((5*2 + 5 + 6) / 3) = ceil(21/3), Essence fixed at 6
+    assert physical_condition_monitor(character) == 10  # 8 + ceil(4/2)
+    assert stun_condition_monitor(character) == 11  # 8 + ceil(5/2)
 
 
 def test_starting_nuyen_matches_resources_priority_letter_via_engine() -> None:

@@ -167,7 +167,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Depends on: WP6.
   Acceptance: tests against fixtures for nuyen/contact math.
 
-- [ ] **WP10 — Derived stats + full end-to-end regression. (Headless MVP milestone)**
+- [x] **WP10 — Derived stats + full end-to-end regression. (Headless MVP milestone)**
   Goal: a complete, validated mundane priority-built character, computed headlessly end to end.
   Deliverables: `src/chummer5/engine/derived.py` — initiative, physical/mental/social limits, condition
   monitor boxes as pure functions of finalized attributes. Add the full-character regression test.

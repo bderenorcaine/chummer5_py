@@ -32,13 +32,31 @@ from enum import Enum, auto
 class ImprovementType(Enum):
     """What kind of thing an Improvement targets.
 
-    Only the two kinds the Project Overview names as composition examples (`attribute.Value`,
-    `skill.Pool`) are modeled; more are added when a later WP's derived stat actually needs one
-    (e.g. initiative, limits in WP10).
+    `ATTRIBUTE`/`SKILL` are the two kinds the Project Overview names as composition examples
+    (`attribute.Value`, `skill.Pool`); the other 7 were added in WP10 for `chummer5.engine.derived`
+    (initiative, the three Limits, the two condition monitors), per the Project Overview's own
+    "more are added when a later WP's derived stat actually needs one (e.g. initiative, limits in
+    WP10)" note. Each is a character-wide total, not per-attribute/per-skill like `ATTRIBUTE`/
+    `SKILL` — legacy's own `ImprovementManager.ValueOf` calls for these
+    (`Improvement.ImprovementType.PhysicalLimit` etc.) take no target parameter either, since
+    there's only ever one Physical Limit per character. `ImprovementIndex` still requires a
+    `target` key per its `(type, target)` index shape, so `chummer5.engine.derived` resolves these
+    against a fixed sentinel target (`""`) rather than adding a second, untargeted resolution path
+    to the index for a distinction nothing in MVP scope currently needs. No MVP-supported quality
+    (WP3/WP8's `FLAT_BONUS` classifier only recognizes flat attribute/skill bonuses) or metatype
+    bonus produces any of these 7 yet -- threaded through for the same reason WP6 threaded
+    `Character.improvements` through before any metatype bonus existed to use it.
     """
 
     ATTRIBUTE = auto()
     SKILL = auto()
+    INITIATIVE = auto()
+    INITIATIVE_DICE = auto()
+    PHYSICAL_LIMIT = auto()
+    MENTAL_LIMIT = auto()
+    SOCIAL_LIMIT = auto()
+    PHYSICAL_CM = auto()
+    STUN_CM = auto()
 
 
 class ImprovementSource(Enum):
