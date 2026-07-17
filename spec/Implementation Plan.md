@@ -131,7 +131,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Acceptance: unit tests using **synthetic** improvements only (no XML involved) — proves the resolution
   math before any real rules content touches it, including a stacking/dedup case.
 
-- [ ] **WP6 — Metatype selection & attribute allocation.**
+- [x] **WP6 — Metatype selection & attribute allocation.**
   Goal: first real slice of chargen — pick a metatype, spend attribute points.
   Deliverables: `src/chummer5/engine/character.py` (`Character` aggregate, mundane fields only);
   metatype selection from a Heritage priority letter (via WP2 data), restricted to `metatypes.xml`
