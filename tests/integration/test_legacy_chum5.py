@@ -1,0 +1,151 @@
+"""Round-trips known raw fields from the 11 curated mundane `.chum5` fixtures (WP4).
+
+Every hand-checked value below was independently cross-checked against the raw XML with a bare
+`xml.etree.ElementTree` read, not derived from `chummer5.io.legacy_chum5` itself — see
+`tests/fixtures/README.md` for the corpus and `spec/worklogs/WP4.md` for the reconnaissance this is
+built on.
+"""
+
+from __future__ import annotations
+
+import pytest
+from tests.fixtures.mundane_chum5 import (
+    MUNDANE_FIXTURES,
+    PRIORITY_BUILD_FIXTURE,
+    mundane_fixture_path,
+)
+
+from chummer5.data.priorities import load_priorities
+from chummer5.io.legacy_chum5 import load_chum5, priority_letter
+
+# name -> (metatype, karma_remaining, build_karma, nuyen_remaining, starting_nuyen, quality_count)
+# Hand-checked directly against each file's <karma>/<buildkarma>/<nuyen>/<startingnuyen>/<qualities>
+# elements.
+_KNOWN_RAW_FIELDS = {
+    "BLUE.chum5": ("Ork", 0, 25, 756.333333333333, 450000, 6),
+    "Barrett.chum5": ("Human", 3, 25, 617.50, 450000, 10),
+    "Bastion.chum5": ("Human", 0, 25, 0.00, 450000, 11),
+    "Blindfire.chum5": ("Elf", 3, 25, 300.00, 450000, 10),
+    "Fuzzy-chargen.chum5": ("Human", 0, 25, 610.00, 275000, 11),
+    "Gentle Earthquake.chum5": ("Troll", 1, 25, 90.0000, 140000, 11),
+    "Monomax (approved) 3.chum5": ("Troll", 3, 25, 64.00, 140000, 11),
+    "Rez0luti0n2.0.chum5": ("Dwarf", 0, 25, 400.00, 6000, 12),
+    "SCSi.chum5": ("Human", 0, 25, 55.00, 450000, 6),
+    "Serpent.chum5": ("Human", 0, 25, 15420.0, 275000, 8),
+    "Yeti-#ffffff2.chum5": ("Human", 1, 25, 1145.0, 6000, 6),
+}
+
+
+def test_known_raw_fields_registry_covers_every_curated_fixture() -> None:
+    assert set(_KNOWN_RAW_FIELDS) == set(MUNDANE_FIXTURES)
+
+
+@pytest.mark.parametrize("name", MUNDANE_FIXTURES)
+def test_round_trips_known_raw_fields(name: str) -> None:
+    metatype, karma_remaining, build_karma, nuyen_remaining, starting_nuyen, quality_count = (
+        _KNOWN_RAW_FIELDS[name]
+    )
+    character = load_chum5(mundane_fixture_path(name))
+
+    assert character.metatype == metatype
+    assert character.metatype_category == "Metahuman"  # every mundane fixture, per WP2's note
+    assert character.magic_enabled is False  # the definition of "mundane" used throughout this WP
+    assert character.karma_remaining == karma_remaining
+    assert character.build_karma == build_karma
+    assert character.nuyen_remaining == pytest.approx(nuyen_remaining)
+    assert character.starting_nuyen == starting_nuyen
+    assert len(character.qualities) == quality_count
+
+
+@pytest.mark.parametrize("name", MUNDANE_FIXTURES)
+def test_starting_nuyen_matches_resources_priority_letter(name: str) -> None:
+    # Cross-checks the parser against WP2's independently-loaded priorities.xml data: whatever
+    # Resources priority letter a fixture's raw <priorityresources> encodes should grant exactly
+    # the nuyen the fixture's own <startingnuyen> records, for both build methods in the corpus.
+    priorities = load_priorities()
+    character = load_chum5(mundane_fixture_path(name))
+    letter = priority_letter(character.priorities.resources)
+    assert priorities.resources[letter].nuyen == character.starting_nuyen
+
+
+def test_yeti_is_the_priority_build_fixture() -> None:
+    assert PRIORITY_BUILD_FIXTURE == "Yeti-#ffffff2.chum5"
+    character = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    assert character.build_method == "Priority"
+
+
+def test_yeti_priority_selections() -> None:
+    # Hand-checked against Yeti-#ffffff2.chum5's raw <priority*> elements. Yeti is a Technomancer
+    # (<resenabled>True</resenabled>) despite being "mundane" in this project's magenabled-only
+    # sense — see tests/fixtures/README.md.
+    character = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    priorities = character.priorities
+
+    assert priority_letter(priorities.heritage) == "D"
+    assert priority_letter(priorities.attributes) == "A"
+    assert priority_letter(priorities.talent) == "B"
+    assert priority_letter(priorities.skills) == "C"
+    assert priority_letter(priorities.resources) == "E"
+    assert priorities.talent_codename == "Technomancer"
+    assert priorities.talent_bonus_skills == ("Compiling", "Hacking", "Cybercombat")
+
+
+def test_yeti_attributes() -> None:
+    # Hand-checked against Yeti-#ffffff2.chum5's <attributes><attribute><name>BOD</name>...
+    character = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    bod = character.attributes["BOD"]
+    assert bod.metatype_min == 1
+    assert bod.metatype_max == 6
+    assert bod.metatype_aug_max == 10
+    assert bod.base == 3
+    assert bod.karma == 0
+    assert bod.total_value == 4
+    # No priority-spendable Initiative attribute in a saved character, matching WP2's metatypes.xml
+    # finding (INI is derived, not priority-bought).
+    assert "INI" not in character.attributes
+
+
+def test_yeti_technomancer_quality() -> None:
+    # Hand-checked against Yeti-#ffffff2.chum5's <qualities><quality><name>Technomancer</name>.
+    character = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    technomancer = next(q for q in character.qualities if q.name == "Technomancer")
+    assert technomancer.karma == 15
+    assert technomancer.quality_type == "Positive"
+    assert technomancer.source == "SR5"
+
+
+def test_yeti_skill_groups_include_stealth_and_firearms() -> None:
+    # Hand-checked against Yeti-#ffffff2.chum5's <newskills><groups>.
+    character = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    groups_by_name = {g.name: g for g in character.skill_groups}
+    assert groups_by_name["Stealth"].base == 1
+    assert groups_by_name["Tasking"].base == 0
+    assert groups_by_name["Firearms"].base == 1
+
+
+def test_barrett_attributes_and_qualities() -> None:
+    # Hand-checked against Barrett.chum5's <attributes> and <qualities> (SumtoTen build method,
+    # for coverage of a fixture other than the Priority-built Yeti).
+    character = load_chum5(mundane_fixture_path("Barrett.chum5"))
+
+    bod = character.attributes["BOD"]
+    assert bod.metatype_min == 1
+    assert bod.metatype_max == 6
+    assert bod.base == 4
+    assert bod.karma == 0
+    assert bod.total_value == 5
+
+    qualities_by_name = {q.name: q for q in character.qualities}
+    assert qualities_by_name["Prototype Transhuman"].karma == 10
+    assert qualities_by_name["Prototype Transhuman"].quality_type == "Positive"
+    assert qualities_by_name["SINner (Corporate)"].karma == -25
+    assert qualities_by_name["SINner (Corporate)"].quality_type == "Negative"
+
+
+def test_no_knowledge_skills_are_parsed() -> None:
+    # WP3 precedent: knowledge skills are out of MVP scope, so <newskills><knoskills> is never
+    # touched. Yeti's file has 5 knowledge skills (English Language, Japanese Language, ...); none
+    # should leak into `.skills`.
+    character = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    assert len(character.skills) == 62
+    assert all(skill.category != "Language" for skill in character.skills)

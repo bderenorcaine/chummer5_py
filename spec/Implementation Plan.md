@@ -109,7 +109,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 
 ### Phase C — Regression fixture harness
 
-- [ ] **WP4 — Legacy `.chum5` fixture parser & golden corpus.**
+- [x] **WP4 — Legacy `.chum5` fixture parser & golden corpus.**
   Goal: turn legacy save files into comparable ground truth.
   Deliverables: `src/chummer5/io/legacy_chum5.py` (or `tests/fixtures/` helper) extracting MVP-relevant
   fields (metatype, priority selections, attributes, skills, qualities, karma, nuyen) from a `.chum5`
