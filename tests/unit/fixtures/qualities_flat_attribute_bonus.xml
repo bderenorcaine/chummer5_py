@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Hand-authored fixture for test_qualities.py::test_flat_attribute_bonus_shape_is_supported.
+
+  Mirrors the real legacy/Chummer/data/qualities.xml <quality> schema, exercising an unconditional
+  <specificattribute><val> bonus — a shape no current SR5-sourced quality in the real file uses on
+  its own (the one real example, Lucky, pairs <specificattribute><max> with a <notoriety> shift and
+  is therefore NOT_YET_SUPPORTED). Not derived from any real quality; values are arbitrary.
+-->
+<chummer xmlns="" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.w3.org/2001/XMLSchema qualities.xsd">
+  <categories>
+    <category>Positive</category>
+  </categories>
+  <qualities>
+    <quality>
+      <id>00000000-0000-0000-0000-000000000001</id>
+      <name>Test Flat Attribute Bonus</name>
+      <karma>5</karma>
+      <category>Positive</category>
+      <bonus>
+        <specificattribute>
+          <name>BOD</name>
+          <val>1</val>
+        </specificattribute>
+      </bonus>
+      <source>SR5</source>
+      <page>1</page>
+    </quality>
+  </qualities>
+</chummer>

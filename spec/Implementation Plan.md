@@ -93,7 +93,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Acceptance: unit tests assert known hand-checked values (e.g. Human attribute ranges from
   `metatypes.xml`; priority-A Heritage karma/value table from `priorities.xml`).
 
-- [ ] **WP3 — Quality & skill data loader.**
+- [x] **WP3 — Quality & skill data loader.**
   Goal: load quality and skill rules data.
   Deliverables: `src/chummer5/data/qualities.py` parsing `legacy/Chummer/data/qualities.xml` (id, name,
   category, karma cost, limit, raw bonus node); `src/chummer5/data/skills.py` parsing skill definitions
