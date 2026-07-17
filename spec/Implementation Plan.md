@@ -177,7 +177,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 
 ### Phase E — Save/load
 
-- [ ] **WP11 — Native save format.**
+- [x] **WP11 — Native save format.**
   Goal: persist and reload a character in the project's own format.
   Deliverables: `src/chummer5/io/save_format.py` — JSON format mirroring the domain model.
   Depends on: WP10.
