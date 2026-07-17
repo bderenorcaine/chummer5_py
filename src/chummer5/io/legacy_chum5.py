@@ -3,12 +3,13 @@ regression corpus (`legacy/Chummer.Tests/TestFiles/*.chum5`; curated subset regi
 `tests/fixtures/`).
 
 Extracts exactly the MVP-relevant fields (metatype, priority selections, attributes, skills,
-qualities, karma, nuyen) as faithfully-typed raw values — no rules interpretation, no
+qualities, contacts, karma, nuyen) as faithfully-typed raw values — no rules interpretation, no
 cross-referencing against `chummer5.data`'s loaders. That interpretation is WP6-WP10's job; this
 module's contract is "what does the save file literally say", so it can serve as ground truth for
 those later WPs without importing their conclusions. See `spec/worklogs/WP4.md` for the `.chum5`
 structure this was reverse-engineered from (there is no `.xsd` for the save format, unlike the data
-files).
+files), and `spec/worklogs/WP9.md` for the `<contacts>`/`<contactpoints>` extension WP4 deferred to
+this WP.
 """
 
 from __future__ import annotations
@@ -62,6 +63,14 @@ class LegacyQuality:
 
 
 @dataclass(frozen=True)
+class LegacyContact:
+    name: str
+    connection: int
+    loyalty: int
+    free: bool  # <free>True</free> -- a GM-granted/plot contact; costs no points (WP9)
+
+
+@dataclass(frozen=True)
 class PrioritySelections:
     """Raw `<priority*>` fields from a saved character, unparsed beyond XML extraction.
 
@@ -108,6 +117,8 @@ class LegacyCharacter:
     skills: tuple[LegacySkill, ...]
     skill_groups: tuple[LegacySkillGroup, ...]
     qualities: tuple[LegacyQuality, ...]
+    contacts: tuple[LegacyContact, ...]
+    contact_points_budget: int  # <contactpoints>: cached CHA*3 free-contact-point budget (WP9)
     karma_remaining: int
     build_karma: int
     nuyen_remaining: float
@@ -199,6 +210,25 @@ def _parse_qualities(elem: ET.Element | None) -> tuple[LegacyQuality, ...]:
     return tuple(_parse_quality(q) for q in elem.findall("quality"))
 
 
+def _parse_contact(elem: ET.Element) -> LegacyContact:
+    return LegacyContact(
+        name=elem.findtext("name", ""),
+        connection=int(elem.findtext("connection", "0")),
+        loyalty=int(elem.findtext("loyalty", "0")),
+        free=_parse_bool(elem.findtext("free")),
+    )
+
+
+def _parse_contacts(elem: ET.Element | None) -> tuple[LegacyContact, ...]:
+    # Deliberately every <contact> child, not filtered by <type>/<group> -- every mundane fixture's
+    # contacts are plain, non-group `type == "Contact"` entries (checked directly across all 11 in
+    # WP9), so there is nothing in the curated corpus that would need that filter yet. See
+    # spec/worklogs/WP9.md.
+    if elem is None:
+        return ()
+    return tuple(_parse_contact(c) for c in elem.findall("contact"))
+
+
 def _parse_priorities(root: ET.Element) -> PrioritySelections:
     # <priorityskills> appears twice at the same level with different shapes: a scalar
     # "<letter>,<n>" value (the Skills category, like its four siblings) and a list wrapper
@@ -228,10 +258,10 @@ def _parse_priorities(root: ET.Element) -> PrioritySelections:
 def load_chum5(path: Path) -> LegacyCharacter:
     """Parse a legacy `.chum5` save file into a `LegacyCharacter` of MVP-relevant raw fields.
 
-    Deliberately excludes knowledge skills (out of MVP scope per WP3's precedent) and contacts
-    (not in WP4's deliverable list; picked up by WP9). Cyberware/vehicles/gear/spells/magic/
-    matrix/etc. are similarly untouched — this parser only extracts what WP6-WP10's engine needs
-    to validate against.
+    Deliberately excludes knowledge skills (out of MVP scope per WP3's precedent). Contacts (WP9)
+    are now included: every `<contact>` entry plus the character-level `<contactpoints>` cached
+    free-budget value (see `spec/worklogs/WP9.md`). Cyberware/vehicles/gear/spells/magic/matrix/etc.
+    remain untouched — this parser only extracts what WP6-WP10's engine needs to validate against.
     """
     root = ET.parse(path).getroot()
     newskills_elem = root.find("newskills")
@@ -248,6 +278,8 @@ def load_chum5(path: Path) -> LegacyCharacter:
         skills=_parse_skills(newskills_elem),
         skill_groups=_parse_skill_groups(newskills_elem),
         qualities=_parse_qualities(root.find("qualities")),
+        contacts=_parse_contacts(root.find("contacts")),
+        contact_points_budget=int(root.findtext("contactpoints", "0")),
         karma_remaining=int(root.findtext("karma", "0")),
         build_karma=int(root.findtext("buildkarma", "0")),
         nuyen_remaining=float(root.findtext("nuyen", "0")),

@@ -35,6 +35,22 @@ _KNOWN_RAW_FIELDS = {
     "Yeti-#ffffff2.chum5": ("Human", 1, 25, 1145.0, 6000, 6),
 }
 
+# name -> <contactpoints> (the save format's cached CHA*3 free-contact-point budget). Hand-checked
+# directly against each file's <contactpoints> element (WP9).
+_KNOWN_CONTACT_POINTS_BUDGET = {
+    "BLUE.chum5": 15,
+    "Barrett.chum5": 12,
+    "Bastion.chum5": 12,
+    "Blindfire.chum5": 18,
+    "Fuzzy-chargen.chum5": 6,
+    "Gentle Earthquake.chum5": 6,
+    "Monomax (approved) 3.chum5": 6,
+    "Rez0luti0n2.0.chum5": 9,
+    "SCSi.chum5": 6,
+    "Serpent.chum5": 9,
+    "Yeti-#ffffff2.chum5": 15,
+}
+
 
 def test_known_raw_fields_registry_covers_every_curated_fixture() -> None:
     assert set(_KNOWN_RAW_FIELDS) == set(MUNDANE_FIXTURES)
@@ -66,6 +82,39 @@ def test_starting_nuyen_matches_resources_priority_letter(name: str) -> None:
     character = load_chum5(mundane_fixture_path(name))
     letter = priority_letter(character.priorities.resources)
     assert priorities.resources[letter].nuyen == character.starting_nuyen
+
+
+def test_known_contact_points_budget_registry_covers_every_curated_fixture() -> None:
+    assert set(_KNOWN_CONTACT_POINTS_BUDGET) == set(MUNDANE_FIXTURES)
+
+
+@pytest.mark.parametrize("name", MUNDANE_FIXTURES)
+def test_contact_points_budget_matches_raw_tag(name: str) -> None:
+    character = load_chum5(mundane_fixture_path(name))
+    assert character.contact_points_budget == _KNOWN_CONTACT_POINTS_BUDGET[name]
+
+
+def test_yeti_contacts() -> None:
+    # Hand-checked against Yeti-#ffffff2.chum5's <contacts><contact>...
+    character = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    assert len(character.contacts) == 2
+    contacts_by_name = {c.name: c for c in character.contacts}
+    assert contacts_by_name["JoJo"].connection == 3
+    assert contacts_by_name["JoJo"].loyalty == 3
+    assert contacts_by_name["JoJo"].free is False
+    assert contacts_by_name["Ralph, Just Ralph"].connection == 5
+    assert contacts_by_name["Ralph, Just Ralph"].loyalty == 4
+    assert contacts_by_name["Ralph, Just Ralph"].free is False
+
+
+def test_monomax_has_one_free_contact() -> None:
+    # Hand-checked: Monomax (approved) 3.chum5 has a <free>True</free> contact -- the only one
+    # across the 11 curated mundane fixtures (WP9's own reconnaissance).
+    character = load_chum5(mundane_fixture_path("Monomax (approved) 3.chum5"))
+    free_contacts = [c for c in character.contacts if c.free]
+    assert len(free_contacts) == 1
+    assert free_contacts[0].connection == 2
+    assert free_contacts[0].loyalty == 1
 
 
 def test_yeti_is_the_priority_build_fixture() -> None:

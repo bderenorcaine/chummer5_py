@@ -37,6 +37,7 @@ from chummer5.engine.character import (
 )
 from chummer5.engine.improvements import ImprovementIndex, ImprovementType
 from chummer5.engine.qualities import apply_quality_improvements, create_quality_selection
+from chummer5.engine.resources import Contact, create_contact_selection, starting_nuyen
 from chummer5.engine.skills import create_skill_allocation, skill_rating
 from chummer5.io.legacy_chum5 import load_chum5, priority_letter
 
@@ -231,3 +232,69 @@ def test_blindfire_catlike_quality_matches_engine_end_to_end() -> None:
     )
     apply_quality_improvements(character, selection)
     assert character.improvements.resolve(ImprovementType.SKILL, "Sneaking") == 2
+
+
+def test_cross_corpus_contact_free_budget_matches_cha_times_three() -> None:
+    """Every mundane fixture's `<contactpoints>` (the save format's cached free-contact-point
+    budget) equals its own `CHA` `<totalvalue>` times 3 -- confirmed for all 11 during WP9's
+    research (see spec/worklogs/WP9.md), cross-validating `chummer5.engine.resources`'s
+    `FREE_CONTACT_POINTS_PER_CHARISMA` constant against real legacy-computed data, the same kind of
+    cross-loader check WP4 ran for starting nuyen.
+    """
+    checked = 0
+    for fixture_name in MUNDANE_FIXTURES:
+        legacy = load_chum5(mundane_fixture_path(fixture_name))
+        cha_total = legacy.attributes["CHA"].total_value
+        assert cha_total * 3 == legacy.contact_points_budget, fixture_name
+        checked += 1
+    assert checked == len(MUNDANE_FIXTURES)
+
+
+def test_yeti_contacts_match_engine_end_to_end() -> None:
+    """Yeti's two contacts ((3,3) and (5,4)) sum to exactly its free budget (15 == CHA 5 * 3), so
+    `karma_cost` comes out to 0 -- a clean, real-data confirmation of both the budget formula and
+    the "no karma owed while under budget" case. The excess-karma case itself (a selection that
+    goes *over* budget) is covered synthetically in `tests/unit/test_resources.py`, since no
+    mundane fixture's engine-reconstructable contact list happens to exceed its own budget.
+    """
+    legacy = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    assert legacy.contact_points_budget == 15
+
+    heritage_letter = priority_letter(legacy.priorities.heritage)
+    attributes_letter = priority_letter(legacy.priorities.attributes)
+    heritage = PRIORITIES.heritage[heritage_letter]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    character = create_character(
+        metatype_choice=human_choice,
+        heritage_letter=heritage_letter,
+        attributes_letter=attributes_letter,
+        priorities=PRIORITIES,
+        attribute_points={
+            code: legacy.attributes[code].base + legacy.attributes[code].karma
+            for code in ALLOCATABLE_ATTRIBUTES
+        },
+    )
+    assert character.attribute_value("CHA") == 5
+
+    contacts = tuple(
+        Contact(name=c.name, connection=c.connection, loyalty=c.loyalty, free=c.free)
+        for c in legacy.contacts
+    )
+    assert len(contacts) == 2
+    selection = create_contact_selection(character, contacts)
+    assert selection.free_points == legacy.contact_points_budget
+    assert selection.points_spent == 15
+    assert selection.karma_cost == 0
+
+
+def test_starting_nuyen_matches_resources_priority_letter_via_engine() -> None:
+    """`chummer5.engine.resources.starting_nuyen` reproduces WP4's already-cross-validated
+    `<startingnuyen>` figure for every mundane fixture (see spec/worklogs/WP4.md) -- this test
+    exercises the WP9 engine function itself rather than WP2's raw loader directly.
+    """
+    for fixture_name in MUNDANE_FIXTURES:
+        legacy = load_chum5(mundane_fixture_path(fixture_name))
+        resources_letter = priority_letter(legacy.priorities.resources)
+        assert starting_nuyen(resources_letter, PRIORITIES) == legacy.starting_nuyen, fixture_name

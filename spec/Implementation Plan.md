@@ -159,7 +159,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Acceptance: tests against fixtures restricted to MVP-supported qualities; an explicit test that an
   unsupported-bonus quality is excluded from the offered list rather than silently mis-applied.
 
-- [ ] **WP9 — Contacts & starting resources.**
+- [x] **WP9 — Contacts & starting resources.**
   Goal: nuyen, contacts, and a minimal starting-gear stub.
   Deliverables: `src/chummer5/engine/resources.py` — Resources-priority-letter → starting nuyen;
   contacts (connection/loyalty, karma cost beyond free points); a deliberately minimal starter-gear
