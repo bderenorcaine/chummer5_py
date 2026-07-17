@@ -122,7 +122,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 
 ### Phase D — Core engine (headless)
 
-- [ ] **WP5 — Improvement engine core.**
+- [x] **WP5 — Improvement engine core.**
   Goal: the base+improvements composition mechanism, proven in isolation.
   Deliverables: `src/chummer5/engine/improvements.py` — `Improvement` dataclass (source type/id, target,
   value, rating, unique-name dedup group) + index (`dict[(type, target)] -> list[Improvement]`) +
