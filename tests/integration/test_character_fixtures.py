@@ -26,6 +26,7 @@ from tests.fixtures.mundane_chum5 import (
 
 from chummer5.data.metatypes import Metatype, load_metatypes
 from chummer5.data.priorities import load_priorities
+from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.engine.character import (
     ALLOCATABLE_ATTRIBUTES,
@@ -34,13 +35,15 @@ from chummer5.engine.character import (
     metatype_choices,
     sr5_metatypes,
 )
-from chummer5.engine.improvements import ImprovementIndex
+from chummer5.engine.improvements import ImprovementIndex, ImprovementType
+from chummer5.engine.qualities import apply_quality_improvements, create_quality_selection
 from chummer5.engine.skills import create_skill_allocation, skill_rating
 from chummer5.io.legacy_chum5 import load_chum5, priority_letter
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 SKILLS = load_skills()
+QUALITIES = load_qualities()
 
 
 def test_yeti_priority_build_matches_engine_end_to_end() -> None:
@@ -194,3 +197,37 @@ def test_cross_corpus_attribute_value_matches_when_unaugmented() -> None:
             )
 
     assert checked_at_least_one
+
+
+def test_blindfire_catlike_quality_matches_engine_end_to_end() -> None:
+    """`Blindfire.chum5` is the only mundane fixture carrying one of WP3's 3 MVP-offered
+    (`FLAT_BONUS`) qualities -- Catlike. It also carries several out-of-scope (non-SR5-sourced, or
+    SR5 but `NOT_YET_SUPPORTED`) qualities, so this only cross-checks Catlike specifically -- a full
+    quality-list rebuild isn't meaningful for this fixture (see WP8's worklog for why), unlike
+    Yeti's role for WP6/WP7's full-allocation tests.
+    """
+    legacy = load_chum5(mundane_fixture_path("Blindfire.chum5"))
+    legacy_catlike = next(q for q in legacy.qualities if q.name == "Catlike")
+    assert legacy_catlike.source == "SR5"
+    assert legacy_catlike.karma == 7
+
+    catalog_catlike = next(q for q in QUALITIES if q.name == "Catlike")
+    assert catalog_catlike.id == legacy_catlike.id
+    assert catalog_catlike.karma == legacy_catlike.karma
+
+    selection = create_quality_selection([catalog_catlike.id], QUALITIES)
+    assert selection.positive_karma == legacy_catlike.karma
+
+    heritage = PRIORITIES.heritage["D"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    character = create_character(
+        metatype_choice=human_choice,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    apply_quality_improvements(character, selection)
+    assert character.improvements.resolve(ImprovementType.SKILL, "Sneaking") == 2

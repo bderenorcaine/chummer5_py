@@ -151,7 +151,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Depends on: WP3, WP6.
   Acceptance: tests against the fixture corpus.
 
-- [ ] **WP8 — Quality selection & minimal Improvement bonuses.**
+- [x] **WP8 — Quality selection & minimal Improvement bonuses.**
   Goal: qualities affect karma and, for the supported subset, feed the Improvement engine.
   Deliverables: `src/chummer5/engine/qualities.py` — positive/negative quality picking, karma cost,
   negative-quality karma cap; only WP3's "MVP-supported" qualities produce `Improvement` records.
