@@ -25,3 +25,6 @@ htmlcov/
 !.vscode/extensions.json
 .idea/
 .DS_Store
+
+# Copyrighted reference material kept locally for rules lookups, not for redistribution.
+/spec/rulebooks/

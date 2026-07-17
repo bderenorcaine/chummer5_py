@@ -26,11 +26,17 @@ runs anywhere Python and a browser run.
    legacy C# is the executable spec.
 2. **Game data.** `legacy/Chummer/data/*.xml` (+ matching `.xsd`) is the actual SR5 ruleset — metatypes,
    priorities, qualities, gear, etc. — already decoupled from code. The new project parses these files
-   directly rather than re-entering rules content.
+   directly rather than re-entering rules content. These files span many sourcebooks; almost every
+   entry carries a `<source>` tag identifying which book it's from (e.g. `SR5`, `RF`, `DT`). See
+   "Core rulebook only" under MVP scope below for how this gates what MVP actually loads/offers.
 3. **Regression oracle.** `legacy/Chummer.Tests/TestFiles/*.chum5` is a corpus of real, legacy-computed
    characters. The new engine's output gets diffed against these to catch silently-wrong rules logic —
    this matters more than it sounds like it should, because an AI-agent-assisted port of unfamiliar
    business logic will otherwise happily produce plausible-but-wrong numbers.
+
+`spec/rulebooks/Shadowrun_Fifth_Edition_Core_Rulebook.pdf` is also kept as the authoritative rules
+*text* — used to resolve cases where the data/code alone don't make intent obvious (e.g. which
+direction a metatype/magic eligibility rule actually runs).
 
 **License:** the legacy project is GPLv3. Because this project reuses its data files, rules logic, and
 test fixtures, it is a derivative work and is GPLv3 too. Not a decision point — inherited.
@@ -54,6 +60,22 @@ test fixtures, it is a derivative work and is GPLv3 too. Not a decision point �
   skills/qualities → derived stats) without also requiring spell/program selection, tradition choice, or
   drain/fading. Magic/resonance is the first fast-follow after MVP, not a "someday".
   This means that, in order to obtain valid characters in MVP, the effect of "no magic/resonance priority" must be modeled as "magic/resonance priority forced to E (mundane)", i.e. the only available priorities for the other aspects are A, B, C, and D.
+  (Rules note for that later work: metatype, not the other way around, governs Magic/Resonance
+  eligibility — most metatypes are simply *eligible* to buy Magic via a Talent priority letter,
+  a few are inherently magical and start with Magic forced ≥1 regardless of Talent choice, and a
+  few can never access Magic at all. This only matters once magic/resonance chargen exists — every
+  metatype in MVP's scope, per the "Core rulebook only" rule below, falls in the plain-eligible
+  bucket, which is exactly why forcing Talent to E is sufficient to get mundane characters in MVP
+  without needing any metatype-specific handling.)
+- **Core rulebook (SR5) content only.** Beyond "mundane," MVP further restricts every data-driven
+  choice (metatype, quality, ...) to entries sourced from the SR5 core rulebook — checked via each
+  data file's per-entry `<source>` tag. Concretely: `metatypes.xml`'s `Metahuman` category has 5
+  `source=SR5` base types (Human, Elf, Dwarf, Ork, Troll); every metavariant (Nartaki, Gnome, ...)
+  and every non-`Metahuman` metatype (Centaur, Sasquatch, A.I., Shapeshifters, ...) is sourced from
+  a later book and is out of MVP scope. `qualities.xml` similarly narrows from 803 entries to 96
+  `source=SR5` ones. `skills.xml`'s 76 entries are all `source=SR5` already, so no filtering is
+  needed there. This is a general MVP-scope filter every data loader should apply, not a
+  metatype-specific rule.
 - Attributes, active skills (+ specializations, skill groups), positive/negative qualities (karma cost
   and limits), contacts, starting nuyen/resources spent on a basic gear purchase.
 - Derived stats needed to validate a freshly created character: attribute totals, skill dice pools,
@@ -141,6 +163,19 @@ installs — `pip install --break-system-packages` or similar host mutations are
 not by discipline. The devcontainer defines the actual toolchain (Python, `uv`); reopening the workspace
 in it relocates the whole VS Code extension host — including agent sessions — into the container, so this
 isn't just a CI convenience, it's how day-to-day (and agent-driven) development happens here.
+
+**Stale `.venv` console scripts.** `.devcontainer/devcontainer.json` pins `workspaceFolder` to
+`/workspace`. If a session ever ends up with the repo checked out at a *different* absolute path
+(seen in some agent-harness sessions, not a real "Reopen in Container" flow), `.venv/bin/{pytest,
+ruff,mypy}` — small scripts with a `#!/workspace/.venv/bin/python`-style shebang baked in at
+`uv sync` time — fail with a misleading `No such file or directory` even though the file is right
+there. Two fixes, in order of preference:
+1. Invoke tools as `uv run python -m pytest` / `-m ruff` / `-m mypy` instead of the bare command —
+   this runs the venv's `python` (a symlink, not a shebang script, so it isn't affected) with `-m`,
+   sidestepping the stale shebang entirely. Prefer this form generally, since it's a strict superset
+   of the bare-command case.
+2. If something still doesn't work, regenerate the venv (`.venv/` is gitignored, so this is always
+   safe): `rm -rf .venv && uv sync --group dev`.
 
 ### Testing strategy
 - `legacy/Chummer.Tests/TestFiles/*.chum5` (34 real characters) used as golden-output regression fixtures:

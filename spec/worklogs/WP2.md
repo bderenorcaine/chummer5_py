@@ -132,3 +132,29 @@ dataclasses.
 WP2 complete: both loaders parse the real legacy data files into frozen dataclasses, unit tests
 assert hand-checked values from both source XML files, and the acceptance criteria (`pytest`,
 `ruff`, `mypy` all green) are met.
+
+### 2026-07-17 — Post-completion corrections (from user review)
+
+Reviewing WP2's findings with the user surfaced two corrections, now reflected in
+`Project Overview.md` and `Implementation Plan.md` rather than left sitting only in this log:
+
+1. **I had the MAG-eligibility causality backwards.** I'd framed it as "some metatypes are
+   inherently magical (`enableattribute: MAG` bonus)" without stating the general rule underneath:
+   metatype is chosen first and *governs* Magic/Resonance eligibility — most metatypes are simply
+   eligible to buy Magic via a Talent priority, some are forced to Magic ≥ 1 regardless of Talent
+   choice, and some can never access it. The user added
+   `spec/rulebooks/Shadowrun_Fifth_Edition_Core_Rulebook.pdf` as an authoritative reference for
+   exactly this kind of rules-intent question. Net effect on scope: none of MVP's in-scope
+   metatypes (see next point) carry a magic-forcing bonus, so this remains moot for MVP and only
+   matters once magic/resonance chargen is built.
+2. **Metavariants are out of MVP scope, and so is everything except the SR5 core rulebook.** I'd
+   flagged metavariant-granted qualities (Nartaki, etc.) as an open scope question; the user
+   resolved it: metavariants are out, and more generally *only* `source == "SR5"` content is in
+   scope for MVP, checked per-entry via each data file's `<source>` tag. This one rule happens to
+   already produce "Metahuman base types only" as a side effect (all metavariants are non-`SR5`-
+   sourced), and generalizes cleanly to other loaders — verified `qualities.xml` narrows from 803
+   to 96 `source == "SR5"` entries, `skills.xml`'s 76 are already all `SR5`. Written up as a
+   general principle in the Implementation Plan's "Notes that shape the plan" section, with
+   explicit follow-on clauses added to WP3 and WP6. No code change needed in WP2 itself — both
+   `Metatype` and (eventually) the WP3 quality loader already retain the `source` field needed to
+   apply this filter downstream.

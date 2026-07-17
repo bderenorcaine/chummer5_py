@@ -25,6 +25,17 @@ values are legacy-computed truth regardless of how the points were bought. Only 
 plus a handful of hand-authored cases checked directly against `priorities.xml`, validate the
 **priority-table allocation logic** itself.
 
+**MVP content scope = the SR5 core rulebook, checked via each data file's `<source>` tag.**
+Discovered during WP2: legacy data files span many sourcebooks, and almost every entry (metatype,
+metavariant, quality, skill, ...) carries a `<source>` tag identifying which one. MVP restricts to
+`source == "SR5"` uniformly — this is what "mundane... core-rulebook math" in the Project Overview
+concretely means at the data layer, not just a metatype-specific rule. Verified counts:
+`metatypes.xml` → 5 of 21 (`Metahuman` category base types: Human, Elf, Dwarf, Ork, Troll; this
+also excludes every metavariant, since all of them are non-`SR5`-sourced); `qualities.xml` → 96 of
+803; `skills.xml` → 76 of 76 (no filtering needed, already all core). Any WP whose loader offers a
+list of choices to the player (metatypes, qualities, and by extension gear/priorities content
+later) needs this filter; see the SR5-scope clauses added to WP3 and WP6 below.
+
 **Quality `<bonus>` nodes are a mini-language, not a single field.** `qualities.xml` bonus nodes range
 from trivial (`<ambidextrous/>`) to nested value-bearing tags, mirroring the general Improvement bonus
 grammar the legacy engine parses. MVP does not implement that general parser — WP3/WP8 curate a small
@@ -86,8 +97,12 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Goal: load quality and skill rules data.
   Deliverables: `src/chummer5/data/qualities.py` parsing `legacy/Chummer/data/qualities.xml` (id, name,
   category, karma cost, limit, raw bonus node); `src/chummer5/data/skills.py` parsing skill definitions
-  (name, linked attribute, category/group). Classify each quality's bonus node as "MVP-supported" (flat
-  attribute/skill bonus) or "not yet supported" — this classification is what WP8 filters on.
+  (name, linked attribute, category/group). Restrict the loaded/offered quality catalog to
+  `source == "SR5"` (96 of 803 entries — see "MVP content scope" note above) before applying the
+  bonus-node classification below; `skills.xml`'s 76 entries are already all `source == "SR5"`, so
+  no equivalent filtering is needed there. Classify each in-scope quality's bonus node as
+  "MVP-supported" (flat attribute/skill bonus) or "not yet supported" — this classification is what
+  WP8 filters on.
   Depends on: WP1.
   Acceptance: unit tests cover at least one supported and one unsupported bonus-node shape; loader
   reports counts of each so the split is visible.
@@ -119,9 +134,12 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 - [ ] **WP6 — Metatype selection & attribute allocation.**
   Goal: first real slice of chargen — pick a metatype, spend attribute points.
   Deliverables: `src/chummer5/engine/character.py` (`Character` aggregate, mundane fields only);
-  metatype selection from a Heritage priority letter (via WP2 data); attribute point allocation from an
-  Attributes priority letter within metatype min/max; `Attribute.Value = metatype minimum + points spent
-  + Σ improvements` (via WP5).
+  metatype selection from a Heritage priority letter (via WP2 data), restricted to `metatypes.xml`
+  entries with `source == "SR5"` (Human/Elf/Dwarf/Ork/Troll base types only — metavariants and
+  non-core metatypes like Centaur/Sasquatch/A.I./Shapeshifters are excluded from MVP; see "MVP
+  content scope" note above) when cross-referencing against a Heritage priority's metatype list;
+  attribute point allocation from an Attributes priority letter within metatype min/max;
+  `Attribute.Value = metatype minimum + points spent + Σ improvements` (via WP5).
   Depends on: WP2, WP5.
   Acceptance: tests against WP4's mundane fixture set (attribute totals) and specifically against
   `Yeti-#ffffff2.chum5` (allocation budget/spend logic).
