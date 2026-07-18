@@ -223,7 +223,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Depends on: WP8, WP9, WP15.
   Acceptance: manual walkthrough; values match engine output for the same inputs.
 
-- [ ] **WP17 — Character sheet + save/load UI. (UI MVP milestone)**
+- [x] **WP17 — Character sheet + save/load UI. (UI MVP milestone)**
   Goal: finish and persist a character through the browser, start to finish.
   Deliverables: read-only finished-character view (derived stats), save/download (native format via
   WP11), load/upload (native format + legacy `.chum5` import via WP12).

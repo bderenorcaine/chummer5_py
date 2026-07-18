@@ -1,0 +1,141 @@
+<div id="character-sheet">
+  {% if sheet_error %}
+  <p class="error">{{ sheet_error }}</p>
+  {% endif %}
+  {% if sheet_info %}
+  <p class="info">{{ sheet_info }}</p>
+  {% endif %}
+
+  {% if character %}
+  <h2>{{ character.metatype.name }}</h2>
+  <ul>
+    <li>Heritage {{ priority_summary.heritage }}</li>
+    <li>Attributes {{ priority_summary.attributes }}</li>
+    <li>Skills {{ priority_summary.skills }}</li>
+    <li>Resources {{ priority_summary.resources }}</li>
+  </ul>
+
+  <h3>Attributes</h3>
+  <table>
+    <thead>
+      <tr><th>Attribute</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      {% for row in attribute_rows %}
+      <tr><td>{{ row.code }}</td><td>{{ row.value }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>Skills</h3>
+  {% if sheet_skill_rows %}
+  <table>
+    <thead>
+      <tr><th>Skill</th><th>Rating</th><th>Pool</th></tr>
+    </thead>
+    <tbody>
+      {% for row in sheet_skill_rows %}
+      <tr><td>{{ row.skill.name }}</td><td>{{ row.rating }}</td><td>{{ row.pool }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No skills rated above 0.</p>
+  {% endif %}
+
+  <h3>Qualities</h3>
+  {% if quality_names %}
+  <ul>
+    {% for name in quality_names %}
+    <li>{{ name }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>None selected.</p>
+  {% endif %}
+
+  <h3>Contacts</h3>
+  {% if contacts %}
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Connection</th><th>Loyalty</th><th>Points</th></tr>
+    </thead>
+    <tbody>
+      {% for contact in contacts %}
+      <tr>
+        <td>{{ contact.name }}</td>
+        <td>{{ contact.connection }}</td>
+        <td>{{ contact.loyalty }}</td>
+        <td>{{ contact.points }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>None.</p>
+  {% endif %}
+
+  <h3>Gear</h3>
+  {% if gear_rows %}
+  <ul>
+    {% for row in gear_rows %}
+    <li>{{ row.name }} × {{ row.quantity }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>None purchased.</p>
+  {% endif %}
+  <p>Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget }}.</p>
+
+  <h3>Derived stats</h3>
+  <table>
+    <tbody>
+      <tr><th>Initiative</th><td>{{ initiative_value }} + {{ initiative_dice }}D6</td></tr>
+      <tr><th>Physical limit</th><td>{{ physical_limit }}</td></tr>
+      <tr><th>Mental limit</th><td>{{ mental_limit }}</td></tr>
+      <tr><th>Social limit</th><td>{{ social_limit }}</td></tr>
+      <tr><th>Physical condition monitor</th><td>{{ physical_cm }} boxes</td></tr>
+      <tr><th>Stun condition monitor</th><td>{{ stun_cm }} boxes</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Karma</h3>
+  <p>
+    Quality karma cost: {{ quality_karma_cost }}.
+    Contact karma cost (beyond free points): {{ contact_karma_cost }}.
+  </p>
+
+  <h3>Save</h3>
+  <p><a href="/character/save">Download save (.json)</a></p>
+  {% else %}
+  <p>Confirm a metatype and priorities on the chargen page before viewing the character sheet.</p>
+  {% endif %}
+
+  <h3>Load</h3>
+  <form
+    hx-post="/character/load"
+    hx-target="#character-sheet"
+    hx-swap="outerHTML"
+    hx-encoding="multipart/form-data"
+  >
+    <label>
+      Native save file (.json)
+      <input type="file" name="save_file" accept="application/json,.json" />
+    </label>
+    <button type="submit">Load save</button>
+  </form>
+
+  <h3>Import legacy character</h3>
+  <form
+    hx-post="/character/import-chum5"
+    hx-target="#character-sheet"
+    hx-swap="outerHTML"
+    hx-encoding="multipart/form-data"
+  >
+    <label>
+      Legacy Chummer5 save (.chum5)
+      <input type="file" name="chum5_file" accept=".chum5" />
+    </label>
+    <button type="submit">Import .chum5</button>
+  </form>
+</div>

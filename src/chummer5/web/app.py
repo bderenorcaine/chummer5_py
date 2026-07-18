@@ -25,6 +25,20 @@ already-in-progress session (`submit_priorities`, `submit_attributes`) must re-a
 already-committed quality selection's Improvements onto the fresh `Character`, or they'd silently
 vanish the next time attributes are edited — see `_relink_quality_improvements`.
 
+WP17 (the UI MVP milestone) adds a separate `/character/sheet` page: a read-only view of WP10's
+derived stats (initiative, the three Limits, both condition monitors) plus a summary of every
+already-committed selection, backed by `_character_sheet_context`. It's a standalone page rather
+than another `_chargen_body.html` fragment, since none of the five chargen-form routes (`/ui/*`)
+target it — wiring live updates into all five would mean out-of-band HTMX swaps for a view that's
+explicitly "read-only finished character", not a form; a plain nav link plus its own full-page
+render is simpler and matches the deliverable's own framing ("finish and persist a character",
+distinct from "spend points"). The same page also hosts save/download (`GET /character/save`,
+WP11's `to_json`/`create_character_save`) and load/import (`POST /character/load` for WP11's own
+native format, `POST /character/import-chum5` for WP12's legacy import) — both repopulate every
+`ChargenSession` field via `_apply_built_character_to_session`, the same shape `submit_priorities`
+et al. already mutate, so the five chargen-form routes need no changes to pick up a loaded/imported
+character on their next submission.
+
 Run locally: `uv run uvicorn chummer5.web.app:app --reload` (or `python -m uvicorn ...` — same
 `uv run python -m X` workaround as `pytest`/`ruff`/`mypy`, see Project Overview.md's Development
 environment note), then open http://127.0.0.1:8000/.
@@ -32,17 +46,19 @@ environment note), then open http://127.0.0.1:8000/.
 
 from __future__ import annotations
 
+import tempfile
+import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.datastructures import FormData
+from starlette.datastructures import FormData, UploadFile
 
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
@@ -56,6 +72,15 @@ from chummer5.engine.character import (
     MetatypeChoice,
     create_character,
     metatype_choices,
+)
+from chummer5.engine.derived import (
+    initiative_dice,
+    initiative_value,
+    mental_limit,
+    physical_condition_monitor,
+    physical_limit,
+    social_limit,
+    stun_condition_monitor,
 )
 from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.qualities import (
@@ -82,6 +107,18 @@ from chummer5.engine.skills import (
     dice_pool,
     skill_point_budget,
     skill_rating,
+)
+from chummer5.io.legacy_import import (
+    UnsupportedLegacyCharacterError,
+    import_chum5,
+)
+from chummer5.io.save_format import (
+    BuiltCharacter,
+    CharacterSave,
+    build_character,
+    create_character_save,
+    from_json,
+    to_json,
 )
 from chummer5.web.session import (
     PRIORITY_LETTERS,
@@ -448,6 +485,148 @@ def _resources_context(
     }
 
 
+def _character_sheet_context(
+    session: ChargenSession, *, error: str | None = None, info: str | None = None
+) -> dict[str, Any]:
+    """Context for `_character_sheet.html`: WP10's derived stats plus a read-only recap of every
+    already-committed selection. Unlike the five `_*_context` builders above, there is no
+    echo-the-submission variant here -- this page never redisplays invalid input, only the
+    session's own last-known-good state (or `error`/`info`, set by the save/load routes below).
+
+    `create_contact_selection`/`create_resources_selection` are called directly here (unlike
+    `_contacts_context`/`_resources_context`, which avoid them to support echoing invalid input) --
+    `session.contacts`/`session.gear_names` are only ever set by a route that already validated
+    them, so re-validating here is always a no-op, just a convenient way to get `karma_cost`/
+    `nuyen_remaining` without recomputing the arithmetic a third time.
+    """
+    character = session.character
+    if character is None:
+        return {"character": None, "sheet_error": error, "sheet_info": info}
+
+    allocation = session.skill_allocation
+    skill_rows = (
+        [
+            {"skill": skill, "rating": rating, "pool": dice_pool(character, allocation, skill)}
+            for skill in MUNDANE_SKILLS
+            if (rating := skill_rating(character, allocation, skill)) > 0
+        ]
+        if allocation is not None
+        else []
+    )
+    quality_names = (
+        [q.name for q in session.quality_selection.qualities]
+        if session.quality_selection is not None
+        else []
+    )
+    contact_selection = create_contact_selection(character, session.contacts)
+    resources_selection = create_resources_selection(
+        session.resources_letter, PRIORITIES, session.gear_names
+    )
+    gear_counts: dict[str, int] = {}
+    for name in session.gear_names:
+        gear_counts[name] = gear_counts.get(name, 0) + 1
+
+    return {
+        "character": character,
+        "priority_summary": {
+            "heritage": (
+                f"{session.heritage_letter} — {PRIORITIES.heritage[session.heritage_letter].name}"
+            ),
+            "attributes": (
+                f"{session.attributes_letter} — "
+                f"{PRIORITIES.attributes[session.attributes_letter].name}"
+            ),
+            "skills": (
+                f"{session.skills_letter} — {PRIORITIES.skills[session.skills_letter].name}"
+            ),
+            "resources": (
+                f"{session.resources_letter} — "
+                f"{PRIORITIES.resources[session.resources_letter].name}"
+            ),
+        },
+        "attribute_rows": [
+            {"code": code, "value": character.attribute_value(code)}
+            for code in ALLOCATABLE_ATTRIBUTES
+        ],
+        "sheet_skill_rows": skill_rows,
+        "quality_names": quality_names,
+        "contacts": contact_selection.contacts,
+        "gear_rows": [
+            {"name": name, "quantity": quantity} for name, quantity in sorted(gear_counts.items())
+        ],
+        "nuyen_budget": resources_selection.nuyen_budget,
+        "nuyen_remaining": resources_selection.nuyen_remaining,
+        "quality_karma_cost": (
+            session.quality_selection.karma_cost if session.quality_selection is not None else 0
+        ),
+        "contact_karma_cost": contact_selection.karma_cost,
+        "initiative_value": initiative_value(character),
+        "initiative_dice": initiative_dice(character),
+        "physical_limit": physical_limit(character),
+        "mental_limit": mental_limit(character),
+        "social_limit": social_limit(character),
+        "physical_cm": physical_condition_monitor(character),
+        "stun_cm": stun_condition_monitor(character),
+        "sheet_error": error,
+        "sheet_info": info,
+    }
+
+
+def _character_save_from_session(session: ChargenSession) -> CharacterSave:
+    """Build a `CharacterSave` (WP11) from a session's currently committed selections -- the
+    inverse of `_apply_built_character_to_session` below. Only called once `session.character` is
+    confirmed non-`None` (see `download_save`).
+    """
+    character = session.character
+    assert character is not None
+    allocation = session.skill_allocation
+    quality_ids = (
+        tuple(q.id for q in session.quality_selection.qualities)
+        if session.quality_selection is not None
+        else ()
+    )
+    return create_character_save(
+        metatype_name=character.metatype.name,
+        heritage_letter=session.heritage_letter,
+        attributes_letter=session.attributes_letter,
+        attribute_points=character.attribute_points,
+        skills_letter=session.skills_letter,
+        skill_points=allocation.skill_points if allocation is not None else {},
+        group_points=allocation.group_points if allocation is not None else {},
+        quality_ids=quality_ids,
+        contacts=session.contacts,
+        resources_letter=session.resources_letter,
+        gear_names=session.gear_names,
+    )
+
+
+def _apply_built_character_to_session(
+    session: ChargenSession, save: CharacterSave, built: BuiltCharacter
+) -> None:
+    """Overwrite every `ChargenSession` field from a successfully loaded/imported character --
+    used by both `load_save` (WP11's native format) and `import_chum5_route` (WP12's legacy
+    import), since both ultimately produce the same `(CharacterSave, BuiltCharacter)` pair. Safe to
+    call regardless of the session's prior state (a fresh session or one already mid-chargen):
+    every field this WP's chargen routes read is set here, none is merged with what came before.
+
+    `built.character` (not a re-`create_character` call) is used for `session.character` --
+    `build_character` already ran `apply_quality_improvements` on it (see
+    `chummer5.io.save_format`), so it arrives with the right `ImprovementIndex` already populated,
+    unlike `create_character`'s always-empty one (see `_relink_quality_improvements`'s docstring
+    for why that matters elsewhere).
+    """
+    session.heritage_letter = save.heritage_letter
+    session.attributes_letter = save.attributes_letter
+    session.skills_letter = save.skills_letter
+    session.resources_letter = save.resources_letter
+    session.metatype_id = built.character.metatype.id
+    session.character = built.character
+    session.skill_allocation = built.skill_allocation
+    session.quality_selection = built.quality_selection
+    session.contacts = built.contact_selection.contacts
+    session.gear_names = save.gear_names
+
+
 def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> dict[str, Any]:
     """Merge the priority-form context with a clean (non-error) render of the attribute, skill,
     quality, contact, and resources sections, reflecting the session's currently committed state.
@@ -737,6 +916,118 @@ def create_app() -> FastAPI:
                     session.character, session.resources_letter, gear_names
                 )
         response = templates.TemplateResponse(request, "_resources.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.get("/character/sheet", response_class=HTMLResponse)
+    def character_sheet(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        context = _character_sheet_context(session)
+        response = templates.TemplateResponse(request, "character_sheet.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.get("/character/save")
+    def download_save(request: Request) -> Response:
+        session, new_cookie = resolve_session(request)
+        if session.character is None:
+            raise HTTPException(
+                status_code=400, detail="Confirm a metatype and priorities before saving."
+            )
+        body = to_json(_character_save_from_session(session))
+        response = Response(
+            content=body,
+            media_type="application/json",
+            headers={"Content-Disposition": 'attachment; filename="character.json"'},
+        )
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/character/load", response_class=HTMLResponse)
+    async def load_save(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        form = await request.form()
+        upload = form.get("save_file")
+        error: str | None = None
+        info: str | None = None
+        if not isinstance(upload, UploadFile) or not upload.filename:
+            error = "Choose a save file to load."
+        else:
+            raw = await upload.read()
+            try:
+                text = raw.decode("utf-8")
+                save = from_json(text)
+                built = build_character(
+                    save,
+                    metatypes=METATYPES,
+                    priorities=PRIORITIES,
+                    skills=SKILLS,
+                    qualities=QUALITIES,
+                )
+            # A user-supplied file's shape is never trusted beyond this point -- malformed JSON
+            # (ValueError, via json.JSONDecodeError/UnicodeDecodeError), a missing field
+            # (KeyError), a save shaped as something other than a JSON object (AttributeError, from
+            # calling .get on a list/scalar), or a shape that parses but fails one of
+            # build_character's own validations (ValueError) are all just "not a loadable save",
+            # reported the same way rather than crashing the request.
+            except (ValueError, KeyError, AttributeError) as exc:
+                error = f"Could not load save: {exc}"
+            else:
+                _apply_built_character_to_session(session, save, built)
+                info = "Character loaded."
+        context = _character_sheet_context(session, error=error, info=info)
+        response = templates.TemplateResponse(request, "_character_sheet.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/character/import-chum5", response_class=HTMLResponse)
+    async def import_chum5_route(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        form = await request.form()
+        upload = form.get("chum5_file")
+        error: str | None = None
+        info: str | None = None
+        if not isinstance(upload, UploadFile) or not upload.filename:
+            error = "Choose a .chum5 file to import."
+        else:
+            raw = await upload.read()
+            # `import_chum5`/`load_chum5` take a `Path`, not bytes -- write the upload to a scratch
+            # file rather than widening that module's signature for this one caller. Deleted
+            # automatically once the `with` block exits, success or failure.
+            with tempfile.NamedTemporaryFile(suffix=".chum5") as tmp:
+                tmp.write(raw)
+                tmp.flush()
+                try:
+                    result = import_chum5(
+                        Path(tmp.name),
+                        metatypes=METATYPES,
+                        priorities=PRIORITIES,
+                        skills=SKILLS,
+                        qualities=QUALITIES,
+                    )
+                except UnsupportedLegacyCharacterError as exc:
+                    error = "Cannot import: " + "; ".join(exc.reasons)
+                except ET.ParseError as exc:
+                    error = f"Not a valid .chum5 file: {exc}"
+                else:
+                    _apply_built_character_to_session(session, result.save, result.built)
+                    messages = ["Character imported."]
+                    if result.dropped_qualities:
+                        messages.append(
+                            "Dropped qualities (not MVP-supported): "
+                            + ", ".join(result.dropped_qualities)
+                        )
+                    if result.dropped_skills:
+                        messages.append(
+                            "Dropped skills (unresolvable): " + ", ".join(result.dropped_skills)
+                        )
+                    info = " ".join(messages)
+        context = _character_sheet_context(session, error=error, info=info)
+        response = templates.TemplateResponse(request, "_character_sheet.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
         return response

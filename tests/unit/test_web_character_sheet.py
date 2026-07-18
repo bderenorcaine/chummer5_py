@@ -1,0 +1,225 @@
+"""WP17: the character-sheet page, save/download, and native-format load, backed directly by
+WP10's derived-stat functions and WP11's `CharacterSave`/`build_character`. Synthetic (hand-built)
+coverage; the legacy `.chum5` import path (WP12, `import_chum5`) against a real fixture is covered
+in `tests/integration/test_web_character_sheet_fixtures.py`, mirroring how WP12's own unit/
+integration test split already works (see `tests/unit/test_legacy_import.py`'s own docstring).
+"""
+
+from __future__ import annotations
+
+from fastapi.testclient import TestClient
+
+from chummer5.data.metatypes import load_metatypes
+from chummer5.data.priorities import load_priorities
+from chummer5.engine.character import create_character, metatype_choices
+from chummer5.engine.derived import (
+    initiative_dice,
+    initiative_value,
+    mental_limit,
+    physical_condition_monitor,
+    physical_limit,
+    social_limit,
+    stun_condition_monitor,
+)
+from chummer5.io.save_format import from_json
+from chummer5.web.app import create_app
+
+METATYPES = load_metatypes()
+PRIORITIES = load_priorities()
+
+
+def _confirm_human(client: TestClient) -> None:
+    client.get("/")
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+    assert response.status_code == 200
+
+
+def test_character_sheet_shows_placeholder_before_confirmation() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/character/sheet")
+
+    assert response.status_code == 200
+    assert "Confirm a metatype and priorities" in response.text
+    # The load/import forms are always available, even before any chargen confirmation -- that's
+    # how a session can start *from* an import rather than the priority form.
+    assert 'hx-post="/character/load"' in response.text
+    assert 'hx-post="/character/import-chum5"' in response.text
+
+
+def test_character_sheet_shows_derived_stats_matching_the_engine() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post("/ui/attributes", data={"attr_BOD": 3, "attr_AGI": 2})
+
+    response = client.get("/character/sheet")
+
+    assert response.status_code == 200
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    character = create_character(human_choice, "A", "B", PRIORITIES, {"BOD": 3, "AGI": 2})
+    assert f"{initiative_value(character)} + {initiative_dice(character)}D6" in response.text
+    assert f"<td>{physical_limit(character)}</td>" in response.text
+    assert f"<td>{mental_limit(character)}</td>" in response.text
+    assert f"<td>{social_limit(character)}</td>" in response.text
+    assert f"{physical_condition_monitor(character)} boxes" in response.text
+    assert f"{stun_condition_monitor(character)} boxes" in response.text
+
+
+def test_download_save_before_confirmation_is_rejected() -> None:
+    client = TestClient(create_app())
+    client.get("/")
+
+    response = client.get("/character/save")
+
+    assert response.status_code == 400
+
+
+def test_download_save_returns_an_attachment_json_body() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post("/ui/attributes", data={"attr_BOD": 3})
+
+    response = client.get("/character/save")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert "attachment" in response.headers["content-disposition"]
+    save = from_json(response.text)
+    assert save.metatype_name == "Human"
+    assert save.heritage_letter == "A"
+    assert save.attribute_points["BOD"] == 3
+
+
+def test_saved_character_loads_into_a_fresh_session_with_matching_values() -> None:
+    source_client = TestClient(create_app())
+    _confirm_human(source_client)
+    source_client.post("/ui/attributes", data={"attr_BOD": 3, "attr_AGI": 2})
+    source_client.post("/ui/skills", data={"skill_" + _first_mundane_skill_id(): "2"})
+    save_bytes = source_client.get("/character/save").content
+
+    fresh_client = TestClient(create_app())
+    fresh_client.get("/")
+    response = fresh_client.post(
+        "/character/load",
+        files={"save_file": ("character.json", save_bytes, "application/json")},
+    )
+
+    assert response.status_code == 200
+    assert "Character loaded." in response.text
+    assert "Human" in response.text
+
+    # The rest of the chargen page reflects the loaded selections too, not just the sheet -- a
+    # follow-up GET / should show the same committed attribute spend.
+    index_response = fresh_client.get("/")
+    assert "Confirmed: Human" in index_response.text
+
+
+def _first_mundane_skill_id() -> str:
+    from chummer5.web.app import MUNDANE_SKILLS
+
+    return MUNDANE_SKILLS[0].id
+
+
+def test_a_loaded_qualitys_bonus_survives_a_later_attribute_edit() -> None:
+    """WP16 found that `create_character` always rebuilds a fresh, empty `ImprovementIndex`, so
+    every route that rebuilds `session.character` for an already-in-progress session must re-apply
+    any committed quality's Improvements onto it (`_relink_quality_improvements`), or the bonus
+    silently vanishes on the next attribute edit. `_apply_built_character_to_session` (this WP's
+    load/import entry point) sets `session.quality_selection` from the loaded save, so the existing
+    relink call in `submit_attributes` should already cover a *loaded* quality the same way it
+    covers one picked directly through the UI -- this proves that composition end to end rather
+    than just asserting it by inspection.
+    """
+    from chummer5.data.qualities import load_qualities
+
+    catlike = next(q for q in load_qualities() if q.name == "Catlike")
+
+    source_client = TestClient(create_app())
+    _confirm_human(source_client)
+    source_client.post("/ui/qualities", data={"quality_id": catlike.id})
+    save_bytes = source_client.get("/character/save").content
+
+    fresh_client = TestClient(create_app())
+    fresh_client.get("/")
+    fresh_client.post(
+        "/character/load",
+        files={"save_file": ("character.json", save_bytes, "application/json")},
+    )
+    assert "Sneaking" in fresh_client.get("/character/sheet").text
+
+    fresh_client.post("/ui/attributes", data={"attr_BOD": 1})
+
+    assert "Sneaking" in fresh_client.get("/character/sheet").text
+
+
+def test_loading_a_malformed_file_is_rejected_without_touching_the_session() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/character/load",
+        files={"save_file": ("bad.json", b"not json at all", "application/json")},
+    )
+
+    assert response.status_code == 200
+    assert "Could not load save" in response.text
+    # The previously-confirmed character survives an invalid load attempt.
+    sheet = client.get("/character/sheet")
+    assert "Human" in sheet.text
+
+
+def test_loading_without_choosing_a_file_shows_a_prompt_not_a_crash() -> None:
+    client = TestClient(create_app())
+    client.get("/")
+
+    response = client.post("/character/load", data={})
+
+    assert response.status_code == 200
+    assert "Choose a save file" in response.text
+
+
+def test_importing_without_choosing_a_file_shows_a_prompt_not_a_crash() -> None:
+    client = TestClient(create_app())
+    client.get("/")
+
+    response = client.post("/character/import-chum5", data={})
+
+    assert response.status_code == 200
+    assert "Choose a .chum5 file" in response.text
+
+
+def test_importing_a_non_xml_file_is_rejected() -> None:
+    client = TestClient(create_app())
+    client.get("/")
+
+    response = client.post(
+        "/character/import-chum5",
+        files={"chum5_file": ("bad.chum5", b"this is not xml", "application/xml")},
+    )
+
+    assert response.status_code == 200
+    assert "Not a valid .chum5 file" in response.text
+
+
+def test_nav_links_to_the_character_sheet_from_every_page() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/")
+
+    assert 'href="/character/sheet"' in response.text
