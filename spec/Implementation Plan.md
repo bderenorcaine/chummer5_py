@@ -193,7 +193,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 
 ### Phase F — FastAPI/HTMX UI
 
-- [ ] **WP13 — Web app skeleton.**
+- [x] **WP13 — Web app skeleton.**
   Goal: the UI stack runs end to end, doing nothing yet.
   Deliverables: `src/chummer5/web/app.py` (FastAPI app factory), Jinja2 base layout, HTMX vendored
   locally (not CDN-loaded, to keep the app fully offline/local-first), `uvicorn` dev-run instructions,

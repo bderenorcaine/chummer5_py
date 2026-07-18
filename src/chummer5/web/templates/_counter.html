@@ -1,0 +1,7 @@
+<div id="counter">
+  <p>Pings: <span id="counter-value">{{ count }}</span></p>
+  <form hx-post="/ui/counter" hx-target="#counter" hx-swap="outerHTML">
+    <input type="hidden" name="count" value="{{ count }}" />
+    <button type="submit">Ping the server</button>
+  </form>
+</div>
