@@ -1,0 +1,88 @@
+<div id="skill-allocation">
+  {% if character %}
+  <h2>Skills</h2>
+
+  {% if skill_error %}
+  <p class="error">{{ skill_error }}</p>
+  {% endif %}
+
+  <p>
+    Skill points remaining: {{ skills_remaining }} / {{ skills_budget }}.
+    Skill group points remaining: {{ groups_remaining }} / {{ groups_budget }}.
+  </p>
+
+  <form
+    hx-post="/ui/skills"
+    hx-target="#skill-allocation"
+    hx-swap="outerHTML"
+    hx-trigger="change, input delay:400ms"
+  >
+    <h3>Skill groups</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Group</th>
+          <th>Points</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in group_rows %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>
+            <input
+              type="number"
+              name="group_{{ row.name }}"
+              value="{{ row.points }}"
+              min="0"
+              max="{{ max_skill_rating }}"
+            />
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Individual skills</h3>
+    <p>
+      A skill's own points are ignored whenever its group has points spent (the group rating
+      wins) — see the "strict skill groups" rule.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Skill</th>
+          <th>Attribute</th>
+          <th>Group</th>
+          <th>Points</th>
+          <th>Rating</th>
+          <th>Pool</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in skill_rows %}
+        <tr>
+          <td>{{ row.skill.name }}</td>
+          <td>{{ row.skill.attribute }}</td>
+          <td>{{ row.skill.skill_group or "—" }}</td>
+          <td>
+            <input
+              type="number"
+              name="skill_{{ row.skill.id }}"
+              value="{{ row.points }}"
+              min="0"
+              max="{{ max_skill_rating }}"
+            />
+          </td>
+          <td>{{ row.rating }}</td>
+          <td>{{ row.pool }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Update skills</button>
+  </form>
+  {% else %}
+  <p>Confirm a metatype and priorities above before allocating skill points.</p>
+  {% endif %}
+</div>

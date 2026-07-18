@@ -1,4 +1,5 @@
-<div id="chargen-form">
+<div id="priority-section">
+  <h2>Priority &amp; metatype selection</h2>
   <p>
     Assign each of Heritage, Attributes, Skills, and Resources a different priority letter
     (A-D). Talent is forced to E — mundane MVP characters don't choose it.
@@ -11,7 +12,7 @@
   <form
     id="priority-form"
     hx-post="/ui/priorities"
-    hx-target="#chargen-form"
+    hx-target="#chargen-body"
     hx-swap="outerHTML"
   >
     <label>

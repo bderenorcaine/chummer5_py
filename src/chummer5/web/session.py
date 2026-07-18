@@ -18,6 +18,7 @@ import secrets
 from dataclasses import dataclass
 
 from chummer5.engine.character import Character
+from chummer5.engine.skills import SkillAllocation
 
 SESSION_COOKIE_NAME = "chummer5_session"
 
@@ -41,7 +42,13 @@ class ChargenSession:
     Mutable (unlike the frozen engine dataclasses it wraps) because it's the thing that changes
     across multiple requests as a player works through the chargen screens. `character` is only
     set once a metatype + a full, valid set of priority letters has been confirmed (WP14); WP15
-    replaces it with a new `Character` carrying real attribute-point spend.
+    replaces it with a new `Character` carrying real attribute-point spend on every valid
+    attribute-allocation submission. `skill_allocation` is WP15's equivalent for skill/skill-group
+    point spend -- `None` until the first valid skill-allocation submission, mirroring
+    `character`'s own "unset until confirmed" shape. Both `character` and `skill_allocation` are
+    reset (attribute points to empty, skill_allocation to `None`) whenever priorities/metatype are
+    re-confirmed (`chummer5.web.app.submit_priorities`), since a changed Attributes/Skills letter
+    or metatype invalidates the old point spend's budget.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER
@@ -50,6 +57,7 @@ class ChargenSession:
     resources_letter: str = DEFAULT_RESOURCES_LETTER
     metatype_id: str | None = None
     character: Character | None = None
+    skill_allocation: SkillAllocation | None = None
 
 
 class SessionStore:

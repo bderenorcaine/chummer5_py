@@ -1,0 +1,53 @@
+<div id="attribute-allocation">
+  {% if character %}
+  <h2>Attributes</h2>
+
+  {% if attribute_error %}
+  <p class="error">{{ attribute_error }}</p>
+  {% endif %}
+
+  <p>
+    Primary attribute points remaining: {{ primary_remaining }} / {{ primary_budget }}.
+    Special (Edge) points remaining: {{ special_remaining }} / {{ special_budget }}.
+  </p>
+
+  <form
+    hx-post="/ui/attributes"
+    hx-target="#attribute-allocation"
+    hx-swap="outerHTML"
+    hx-trigger="change, input delay:400ms"
+  >
+    <table>
+      <thead>
+        <tr>
+          <th>Attribute</th>
+          <th>Points</th>
+          <th>Value</th>
+          <th>Metatype range</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in attribute_rows %}
+        <tr>
+          <td>{{ row.code }}</td>
+          <td>
+            <input
+              type="number"
+              name="attr_{{ row.code }}"
+              value="{{ row.points }}"
+              min="0"
+              max="{{ row.maximum - row.minimum }}"
+            />
+          </td>
+          <td>{{ row.value }}</td>
+          <td>{{ row.minimum }}–{{ row.maximum }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Update attributes</button>
+  </form>
+  {% else %}
+  <p>Confirm a metatype and priorities above before allocating attribute points.</p>
+  {% endif %}
+</div>

@@ -211,7 +211,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Acceptance: manual walkthrough creates a metatype+priority selection that matches what WP6's engine
   would produce for the same inputs.
 
-- [ ] **WP15 — Attribute & skill allocation UI.**
+- [x] **WP15 — Attribute & skill allocation UI.**
   Goal: spend attribute/skill points through the browser.
   Deliverables: point-spend forms with HTMX-driven live remaining-points and dice-pool preview.
   Depends on: WP7, WP14.
