@@ -39,6 +39,27 @@ native format, `POST /character/import-chum5` for WP12's legacy import) — both
 et al. already mutate, so the five chargen-form routes need no changes to pick up a loaded/imported
 character on their next submission.
 
+WP18 folds `ChargenSession`'s four sibling selection fields (`skill_allocation`,
+`quality_selection`, `contacts`, `gear_names`) onto `chummer5.engine.character.Character` itself
+(`skill_allocation`/`quality_selection`/`contact_selection`/`resources_selection`, each `None`
+until committed) — see that module's docstring for the full rationale. Every route below now reads
+and writes through `session.character.x` instead of a same-named `session.x`; `_apply_built_
+character_to_session` shrinks to a straight assignment since `build_character` (WP11) now returns
+a single fully-populated `Character` rather than the retired `BuiltCharacter` wrapper.
+`_relink_quality_improvements` keeps its job (re-landing a carried-forward quality selection's
+`Improvement`s onto a freshly `create_character`'d `Character`, since that function still starts
+every `Character` with an empty `ImprovementIndex`) but now also re-attaches the `quality_selection`
+field itself and returns the updated `Character`. A new sibling, `_relink_contact_selection`,
+recomputes (not merely re-attaches) a carried-forward contact selection against the new
+`Character`, since `ContactSelection.free_points`/`karma_cost` depend on `character.attribute_
+value("CHA")`, which a metatype/attribute-point change can alter — unlike `quality_selection`
+(fixed karma amounts, no character-state dependency) or `resources_selection` (depends only on the
+Resources letter and the gear catalog, never on `character` itself), which are safe to carry
+forward by plain reference. `submit_attributes`/`submit_priorities` still call `create_character()`
+fresh on every edit rather than `dataclasses.replace`-ing the existing `Character` in place — WP18
+deliberately defers that switch to WP19 (see both WPs' worklogs for why), so these two relink
+helpers remain load-bearing for one more WP.
+
 Run locally: `uv run uvicorn chummer5.web.app:app --reload` (or `python -m uvicorn ...` — same
 `uv run python -m X` workaround as `pytest`/`ruff`/`mypy`, see Project Overview.md's Development
 environment note), then open http://127.0.0.1:8000/.
@@ -95,6 +116,7 @@ from chummer5.engine.resources import (
     KARMA_PER_EXCESS_CONTACT_POINT,
     STARTER_GEAR_CATALOG,
     Contact,
+    ContactSelection,
     StarterGearItem,
     create_contact_selection,
     create_resources_selection,
@@ -113,7 +135,6 @@ from chummer5.io.legacy_import import (
     import_chum5,
 )
 from chummer5.io.save_format import (
-    BuiltCharacter,
     CharacterSave,
     build_character,
     create_character_save,
@@ -356,31 +377,61 @@ def _skill_allocation_context(
     }
 
 
-def _relink_quality_improvements(character: Character, session: ChargenSession) -> None:
-    """Re-apply a session's already-committed quality selection onto a freshly built `Character`.
+def _relink_quality_improvements(
+    character: Character, quality_selection: QualitySelection | None
+) -> Character:
+    """Re-apply a carried-forward quality selection's bonuses onto a freshly built `Character`,
+    and re-attach the selection itself (WP18 folded `quality_selection` onto `Character` -- a
+    fresh `create_character()` call always starts it, like `improvements`, empty/`None`).
 
     `create_character` always returns a `Character` with a brand-new, empty `ImprovementIndex`
     (see its own docstring) -- every route that builds a new `Character` for an
     already-in-progress session (`submit_priorities`, `submit_attributes`) has to re-land this
     selection's bonuses onto it, or a previously-picked quality's skill bonus would silently
-    vanish the next time an attribute is edited. Safe to call unconditionally: a no-op before any
-    quality has ever been committed.
+    vanish the next time an attribute is edited. Safe to call unconditionally: returns `character`
+    unchanged if nothing has ever been committed.
     """
-    if session.quality_selection is not None:
-        apply_quality_improvements(character, session.quality_selection)
+    if quality_selection is None:
+        return character
+    apply_quality_improvements(character, quality_selection)
+    return replace(character, quality_selection=quality_selection)
 
 
-def _replace_committed_qualities(character: Character, selection: QualitySelection) -> None:
+def _relink_contact_selection(
+    character: Character, contact_selection: ContactSelection | None
+) -> Character:
+    """Recompute a carried-forward contact selection against a freshly built `Character`.
+
+    Unlike quality selection, a plain re-attach isn't correct here: `ContactSelection.free_points`/
+    `karma_cost` are derived from `character.attribute_value("CHA")`, which a metatype or
+    attribute-point change (the two things that trigger a fresh `create_character()` call) can
+    itself change. Recomputes from `contact_selection`'s own raw `contacts` tuple via
+    `create_contact_selection` rather than trusting the old snapshot's numbers -- always safe to
+    call (see `create_contact_selection`'s docstring: it never rejects a contact list that already
+    passed its Connection/Loyalty-minimum check once). Returns `character` unchanged if no contact
+    has ever been committed.
+    """
+    if contact_selection is None:
+        return character
+    return replace(
+        character, contact_selection=create_contact_selection(character, contact_selection.contacts)
+    )
+
+
+def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
     """Swap whatever QUALITY-sourced Improvements `character.improvements` currently holds for
-    `selection`'s. `apply_quality_improvements` only ever adds -- calling it twice for two
-    submissions of the same session's `Character` (i.e. without an intervening `create_character`
-    rebuild) would double up any quality that stayed selected across both, so previously-applied
-    QUALITY improvements are removed first.
+    `selection`'s, and re-attach `selection` as `character.quality_selection`.
+
+    `apply_quality_improvements` only ever adds -- calling it twice for two submissions against
+    the same `Character` (i.e. without an intervening `create_character` rebuild) would double up
+    any quality that stayed selected across both, so previously-applied QUALITY improvements are
+    removed first.
     """
     for imp in character.improvements.improvements:
         if imp.source_type == ImprovementSource.QUALITY:
             character.improvements.remove_source(ImprovementSource.QUALITY, imp.source_id)
     apply_quality_improvements(character, selection)
+    return replace(character, quality_selection=selection)
 
 
 def _quality_selection_context(
@@ -493,17 +544,21 @@ def _character_sheet_context(
     echo-the-submission variant here -- this page never redisplays invalid input, only the
     session's own last-known-good state (or `error`/`info`, set by the save/load routes below).
 
-    `create_contact_selection`/`create_resources_selection` are called directly here (unlike
-    `_contacts_context`/`_resources_context`, which avoid them to support echoing invalid input) --
-    `session.contacts`/`session.gear_names` are only ever set by a route that already validated
-    them, so re-validating here is always a no-op, just a convenient way to get `karma_cost`/
-    `nuyen_remaining` without recomputing the arithmetic a third time.
+    `contact_selection` is recomputed here (via `create_contact_selection`), not read directly off
+    `character.contact_selection` -- same reasoning as `_relink_contact_selection`: its
+    `free_points`/`karma_cost` depend on `character.attribute_value("CHA")`, so recomputing from
+    the committed `contacts` tuple is the only way to guarantee this always reflects the
+    character's *current* CHA, even if every mutating route's own relink call were somehow missed.
+    `resources_selection` has no such character-dependency (see `chummer5.engine.resources
+    .create_resources_selection`'s signature -- no `character` parameter at all), so it's read
+    directly off `character.resources_selection`, falling back to a fresh zero-spend selection if
+    nothing's been committed yet.
     """
     character = session.character
     if character is None:
         return {"character": None, "sheet_error": error, "sheet_info": info}
 
-    allocation = session.skill_allocation
+    allocation = character.skill_allocation
     skill_rows = (
         [
             {"skill": skill, "rating": rating, "pool": dice_pool(character, allocation, skill)}
@@ -514,17 +569,20 @@ def _character_sheet_context(
         else []
     )
     quality_names = (
-        [q.name for q in session.quality_selection.qualities]
-        if session.quality_selection is not None
+        [q.name for q in character.quality_selection.qualities]
+        if character.quality_selection is not None
         else []
     )
-    contact_selection = create_contact_selection(character, session.contacts)
-    resources_selection = create_resources_selection(
-        session.resources_letter, PRIORITIES, session.gear_names
+    committed_contacts = (
+        character.contact_selection.contacts if character.contact_selection is not None else ()
+    )
+    contact_selection = create_contact_selection(character, committed_contacts)
+    resources_selection = character.resources_selection or create_resources_selection(
+        session.resources_letter, PRIORITIES, ()
     )
     gear_counts: dict[str, int] = {}
-    for name in session.gear_names:
-        gear_counts[name] = gear_counts.get(name, 0) + 1
+    for item in resources_selection.gear:
+        gear_counts[item.name] = gear_counts.get(item.name, 0) + 1
 
     return {
         "character": character,
@@ -557,7 +615,7 @@ def _character_sheet_context(
         "nuyen_budget": resources_selection.nuyen_budget,
         "nuyen_remaining": resources_selection.nuyen_remaining,
         "quality_karma_cost": (
-            session.quality_selection.karma_cost if session.quality_selection is not None else 0
+            character.quality_selection.karma_cost if character.quality_selection is not None else 0
         ),
         "contact_karma_cost": contact_selection.karma_cost,
         "initiative_value": initiative_value(character),
@@ -579,10 +637,18 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     """
     character = session.character
     assert character is not None
-    allocation = session.skill_allocation
+    allocation = character.skill_allocation
     quality_ids = (
-        tuple(q.id for q in session.quality_selection.qualities)
-        if session.quality_selection is not None
+        tuple(q.id for q in character.quality_selection.qualities)
+        if character.quality_selection is not None
+        else ()
+    )
+    contacts = (
+        character.contact_selection.contacts if character.contact_selection is not None else ()
+    )
+    gear_names = (
+        tuple(item.name for item in character.resources_selection.gear)
+        if character.resources_selection is not None
         else ()
     )
     return create_character_save(
@@ -594,22 +660,25 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         skill_points=allocation.skill_points if allocation is not None else {},
         group_points=allocation.group_points if allocation is not None else {},
         quality_ids=quality_ids,
-        contacts=session.contacts,
+        contacts=contacts,
         resources_letter=session.resources_letter,
-        gear_names=session.gear_names,
+        gear_names=gear_names,
     )
 
 
 def _apply_built_character_to_session(
-    session: ChargenSession, save: CharacterSave, built: BuiltCharacter
+    session: ChargenSession, save: CharacterSave, built: Character
 ) -> None:
-    """Overwrite every `ChargenSession` field from a successfully loaded/imported character --
-    used by both `load_save` (WP11's native format) and `import_chum5_route` (WP12's legacy
-    import), since both ultimately produce the same `(CharacterSave, BuiltCharacter)` pair. Safe to
-    call regardless of the session's prior state (a fresh session or one already mid-chargen):
-    every field this WP's chargen routes read is set here, none is merged with what came before.
+    """Overwrite `ChargenSession` from a successfully loaded/imported character -- used by both
+    `load_save` (WP11's native format) and `import_chum5_route` (WP12's legacy import), since both
+    ultimately produce the same `(CharacterSave, Character)` pair (WP18 retired the
+    `BuiltCharacter` wrapper `build_character` used to return -- see `chummer5.io.save_format`'s
+    docstring; `built` already carries its own `skill_allocation`/`quality_selection`/
+    `contact_selection`/`resources_selection`, so there's nothing left to reassemble here). Safe to
+    call regardless of the session's prior state (a fresh session or one already mid-chargen): every
+    field this WP's chargen routes read is set here, none is merged with what came before.
 
-    `built.character` (not a re-`create_character` call) is used for `session.character` --
+    `built` (not a re-`create_character` call) is used for `session.character` directly --
     `build_character` already ran `apply_quality_improvements` on it (see
     `chummer5.io.save_format`), so it arrives with the right `ImprovementIndex` already populated,
     unlike `create_character`'s always-empty one (see `_relink_quality_improvements`'s docstring
@@ -619,12 +688,8 @@ def _apply_built_character_to_session(
     session.attributes_letter = save.attributes_letter
     session.skills_letter = save.skills_letter
     session.resources_letter = save.resources_letter
-    session.metatype_id = built.character.metatype.id
-    session.character = built.character
-    session.skill_allocation = built.skill_allocation
-    session.quality_selection = built.quality_selection
-    session.contacts = built.contact_selection.contacts
-    session.gear_names = save.gear_names
+    session.metatype_id = built.metatype.id
+    session.character = built
 
 
 def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> dict[str, Any]:
@@ -636,20 +701,30 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     character = session.character
     attribute_points = character.attribute_points if character is not None else {}
     attribute_ctx = _attribute_allocation_context(character, attribute_points)
-    allocation = session.skill_allocation
+    allocation = character.skill_allocation if character is not None else None
     skill_points = allocation.skill_points if allocation is not None else {}
     group_points = allocation.group_points if allocation is not None else {}
     skill_ctx = _skill_allocation_context(
         character, session.skills_letter, skill_points, group_points
     )
     quality_ids = (
-        tuple(q.id for q in session.quality_selection.qualities)
-        if session.quality_selection is not None
+        tuple(q.id for q in character.quality_selection.qualities)
+        if character is not None and character.quality_selection is not None
         else ()
     )
     quality_ctx = _quality_selection_context(character, quality_ids)
-    contact_ctx = _contacts_context(character, session.contacts)
-    resources_ctx = _resources_context(character, session.resources_letter, session.gear_names)
+    contacts = (
+        character.contact_selection.contacts
+        if character is not None and character.contact_selection is not None
+        else ()
+    )
+    contact_ctx = _contacts_context(character, contacts)
+    gear_names = (
+        tuple(item.name for item in character.resources_selection.gear)
+        if character is not None and character.resources_selection is not None
+        else ()
+    )
+    resources_ctx = _resources_context(character, session.resources_letter, gear_names)
     return {
         **priority_ctx,
         **attribute_ctx,
@@ -742,26 +817,30 @@ def create_app() -> FastAPI:
             if choice is None:
                 error = "Select a metatype offered for the chosen Heritage priority."
             else:
+                previous = session.character
                 character = create_character(
                     choice, heritage_letter, attributes_letter, PRIORITIES, {}
                 )
-                # `create_character` returns a fresh, empty `ImprovementIndex` -- re-land any
-                # already-committed quality selection's bonuses before this becomes the session's
-                # new `character`. See `_relink_quality_improvements`.
-                _relink_quality_improvements(character, session)
+                # `create_character` returns a fresh, empty `ImprovementIndex` -- and, since WP18,
+                # a fresh Character whose skill_allocation/quality_selection/contact_selection/
+                # resources_selection all start `None` too. Quality and contacts are carried
+                # forward from the session's previous Character (re-landing quality's Improvements,
+                # recomputing contacts' CHA-derived free_points/karma_cost); skill_allocation and
+                # resources_selection are intentionally left `None` (reset) -- a changed metatype/
+                # Attributes/Skills/Resources letter invalidates whatever skill/gear spend was
+                # already made against the *old* budget. See ChargenSession's docstring.
+                character = _relink_quality_improvements(
+                    character, previous.quality_selection if previous is not None else None
+                )
+                character = _relink_contact_selection(
+                    character, previous.contact_selection if previous is not None else None
+                )
                 session.heritage_letter = heritage_letter
                 session.attributes_letter = attributes_letter
                 session.skills_letter = skills_letter
                 session.resources_letter = resources_letter
                 session.metatype_id = metatype_id
                 session.character = character
-                # A changed metatype/Attributes/Skills letter invalidates whatever attribute/skill
-                # points were already spent against the *old* budget -- reset both rather than
-                # silently carrying over a spend that may now be over budget or off a metatype's
-                # attribute range. See ChargenSession's docstring. A changed Resources letter is
-                # the same story for gear spend, since its nuyen budget depends on that letter.
-                session.skill_allocation = None
-                session.gear_names = ()
 
         # The priority form's `hx-target` is `#chargen-body` (the whole three-section wrapper, not
         # just this form) since a successful submission invalidates the attribute/skill sections'
@@ -801,6 +880,7 @@ def create_app() -> FastAPI:
                 special_attribute_points=session.character.special_attribute_points,
                 karma=0,
             )
+            previous = session.character
             try:
                 character = create_character(
                     choice,
@@ -814,9 +894,18 @@ def create_app() -> FastAPI:
                     session.character, attribute_points, error=str(exc)
                 )
             else:
-                # See the identical comment in submit_priorities -- a fresh Character means a
-                # fresh, empty ImprovementIndex.
-                _relink_quality_improvements(character, session)
+                # See the identical comment in submit_priorities -- a fresh Character means fresh
+                # skill_allocation/quality_selection/contact_selection/resources_selection (all
+                # `None`) and a fresh, empty ImprovementIndex. Unlike submit_priorities, an
+                # attribute-point edit alone doesn't invalidate skill or gear spend (neither
+                # depends on attribute points), so both carry forward by plain reference.
+                character = _relink_quality_improvements(character, previous.quality_selection)
+                character = _relink_contact_selection(character, previous.contact_selection)
+                character = replace(
+                    character,
+                    skill_allocation=previous.skill_allocation,
+                    resources_selection=previous.resources_selection,
+                )
                 session.character = character
                 context = _attribute_allocation_context(character, attribute_points)
         response = templates.TemplateResponse(request, "_attribute_allocation.html", context)
@@ -846,7 +935,7 @@ def create_app() -> FastAPI:
                     error=str(exc),
                 )
             else:
-                session.skill_allocation = allocation
+                session.character = replace(session.character, skill_allocation=allocation)
                 context = _skill_allocation_context(
                     session.character, session.skills_letter, skill_points, group_points
                 )
@@ -868,8 +957,7 @@ def create_app() -> FastAPI:
             except ValueError as exc:
                 context = _quality_selection_context(session.character, quality_ids, error=str(exc))
             else:
-                _replace_committed_qualities(session.character, selection)
-                session.quality_selection = selection
+                session.character = _replace_committed_qualities(session.character, selection)
                 context = _quality_selection_context(session.character, quality_ids)
         response = templates.TemplateResponse(request, "_quality_selection.html", context)
         if new_cookie is not None:
@@ -885,11 +973,11 @@ def create_app() -> FastAPI:
             form = await request.form()
             contacts = _parse_contacts(form, MAX_CONTACT_ROWS)
             try:
-                create_contact_selection(session.character, contacts)
+                selection = create_contact_selection(session.character, contacts)
             except ValueError as exc:
                 context = _contacts_context(session.character, contacts, error=str(exc))
             else:
-                session.contacts = contacts
+                session.character = replace(session.character, contact_selection=selection)
                 context = _contacts_context(session.character, contacts)
         response = templates.TemplateResponse(request, "_contacts.html", context)
         if new_cookie is not None:
@@ -905,13 +993,15 @@ def create_app() -> FastAPI:
             form = await request.form()
             gear_names = _parse_gear(form, STARTER_GEAR_CATALOG)
             try:
-                create_resources_selection(session.resources_letter, PRIORITIES, gear_names)
+                selection = create_resources_selection(
+                    session.resources_letter, PRIORITIES, gear_names
+                )
             except ValueError as exc:
                 context = _resources_context(
                     session.character, session.resources_letter, gear_names, error=str(exc)
                 )
             else:
-                session.gear_names = gear_names
+                session.character = replace(session.character, resources_selection=selection)
                 context = _resources_context(
                     session.character, session.resources_letter, gear_names
                 )

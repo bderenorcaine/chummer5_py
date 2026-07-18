@@ -18,9 +18,6 @@ import secrets
 from dataclasses import dataclass
 
 from chummer5.engine.character import Character
-from chummer5.engine.qualities import QualitySelection
-from chummer5.engine.resources import Contact
-from chummer5.engine.skills import SkillAllocation
 
 SESSION_COOKIE_NAME = "chummer5_session"
 
@@ -42,36 +39,46 @@ class ChargenSession:
     """One browser session's in-progress chargen state.
 
     Mutable (unlike the frozen engine dataclasses it wraps) because it's the thing that changes
-    across multiple requests as a player works through the chargen screens. `character` is only
-    set once a metatype + a full, valid set of priority letters has been confirmed (WP14); WP15
-    replaces it with a new `Character` carrying real attribute-point spend on every valid
-    attribute-allocation submission. `skill_allocation` is WP15's equivalent for skill/skill-group
-    point spend -- `None` until the first valid skill-allocation submission, mirroring
-    `character`'s own "unset until confirmed" shape. Both `character` and `skill_allocation` are
-    reset (attribute points to empty, skill_allocation to `None`) whenever priorities/metatype are
-    re-confirmed (`chummer5.web.app.submit_priorities`), since a changed Attributes/Skills letter
-    or metatype invalidates the old point spend's budget.
+    across multiple requests as a player works through the chargen screens.
 
-    WP16 adds three more committed selections, each reset independently since they don't all
-    depend on the same things:
-    - `quality_selection`: **not** reset on reconfirmation. None of the 3 MVP-offered qualities
-      (Catlike, Double-Jointed, Natural Athlete) are metatype-gated or priority-letter-budgeted --
-      the 25-karma-per-side cap is a fixed constant -- so a changed Heritage/Attributes/Skills/
-      Resources letter or metatype has no bearing on whether a prior quality pick is still valid.
-      Its *Improvements*, however, always need re-landing onto whatever `Character` object is
-      current, because `create_character` always builds a fresh, empty `ImprovementIndex` (see
-      `chummer5.engine.character.create_character`'s own docstring) -- every route that calls it
-      again (`submit_priorities`, `submit_attributes`) must re-apply this selection's bonuses onto
-      the new `Character`, or a previously-picked quality's skill bonus would silently vanish the
-      next time an attribute is edited. See `chummer5.web.app`'s `_relink_quality_improvements`.
-    - `contacts`: **not** reset on reconfirmation either. A contact's Connection/Loyalty are the
-      player's own invention, not validated against metatype/priorities at all; only the *free
-      contact-point budget* (`CHA * 3`) depends on the character, and that's recomputed fresh from
-      the current `Character` on every render (`chummer5.web.app._contacts_context`), so there's
-      nothing stale to reset.
-    - `gear_names`: **is** reset on reconfirmation, mirroring `skill_allocation` -- the nuyen
-      budget it spends against depends specifically on the Resources priority letter, which is one
-      of the four letters reconfirmation can change.
+    **WP18's fold.** Through WP17, this class carried `character` plus four more sibling fields
+    (`skill_allocation`, `quality_selection`, `contacts`, `gear_names`) that were independently
+    threaded through here, the save format, and legacy import, and only reunited with `character`
+    ad hoc (`chummer5.io.save_format`'s now-retired `BuiltCharacter`). WP18 moved all four onto
+    `chummer5.engine.character.Character` itself (see its docstring), so this class now holds only
+    `character` -- every one of those four is read as `character.skill_allocation`,
+    `character.quality_selection`, `character.contact_selection`, `character.resources_selection`
+    from here on, each `None` until that stage of chargen is committed (the old `session.contacts`/
+    `session.gear_names` defaulted to `()` instead; the equivalent reads are now
+    `character.contact_selection.contacts if character.contact_selection else ()` and
+    `[item.name for item in character.resources_selection.gear] if character.resources_selection
+    else ()`).
+
+    `heritage_letter`/`attributes_letter`/`skills_letter`/`resources_letter`/`metatype_id` remain
+    genuine sibling state, not folded into `Character`: they're the *pre-confirmation* priority-form
+    selection a player is still adjusting, which exists before any `Character` does (the very first
+    page load has no character yet, but still needs a legal starting letter assignment -- see the
+    `DEFAULT_*_LETTER` constants below). Once a metatype+priorities submission is confirmed,
+    `heritage_letter`/`attributes_letter` are duplicated onto the resulting `Character` too (it
+    needs them for its own attribute-range/budget lookups), but `skills_letter`/`resources_letter`/
+    `metatype_id` have no `Character`-side equivalent at all, so this session-level copy remains
+    the only copy for all four regardless.
+
+    `character` is only set once a metatype + a full, valid set of priority letters has been
+    confirmed (WP14); WP15 replaces it with a new `Character` carrying real attribute-point spend
+    on every valid attribute-allocation submission. A changed Attributes/Skills letter or metatype
+    invalidates the old point spend's budget, so both `attribute_points` and `skill_allocation` are
+    still reset on reconfirmation (`chummer5.web.app.submit_priorities`) -- unchanged behavior, now
+    expressed as resetting fields *on* the new `Character` rather than resetting sibling session
+    fields to match a freshly-built one.
+
+    `quality_selection` and `contact_selection` are **not** reset on reconfirmation (unchanged from
+    WP16): none of the 3 MVP-offered qualities are metatype-gated or priority-letter-budgeted, and a
+    contact's Connection/Loyalty aren't validated against metatype/priorities at all -- only the
+    *free* contact-point budget (`CHA * 3`) depends on the character, and that's recomputed fresh
+    from the current `Character` on every render. `resources_selection` **is** reset on
+    reconfirmation, mirroring the old `gear_names` behavior -- its nuyen budget depends specifically
+    on the Resources priority letter, one of the four letters reconfirmation can change.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER
@@ -80,10 +87,6 @@ class ChargenSession:
     resources_letter: str = DEFAULT_RESOURCES_LETTER
     metatype_id: str | None = None
     character: Character | None = None
-    skill_allocation: SkillAllocation | None = None
-    quality_selection: QualitySelection | None = None
-    contacts: tuple[Contact, ...] = ()
-    gear_names: tuple[str, ...] = ()
 
 
 class SessionStore:

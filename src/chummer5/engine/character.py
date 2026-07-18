@@ -28,10 +28,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 from chummer5.data.metatypes import AttributeRange, Metatype
 from chummer5.data.priorities import HeritagePriority, PriorityTable
 from chummer5.engine.improvements import ImprovementIndex, ImprovementType
+
+if TYPE_CHECKING:
+    # Deferred to type-checking only: `chummer5.engine.{qualities,resources,skills}` each import
+    # `Character` from this module, so importing them back here at runtime would be circular. Safe
+    # under `from __future__ import annotations` (PEP 563) -- every annotation in this module,
+    # including dataclass field types, is a lazily-evaluated string, so `dataclasses.dataclass`
+    # never needs these names to actually resolve at import time.
+    from chummer5.engine.qualities import QualitySelection
+    from chummer5.engine.resources import ContactSelection, ResourcesSelection
+    from chummer5.engine.skills import SkillAllocation
 
 # MVP content-scope filter (see Project Overview's "Core rulebook only" note and WP2's worklog):
 # every data-driven choice offered to the player is restricted to entries sourced from the SR5
@@ -104,12 +115,25 @@ def metatype_choices(
 
 @dataclass(frozen=True)
 class Character:
-    """A mundane, priority-built character: a chosen metatype plus finalized attribute points.
+    """A mundane, priority-built character-in-progress: metatype, attribute points, plus whatever
+    later chargen stages have been committed so far.
 
     `attribute_points` holds however many points were spent above the metatype minimum for each
     of `ALLOCATABLE_ATTRIBUTES` — the source of those points (Attributes-priority budget vs.
     special-attribute-points budget) is a construction-time concern (`create_character`'s
     validation), not part of the finished character's own state.
+
+    **WP18's fold**: `skill_allocation`/`quality_selection`/`contact_selection`/
+    `resources_selection` make `Character` the single aggregate for a character-in-progress,
+    replacing the prior design where only metatype/attributes lived here and the other four
+    selections were sibling fields independently threaded through `chummer5.web.session
+    .ChargenSession` and reunited ad hoc in `chummer5.io.save_format`'s now-retired
+    `BuiltCharacter`. Each defaults to `None` until that stage of chargen is committed — the same
+    "unset until confirmed" shape `attribute_points`/`improvements` already had before any points
+    were spent. `create_character` itself does not set any of the four; a caller building up a
+    character stage by stage does so via `dataclasses.replace(character, skill_allocation=...)`
+    etc. against its existing `Character`, not by calling `create_character` again (which would
+    also hand back a fresh, empty `improvements` index -- see that function's own docstring).
     """
 
     metatype: Metatype
@@ -118,6 +142,10 @@ class Character:
     special_attribute_points: int
     attribute_points: MappingProxyType[str, int]
     improvements: ImprovementIndex
+    skill_allocation: SkillAllocation | None = None
+    quality_selection: QualitySelection | None = None
+    contact_selection: ContactSelection | None = None
+    resources_selection: ResourcesSelection | None = None
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]

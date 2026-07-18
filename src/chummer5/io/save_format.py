@@ -27,6 +27,14 @@ objects" -- the built objects hold references to catalog data (`Metatype`, `Qual
 mutable `ImprovementIndex` with no meaningful JSON encoding, whereas the selections are already
 exactly the plain (str/int/bool/tuple) values every `create_*` function takes.
 
+**`build_character()` returns a `Character` directly, not a `BuiltCharacter` wrapper (as of WP18).**
+WP11 originally paired one alongside `Character` specifically because `Character` itself only held
+metatype/attributes at the time -- a save's other four selections had nowhere to attach except a
+bundling type built for the purpose. WP18 widened `Character` with
+`skill_allocation`/`quality_selection`/`contact_selection`/`resources_selection` fields (see its own
+docstring), which makes that wrapper redundant: `build_character` now attaches all four to the
+`Character` it builds via one `dataclasses.replace` call and returns that directly.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -39,7 +47,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
@@ -48,19 +56,13 @@ from chummer5.data.priorities import PriorityTable
 from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
 from chummer5.engine.character import Character, create_character, metatype_choices
-from chummer5.engine.qualities import (
-    QualitySelection,
-    apply_quality_improvements,
-    create_quality_selection,
-)
+from chummer5.engine.qualities import apply_quality_improvements, create_quality_selection
 from chummer5.engine.resources import (
     Contact,
-    ContactSelection,
-    ResourcesSelection,
     create_contact_selection,
     create_resources_selection,
 )
-from chummer5.engine.skills import SkillAllocation, create_skill_allocation
+from chummer5.engine.skills import create_skill_allocation
 
 # Bumped only if a future WP changes this format's shape in a way older saves can't be read as.
 # MVP has exactly one version; there is no migration path yet because there is nothing to migrate
@@ -193,26 +195,6 @@ def from_json(text: str) -> CharacterSave:
     return _dict_to_save(data)
 
 
-@dataclass(frozen=True)
-class BuiltCharacter:
-    """The full set of engine artifacts one `CharacterSave` reconstructs into.
-
-    Deliberately not compared field-for-field with `==` in tests: `Character` embeds an
-    `ImprovementIndex`, which has no `__eq__` of its own (see `chummer5.engine.improvements`), so
-    two independently-built `Character`s are never `==` even with identical selections -- the same
-    reason existing fixture tests (e.g. `tests/integration/test_character_fixtures.py`) always
-    compare `Character.attribute_value()` results rather than `Character` instances directly.
-    `SkillAllocation`/`QualitySelection`/`ContactSelection`/`ResourcesSelection` hold no such
-    unindexed engine state, so those four *do* compare equal by value.
-    """
-
-    character: Character
-    skill_allocation: SkillAllocation
-    quality_selection: QualitySelection
-    contact_selection: ContactSelection
-    resources_selection: ResourcesSelection
-
-
 def build_character(
     save: CharacterSave,
     *,
@@ -220,9 +202,18 @@ def build_character(
     priorities: PriorityTable,
     skills: tuple[Skill, ...],
     qualities: tuple[Quality, ...],
-) -> BuiltCharacter:
-    """Reconstruct every engine artifact a `CharacterSave` describes, re-running the same
-    `create_*` validation each one already has (see module docstring).
+) -> Character:
+    """Reconstruct a fully-populated `Character` from a `CharacterSave`, re-running the same
+    `create_*` validation each selection already has (see module docstring).
+
+    A save always carries every selection at once (unlike an in-progress `ChargenSession`, which
+    fills `Character`'s four optional fields in one at a time), so this builds and attaches all
+    four in a single `dataclasses.replace` rather than the incremental per-stage updates
+    `chummer5.web.app` performs against a live session -- see `chummer5.engine.character
+    .Character`'s own docstring for that shape (introduced in WP18, which also retired this
+    function's prior `BuiltCharacter` return type: a save's `Character` already carries
+    `skill_allocation`/`quality_selection`/`contact_selection`/`resources_selection` directly, so a
+    separate bundling type added nothing).
 
     `metatypes`/`priorities`/`skills`/`qualities` are the static rules catalogs (WP2/WP3's loader
     output) -- passed in rather than loaded here, mirroring how every other engine module takes
@@ -264,8 +255,8 @@ def build_character(
         save.resources_letter, priorities, gear_names=save.gear_names
     )
 
-    return BuiltCharacter(
-        character=character,
+    return replace(
+        character,
         skill_allocation=skill_allocation,
         quality_selection=quality_selection,
         contact_selection=contact_selection,

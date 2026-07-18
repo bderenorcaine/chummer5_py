@@ -52,12 +52,12 @@ there's no MVP-computed value Resonance content would corrupt if left unconsumed
 
 **Import validates by actually building, not just by shape.** `import_chum5`/
 `import_legacy_character` call straight into WP11's `build_character()` before returning, so
-"successfully imports" means "this `CharacterSave` reconstructs into a real `Character`/
-`SkillAllocation`/`QualitySelection`/`ContactSelection`/`ResourcesSelection` that passes every one
-of `create_*`'s own validations" — not merely "the fields were extracted into the right shape." Any
-`create_*` rejection (e.g. a corpus file with a real rules violation this module's own checks don't
-anticipate) surfaces as `build_character`'s own `ValueError`, unchanged; this module does not catch
-or reinterpret it.
+"successfully imports" means "this `CharacterSave` reconstructs into a real `Character` (carrying
+its own `skill_allocation`/`quality_selection`/`contact_selection`/`resources_selection`, per WP18's
+fold) that passes every one of `create_*`'s own validations" — not merely "the fields were
+extracted into the right shape." Any `create_*` rejection (e.g. a corpus file with a real rules
+violation this module's own checks don't anticipate) surfaces as `build_character`'s own
+`ValueError`, unchanged; this module does not catch or reinterpret it.
 """
 
 from __future__ import annotations
@@ -69,12 +69,11 @@ from chummer5.data.metatypes import Metatype
 from chummer5.data.priorities import PriorityTable
 from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
-from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES
+from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character
 from chummer5.engine.qualities import mvp_quality_catalog
 from chummer5.engine.resources import Contact
 from chummer5.io.legacy_chum5 import LegacyCharacter, load_chum5, priority_letter
 from chummer5.io.save_format import (
-    BuiltCharacter,
     CharacterSave,
     build_character,
     create_character_save,
@@ -125,13 +124,16 @@ def _blocking_reasons(legacy: LegacyCharacter) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class ImportResult:
-    """A successfully imported legacy character: the native `CharacterSave`, the `BuiltCharacter`
-    that save reconstructs into (proving the import is actually buildable, not just shaped right),
-    and what got excluded along the way -- see module docstring for the excluded-vs-blocking split.
+    """A successfully imported legacy character: the native `CharacterSave`, the `Character` that
+    save reconstructs into (proving the import is actually buildable, not just shaped right; see
+    `chummer5.io.save_format.build_character` -- `Character` itself carries the resulting
+    `skill_allocation`/`quality_selection`/`contact_selection`/`resources_selection` since WP18's
+    fold, so no separate wrapper type is needed here either), and what got excluded along the way
+    -- see module docstring for the excluded-vs-blocking split.
     """
 
     save: CharacterSave
-    built: BuiltCharacter
+    built: Character
     dropped_qualities: tuple[str, ...]
     dropped_skills: tuple[str, ...]
 

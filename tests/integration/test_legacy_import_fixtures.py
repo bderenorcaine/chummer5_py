@@ -51,7 +51,7 @@ def test_imports_yeti_end_to_end() -> None:
         qualities=QUALITIES,
     )
 
-    character = result.built.character
+    character = result.built
     for code in ALLOCATABLE_ATTRIBUTES:
         assert character.attribute_value(code) == legacy.attributes[code].total_value, code
 

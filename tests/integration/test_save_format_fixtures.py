@@ -94,8 +94,8 @@ def test_yeti_save_round_trips_through_json_unchanged() -> None:
 def test_yeti_build_save_load_produces_an_equal_reconstruction() -> None:
     """The `build → save → load → equal` acceptance criterion itself: build once, round-trip the
     save through JSON, build again from the reloaded copy, and confirm every artifact that can be
-    compared by value matches -- plus the two artifacts that can't (`Character`, whose
-    `ImprovementIndex` has no `__eq__`; see `BuiltCharacter`'s docstring) are cross-checked via
+    compared by value matches -- plus the one field that can't (`ImprovementIndex` has no
+    `__eq__`; see `chummer5.engine.character.Character`'s docstring) is cross-checked via
     `attribute_value()` instead, against both each other and Yeti's own legacy-computed totals.
     """
     save = _yeti_save()
@@ -114,8 +114,8 @@ def test_yeti_build_save_load_produces_an_equal_reconstruction() -> None:
 
     legacy = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
     for code in ALLOCATABLE_ATTRIBUTES:
-        before_value = built_before.character.attribute_value(code)
-        after_value = built_after.character.attribute_value(code)
+        before_value = built_before.attribute_value(code)
+        after_value = built_after.attribute_value(code)
         assert before_value == after_value == legacy.attributes[code].total_value, code
 
     assert built_before.skill_allocation == built_after.skill_allocation

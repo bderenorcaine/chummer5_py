@@ -41,7 +41,7 @@ def test_importing_yeti_through_the_web_layer_matches_the_engine_directly() -> N
         skills=SKILLS,
         qualities=QUALITIES,
     )
-    expected_character = expected.built.character
+    expected_character = expected.built
 
     client = TestClient(create_app())
     client.get("/")
