@@ -18,6 +18,8 @@ import secrets
 from dataclasses import dataclass
 
 from chummer5.engine.character import Character
+from chummer5.engine.qualities import QualitySelection
+from chummer5.engine.resources import Contact
 from chummer5.engine.skills import SkillAllocation
 
 SESSION_COOKIE_NAME = "chummer5_session"
@@ -49,6 +51,27 @@ class ChargenSession:
     reset (attribute points to empty, skill_allocation to `None`) whenever priorities/metatype are
     re-confirmed (`chummer5.web.app.submit_priorities`), since a changed Attributes/Skills letter
     or metatype invalidates the old point spend's budget.
+
+    WP16 adds three more committed selections, each reset independently since they don't all
+    depend on the same things:
+    - `quality_selection`: **not** reset on reconfirmation. None of the 3 MVP-offered qualities
+      (Catlike, Double-Jointed, Natural Athlete) are metatype-gated or priority-letter-budgeted --
+      the 25-karma-per-side cap is a fixed constant -- so a changed Heritage/Attributes/Skills/
+      Resources letter or metatype has no bearing on whether a prior quality pick is still valid.
+      Its *Improvements*, however, always need re-landing onto whatever `Character` object is
+      current, because `create_character` always builds a fresh, empty `ImprovementIndex` (see
+      `chummer5.engine.character.create_character`'s own docstring) -- every route that calls it
+      again (`submit_priorities`, `submit_attributes`) must re-apply this selection's bonuses onto
+      the new `Character`, or a previously-picked quality's skill bonus would silently vanish the
+      next time an attribute is edited. See `chummer5.web.app`'s `_relink_quality_improvements`.
+    - `contacts`: **not** reset on reconfirmation either. A contact's Connection/Loyalty are the
+      player's own invention, not validated against metatype/priorities at all; only the *free
+      contact-point budget* (`CHA * 3`) depends on the character, and that's recomputed fresh from
+      the current `Character` on every render (`chummer5.web.app._contacts_context`), so there's
+      nothing stale to reset.
+    - `gear_names`: **is** reset on reconfirmation, mirroring `skill_allocation` -- the nuyen
+      budget it spends against depends specifically on the Resources priority letter, which is one
+      of the four letters reconfirmation can change.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER
@@ -58,6 +81,9 @@ class ChargenSession:
     metatype_id: str | None = None
     character: Character | None = None
     skill_allocation: SkillAllocation | None = None
+    quality_selection: QualitySelection | None = None
+    contacts: tuple[Contact, ...] = ()
+    gear_names: tuple[str, ...] = ()
 
 
 class SessionStore:

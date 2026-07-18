@@ -1,0 +1,52 @@
+<div id="quality-selection">
+  {% if character %}
+  <h2>Qualities</h2>
+
+  {% if quality_error %}
+  <p class="error">{{ quality_error }}</p>
+  {% endif %}
+
+  <p>
+    Positive Quality karma: {{ positive_karma }} / {{ karma_limit }}.
+    Negative Quality karma: {{ negative_karma }} / {{ karma_limit }}.
+  </p>
+
+  <form
+    hx-post="/ui/qualities"
+    hx-target="#quality-selection"
+    hx-swap="outerHTML"
+    hx-trigger="change"
+  >
+    <table>
+      <thead>
+        <tr>
+          <th>Select</th>
+          <th>Quality</th>
+          <th>Category</th>
+          <th>Karma</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in quality_rows %}
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              name="quality_id"
+              value="{{ row.quality.id }}"
+              {% if row.selected %}checked{% endif %}
+            />
+          </td>
+          <td>{{ row.quality.name }}</td>
+          <td>{{ row.quality.category }}</td>
+          <td>{{ row.quality.karma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Update qualities</button>
+  </form>
+  {% else %}
+  <p>Confirm a metatype and priorities above before selecting qualities.</p>
+  {% endif %}
+</div>

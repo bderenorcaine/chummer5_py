@@ -16,6 +16,15 @@ for a live HTMX update. `POST /ui/priorities` now re-renders all three sections 
 (`_chargen_body.html`) since a changed metatype/Attributes/Skills letter invalidates whatever
 attribute/skill points were already spent — see `ChargenSession`'s docstring for the reset rule.
 
+WP16 rounds out chargen inputs with three more fragments/routes, same pattern: `POST /ui/qualities`
+(WP8's `create_quality_selection`/`apply_quality_improvements`), `POST /ui/contacts` (WP9's
+`create_contact_selection`), `POST /ui/resources` (WP9's `create_resources_selection`). One new
+wrinkle WP16 surfaces: `create_character` always builds a `Character` with a brand-new, empty
+`ImprovementIndex` (see its own docstring), so every route that calls it again for an
+already-in-progress session (`submit_priorities`, `submit_attributes`) must re-apply any
+already-committed quality selection's Improvements onto the fresh `Character`, or they'd silently
+vanish the next time attributes are edited — see `_relink_quality_improvements`.
+
 Run locally: `uv run uvicorn chummer5.web.app:app --reload` (or `python -m uvicorn ...` — same
 `uv run python -m X` workaround as `pytest`/`ruff`/`mypy`, see Project Overview.md's Development
 environment note), then open http://127.0.0.1:8000/.
@@ -37,6 +46,7 @@ from starlette.datastructures import FormData
 
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
+from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.engine.character import (
     ALLOCATABLE_ATTRIBUTES,
@@ -46,6 +56,24 @@ from chummer5.engine.character import (
     MetatypeChoice,
     create_character,
     metatype_choices,
+)
+from chummer5.engine.improvements import ImprovementSource
+from chummer5.engine.qualities import (
+    QUALITY_KARMA_LIMIT,
+    QualitySelection,
+    apply_quality_improvements,
+    create_quality_selection,
+    mvp_quality_catalog,
+)
+from chummer5.engine.resources import (
+    FREE_CONTACT_POINTS_PER_CHARISMA,
+    KARMA_PER_EXCESS_CONTACT_POINT,
+    STARTER_GEAR_CATALOG,
+    Contact,
+    StarterGearItem,
+    create_contact_selection,
+    create_resources_selection,
+    starting_nuyen,
 )
 from chummer5.engine.skills import (
     MAX_SKILL_RATING_CREATE,
@@ -71,6 +99,16 @@ STATIC_DIR = WEB_DIR / "static"
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 SKILLS = load_skills()
+QUALITIES = load_qualities()
+
+# The MVP-offered quality catalog (see chummer5.engine.qualities): 3 FLAT_BONUS qualities, all
+# Positive. Computed once, mirroring MUNDANE_SKILLS/MUNDANE_SKILL_GROUPS below.
+MVP_QUALITIES = mvp_quality_catalog(QUALITIES)
+
+# Fixed number of contact-input rows the UI offers -- there's no client-side add/remove, so this
+# is a plain, generously-sized table (mirrors the fixed-row attribute/skill tables) rather than
+# dynamic HTML. A row with a blank name is treated as "no contact here" by `_parse_contacts`.
+MAX_CONTACT_ROWS = 8
 
 # MVP is mundane-only (Talent forced to E -- see Project Overview's MVP scope), so a fresh
 # character's MAG/RES are always 0 and can never be raised in chargen. The 12 skills linked to
@@ -142,6 +180,54 @@ def _parse_points(form: FormData, keys: Iterable[str], prefix: str) -> dict[str,
         if value != 0:
             points[key] = value
     return points
+
+
+def _parse_contacts(form: FormData, max_rows: int) -> tuple[Contact, ...]:
+    """Read up to `max_rows` contact rows off a submitted form into `Contact`s.
+
+    Any row whose name field is blank is skipped entirely (the fixed-row table has no client-side
+    add/remove, so most rows are typically empty). A malformed Connection/Loyalty value is treated
+    as 0 rather than dropping the whole row -- `create_contact_selection`'s own
+    Connection/Loyalty-below-1 check is what's responsible for rejecting it, the same "let the
+    engine validate what it's already responsible for" choice `_parse_points` makes for negative
+    attribute/skill points.
+    """
+    contacts = []
+    for i in range(max_rows):
+        name = str(form.get(f"contact_name_{i}") or "").strip()
+        if not name:
+            continue
+        try:
+            connection = int(str(form.get(f"contact_connection_{i}", "0")))
+        except ValueError:
+            connection = 0
+        try:
+            loyalty = int(str(form.get(f"contact_loyalty_{i}", "0")))
+        except ValueError:
+            loyalty = 0
+        free = form.get(f"contact_free_{i}") is not None
+        contacts.append(Contact(name=name, connection=connection, loyalty=loyalty, free=free))
+    return tuple(contacts)
+
+
+def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str, ...]:
+    """Expand each starter-gear item's submitted quantity into that many repeats of its name --
+    `create_resources_selection`'s `gear_names` is a flat, repeats-allowed name list (see
+    `chummer5.engine.resources`), not a `{name: quantity}` mapping. An unparseable or negative
+    quantity is clamped to 0: unlike attribute/skill points, there's no engine-level "negative
+    quantity" concept here for `create_resources_selection` to validate instead (repeating a name
+    -3 times isn't a meaningful rejection to surface), so this is a plain web-robustness clamp, not
+    a rule this function is offloading onto the engine.
+    """
+    names: list[str] = []
+    for item in catalog:
+        raw = form.get(f"gear_{item.name}")
+        try:
+            quantity = int(str(raw)) if raw is not None else 0
+        except ValueError:
+            quantity = 0
+        names.extend([item.name] * max(quantity, 0))
+    return tuple(names)
 
 
 def _attribute_allocation_context(
@@ -233,10 +319,140 @@ def _skill_allocation_context(
     }
 
 
+def _relink_quality_improvements(character: Character, session: ChargenSession) -> None:
+    """Re-apply a session's already-committed quality selection onto a freshly built `Character`.
+
+    `create_character` always returns a `Character` with a brand-new, empty `ImprovementIndex`
+    (see its own docstring) -- every route that builds a new `Character` for an
+    already-in-progress session (`submit_priorities`, `submit_attributes`) has to re-land this
+    selection's bonuses onto it, or a previously-picked quality's skill bonus would silently
+    vanish the next time an attribute is edited. Safe to call unconditionally: a no-op before any
+    quality has ever been committed.
+    """
+    if session.quality_selection is not None:
+        apply_quality_improvements(character, session.quality_selection)
+
+
+def _replace_committed_qualities(character: Character, selection: QualitySelection) -> None:
+    """Swap whatever QUALITY-sourced Improvements `character.improvements` currently holds for
+    `selection`'s. `apply_quality_improvements` only ever adds -- calling it twice for two
+    submissions of the same session's `Character` (i.e. without an intervening `create_character`
+    rebuild) would double up any quality that stayed selected across both, so previously-applied
+    QUALITY improvements are removed first.
+    """
+    for imp in character.improvements.improvements:
+        if imp.source_type == ImprovementSource.QUALITY:
+            character.improvements.remove_source(ImprovementSource.QUALITY, imp.source_id)
+    apply_quality_improvements(character, selection)
+
+
+def _quality_selection_context(
+    character: Character | None,
+    quality_ids: Iterable[str],
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_quality_selection.html`. `quality_ids` is whatever should be shown checked --
+    the session's committed selection on a clean render, or the raw submitted checkbox values on
+    an error-echo render, same shape as the attribute/skill contexts above.
+    """
+    if character is None:
+        return {"character": None, "quality_error": error}
+    ids = set(quality_ids)
+    rows = [{"quality": q, "selected": q.id in ids} for q in MVP_QUALITIES]
+    positive_karma = sum(q.karma for q in MVP_QUALITIES if q.id in ids and q.category == "Positive")
+    negative_karma = -sum(
+        q.karma for q in MVP_QUALITIES if q.id in ids and q.category == "Negative"
+    )
+    return {
+        "character": character,
+        "quality_rows": rows,
+        "positive_karma": positive_karma,
+        "negative_karma": negative_karma,
+        "karma_limit": QUALITY_KARMA_LIMIT,
+        "quality_error": error,
+    }
+
+
+def _contacts_context(
+    character: Character | None,
+    contacts: tuple[Contact, ...],
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_contacts.html`. `points_spent`/`karma_cost` are computed directly from
+    `Contact.points` (never by calling `create_contact_selection`, which raises on the very
+    Connection/Loyalty-below-1 input an error-echo render needs to display) -- `free_points` reads
+    `character.attribute_value("CHA")` fresh on every render, so it always reflects the character's
+    *current* CHA even if an attribute submission changed it since contacts were last saved.
+    """
+    if character is None:
+        return {"character": None, "contact_error": error}
+    rows = [
+        {
+            "index": i,
+            "name": contacts[i].name if i < len(contacts) else "",
+            "connection": contacts[i].connection if i < len(contacts) else "",
+            "loyalty": contacts[i].loyalty if i < len(contacts) else "",
+            "free": contacts[i].free if i < len(contacts) else False,
+            "points": contacts[i].points if i < len(contacts) else 0,
+        }
+        for i in range(MAX_CONTACT_ROWS)
+    ]
+    free_points = character.attribute_value("CHA") * FREE_CONTACT_POINTS_PER_CHARISMA
+    points_spent = sum(contact.points for contact in contacts)
+    karma_cost = max(0, points_spent - free_points) * KARMA_PER_EXCESS_CONTACT_POINT
+    return {
+        "character": character,
+        "contact_rows": rows,
+        "free_points": free_points,
+        "points_spent": points_spent,
+        "contact_karma_cost": karma_cost,
+        "contact_error": error,
+    }
+
+
+def _resources_context(
+    character: Character | None,
+    resources_letter: str,
+    gear_names: tuple[str, ...],
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_resources.html`. `gear_names` is the flat, repeats-allowed name list
+    `create_resources_selection` itself takes -- tallied into per-item quantities here purely for
+    display.
+    """
+    if character is None:
+        return {"character": None, "resources_error": error}
+    counts: dict[str, int] = {}
+    for name in gear_names:
+        counts[name] = counts.get(name, 0) + 1
+    rows: list[dict[str, Any]] = [
+        {
+            "item": item,
+            "quantity": counts.get(item.name, 0),
+            "subtotal": item.cost * counts.get(item.name, 0),
+        }
+        for item in STARTER_GEAR_CATALOG
+    ]
+    budget = starting_nuyen(resources_letter, PRIORITIES)
+    spent = sum(int(row["subtotal"]) for row in rows)
+    return {
+        "character": character,
+        "gear_rows": rows,
+        "nuyen_budget": budget,
+        "nuyen_spent": spent,
+        "nuyen_remaining": budget - spent,
+        "resources_error": error,
+    }
+
+
 def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> dict[str, Any]:
-    """Merge the priority-form context with a clean (non-error) render of the attribute and skill
-    sections, reflecting the session's currently committed state. Used by both `GET /` and a
-    successful `POST /ui/priorities` (the two places that render all three sections at once).
+    """Merge the priority-form context with a clean (non-error) render of the attribute, skill,
+    quality, contact, and resources sections, reflecting the session's currently committed state.
+    Used by both `GET /` and a successful `POST /ui/priorities` (the places that render every
+    section at once).
     """
     character = session.character
     attribute_points = character.attribute_points if character is not None else {}
@@ -247,7 +463,22 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     skill_ctx = _skill_allocation_context(
         character, session.skills_letter, skill_points, group_points
     )
-    return {**priority_ctx, **attribute_ctx, **skill_ctx}
+    quality_ids = (
+        tuple(q.id for q in session.quality_selection.qualities)
+        if session.quality_selection is not None
+        else ()
+    )
+    quality_ctx = _quality_selection_context(character, quality_ids)
+    contact_ctx = _contacts_context(character, session.contacts)
+    resources_ctx = _resources_context(character, session.resources_letter, session.gear_names)
+    return {
+        **priority_ctx,
+        **attribute_ctx,
+        **skill_ctx,
+        **quality_ctx,
+        **contact_ctx,
+        **resources_ctx,
+    }
 
 
 def create_app() -> FastAPI:
@@ -335,6 +566,10 @@ def create_app() -> FastAPI:
                 character = create_character(
                     choice, heritage_letter, attributes_letter, PRIORITIES, {}
                 )
+                # `create_character` returns a fresh, empty `ImprovementIndex` -- re-land any
+                # already-committed quality selection's bonuses before this becomes the session's
+                # new `character`. See `_relink_quality_improvements`.
+                _relink_quality_improvements(character, session)
                 session.heritage_letter = heritage_letter
                 session.attributes_letter = attributes_letter
                 session.skills_letter = skills_letter
@@ -344,8 +579,10 @@ def create_app() -> FastAPI:
                 # A changed metatype/Attributes/Skills letter invalidates whatever attribute/skill
                 # points were already spent against the *old* budget -- reset both rather than
                 # silently carrying over a spend that may now be over budget or off a metatype's
-                # attribute range. See ChargenSession's docstring.
+                # attribute range. See ChargenSession's docstring. A changed Resources letter is
+                # the same story for gear spend, since its nuyen budget depends on that letter.
                 session.skill_allocation = None
+                session.gear_names = ()
 
         # The priority form's `hx-target` is `#chargen-body` (the whole three-section wrapper, not
         # just this form) since a successful submission invalidates the attribute/skill sections'
@@ -398,6 +635,9 @@ def create_app() -> FastAPI:
                     session.character, attribute_points, error=str(exc)
                 )
             else:
+                # See the identical comment in submit_priorities -- a fresh Character means a
+                # fresh, empty ImprovementIndex.
+                _relink_quality_improvements(character, session)
                 session.character = character
                 context = _attribute_allocation_context(character, attribute_points)
         response = templates.TemplateResponse(request, "_attribute_allocation.html", context)
@@ -432,6 +672,71 @@ def create_app() -> FastAPI:
                     session.character, session.skills_letter, skill_points, group_points
                 )
         response = templates.TemplateResponse(request, "_skill_allocation.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/qualities", response_class=HTMLResponse)
+    async def submit_qualities(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None:
+            context = _quality_selection_context(None, ())
+        else:
+            form = await request.form()
+            quality_ids = [str(value) for value in form.getlist("quality_id")]
+            try:
+                selection = create_quality_selection(quality_ids, QUALITIES)
+            except ValueError as exc:
+                context = _quality_selection_context(session.character, quality_ids, error=str(exc))
+            else:
+                _replace_committed_qualities(session.character, selection)
+                session.quality_selection = selection
+                context = _quality_selection_context(session.character, quality_ids)
+        response = templates.TemplateResponse(request, "_quality_selection.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/contacts", response_class=HTMLResponse)
+    async def submit_contacts(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None:
+            context = _contacts_context(None, ())
+        else:
+            form = await request.form()
+            contacts = _parse_contacts(form, MAX_CONTACT_ROWS)
+            try:
+                create_contact_selection(session.character, contacts)
+            except ValueError as exc:
+                context = _contacts_context(session.character, contacts, error=str(exc))
+            else:
+                session.contacts = contacts
+                context = _contacts_context(session.character, contacts)
+        response = templates.TemplateResponse(request, "_contacts.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/resources", response_class=HTMLResponse)
+    async def submit_resources(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None:
+            context = _resources_context(None, session.resources_letter, ())
+        else:
+            form = await request.form()
+            gear_names = _parse_gear(form, STARTER_GEAR_CATALOG)
+            try:
+                create_resources_selection(session.resources_letter, PRIORITIES, gear_names)
+            except ValueError as exc:
+                context = _resources_context(
+                    session.character, session.resources_letter, gear_names, error=str(exc)
+                )
+            else:
+                session.gear_names = gear_names
+                context = _resources_context(
+                    session.character, session.resources_letter, gear_names
+                )
+        response = templates.TemplateResponse(request, "_resources.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
         return response

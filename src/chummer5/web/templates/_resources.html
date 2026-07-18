@@ -1,0 +1,49 @@
+<div id="resources">
+  {% if character %}
+  <h2>Resources</h2>
+
+  {% if resources_error %}
+  <p class="error">{{ resources_error }}</p>
+  {% endif %}
+
+  <p>Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget }} (spent {{ nuyen_spent }}).</p>
+
+  <form
+    hx-post="/ui/resources"
+    hx-target="#resources"
+    hx-swap="outerHTML"
+    hx-trigger="change, input delay:400ms"
+  >
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Cost</th>
+          <th>Quantity</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in gear_rows %}
+        <tr>
+          <td>{{ row.item.name }}</td>
+          <td>{{ row.item.cost }}</td>
+          <td>
+            <input
+              type="number"
+              name="gear_{{ row.item.name }}"
+              value="{{ row.quantity }}"
+              min="0"
+            />
+          </td>
+          <td>{{ row.subtotal }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Update gear</button>
+  </form>
+  {% else %}
+  <p>Confirm a metatype and priorities above before spending starting nuyen.</p>
+  {% endif %}
+</div>

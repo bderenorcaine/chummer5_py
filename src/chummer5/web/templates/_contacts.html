@@ -1,0 +1,71 @@
+<div id="contacts">
+  {% if character %}
+  <h2>Contacts</h2>
+
+  {% if contact_error %}
+  <p class="error">{{ contact_error }}</p>
+  {% endif %}
+
+  <p>
+    Free contact points: {{ free_points }}. Points spent: {{ points_spent }}.
+    Karma cost beyond free points: {{ contact_karma_cost }}.
+  </p>
+
+  <form
+    hx-post="/ui/contacts"
+    hx-target="#contacts"
+    hx-swap="outerHTML"
+    hx-trigger="change, input delay:400ms"
+  >
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Connection</th>
+          <th>Loyalty</th>
+          <th>Free</th>
+          <th>Points</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in contact_rows %}
+        <tr>
+          <td>
+            <input type="text" name="contact_name_{{ row.index }}" value="{{ row.name }}" />
+          </td>
+          <td>
+            <input
+              type="number"
+              name="contact_connection_{{ row.index }}"
+              value="{{ row.connection }}"
+              min="0"
+              max="12"
+            />
+          </td>
+          <td>
+            <input
+              type="number"
+              name="contact_loyalty_{{ row.index }}"
+              value="{{ row.loyalty }}"
+              min="0"
+              max="12"
+            />
+          </td>
+          <td>
+            <input
+              type="checkbox"
+              name="contact_free_{{ row.index }}"
+              {% if row.free %}checked{% endif %}
+            />
+          </td>
+          <td>{{ row.points }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Update contacts</button>
+  </form>
+  {% else %}
+  <p>Confirm a metatype and priorities above before adding contacts.</p>
+  {% endif %}
+</div>

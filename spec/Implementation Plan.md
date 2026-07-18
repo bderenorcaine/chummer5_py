@@ -217,7 +217,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Depends on: WP7, WP14.
   Acceptance: manual walkthrough; values match engine output for the same inputs.
 
-- [ ] **WP16 — Qualities, contacts & resources UI.**
+- [x] **WP16 — Qualities, contacts & resources UI.**
   Goal: round out chargen inputs.
   Deliverables: quality picker (MVP-supported catalog only), contacts editor, nuyen spend screen.
   Depends on: WP8, WP9, WP15.
