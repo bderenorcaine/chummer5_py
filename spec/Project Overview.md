@@ -87,11 +87,20 @@ test fixtures, it is a derivative work and is GPLv3 too. Not a decision point �
 - Web UI (local, single-user, no auth) as the only supported interface.
 - All user-facing strings routed through an i18n key layer from day one, even though only English ships.
 
+**A gap found after MVP shipped, not a deliberate cut:** Lifestyle selection — SR5's mandatory
+"Step Six" line item (core rulebook, p.369: "A character must select one of the lifestyles below to
+be their primary Lifestyle"), paid from the same Resources-priority nuyen pool the bullet above
+already claims as in scope — is absent from what MVP actually built. It wasn't excluded by any
+decision recorded in this document; it was simply missed, discovered during post-MVP scoping. See
+Implementation Plan's WP20.
+
 **Explicitly out of scope for MVP (deferred, not abandoned):**
 - The general-purpose Improvement engine (full type coverage — cyberware/bioware effects, vehicles,
   matrix rules, most of the ~100+ improvement types the legacy engine supports).
 - Magic and Resonance (adepts, magicians, mystic adepts, technomancers) — see above.
-- Cyberware, bioware, vehicles, drones, full gear catalog beyond a basic purchase flow.
+- Cyberware, bioware, vehicles, drones, full gear catalog beyond a basic purchase flow. (Cyberware/
+  bioware specifically need real Essence tracking as a prerequisite, not just new catalog content —
+  see Open Questions below.)
 - Career mode (post-chargen karma spending, character aging over time).
 - Plugins.
 - Localization content (structure only, per above).
@@ -141,6 +150,54 @@ legacy app's performance problems live:
   field mutation of every `Improvement`. The new design recomputes the (cheap, character-sized) index on
   add/remove instead. Add caching only if profiling actually shows it's needed — the legacy caching
   complexity exists to offset reflection/regex overhead that doesn't exist in this design to begin with.
+
+**Why `ImprovementIndex` is the one genuinely mutable object in an otherwise-frozen domain model.**
+`Character` and every other engine dataclass are `frozen=True` — no field of an existing instance is
+ever reassigned. `ImprovementIndex` is the deliberate exception (`add`/`remove_source` mutate
+`self._improvements`/`self._index` directly). The line holds up on its own logic, not just as a
+mirror of the legacy shape: fields with a *joint, shared-budget constraint* — attribute points
+collectively bounded by one priority budget, each individually bounded by a metatype range — belong
+in "reconstruct wholesale to validate," since checking one requires knowing the others
+simultaneously. Independently-scoped, per-source deltas (a quality's flat bonus, eventually a
+cyberware's) don't share that constraint — each is addable/removable on its own, with no reference to
+any other Improvement — so a mutable, per-source collection is the right shape there, and making it
+immutable too would buy nothing. This is the same "no manual per-field cache invalidation" principle
+above, generalized: keep the mutable surface exactly as large as the actual mutation-shaped problem,
+and reconstruct everything else. "Frozen," though, doesn't mean "always rebuilt from nothing" — see
+the next section for how a `frozen` `Character` actually advances one stage at a time.
+
+### Character as the single aggregate
+
+`Character` (`chummer5.engine.character`) is the one object representing an in-progress character:
+metatype and attributes, plus — once each stage is committed — `skill_allocation`,
+`quality_selection`, `contact_selection`, and `resources_selection`, all as fields on the same
+instance. This wasn't the original shape. Attributes arrived first (WP6), the only thing `Character`
+needed to hold at the time; skills, qualities, contacts, and resources (WP7-WP9) each rode in
+afterward as independent `ChargenSession` siblings, reunited only ad hoc — for save/load and legacy
+import — by a since-retired `BuiltCharacter` wrapper. A design discussion held after the UI MVP
+milestone found this split had no rules justification, only a build-order one (nothing about a
+quality is conceptually outside "the character"), and WP18 folded everything back onto `Character`
+directly. `ChargenSession` (`chummer5.web.session`) now holds only `character` plus the handful of
+state that genuinely predates having one — the 4 priority letters, before a metatype is even chosen.
+
+Advancing a committed `Character` one stage — spending more attribute points, picking a quality — is
+`dataclasses.replace(character, field=new_value)` wherever the change doesn't require re-deriving
+anything else about the character, not always a fresh `create_character()` call. This is more than a
+convenience. `replace()` copies every untouched field *by reference*, so a `Character`'s
+already-populated `ImprovementIndex` and already-committed selections simply survive a `replace()`
+call with nothing to re-link — the "re-apply a quality's Improvement onto a freshly-rebuilt, empty
+index" workaround this design needed before WP18/WP19 is now only necessary where a route still
+deliberately calls `create_character()` fresh (currently just attribute-point edits — a real,
+intentional asymmetry with metatype/priority edits, left for a future WP to unify if it's ever worth
+it, not an oversight). Second: `Character` has no `__post_init__` validation — every invariant
+(attribute points fit their budget, values fit the metatype's range) is enforced only by
+`create_character`'s own checks at construction time — so `replace()`-ing old, now-out-of-budget
+values onto a newly reconfirmed metatype/priority selection simply succeeds rather than raising.
+Validity is instead re-derived at render time, by re-running the same `create_*` validators that
+already exist and reading their error message rather than raising it — a stale selection surfaces a
+specific "no longer fits" diagnostic next to the affected section and clears itself automatically the
+moment the player edits it back into range, rather than being discarded the moment a priority letter
+changes.
 
 ### Performance lessons from the legacy app
 Concrete, code-grounded findings (not general "Windows is slow" hand-waving) that this project deliberately
@@ -193,4 +250,39 @@ floor, dependency/packaging tool, pydantic vs. plain dataclasses for the domain 
 low-cost-to-change defaults to be set when scaffolding the project, not spec-level rulings.
 
 Anything discovered during implementation that materially changes scope, data compatibility, or the
-Improvement engine's shape gets raised as a new entry here before being acted on.
+Improvement engine's shape gets raised as a new entry here before being acted on. The MVP itself
+(Phases A-F) shipped without hitting any such entry — everything below was raised afterward, during
+a design discussion scoping what comes next (see Implementation Plan's Phase G/H). None of it
+blocked or reversed anything already shipped; all three are prerequisites/corrections for work still
+ahead.
+
+### 2026-07-18 — Essence is a hardcoded constant; cyberware/bioware need real tracking first, not just new catalog content
+
+`chummer5.engine.derived.BASE_ESSENCE` is a fixed `6`, read in exactly one place (`social_limit`) —
+correct for MVP, since nothing in MVP's scope ever reduces Essence (see that module's own docstring
+for the full Yeti-fixture trace that led here). Surfaced while scoping cyberware as a candidate
+post-MVP expansion: real Essence tracking (a `Character` field plus a `6 - Σ(cyberware/bioware
+essence cost)` formula) is a genuine prerequisite for cyberware, not a side effect of adding a
+catalog — and it isn't the only one. `chummer5.io.legacy_import` currently hard-*rejects* any
+`.chum5` import containing cyberware/bioware specifically because of this gap (tested explicitly),
+so that rejection path has to be unwound in the same piece of work, not routed around. Neither is
+difficult in isolation, but a cyberware WP needs to land both *before* cyberware content itself, not
+alongside it.
+
+### 2026-07-18 — "Talent forced to E" is real plumbing in the web layer, not just an engine default
+
+Confirmed while scoping adept-first magic as a candidate post-MVP expansion. The rules/data side is
+close to ready: Adept-eligible Talent letters (B/C/D) already parse cleanly out of `priorities.xml`
+with zero changes needed to `chummer5.data.priorities`, and for pure Adepts, Power Points equal the
+Magic rating 1:1 (no separate formula to derive). What isn't ready is the assumption, threaded
+through `chummer5.web.session`'s letter constants and `chummer5.web.app`'s priority-validation logic
+(not just the engine layer), that Talent sits outside the 4 player-chosen priority categories.
+Making Talent a real 5th choice touches more existing plumbing than any other post-MVP candidate
+surveyed — this is why adept magic, despite having the best-scoped *content* of any candidate (only
+6 of 28 SR5 Adept Powers even need new Improvement handling), isn't scoped as the smallest next step.
+See Implementation Plan's Phase H intro.
+
+*(A third entry — whether `Character`'s frozen shape should hold every committed selection, not just
+attributes — was raised here 2026-07-18 and resolved the same day by WP18/WP19. See "Character as the
+single aggregate" under Architecture below for the settled design; entries here stay only while
+genuinely open.)*

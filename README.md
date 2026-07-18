@@ -19,6 +19,12 @@ uv run python -m pytest         # run the test suite
 uv run uvicorn chummer5.web.app:app --reload   # run the web app at http://127.0.0.1:8000/
 ```
 
+### Just want to run the app?
+
+From the host (no editing, no "Reopen in Container"), `./start-app.sh` builds the devcontainer
+image and starts the web app inside it with the port published to the host — open
+`http://127.0.0.1:8000/` in your own browser once it prints "Uvicorn running". Ctrl+C stops it.
+
 ## License
 
 GPLv3 — see [LICENSE](LICENSE). Inherited from the legacy codebase, whose data files, rules logic, and

@@ -40,7 +40,15 @@ later) needs this filter; see the SR5-scope clauses added to WP3 and WP6 below.
 from trivial (`<ambidextrous/>`) to nested value-bearing tags, mirroring the general Improvement bonus
 grammar the legacy engine parses. MVP does not implement that general parser — WP3/WP8 curate a small
 supported subset (flat attribute/skill bonuses) and exclude qualities using anything else from the
-MVP-offered quality list, rather than silently ignoring their mechanical effect.
+MVP-offered quality list, rather than silently ignoring their mechanical effect. WP22 (Phase H) widens
+this subset with a precisely-verified list of what else is safely offerable and what still isn't.
+
+**Post-MVP scoping (Phase G/H below) surfaced two hidden dependencies worth knowing before touching
+either area.** Cyberware needs real Essence tracking as a prerequisite — today a hardcoded constant
+(`chummer5.engine.derived.BASE_ESSENCE`) — not just new catalog content; adept magic needs unwinding
+"Talent forced to E" across the web/session layers, not just engine data. Full detail in Project
+Overview's Open Questions section (dated 2026-07-18 entries) and in Phase H's own intro below. Neither
+blocks any WP currently on this list, which deliberately steers around both areas.
 
 ## Repo/package layout (established in WP1)
 
@@ -337,3 +345,159 @@ Doing the fold first means WP19 gets written once, against its final shape.
   allocation with a specific "over budget by N" message rather than a blank/reset form. A parallel
   case where the new letter's budget still fits the existing spend confirms nothing is disturbed.
   Unit tests for both the still-valid and now-invalid transitions.
+
+### Phase H — Post-MVP: smallest-scope content expansions
+
+Raised in the same post-MVP design discussion as Phase G, after surveying five candidate
+expansions (cyberware, a fuller equipment catalog, adept-first magic, quality bonus-language
+widening, and lifestyle selection) against the actual legacy data files rather than assuming their
+size. Two findings shaped what's scoped here versus deferred: **cyberware requires real Essence
+tracking as a hidden prerequisite** (today `chummer5.engine.derived.BASE_ESSENCE` is a fixed
+constant, and `legacy_import.py` hard-rejects any save containing cyberware) **and adept magic
+requires unwinding "Talent forced to E,"** which is threaded through the web/session/priorities
+layers more invasively than any other candidate — both are real next milestones, deliberately not
+scoped here as the *smallest* next step. Lifestyle selection, equipment-catalog expansion, and a
+bounded slice of quality-bonus-language widening are, by contrast, genuinely small: each reuses an
+existing mechanism (the Resources-priority nuyen budget, the `StarterGearItem` flat-cost shape, the
+`FlatBonus`/`Improvement` machinery respectively) rather than needing a new one.
+
+**All three should land after WP18** (Phase G's `Character`-folding WP), not in parallel with it —
+each adds a new committed selection (`LifestyleSelection`, a widened `ResourcesSelection`, more
+offerable qualities), which is exactly the shape WP18 is designed to hold cleanly. Building any of
+them against today's scattered `ChargenSession`-sibling shape means redoing that plumbing right
+after WP18 changes it. WP22 (qualities) touches no `Character` fields, so it has no *technical*
+dependency on WP18, but shares files (`engine/qualities.py`, `web/app.py`'s quality routes) with
+it — sequence after WP18 anyway to avoid merge conflicts, unless deliberately run in parallel on a
+separate branch.
+
+- [ ] **WP20 — Lifestyle selection.**
+  Goal: add the mandatory core-rulebook Lifestyle chargen step (rulebook, p.369: "A character must
+  select one of the lifestyles below to be their primary Lifestyle") — currently absent from the
+  engine entirely (confirmed: zero references anywhere in `src/`) despite being squarely within
+  MVP's own stated scope ("starting nuyen/resources spent on a basic gear purchase" already implies
+  a Resources-priority spend; lifestyle is the same kind of spend and the rulebook treats it as a
+  mandatory line item of the same chargen step, not a separate one). Not excluded by Project
+  Overview's scope lists either way — an oversight, not a deliberate cut.
+  Deliverables:
+  - `src/chummer5/data/lifestyle.py` (new): loader for `legacy/Chummer/data/lifestyles.xml`,
+    filtered to `source == "SR5"` (9 raw entries) and further to the 6 real starting tiers (Street,
+    Squatter, Low, Middle/Medium, High, Luxury) — exclude the "ID ERROR" placeholder and the two
+    Hospitalized entries explicitly (document why: not valid starting-lifestyle choices), the same
+    "exclude, don't silently drop" pattern WP2/WP3/WP6 already established for out-of-scope
+    metatypes/qualities.
+  - `src/chummer5/engine/lifestyle.py` (new): `LifestyleSelection` (tier, months, total cost) +
+    `create_lifestyle_selection(tier_name, months, catalog)`, validating the tier is known and
+    computing `cost = tier.monthly_cost * months`. Confirm the actual minimum-months rule via
+    `pdftotext -layout` against the rulebook's Lifestyle section (p.369-373) before hardcoding one —
+    don't assume "1" from fixture inspection alone — and record the citation in
+    `spec/rulebooks/learnings.md`, per this project's established practice (see WP8/WP9/WP10's
+    entries there).
+  - Wire the lifestyle cost into the **same** Resources-priority nuyen budget
+    `create_resources_selection` already draws from for gear (confirmed via fixture cross-check:
+    every one of the 11 curated mundane fixtures' `<lifestyle>` cost comes out of the same pool as
+    its gear spend, not a separate currency) — decide in the worklog whether this means widening
+    `ResourcesSelection` itself to include a `lifestyle` field, or a separate selection checked
+    against the same remaining-budget number; document the choice and why.
+  - The 9-entry SR5 lifestyle-qualities catalog (extra comforts/security modifiers) is explicitly
+    **out of scope for this WP** — none of the 11 curated fixtures need it to reproduce their base
+    lifestyle cost — mirroring `resources.py`'s own "not the full gear catalog" precedent.
+  - `src/chummer5/web/`: a lifestyle-selection form. Decide and document whether this is a new
+    section/route or folds into the existing Resources section (`_resources.html`/
+    `submit_resources`), given both spend from one shared budget.
+  - `src/chummer5/io/save_format.py` / `legacy_import.py`: thread the lifestyle selection through
+    `CharacterSave`/`build_character`, the same mechanical addition every prior selection type
+    already got.
+  Depends on: WP18.
+  Acceptance: unit tests for tier lookup and cost math against hand-checked `lifestyles.xml` values;
+  integration tests against all 11 curated mundane fixtures' real `<lifestyle>` data
+  (`baselifestyle`/`months`/`cost`) — the best fixture coverage of any Phase G/H candidate surveyed,
+  use it fully rather than only hand-checked cases.
+
+- [ ] **WP21 — Expand the starter-gear catalog to the full flat-cost SR5 equipment set.**
+  Goal: grow `STARTER_GEAR_CATALOG` from 5 hand-picked items to the real SR5-core, flat-cost
+  gear/armor/weapon catalog — confirmed at **411 items** (266 gear + 11 armor + 134 weapons,
+  `source == "SR5"` and a plain integer `<cost>`, no `Rating`/`FixedValues`/`Variable` formula) —
+  via a real XML loader instead of a hardcoded list. Zero new Improvement/engine mechanics needed
+  for this subset; the biggest visible content increase available at the lowest technical risk of
+  the candidates surveyed.
+  Deliverables:
+  - `src/chummer5/data/gear.py` (new): loaders for `legacy/Chummer/data/{gear,armor,weapons}.xml`,
+    filtered to `source == "SR5"` AND flat-cost as defined above. Explicitly exclude, with the
+    exclusion documented rather than silently dropped: rating-scaled/`FixedValues`/`Variable`-cost
+    items (125 of 391 SR5 gear entries, 1 of 12 SR5 armor entries — `Clothing`); and the 3
+    additive-stacking armor items (`Helmet`, `Ballistic Shield`, `Riot Shield` — `armor='+2'`/`'+6'`
+    stacking math is genuinely different from every other flat item's single rating). Preserve each
+    item's category (34 distinct among the flat subset) for the UI grouping below.
+  - `src/chummer5/engine/resources.py`: replace the hardcoded `STARTER_GEAR_CATALOG` tuple with the
+    loaded catalog; `StarterGearItem` gains an optional `category` field, and armor items gain an
+    `armor_rating` field (armor's own rating, not a nuyen concept).
+  - **Explicitly do not implement** SR5's Availability-cap rule (Restricted/Forbidden-availability
+    purchases are capped by a Priority-derived Availability budget) despite ~57% of SR5 gear and
+    69% of SR5 weapons carrying such a code — flag this as a deliberate, documented scope cut (the
+    same pattern as the already-established skill-karma and 7-point-contact cuts), not a silent
+    gap. A natural candidate for its own later WP once this catalog's size makes the gap visible.
+  - `src/chummer5/web/`: `_resources.html`'s gear picker needs restructuring for ~400 items instead
+    of 5 — category-grouped, not a single flat list; a real (if modest) UI task distinct from
+    WP15/16's small fixed lists.
+  Depends on: WP18.
+  Acceptance: unit tests confirming the loader's counts (411 flat items total, matching this
+  research) and that a rating-scaled/`Variable`-cost item is correctly excluded rather than
+  mis-parsed; existing gear-purchase fixture tests still pass unchanged.
+
+- [ ] **WP22 — Offer more qualities: verified-inert flavor picks + the Limit-bonus trio.**
+  Goal: widen the offered SR5 quality catalog beyond today's 3 (Catlike, Double-Jointed, Natural
+  Athlete), using this session's verified classification of all 93 currently-`NOT_YET_SUPPORTED`
+  SR5 qualities — without ever offering a quality whose real mechanical effect would be silently
+  dropped, preserving `chummer5.data.qualities`' own stated rule ("MVP never partially applies a
+  quality's effects").
+  Deliverables:
+  - **Tranche 1 — the Indomitable trio (Mental/Physical/Social).** Each `<bonus>` maps directly onto
+    an existing `ImprovementType` (`MENTAL_LIMIT`/`PHYSICAL_LIMIT`/`SOCIAL_LIMIT`), already consumed
+    unconditionally by `chummer5.engine.derived`. Extend `chummer5.data.qualities._classify_bonus`'s
+    flat-shape recognition to cover `<mentallimit>`/`<physicallimit>`/`<sociallimit>` (a bare
+    numeric value, no condition — verified present) the same way it already covers
+    `<specificskill>`/`<specificattribute>`; extend
+    `chummer5.engine.qualities._TARGET_KIND_TO_IMPROVEMENT_TYPE` with the 3 new target kinds.
+  - **Tranche 2 — 8 verified-inert qualities.** Gearhead, Guts, Juryrigger, Natural Hardening,
+    Low-Light Vision, Thermographic Vision, Simsense Vertigo, Unsteady Hands — each confirmed this
+    session to have an empty `<bonus/>`, no `<required>`/`<forbidden>` gate, and no hardcoded
+    by-name special-casing anywhere in the legacy C# (`grep`-checked). Their real SR5 effects are
+    genuinely in-play/narrative (light-condition perception, fear-test resistance, repair time,
+    Matrix-attack resistance on gear, called-shot penalties) — none produce a chargen-time
+    computed value. Add a new `BonusSupport` value (e.g. `NO_EFFECT`) distinct from `FLAT_BONUS`,
+    so "verified mechanically inert" stays visibly different from "has a flat numeric bonus" rather
+    than conflating the two.
+  - **Explicitly excluded, reasons recorded in this WP's worklog** (verified, not assumed): Astral
+    Beacon, Astral Chameleon, Focused Concentration (magic-gated via `<required>` — unreachable for
+    any mundane character); Gremlins (not actually bonus-empty — carries
+    `<firstlevelbonus><notoriety>1</notoriety></firstlevelbonus>`, gated behind the wholly
+    unmodeled Notoriety/reputation system shared with 18 other SR5 qualities).
+  - **Deliberately deferred, not defaulted into this WP:** Human-Looking (gated to Elf/Dwarf/Ork —
+    all in-scope metatypes, genuinely offerable, but needs a new "required metatype" check with no
+    precedent in the engine) and the two forbidden-pairs, Insomnia (Basic)/(Full) and Distinctive
+    Style/Blandness (need a new "mutually exclusive quality" check). Both are small, real, and
+    self-contained, but a genuinely different kind of change (a new validation axis on
+    `create_quality_selection`) than tranches 1-2's pure data-classification changes, and nothing
+    else in the 96-quality set would ride along to amortize building it — scope as a follow-up WP
+    once/if it's worth it on its own, don't bundle by default.
+  - **This WP's first real task, not a chat-turn shortcut:** a proper `pdftotext -layout` +
+    rulebook-citation pass (same methodology as WP8/WP9/WP10, recorded in
+    `spec/rulebooks/learnings.md`) over the ~20 remaining `selecttext`-only SR5 qualities not
+    already covered above (Home Ground, Code of Honor, Codeblock, Social Stress, Natural Immunity
+    ×2, Spirit Affinity, Prejudiced ×6, SINner ×3 — Allergy's 8 variants stay excluded, already
+    correctly bucketed as toxin/pathogen-resist, a system this project doesn't model). Several of
+    these (SINner, Prejudiced) carry real, currently-unmodeled narrative/mechanical weight
+    (background checks, social-test penalties) despite a shape-trivial `<bonus>` node — offering
+    them for karma with zero consequence applied would violate the "never partially apply" rule in
+    spirit even though not in mechanism. Do not default to including any of them; only add ones this
+    pass confirms are as genuinely inert as tranche 2's 8.
+  Depends on: WP3, WP8 (already satisfied); sequence after WP18 to avoid merge conflicts on shared
+  files (`engine/qualities.py`, `web/app.py`'s quality routes), though there's no technical
+  dependency on WP18's `Character`-folding itself.
+  Acceptance: unit tests — every newly-offerable quality (3 Indomitable + 8 verified-inert, plus
+  whatever the rulebook-research pass adds, taking the offered catalog from 3/96 upward)
+  individually selectable and correctly karma-charged; the 3 Indomitable qualities verified to
+  actually raise the relevant Limit via `chummer5.engine.derived`; an explicit test that every
+  excluded-with-reasons quality (Astral Beacon/Chameleon, Focused Concentration, Gremlins) stays
+  excluded from the offered list, mirroring WP8's own "excluded... rather than silently mis-applied"
+  acceptance criterion.
