@@ -176,7 +176,12 @@ def test_submitting_over_budget_skill_points_is_rejected() -> None:
     assert "exceeds" in response.text
 
 
-def test_reconfirming_priorities_resets_attribute_and_skill_allocation() -> None:
+def test_reconfirming_priorities_with_a_still_fitting_budget_keeps_the_allocation() -> None:
+    """WP19: reconfirmation no longer resets a spend that still fits the (re)confirmed letters --
+    unlike the pre-WP19 behavior (see `spec/worklogs/WP18.md`'s own recorded check, which expected
+    a full/full reset here), a plain re-submission of the *same* letters must leave the existing
+    spend exactly as it was.
+    """
     client = TestClient(create_app())
     _confirm_human(client)
     skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
@@ -201,8 +206,79 @@ def test_reconfirming_priorities_resets_attribute_and_skill_allocation() -> None
 
     primary_budget = PRIORITIES.attributes["B"].points
     skills_budget = PRIORITIES.skills["C"].skills
-    assert f"{primary_budget} / {primary_budget}" in response.text
-    assert f"{skills_budget} / {skills_budget}" in response.text
+    assert f"{primary_budget - 2} / {primary_budget}" in response.text
+    assert f"{skills_budget - 3} / {skills_budget}" in response.text
+    assert 'value="2"' in response.text  # BOD's spent points still echoed in the form
+    assert "No longer fits" not in response.text
+
+
+def test_reconfirming_priorities_with_a_lower_attributes_budget_flags_the_existing_spend() -> None:
+    """The WP19 acceptance scenario: spend attribute points that fit the current Attributes
+    letter, lower that letter on reconfirmation, and confirm the spend is kept (not reset) while a
+    distinct "no longer fits" warning appears -- rather than a blank/reset form.
+    """
+    client = TestClient(create_app())
+    _confirm_human(client)  # Attributes letter B, budget 20
+    # BOD/AGI/REA at 5 each (value 6, Human's max) = 15 points -- fits B's 20-point budget.
+    client.post("/ui/attributes", data={"attr_BOD": "5", "attr_AGI": "5", "attr_REA": "5"})
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    # Swap Attributes B (20 points) for D (14 points) -- 15 points spent no longer fits.
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "D",
+            "skills_letter": "C",
+            "resources_letter": "B",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    new_budget = PRIORITIES.attributes["D"].points
+    assert new_budget == 14
+    # The old spend (15 points) is still shown, over the new 14-point budget -- not reset to 0.
+    assert 'value="5"' in response.text
+    assert f"-1 / {new_budget}" in response.text
+    assert "No longer fits since priorities were last confirmed" in response.text
+    assert "exceeds" in response.text
+
+
+def test_reconfirming_priorities_with_a_lower_skills_budget_flags_the_existing_spend() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)  # Skills letter C, budget 28
+    ungrouped_skills = [s for s in MUNDANE_SKILLS if s.skill_group is None][:5]
+    # 6+6+6+6+1 = 25 points -- fits C's 28-point budget.
+    points = {s.id: 6 for s in ungrouped_skills[:4]}
+    points[ungrouped_skills[4].id] = 1
+    client.post("/ui/skills", data={f"skill_{sid}": str(v) for sid, v in points.items()})
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    # Swap Skills C (28 points) for D (22 points) -- 25 points spent no longer fits.
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "D",
+            "resources_letter": "C",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    new_budget = PRIORITIES.skills["D"].skills
+    assert new_budget == 22
+    assert f"-3 / {new_budget}" in response.text
+    assert "No longer fits since priorities were last confirmed" in response.text
+    assert "exceeds" in response.text
 
 
 def test_attributes_and_skills_endpoints_before_confirmation_do_not_crash() -> None:

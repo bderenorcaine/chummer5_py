@@ -60,6 +60,23 @@ fresh on every edit rather than `dataclasses.replace`-ing the existing `Characte
 deliberately defers that switch to WP19 (see both WPs' worklogs for why), so these two relink
 helpers remain load-bearing for one more WP.
 
+WP19 makes that switch, but only for `submit_priorities`: reconfirming priorities/metatype no
+longer discards the player's attribute/skill/gear spend and rebuilds an empty `Character` — it
+`dataclasses.replace`s the *previous* `Character` in place (new metatype/letters/budget, every
+other field carried forward by reference, `improvements` included), then re-validates. Because
+`Character` has no `__post_init__` invariant, a spend that no longer fits the newly reconfirmed
+letters/metatype constructs without error; whether it still fits is instead re-derived, fresh, by
+`_attribute_allocation_context`/`_skill_allocation_context`/`_resources_context` on every render
+(each gains an `*_budget_warning` key from re-running its own `create_*` validator and catching
+the `ValueError`, distinct from that same context's existing `*_error` key for a submission this
+request itself just rejected) — so a now-invalid carry-forward stays visibly flagged across page
+reloads until the player edits that section back within budget, rather than either silently
+vanishing (the old reset) or blocking the rest of chargen. `_relink_quality_improvements` is no
+longer called from `submit_priorities` (calling it after a `replace` that already carried
+`improvements` forward would double the bonus) but remains necessary for `submit_attributes`,
+which WP19 leaves on its pre-existing `create_character()`-fresh shape — see `spec/worklogs/WP19.md`
+for why only `submit_priorities` needed the switch.
+
 Run locally: `uv run uvicorn chummer5.web.app:app --reload` (or `python -m uvicorn ...` — same
 `uv run python -m X` workaround as `pytest`/`ruff`/`mypy`, see Project Overview.md's Development
 environment note), then open http://127.0.0.1:8000/.
@@ -103,7 +120,7 @@ from chummer5.engine.derived import (
     social_limit,
     stun_condition_monitor,
 )
-from chummer5.engine.improvements import ImprovementSource
+from chummer5.engine.improvements import ImprovementIndex, ImprovementSource
 from chummer5.engine.qualities import (
     QUALITY_KARMA_LIMIT,
     QualitySelection,
@@ -117,6 +134,7 @@ from chummer5.engine.resources import (
     STARTER_GEAR_CATALOG,
     Contact,
     ContactSelection,
+    ResourcesSelection,
     StarterGearItem,
     create_contact_selection,
     create_resources_selection,
@@ -195,6 +213,12 @@ def _priority_form_context(
     character: object,
     error: str | None,
 ) -> dict[str, Any]:
+    """Context for `_priority_form.html`'s own fields (letters, metatype options, the
+    duplicate-letter/unoffered-metatype `error`). Always passed through `_chargen_body_context`
+    before being rendered, which folds in one more key this function doesn't set itself:
+    `priority_stale_selections` (WP19) -- see that function's docstring for why it's computed
+    there instead of here.
+    """
     heritage = PRIORITIES.heritage.get(heritage_letter)
     metatype_options = metatype_choices(heritage, METATYPES) if heritage is not None else ()
     return {
@@ -304,6 +328,17 @@ def _attribute_allocation_context(
     clamps to the metatype maximum, so an over-budget preview shows a sane capped number instead of
     raising, and the caller decides separately (via `create_character`) whether to actually commit
     the submission to the session.
+
+    **WP19**: when `error` is unset (a clean render, not an echo of a submission this same request
+    just rejected), re-runs `create_character` against `character`'s own current
+    metatype/heritage/attributes letter and `attribute_points`, purely to derive
+    `attribute_budget_warning` from whatever `ValueError` it raises (discarding the exception
+    itself, not its message) -- `submit_priorities` no longer resets a carried-forward spend that
+    no longer fits a just-reconfirmed letter/metatype (see its own comment), so this is what
+    surfaces that fact, freshly, on every render for as long as it stays true. Distinct from
+    `attribute_error` (sourced from a `ValueError` raised by *this specific request's* submission,
+    never stored) so a template can style "you just typed something invalid" differently from
+    "this was fine when you entered it, but a priority change since then broke it."
     """
     if character is None:
         return {"character": None, "attribute_error": error}
@@ -321,6 +356,24 @@ def _attribute_allocation_context(
         }
         for code in ALLOCATABLE_ATTRIBUTES
     ]
+    budget_warning: str | None = None
+    if error is None:
+        validation_choice = MetatypeChoice(
+            character.metatype, character.special_attribute_points, karma=0
+        )
+        try:
+            create_character(
+                validation_choice,
+                character.heritage_letter,
+                character.attributes_letter,
+                PRIORITIES,
+                attribute_points,
+            )
+        except ValueError as exc:
+            budget_warning = (
+                f"No longer fits since priorities were last confirmed: {exc}. "
+                "Adjust the points below to continue."
+            )
     return {
         "character": display,
         "attribute_rows": rows,
@@ -329,6 +382,7 @@ def _attribute_allocation_context(
         "special_budget": character.special_attribute_points,
         "special_remaining": character.special_attribute_points - special_spent,
         "attribute_error": error,
+        "attribute_budget_warning": budget_warning,
     }
 
 
@@ -343,6 +397,11 @@ def _skill_allocation_context(
     """Context for `_skill_allocation.html`. Same echo-the-submission shape as the attribute
     context above; `skill_points`/`group_points` feed a throwaway `SkillAllocation` used purely for
     display (rating/dice-pool preview), independent of whether the submission actually validated.
+
+    **WP19**: same `error`-gated re-validation as `_attribute_allocation_context` -- when `error`
+    is unset, re-runs `create_skill_allocation` against `skills_letter`/`skill_points`/
+    `group_points` purely to derive `skill_budget_warning`. See that function's docstring for why
+    this needs to be re-derived fresh on every render rather than decided once at submission time.
     """
     if character is None:
         return {"character": None, "skill_error": error}
@@ -364,12 +423,22 @@ def _skill_allocation_context(
         {"name": group, "points": allocation.group_points.get(group, 0)}
         for group in MUNDANE_SKILL_GROUPS
     ]
+    budget_warning: str | None = None
+    if error is None:
+        try:
+            create_skill_allocation(skills_letter, PRIORITIES, SKILLS, skill_points, group_points)
+        except ValueError as exc:
+            budget_warning = (
+                f"No longer fits since priorities were last confirmed: {exc}. "
+                "Adjust the points below to continue."
+            )
     return {
         "character": character,
         "skill_rows": skill_rows,
         "group_rows": group_rows,
         "skills_budget": budget.skills,
         "skills_remaining": budget.skills - sum(allocation.skill_points.values()),
+        "skill_budget_warning": budget_warning,
         "groups_budget": budget.skill_groups,
         "groups_remaining": budget.skill_groups - sum(allocation.group_points.values()),
         "max_skill_rating": MAX_SKILL_RATING_CREATE,
@@ -385,11 +454,19 @@ def _relink_quality_improvements(
     fresh `create_character()` call always starts it, like `improvements`, empty/`None`).
 
     `create_character` always returns a `Character` with a brand-new, empty `ImprovementIndex`
-    (see its own docstring) -- every route that builds a new `Character` for an
-    already-in-progress session (`submit_priorities`, `submit_attributes`) has to re-land this
-    selection's bonuses onto it, or a previously-picked quality's skill bonus would silently
-    vanish the next time an attribute is edited. Safe to call unconditionally: returns `character`
-    unchanged if nothing has ever been committed.
+    (see its own docstring) -- every route that builds a new `Character` this way for an
+    already-in-progress session has to re-land this selection's bonuses onto it, or a
+    previously-picked quality's skill bonus would silently vanish the next time an attribute is
+    edited. Safe to call unconditionally: returns `character` unchanged if nothing has ever been
+    committed.
+
+    **WP19 note**: still load-bearing for `submit_attributes` (unchanged this WP -- still rebuilds
+    via `create_character()`), but no longer called from `submit_priorities`, which WP19 switched
+    to `dataclasses.replace`-ing the *previous* `Character` in place. `replace` carries
+    `improvements` forward *by reference*, already populated -- calling this function there would
+    re-apply the same quality's bonus a second time (`apply_quality_improvements` only ever adds;
+    see `_replace_committed_qualities`'s docstring for the same failure mode described from the
+    other direction).
     """
     if quality_selection is None:
         return character
@@ -403,9 +480,10 @@ def _relink_contact_selection(
     """Recompute a carried-forward contact selection against a freshly built `Character`.
 
     Unlike quality selection, a plain re-attach isn't correct here: `ContactSelection.free_points`/
-    `karma_cost` are derived from `character.attribute_value("CHA")`, which a metatype or
-    attribute-point change (the two things that trigger a fresh `create_character()` call) can
-    itself change. Recomputes from `contact_selection`'s own raw `contacts` tuple via
+    `karma_cost` are derived from `character.attribute_value("CHA")`, which a metatype change or an
+    attribute-point change/reinterpretation (both things `submit_attributes` and
+    `submit_priorities` can each trigger) can itself change. Recomputes from `contact_selection`'s
+    own raw `contacts` tuple via
     `create_contact_selection` rather than trusting the old snapshot's numbers -- always safe to
     call (see `create_contact_selection`'s docstring: it never rejects a contact list that already
     passed its Connection/Loyalty-minimum check once). Returns `character` unchanged if no contact
@@ -500,6 +578,32 @@ def _contacts_context(
     }
 
 
+def _resources_selection_for_display(letter: str, gear_names: Iterable[str]) -> ResourcesSelection:
+    """Recompute a `ResourcesSelection`'s nuyen totals against `letter`'s *current* budget, without
+    `create_resources_selection`'s "spend must not exceed budget" check.
+
+    WP19 needs this because `submit_priorities` now carries a committed `ResourcesSelection`
+    forward unconditionally, even across a Resources-letter change -- the stored object's own
+    `resources_letter`/`nuyen_budget` fields can go stale relative to `session.resources_letter`.
+    `_resources_context` never hits this (it recomputes its own budget/spent numbers directly from
+    `resources_letter`/`gear_names`, never trusting the stored object's fields), but
+    `_character_sheet_context` reads `resources_selection.nuyen_budget`/`.nuyen_remaining` straight
+    off the stored object -- so it needs a freshly-recomputed one, and needs it to not raise on an
+    over-budget carry-forward the way `create_resources_selection` deliberately does.
+    """
+    by_name = {item.name: item for item in STARTER_GEAR_CATALOG}
+    selected = tuple(by_name[name] for name in gear_names if name in by_name)
+    budget = starting_nuyen(letter, PRIORITIES)
+    spent = sum(item.cost for item in selected)
+    return ResourcesSelection(
+        resources_letter=letter,
+        nuyen_budget=budget,
+        gear=selected,
+        nuyen_spent=spent,
+        nuyen_remaining=budget - spent,
+    )
+
+
 def _resources_context(
     character: Character | None,
     resources_letter: str,
@@ -510,6 +614,16 @@ def _resources_context(
     """Context for `_resources.html`. `gear_names` is the flat, repeats-allowed name list
     `create_resources_selection` itself takes -- tallied into per-item quantities here purely for
     display.
+
+    **WP19**: same `error`-gated re-validation as `_attribute_allocation_context` -- when `error`
+    is unset, re-runs `create_resources_selection` against `resources_letter`/`gear_names` purely
+    to derive `resources_budget_warning`. `submit_priorities` carries a committed gear purchase
+    forward unconditionally now (see its own comment), so a Resources-letter reconfirmation that
+    shrinks the nuyen budget below what's already been spent needs to surface here rather than
+    silently going over. Not explicitly named in the Implementation Plan's WP19 entry (which lists
+    `_priority_form_context`/`_attribute_allocation_context`/`_skill_allocation_context` as the
+    three to extend) -- included anyway since gear is carried forward exactly like skill points are,
+    and a stale gear purchase deserves the same explanation, not silence.
     """
     if character is None:
         return {"character": None, "resources_error": error}
@@ -526,6 +640,15 @@ def _resources_context(
     ]
     budget = starting_nuyen(resources_letter, PRIORITIES)
     spent = sum(int(row["subtotal"]) for row in rows)
+    budget_warning: str | None = None
+    if error is None:
+        try:
+            create_resources_selection(resources_letter, PRIORITIES, gear_names)
+        except ValueError as exc:
+            budget_warning = (
+                f"No longer fits since priorities were last confirmed: {exc}. "
+                "Adjust the gear below to continue."
+            )
     return {
         "character": character,
         "gear_rows": rows,
@@ -533,6 +656,7 @@ def _resources_context(
         "nuyen_spent": spent,
         "nuyen_remaining": budget - spent,
         "resources_error": error,
+        "resources_budget_warning": budget_warning,
     }
 
 
@@ -549,10 +673,14 @@ def _character_sheet_context(
     `free_points`/`karma_cost` depend on `character.attribute_value("CHA")`, so recomputing from
     the committed `contacts` tuple is the only way to guarantee this always reflects the
     character's *current* CHA, even if every mutating route's own relink call were somehow missed.
-    `resources_selection` has no such character-dependency (see `chummer5.engine.resources
-    .create_resources_selection`'s signature -- no `character` parameter at all), so it's read
-    directly off `character.resources_selection`, falling back to a fresh zero-spend selection if
-    nothing's been committed yet.
+
+    **WP19**: `resources_selection` is now recomputed too (via `_resources_selection_for_display`),
+    for the same reason -- through WP18, `session.resources_letter` only ever changed alongside a
+    reset (a fresh, budget-matching `ResourcesSelection`), so trusting the stored object's own
+    `nuyen_budget` was safe. WP19 removed that reset (see `submit_priorities`'s own comment), so the
+    stored object's budget can now be stale relative to `session.resources_letter`; `create_
+    resources_selection` itself isn't used here because it raises on an over-budget carry-forward,
+    which this read-only page must still render (as a negative `nuyen_remaining`), not crash on.
     """
     character = session.character
     if character is None:
@@ -577,8 +705,13 @@ def _character_sheet_context(
         character.contact_selection.contacts if character.contact_selection is not None else ()
     )
     contact_selection = create_contact_selection(character, committed_contacts)
-    resources_selection = character.resources_selection or create_resources_selection(
-        session.resources_letter, PRIORITIES, ()
+    committed_gear_names = (
+        tuple(item.name for item in character.resources_selection.gear)
+        if character.resources_selection is not None
+        else ()
+    )
+    resources_selection = _resources_selection_for_display(
+        session.resources_letter, committed_gear_names
     )
     gear_counts: dict[str, int] = {}
     for item in resources_selection.gear:
@@ -697,6 +830,16 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     quality, contact, and resources sections, reflecting the session's currently committed state.
     Used by both `GET /` and a successful `POST /ui/priorities` (the places that render every
     section at once).
+
+    **WP19**: also folds a `priority_stale_selections` flag into `priority_ctx` -- `True` if any of
+    the attribute/skill/resources sections below just reported their own `*_budget_warning` (see
+    those context builders), i.e. the currently-committed spend no longer fits the currently-
+    confirmed priorities. Computed here, once, from the same three sub-context calls this function
+    already has to make, rather than inside `_priority_form_context` itself (which would mean
+    either duplicating those three `create_*` re-validation calls a second time, or restructuring
+    both of its call sites to compute them first and pass the flag in) -- `_priority_form.html` is
+    only ever rendered from this merged dict (see both call sites below), so it reads
+    `priority_stale_selections` like any other key regardless of which function actually set it.
     """
     character = session.character
     attribute_points = character.attribute_points if character is not None else {}
@@ -725,6 +868,12 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         else ()
     )
     resources_ctx = _resources_context(character, session.resources_letter, gear_names)
+    stale = bool(
+        attribute_ctx.get("attribute_budget_warning")
+        or skill_ctx.get("skill_budget_warning")
+        or resources_ctx.get("resources_budget_warning")
+    )
+    priority_ctx = {**priority_ctx, "priority_stale_selections": stale}
     return {
         **priority_ctx,
         **attribute_ctx,
@@ -818,23 +967,45 @@ def create_app() -> FastAPI:
                 error = "Select a metatype offered for the chosen Heritage priority."
             else:
                 previous = session.character
-                character = create_character(
-                    choice, heritage_letter, attributes_letter, PRIORITIES, {}
-                )
-                # `create_character` returns a fresh, empty `ImprovementIndex` -- and, since WP18,
-                # a fresh Character whose skill_allocation/quality_selection/contact_selection/
-                # resources_selection all start `None` too. Quality and contacts are carried
-                # forward from the session's previous Character (re-landing quality's Improvements,
-                # recomputing contacts' CHA-derived free_points/karma_cost); skill_allocation and
-                # resources_selection are intentionally left `None` (reset) -- a changed metatype/
-                # Attributes/Skills/Resources letter invalidates whatever skill/gear spend was
-                # already made against the *old* budget. See ChargenSession's docstring.
-                character = _relink_quality_improvements(
-                    character, previous.quality_selection if previous is not None else None
-                )
-                character = _relink_contact_selection(
-                    character, previous.contact_selection if previous is not None else None
-                )
+                if previous is None:
+                    character = Character(
+                        metatype=choice.metatype,
+                        heritage_letter=heritage_letter,
+                        attributes_letter=attributes_letter,
+                        special_attribute_points=choice.special_attribute_points,
+                        attribute_points=MappingProxyType({}),
+                        improvements=ImprovementIndex(),
+                    )
+                else:
+                    # WP19: re-validate the player's existing selections against the newly
+                    # reconfirmed letters/metatype instead of discarding them. `dataclasses.replace`
+                    # carries every untouched field forward *by reference* -- attribute_points,
+                    # skill_allocation, resources_selection, quality_selection, and (crucially)
+                    # `improvements`, which already has that quality's bonuses applied -- so
+                    # unlike the old `create_character()`-fresh design, there is no empty
+                    # `ImprovementIndex` to re-populate here, and calling
+                    # `_relink_quality_improvements` here would double the bonus
+                    # (`apply_quality_improvements` only ever adds). `Character` has no
+                    # `__post_init__` validation, so carrying forward a spend that no longer fits
+                    # the new Attributes/Skills/Resources budget or the new metatype's attribute
+                    # ranges constructs fine -- whether it *still* fits is deliberately not checked
+                    # here. `_attribute_allocation_context`/`_skill_allocation_context`/
+                    # `_resources_context` each re-derive that fresh on every render instead (see
+                    # their own docstrings), which is what makes a "this is now over budget" warning
+                    # reappear on every subsequent page load until the player actually fixes it,
+                    # rather than flashing once on this response and vanishing on the next `GET /`.
+                    character = replace(
+                        previous,
+                        metatype=choice.metatype,
+                        heritage_letter=heritage_letter,
+                        attributes_letter=attributes_letter,
+                        special_attribute_points=choice.special_attribute_points,
+                    )
+                # Contacts are the one carried-forward selection that *does* need recomputing, not
+                # just re-attaching: `ContactSelection.free_points`/`karma_cost` derive from
+                # `character.attribute_value("CHA")`, which this same reconfirmation (a metatype
+                # swap, or attribute points now read against new ranges) can itself have changed.
+                character = _relink_contact_selection(character, character.contact_selection)
                 session.heritage_letter = heritage_letter
                 session.attributes_letter = attributes_letter
                 session.skills_letter = skills_letter
@@ -843,9 +1014,10 @@ def create_app() -> FastAPI:
                 session.character = character
 
         # The priority form's `hx-target` is `#chargen-body` (the whole three-section wrapper, not
-        # just this form) since a successful submission invalidates the attribute/skill sections'
-        # prior state (see the reset above) -- so *every* response here, error or not, has to
-        # re-render the full `_chargen_body.html`, not just `_priority_form.html`. On error,
+        # just this form) since a successful submission can change what the attribute/skill/
+        # resources sections need to say about the carried-forward spend (freshly valid, or now
+        # over budget -- see WP19) -- so *every* response here, error or not, has to re-render the
+        # full `_chargen_body.html`, not just `_priority_form.html`. On error,
         # `_chargen_body_context` reflects the session's untouched (still-committed) attribute/
         # skill state, while `priority_ctx` alone echoes the player's actual invalid submission.
         priority_ctx = _priority_form_context(

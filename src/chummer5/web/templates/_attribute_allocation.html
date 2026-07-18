@@ -5,6 +5,9 @@
   {% if attribute_error %}
   <p class="error">{{ attribute_error }}</p>
   {% endif %}
+  {% if attribute_budget_warning %}
+  <p class="warning">{{ attribute_budget_warning }}</p>
+  {% endif %}
 
   <p>
     Primary attribute points remaining: {{ primary_remaining }} / {{ primary_budget }}.

@@ -301,7 +301,7 @@ Doing the fold first means WP19 gets written once, against its final shape.
   reload into a fresh session; separately, import `Yeti-#ffffff2.chum5`) reproduced with identical
   results — this WP is a pure internal restructuring, not a behavior change.
 
-- [ ] **WP19 — Re-validate instead of reset on priority/metatype reconfirmation.**
+- [x] **WP19 — Re-validate instead of reset on priority/metatype reconfirmation.**
   Goal: replace `submit_priorities`'s current behavior — silently discarding attribute points,
   skill allocation, and gear spend outright on every reconfirmation (`create_character(choice, ...,
   {})`, `session.skill_allocation = None`, `session.gear_names = ()`) — with keeping the player's

@@ -264,7 +264,11 @@ def test_overspending_the_nuyen_budget_is_rejected() -> None:
     assert "exceeds" in response.text
 
 
-def test_reconfirming_priorities_with_a_new_resources_letter_resets_gear() -> None:
+def test_reconfirming_priorities_with_a_new_resources_letter_keeps_gear() -> None:
+    """WP19: reconfirmation carries a committed gear purchase forward instead of resetting it (the
+    pre-WP19 behavior recorded in `spec/worklogs/WP18.md`'s own manual check) -- the nuyen numbers
+    are recomputed against the *new* Resources letter's budget, but the purchase itself survives.
+    """
     client = TestClient(create_app())
     _confirm_human(client)
     meta_link = next(item for item in STARTER_GEAR_CATALOG if item.name == "Meta Link")
@@ -288,7 +292,57 @@ def test_reconfirming_priorities_with_a_new_resources_letter_resets_gear() -> No
     )
 
     budget = PRIORITIES.resources["C"].nuyen
-    assert f"{budget} / {budget}" in response.text
+    assert f"{budget - meta_link.cost} / {budget}" in response.text
+    assert 'value="1"' in response.text  # Meta Link's quantity is still shown, not reset to 0
+    assert "No longer fits" not in response.text
+
+    # The character sheet must also reflect the *new* budget, not a stale one carried over from
+    # the old Resources letter (see `_resources_selection_for_display`'s own docstring).
+    sheet = client.get("/character/sheet")
+    assert f"{budget - meta_link.cost} / {budget}" in sheet.text
+
+
+def test_reconfirming_priorities_with_a_lower_resources_budget_flags_the_existing_gear() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)  # Resources letter D, budget 50,000
+    predator = next(item for item in STARTER_GEAR_CATALOG if item.name == "Ares Predator V")
+    # 70 * 725 = 50,750 -- doesn't fit D's 50,000 budget, so confirm at Resources C (140,000)
+    # first, where it does.
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "D",
+            "resources_letter": "C",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+    client.post("/ui/resources", data={f"gear_{predator.name}": "70"})
+
+    # Now drop Resources back down to D -- the existing purchase no longer fits.
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    new_budget = PRIORITIES.resources["D"].nuyen
+    assert new_budget == 50000
+    assert 'value="70"' in response.text
+    assert f"-750 / {new_budget}" in response.text
+    assert "No longer fits since priorities were last confirmed" in response.text
+    assert "exceeds" in response.text
 
 
 def test_qualities_contacts_resources_endpoints_before_confirmation_do_not_crash() -> None:

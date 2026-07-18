@@ -8,6 +8,12 @@
   {% if error %}
   <p class="error">{{ error }}</p>
   {% endif %}
+  {% if priority_stale_selections %}
+  <p class="warning">
+    Some of your existing attribute, skill, or gear selections no longer fit these priorities —
+    see the sections below for details.
+  </p>
+  {% endif %}
 
   <form
     id="priority-form"

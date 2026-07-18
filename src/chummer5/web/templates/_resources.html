@@ -5,6 +5,9 @@
   {% if resources_error %}
   <p class="error">{{ resources_error }}</p>
   {% endif %}
+  {% if resources_budget_warning %}
+  <p class="warning">{{ resources_budget_warning }}</p>
+  {% endif %}
 
   <p>Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget }} (spent {{ nuyen_spent }}).</p>
 

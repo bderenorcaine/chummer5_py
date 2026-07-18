@@ -5,6 +5,9 @@
   {% if skill_error %}
   <p class="error">{{ skill_error }}</p>
   {% endif %}
+  {% if skill_budget_warning %}
+  <p class="warning">{{ skill_budget_warning }}</p>
+  {% endif %}
 
   <p>
     Skill points remaining: {{ skills_remaining }} / {{ skills_budget }}.

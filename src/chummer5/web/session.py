@@ -66,19 +66,23 @@ class ChargenSession:
 
     `character` is only set once a metatype + a full, valid set of priority letters has been
     confirmed (WP14); WP15 replaces it with a new `Character` carrying real attribute-point spend
-    on every valid attribute-allocation submission. A changed Attributes/Skills letter or metatype
-    invalidates the old point spend's budget, so both `attribute_points` and `skill_allocation` are
-    still reset on reconfirmation (`chummer5.web.app.submit_priorities`) -- unchanged behavior, now
-    expressed as resetting fields *on* the new `Character` rather than resetting sibling session
-    fields to match a freshly-built one.
+    on every valid attribute-allocation submission.
 
-    `quality_selection` and `contact_selection` are **not** reset on reconfirmation (unchanged from
-    WP16): none of the 3 MVP-offered qualities are metatype-gated or priority-letter-budgeted, and a
-    contact's Connection/Loyalty aren't validated against metatype/priorities at all -- only the
-    *free* contact-point budget (`CHA * 3`) depends on the character, and that's recomputed fresh
-    from the current `Character` on every render. `resources_selection` **is** reset on
-    reconfirmation, mirroring the old `gear_names` behavior -- its nuyen budget depends specifically
-    on the Resources priority letter, one of the four letters reconfirmation can change.
+    **WP19**: reconfirming priorities/metatype (`chummer5.web.app.submit_priorities`) no longer
+    resets anything. Through WP18, a changed Attributes/Skills/Resources letter or metatype
+    invalidated the old point spend's budget, so `attribute_points`, `skill_allocation`, and
+    `resources_selection` (gear) were all discarded outright on every reconfirmation, valid or not.
+    WP19 replaces that with re-validate-in-place: every prior selection is carried forward via
+    `dataclasses.replace` regardless of whether it still fits the new letters/metatype, and
+    `chummer5.web.app`'s `_attribute_allocation_context`/`_skill_allocation_context`/
+    `_resources_context` each re-derive (and surface, as a distinct "no longer fits" message) fresh
+    on every render whether it still does -- an over-budget carry-forward is allowed to sit
+    visibly-invalid rather than blocking chargen, until the player edits that section back within
+    budget. `quality_selection` and `contact_selection` were never reset on reconfirmation to begin
+    with (unchanged from WP16): none of the 3 MVP-offered qualities are metatype-gated or
+    priority-letter-budgeted, and a contact's Connection/Loyalty aren't validated against
+    metatype/priorities at all -- only the *free* contact-point budget (`CHA * 3`) depends on the
+    character, and that's recomputed fresh from the current `Character` on every render.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER
