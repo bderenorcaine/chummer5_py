@@ -1,0 +1,7 @@
+<select id="metatype-select" name="metatype_id">
+  {% for choice in metatype_options %}
+  <option value="{{ choice.metatype.id }}" {% if choice.metatype.id == selected.metatype_id %}selected{% endif %}>
+    {{ choice.metatype.name }} (+{{ choice.special_attribute_points }} special attribute point{{ 's' if choice.special_attribute_points != 1 else '' }})
+  </option>
+  {% endfor %}
+</select>

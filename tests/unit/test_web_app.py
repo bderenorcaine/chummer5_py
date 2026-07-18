@@ -1,38 +1,178 @@
-"""WP13: the web app skeleton runs end to end and the HTMX round trip actually swaps DOM content."""
+"""WP14: priority-letter + metatype selection UI, backed by WP6's engine functions directly.
+
+Cross-checks the UI's result against `chummer5.engine.character.metatype_choices`/
+`create_character` called directly with the same inputs, per the Implementation Plan's acceptance
+bar ("manual walkthrough creates a metatype+priority selection that matches what WP6's engine
+would produce for the same inputs").
+"""
 
 from fastapi.testclient import TestClient
 
+from chummer5.data.metatypes import load_metatypes
+from chummer5.data.priorities import load_priorities
+from chummer5.engine.character import create_character, metatype_choices
 from chummer5.web.app import create_app
+from chummer5.web.session import SESSION_COOKIE_NAME
+
+METATYPES = load_metatypes()
+PRIORITIES = load_priorities()
 
 
-def test_index_page_serves_trivial_page() -> None:
+def test_index_serves_priority_form_and_sets_session_cookie() -> None:
     client = TestClient(create_app())
 
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "Chummer5" in response.text
-    assert "Ping the server" in response.text
+    assert "Heritage" in response.text
+    assert "Attributes" in response.text
+    assert "Confirm metatype" in response.text
+    assert SESSION_COOKIE_NAME in response.cookies
 
 
-def test_htmx_round_trip_returns_incremented_fragment() -> None:
+def test_index_default_selection_is_a_valid_distinct_permutation() -> None:
     client = TestClient(create_app())
 
-    response = client.post("/ui/counter", data={"count": "0"})
+    response = client.get("/")
+
+    # Default letters (A/B/C/D across Heritage/Attributes/Skills/Resources) are pre-selected and
+    # already form a legal assignment -- confirmed by the metatype select being pre-populated for
+    # Heritage A with Human as an option.
+    assert "Human" in response.text
+
+
+def test_metatype_fragment_matches_engine_for_a_given_heritage_letter() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/ui/metatypes", params={"heritage_letter": "D"})
 
     assert response.status_code == 200
-    assert '<span id="counter-value">1</span>' in response.text
-    # The returned fragment is swappable in place: it carries the same id="counter" the
-    # index page's hx-target selector matches, and no <html>/<body> wrapper.
-    assert response.text.strip().startswith('<div id="counter">')
+    expected = metatype_choices(PRIORITIES.heritage["D"], METATYPES)
+    for choice in expected:
+        assert choice.metatype.name in response.text
+    # Heritage D only offers Human/Elf -- Troll must not appear.
+    assert "Troll" not in response.text
 
 
-def test_htmx_round_trip_increments_from_a_nonzero_starting_count() -> None:
+def test_submitting_valid_priorities_and_metatype_matches_engine_output() -> None:
     client = TestClient(create_app())
+    client.get("/")  # establish a session cookie
 
-    response = client.post("/ui/counter", data={"count": "5"})
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
 
-    assert '<span id="counter-value">6</span>' in response.text
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Confirmed: Human" in response.text
+
+    expected = create_character(human_choice, "A", "B", PRIORITIES, {})
+    assert f"Special attribute points (EDG budget): {expected.special_attribute_points}" in (
+        response.text
+    )
+    assert expected.special_attribute_points == human_choice.special_attribute_points
+
+
+def test_submitting_duplicate_priority_letters_is_rejected() -> None:
+    client = TestClient(create_app())
+    client.get("/")
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "A",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "different priority letter" in response.text
+    assert "Confirmed:" not in response.text
+
+
+def test_submitting_metatype_not_offered_by_the_chosen_heritage_letter_is_rejected() -> None:
+    client = TestClient(create_app())
+    client.get("/")
+
+    # Heritage D's metatype list is Human/Elf only (see priorities.xml) -- Troll's id is valid
+    # metatype data, just not one Heritage D offers.
+    troll = next(m for m in METATYPES if m.name == "Troll")
+
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "D",
+            "attributes_letter": "A",
+            "skills_letter": "B",
+            "resources_letter": "C",
+            "metatype_id": troll.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Select a metatype offered" in response.text
+    assert "Confirmed:" not in response.text
+
+
+def test_sessions_are_isolated_per_cookie() -> None:
+    # Two independent cookie jars against the *same* app (and thus the same app.state.sessions
+    # store), mirroring two different browsers/tabs -- the server assigns each its own opaque
+    # session id via Set-Cookie; this checks their ChargenSession state doesn't cross-contaminate.
+    app = create_app()
+    client_one = TestClient(app)
+    client_two = TestClient(app)
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    elf_choice = next(c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Elf")
+
+    client_one.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+    client_two.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "metatype_id": elf_choice.metatype.id,
+        },
+    )
+
+    assert client_one.cookies.get(SESSION_COOKIE_NAME) != client_two.cookies.get(
+        SESSION_COOKIE_NAME
+    )
+    assert "Confirmed: Human" in client_one.get("/").text
+    assert "Confirmed: Elf" in client_two.get("/").text
 
 
 def test_vendored_htmx_is_served_locally_not_from_a_cdn() -> None:

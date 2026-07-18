@@ -1,0 +1,88 @@
+<div id="chargen-form">
+  <p>
+    Assign each of Heritage, Attributes, Skills, and Resources a different priority letter
+    (A-D). Talent is forced to E — mundane MVP characters don't choose it.
+  </p>
+
+  {% if error %}
+  <p class="error">{{ error }}</p>
+  {% endif %}
+
+  <form
+    id="priority-form"
+    hx-post="/ui/priorities"
+    hx-target="#chargen-form"
+    hx-swap="outerHTML"
+  >
+    <label>
+      Heritage
+      <select
+        name="heritage_letter"
+        hx-get="/ui/metatypes"
+        hx-trigger="change"
+        hx-target="#metatype-select"
+        hx-swap="outerHTML"
+        hx-include="this"
+      >
+        {% for letter in letters %}
+        <option value="{{ letter }}" {% if letter == selected.heritage_letter %}selected{% endif %}>
+          {{ heritage_priorities[letter].name }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Attributes
+      <select name="attributes_letter">
+        {% for letter in letters %}
+        <option value="{{ letter }}" {% if letter == selected.attributes_letter %}selected{% endif %}>
+          {{ attributes_priorities[letter].name }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Skills
+      <select name="skills_letter">
+        {% for letter in letters %}
+        <option value="{{ letter }}" {% if letter == selected.skills_letter %}selected{% endif %}>
+          {{ skills_priorities[letter].name }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Resources
+      <select name="resources_letter">
+        {% for letter in letters %}
+        <option value="{{ letter }}" {% if letter == selected.resources_letter %}selected{% endif %}>
+          {{ resources_priorities[letter].name }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Metatype
+      {% include "_metatype_select.html" %}
+    </label>
+
+    <button type="submit">Confirm metatype &amp; priorities</button>
+  </form>
+
+  {% if character %}
+  <div id="character-summary">
+    <h2>Confirmed: {{ character.metatype.name }}</h2>
+    <ul>
+      <li>Heritage {{ selected.heritage_letter }} — {{ heritage_priorities[selected.heritage_letter].name }}</li>
+      <li>Attributes {{ selected.attributes_letter }} — {{ attributes_priorities[selected.attributes_letter].name }}</li>
+      <li>Skills {{ selected.skills_letter }} — {{ skills_priorities[selected.skills_letter].name }}</li>
+      <li>Resources {{ selected.resources_letter }} — {{ resources_priorities[selected.resources_letter].name }}</li>
+      <li>Special attribute points (EDG budget): {{ character.special_attribute_points }}</li>
+    </ul>
+  </div>
+  {% endif %}
+</div>

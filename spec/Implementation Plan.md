@@ -202,7 +202,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
   Acceptance: `uvicorn chummer5.web.app:app` serves the trivial page; an HTMX-driven interaction on that
   page round-trips through the server.
 
-- [ ] **WP14 — Priority & metatype selection UI.**
+- [x] **WP14 — Priority & metatype selection UI.**
   Goal: first real chargen screen.
   Deliverables: assign priority letters to the 4 MVP categories (Talent forced to E, not offered as a
   choice) and pick a metatype; server-side in-memory character-in-progress state keyed by a session
