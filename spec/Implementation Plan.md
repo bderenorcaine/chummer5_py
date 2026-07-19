@@ -501,3 +501,81 @@ separate branch.
   excluded-with-reasons quality (Astral Beacon/Chameleon, Focused Concentration, Gremlins) stays
   excluded from the offered list, mirroring WP8's own "excluded... rather than silently mis-applied"
   acceptance criterion.
+
+- [x] **WP23 — Grant metatype-inherent qualities for free (Low-Light Vision, Thermographic Vision,
+  Resistance to Pathogens/Toxins).**
+  Goal: fix a real, previously-undiscovered gap surfaced while reviewing WP22 — SR5 grants specific
+  qualities automatically and for free to certain metatypes (Elf/Ork → Low-Light Vision, Dwarf →
+  Thermographic Vision + Resistance to Pathogens/Toxins, Troll → Thermographic Vision; Human → none),
+  and this engine currently models none of it (`chummer5.data.metatypes.Metatype` never parses the
+  base `<metatype><qualities>` block at all — only `Metavariant` does, and metavariants are entirely
+  out of MVP scope). See Project Overview's 2026-07-19 Open Questions entry for the full discovery
+  writeup and legacy-C# citations (`QualitySource.Metatype`, `Character.cs` ~line 44348). This
+  directly follows from WP22: Low-Light Vision/Thermographic Vision are now purchasable
+  (`NO_EFFECT`), so a non-Human character can currently spend karma re-buying a quality they should
+  already have for free, with nothing to stop them.
+  Deliverables:
+  - `src/chummer5/data/metatypes.py`: widen `Metatype` with `qualities_positive: tuple[str, ...]`/
+    `qualities_negative: tuple[str, ...]` (mirroring `Metavariant`'s existing fields), parsed from
+    the base `<metatype><qualities>` block via the existing `_parse_quality_names` helper.
+  - `src/chummer5/engine/qualities.py`: `resolve_metatype_qualities(metatype, catalog) ->
+    tuple[Quality, ...]` — resolves `qualities_positive`/`qualities_negative` names against the full
+    SR5-scoped quality catalog (not `mvp_quality_catalog` — granting is unconditional, not gated on
+    what MVP can offer a player to *buy*), raising `ValueError` for an unresolvable name (a real
+    data-integrity guard: these names are fixed by the shipped XML, so a mismatch means a real bug,
+    not an expected edge case). `apply_quality_improvements` gains an optional `source_type:
+    ImprovementSource = ImprovementSource.QUALITY` parameter (existing callers unaffected) so
+    metatype-granted Improvements record under the already-reserved, currently-unused
+    `ImprovementSource.METATYPE` instead of `QUALITY` — keeps `ImprovementIndex.remove_source`
+    able to retract exactly one or the other. `offerable_quality_catalog(character, catalog) ->
+    tuple[Quality, ...]` = `mvp_quality_catalog(catalog)` minus whatever `character
+    .metatype_qualities` already grants, so a player can never spend karma re-buying an inherent
+    racial quality (passing this narrowed catalog straight into `create_quality_selection` is
+    sufficient — no signature change needed there, since it already re-derives
+    `mvp_quality_catalog` from whatever catalog it's given).
+  - `src/chummer5/engine/character.py`: `Character` gains `metatype_qualities: tuple[Quality,
+    ...] = ()` — the same "empty until derived" shape other selections have, except this one is
+    never player-submitted, only ever set to `resolve_metatype_qualities`'s output.
+  - `src/chummer5/web/app.py`: a new `_relink_metatype_qualities(character, catalog)` helper
+    (mirrors `_relink_quality_improvements`/`_relink_contact_selection`'s existing pattern) —
+    removes whatever Improvements `character.metatype_qualities` already holds (a no-op on the
+    always-fresh index `submit_attributes` constructs; a real removal on `submit_priorities`'s
+    carried-forward index when the metatype actually changed), resolves the character's *current*
+    `metatype`'s qualities fresh, applies them, and reattaches. Call it from both `submit_priorities`
+    (both the fresh-character and reconfirm branches) and `submit_attributes`, the same two real
+    "(re)construct a `Character`" sites WP18/WP19 already established. `_quality_selection_context`/
+    `submit_qualities` use `offerable_quality_catalog(character, QUALITIES)` instead of the raw
+    `MVP_QUALITIES` module constant, so the picker and its validation both exclude already-granted
+    qualities. `_quality_selection.html` gains a short informational line listing `character
+    .metatype_qualities`. `_character_sheet_context`'s quality display includes `character
+    .metatype_qualities` alongside `quality_selection`'s picks, visibly distinguished as
+    metatype-granted (e.g. not counted in `quality_karma_cost`, which stays `quality_selection`-only).
+  - `src/chummer5/io/save_format.py`: `build_character` resolves and applies `metatype_qualities`
+    the same way it already does `quality_selection`, including it in the final `replace(...)`.
+    Deliberately **not** a new `CharacterSave` field — it's 100% determined by `metatype` plus the
+    current quality catalog, so persisting it would just be redundant, frozen-at-save-time data;
+    re-deriving at load time also means a loaded character always reflects the current catalog.
+  - `src/chummer5/io/legacy_chum5.py`: `LegacyQuality` gains `qualitysource: str` (parsed from
+    `<qualitysource>`), so a real `.chum5`'s metatype-granted qualities are distinguishable from
+    player-picked ones at all.
+  - `src/chummer5/io/legacy_import.py`: excludes `qualitysource == "Metatype"` legacy qualities from
+    the candidate list passed to `create_quality_selection` — they're not a player pick to import
+    faithfully; the normal construction pipeline re-derives and re-grants them from the imported
+    metatype instead, exactly as it does for a freshly-built character. (Confirmed this is a real,
+    currently-live bug, not a hypothetical: before WP22, an Elf/Dwarf/Ork/Troll import would have
+    misreported its free racial quality as a "dropped" unsupported quality; after WP22 it would
+    misreport it as a real karma-costing pick, since Low-Light Vision/Thermographic Vision are now
+    `mvp_quality_catalog`-offered and `LegacyQuality` never captured `qualitysource` to tell the two
+    cases apart.)
+  Depends on: WP22 (shares `engine/qualities.py` and the same quality-catalog-filtering concern;
+  sequenced directly after since WP22 is what turned this from a theoretical gap into a concretely
+  wrong purchasable-catalog and legacy-import bug, not just a missing feature).
+  Acceptance: unit tests for the widened loader (Elf/Dwarf/Ork/Troll's exact granted names, Human's
+  empty tuple, hand-checked against `metatypes.xml`); `resolve_metatype_qualities`/
+  `apply_quality_improvements`'s new `source_type` param/`offerable_quality_catalog` each tested in
+  isolation; integration tests against the 5 curated mundane fixtures with a non-Human core metatype
+  (`BLUE`/Ork, `Blindfire`/Elf, `Gentle Earthquake`/Troll, `Monomax (approved) 3`/Troll,
+  `Rez0luti0n2.0`/Dwarf) confirming the resolved `metatype_qualities` matches each fixture's own
+  `qualitysource=Metatype` entries; a test that submitting an already-granted quality's id to
+  `/ui/qualities` is rejected; a manual walkthrough building an Elf confirms Low-Light Vision appears
+  on the character sheet at zero karma cost and is absent from the purchasable picker.

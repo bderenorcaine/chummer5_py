@@ -53,6 +53,12 @@
   {% else %}
   <p>None selected.</p>
   {% endif %}
+  {% if metatype_quality_names %}
+  <p>
+    Free from metatype:
+    {% for name in metatype_quality_names %}{{ name }}{% if not loop.last %}, {% endif %}{% endfor %}.
+  </p>
+  {% endif %}
 
   <h3>Contacts</h3>
   {% if contacts %}

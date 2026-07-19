@@ -197,6 +197,7 @@ def test_unsupported_quality_is_dropped_and_reported_not_fatal() -> None:
         karma=unsupported.karma,
         quality_type=unsupported.category,
         source=unsupported.source,
+        quality_source="Selected",
     )
     result = import_legacy_character(
         _legacy_character(qualities=(legacy_quality,)),
@@ -219,6 +220,7 @@ def test_mvp_offered_quality_is_imported() -> None:
         karma=catlike.karma,
         quality_type=catlike.category,
         source=catlike.source,
+        quality_source="Selected",
     )
     result = import_legacy_character(
         _legacy_character(qualities=(legacy_quality,)),
@@ -231,6 +233,67 @@ def test_mvp_offered_quality_is_imported() -> None:
     assert result.dropped_qualities == ()
     assert result.save.quality_ids == (catlike.id,)
     assert catlike.id in {q.id for q in result.built.quality_selection.qualities}
+
+
+def test_metatype_granted_quality_is_neither_imported_nor_dropped() -> None:
+    """WP23: an Elf's Low-Light Vision, present in the legacy save with `qualitysource=Metatype`,
+    must not be treated as a player pick (double-counted as a karma spend now that WP22 made it
+    MVP-offered) nor reported as dropped (nothing is actually lost -- `build_character` re-derives
+    and re-grants it from the imported metatype itself).
+    """
+    low_light = next(q for q in QUALITIES if q.name == "Low-Light Vision")
+    legacy_quality = LegacyQuality(
+        id=low_light.id,
+        name=low_light.name,
+        extra="",
+        karma=low_light.karma,
+        quality_type=low_light.category,
+        source=low_light.source,
+        quality_source="Metatype",
+    )
+    result = import_legacy_character(
+        _legacy_character(metatype="Elf", qualities=(legacy_quality,)),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert result.dropped_qualities == ()
+    assert result.save.quality_ids == ()
+    assert "Low-Light Vision" in {q.name for q in result.built.metatype_qualities}
+    # Not double-counted as a player pick either.
+    assert result.built.quality_selection is not None
+    assert "Low-Light Vision" not in {q.name for q in result.built.quality_selection.qualities}
+
+
+def test_metatype_sourced_quality_not_matching_real_racial_list_still_dropped() -> None:
+    """WP23's exclusion is name-gated against the *current* metatype's real racial-quality list,
+    not a blanket `qualitysource == "Metatype"` skip -- confirmed directly against real data during
+    this WP's research (`Yeti-#ffffff2.chum5`'s own Technomancer quality is
+    `qualitysource=Metatype` despite Yeti being Human). A Human character with a
+    `qualitysource=Metatype` quality that isn't actually one of Human's (empty) racial list must
+    still flow through the normal offered/dropped check, not silently vanish.
+    """
+    unsupported = next(q for q in QUALITIES if q.bonus_support == BonusSupport.NOT_YET_SUPPORTED)
+    legacy_quality = LegacyQuality(
+        id=unsupported.id,
+        name=unsupported.name,
+        extra="",
+        karma=unsupported.karma,
+        quality_type=unsupported.category,
+        source=unsupported.source,
+        quality_source="Metatype",
+    )
+    result = import_legacy_character(
+        _legacy_character(metatype="Human", qualities=(legacy_quality,)),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert result.dropped_qualities == (unsupported.name,)
 
 
 def test_unresolvable_skill_suid_is_dropped_and_reported_not_fatal() -> None:

@@ -63,3 +63,22 @@ def test_dwarf_metavariant_karma_costs() -> None:
 def test_default_path_points_at_real_legacy_file() -> None:
     assert DEFAULT_METATYPES_PATH.name == "metatypes.xml"
     assert DEFAULT_METATYPES_PATH.is_file()
+
+
+def test_metatype_grants_free_qualities() -> None:
+    # WP23: the base <metatype><qualities> block, hand-checked against metatypes.xml. Human gets
+    # none; Elf/Ork both get Low-Light Vision; Dwarf gets Thermographic Vision *and* Resistance to
+    # Pathogens/Toxins; Troll gets Thermographic Vision. See spec/worklogs/WP23.md.
+    metatypes = load_metatypes()
+    by_name = {m.name: m for m in metatypes if m.source == "SR5"}
+    assert by_name["Human"].qualities_positive == ()
+    assert by_name["Human"].qualities_negative == ()
+    assert by_name["Elf"].qualities_positive == ("Low-Light Vision",)
+    assert by_name["Ork"].qualities_positive == ("Low-Light Vision",)
+    assert by_name["Dwarf"].qualities_positive == (
+        "Thermographic Vision",
+        "Resistance to Pathogens/Toxins",
+    )
+    assert by_name["Troll"].qualities_positive == ("Thermographic Vision",)
+    for name in ("Elf", "Ork", "Dwarf", "Troll"):
+        assert by_name[name].qualities_negative == ()

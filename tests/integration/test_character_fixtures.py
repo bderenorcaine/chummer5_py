@@ -47,7 +47,11 @@ from chummer5.engine.derived import (
 )
 from chummer5.engine.improvements import ImprovementIndex, ImprovementType
 from chummer5.engine.lifestyle import create_lifestyle_selection
-from chummer5.engine.qualities import apply_quality_improvements, create_quality_selection
+from chummer5.engine.qualities import (
+    apply_quality_improvements,
+    create_quality_selection,
+    resolve_metatype_qualities,
+)
 from chummer5.engine.resources import (
     Contact,
     create_contact_selection,
@@ -247,8 +251,49 @@ def test_blindfire_catlike_quality_matches_engine_end_to_end() -> None:
         priorities=PRIORITIES,
         attribute_points={},
     )
-    apply_quality_improvements(character, selection)
+    apply_quality_improvements(character, selection.qualities)
     assert character.improvements.resolve(ImprovementType.SKILL, "Sneaking") == 2
+
+
+# WP23: the 5 curated mundane fixtures with a non-Human core metatype, each carrying that
+# metatype's real free racial quality/qualities, tagged `qualitysource=Metatype` in the raw
+# `.chum5` -- confirmed during this WP's research (see spec/worklogs/WP23.md).
+_NON_HUMAN_FIXTURES = {
+    "BLUE.chum5": ("Ork", ("Low-Light Vision",)),
+    "Blindfire.chum5": ("Elf", ("Low-Light Vision",)),
+    "Gentle Earthquake.chum5": ("Troll", ("Thermographic Vision",)),
+    "Monomax (approved) 3.chum5": ("Troll", ("Thermographic Vision",)),
+    "Rez0luti0n2.0.chum5": ("Dwarf", ("Thermographic Vision",)),
+}
+
+
+def test_resolve_metatype_qualities_matches_every_non_human_fixture() -> None:
+    """Cross-checks `resolve_metatype_qualities` against real legacy-computed ground truth: every
+    curated mundane fixture with a non-Human core metatype (5 of 11 -- see `_NON_HUMAN_FIXTURES`)
+    carries its metatype's real racial quality/qualities in its own `<quality>` list, each tagged
+    `qualitysource=Metatype`. `Rez0luti0n2.0.chum5`'s Dwarf is missing Resistance to Pathogens/
+    Toxins entirely (a real, pre-existing gap in that specific save, not a parsing bug -- confirmed
+    directly against the raw XML during WP23's research), so this only asserts the *subset* each
+    fixture's own `qualitysource=Metatype` entries name, not that `resolve_metatype_qualities`'
+    full output is always a perfect match to every fixture -- the assertion direction that's
+    actually meaningful as ground truth.
+    """
+    assert set(_NON_HUMAN_FIXTURES) <= set(MUNDANE_FIXTURES)
+    checked = 0
+    for fixture_name, (metatype_name, expected_names) in _NON_HUMAN_FIXTURES.items():
+        legacy = load_chum5(mundane_fixture_path(fixture_name))
+        assert legacy.metatype == metatype_name, fixture_name
+
+        legacy_metatype_quality_names = {
+            q.name for q in legacy.qualities if q.quality_source == "Metatype"
+        }
+        assert set(expected_names) <= legacy_metatype_quality_names, fixture_name
+
+        metatype = next(m for m in METATYPES if m.name == metatype_name and m.source == "SR5")
+        resolved_names = {q.name for q in resolve_metatype_qualities(metatype, QUALITIES)}
+        assert set(expected_names) <= resolved_names, fixture_name
+        checked += 1
+    assert checked == len(_NON_HUMAN_FIXTURES)
 
 
 def test_cross_corpus_contact_free_budget_matches_cha_times_three() -> None:

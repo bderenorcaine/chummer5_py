@@ -286,3 +286,24 @@ See Implementation Plan's Phase H intro.
 attributes — was raised here 2026-07-18 and resolved the same day by WP18/WP19. See "Character as the
 single aggregate" under Architecture below for the settled design; entries here stay only while
 genuinely open.)*
+
+### 2026-07-19 — Metatype-granted free qualities (Low-Light Vision, Thermographic Vision, Resistance to Pathogens/Toxins) were never modeled
+
+Surfaced by a user question while reviewing WP22. Confirmed via the raw data: `legacy/Chummer/data/
+metatypes.xml` grants specific SR5-core qualities for free at character creation via a
+`<metatype><qualities><positive>/<negative>` block — Elf and Ork both get Low-Light Vision, Dwarf
+gets Thermographic Vision **and** Resistance to Pathogens/Toxins, Troll gets Thermographic Vision;
+Human gets none. The legacy engine has a dedicated mechanism for this (`QualitySource.Metatype` —
+auto-granted, zero karma cost, excluded from the karma cap, auto-removed if the metatype changes;
+`Character.cs` ~line 44348). None of this exists in the new engine: `chummer5.data.metatypes
+.Metatype` never parses the base `<qualities>` block at all (only `Metavariant` does, and
+metavariants are entirely out of MVP scope), so an Elf/Dwarf/Ork/Troll character built through this
+engine today silently gets none of their racial qualities. This also connects to WP22 concretely:
+Low-Light Vision/Thermographic Vision are now in the *purchasable* catalog (WP22's `NO_EFFECT`
+tranche) with no check preventing a non-Human character from spending karma on something they
+should already have for free, and (confirmed separately) `chummer5.io.legacy_chum5.LegacyQuality`
+doesn't capture `<qualitysource>` at all, so importing a real Elf/Dwarf/Ork/Troll `.chum5` (5 of the
+11 curated mundane fixtures: `BLUE`/Ork, `Blindfire`/Elf, `Gentle Earthquake`/Troll, `Monomax
+(approved) 3`/Troll, `Rez0luti0n2.0`/Dwarf) would now misreport their free racial quality as a
+karma-costing player pick. Scoped as WP23, next on the Implementation Plan — see that entry for the
+fix.

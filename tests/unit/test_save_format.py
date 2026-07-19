@@ -11,14 +11,26 @@ import json
 
 import pytest
 
+from chummer5.data.lifestyle import load_lifestyles
+from chummer5.data.metatypes import load_metatypes
+from chummer5.data.priorities import load_priorities
+from chummer5.data.qualities import load_qualities
+from chummer5.data.skills import load_skills
 from chummer5.engine.resources import Contact
 from chummer5.io.save_format import (
     FORMAT_VERSION,
     CharacterSave,
+    build_character,
     create_character_save,
     from_json,
     to_json,
 )
+
+METATYPES = load_metatypes()
+PRIORITIES = load_priorities()
+SKILLS = load_skills()
+QUALITIES = load_qualities()
+LIFESTYLES = load_lifestyles()
 
 
 def _sample_save() -> CharacterSave:
@@ -98,3 +110,39 @@ def test_from_json_rejects_missing_format_version() -> None:
     del data["format_version"]
     with pytest.raises(ValueError, match="unsupported save format version"):
         from_json(json.dumps(data))
+
+
+def test_build_character_derives_metatype_qualities_not_from_the_save_file() -> None:
+    """WP23: `metatype_qualities` is never a `CharacterSave` field (see this module's own
+    "selections, not derived values" docstring) -- `build_character` re-derives it purely from
+    `metatype_name` on every load, so an Elf save's `metatype_qualities` comes back populated with
+    Low-Light Vision even though nothing in the save's own JSON says so.
+    """
+    save = create_character_save(
+        metatype_name="Elf",
+        heritage_letter="A",
+        attributes_letter="D",
+        attribute_points={},
+        skills_letter="E",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+    )
+    # Round-tripped through JSON too, so this also proves the derivation survives a real save/load,
+    # not just a freshly-built save object.
+    reloaded = from_json(to_json(save))
+    character = build_character(
+        reloaded,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert [q.name for q in character.metatype_qualities] == ["Low-Light Vision"]
+    assert character.improvements.improvements == ()  # NO_EFFECT -- no Improvement to apply

@@ -6,6 +6,13 @@
   <p class="error">{{ quality_error }}</p>
   {% endif %}
 
+  {% if metatype_qualities %}
+  <p>
+    Free from metatype:
+    {% for quality in metatype_qualities %}{{ quality.name }}{% if not loop.last %}, {% endif %}{% endfor %}.
+  </p>
+  {% endif %}
+
   <p>
     Positive Quality karma: {{ positive_karma }} / {{ karma_limit }}.
     Negative Quality karma: {{ negative_karma }} / {{ karma_limit }}.

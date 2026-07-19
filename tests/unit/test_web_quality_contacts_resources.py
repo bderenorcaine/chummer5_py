@@ -147,6 +147,75 @@ def test_quality_improvements_survive_reconfirming_priorities() -> None:
     assert "<td>2</td>" in skill_response.text
 
 
+def _confirm_elf(client: TestClient) -> None:
+    """WP23: same Heritage A / Attributes B / Skills C / Resources D combination as
+    `_confirm_human`, but Elf -- gives every WP23 test here a character whose metatype grants a
+    free quality (Low-Light Vision).
+    """
+    client.get("/")
+    heritage = PRIORITIES.heritage["A"]
+    elf_choice = next(c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Elf")
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "metatype_id": elf_choice.metatype.id,
+        },
+    )
+    assert "Confirmed: Elf" in response.text
+
+
+def test_elf_metatype_quality_is_shown_free_and_not_purchasable() -> None:
+    client = TestClient(create_app())
+    _confirm_elf(client)
+    low_light = next(q for q in MVP_QUALITIES if q.name == "Low-Light Vision")
+
+    response = client.get("/")
+
+    assert "Free from metatype:" in response.text
+    assert "Low-Light Vision" in response.text
+    assert f'value="{low_light.id}"' not in response.text
+
+
+def test_elf_cannot_submit_already_metatype_granted_quality_id() -> None:
+    client = TestClient(create_app())
+    _confirm_elf(client)
+    low_light = next(q for q in MVP_QUALITIES if q.name == "Low-Light Vision")
+
+    response = client.post("/ui/qualities", data={"quality_id": low_light.id})
+
+    assert "not an MVP-offered quality id" in response.text
+
+
+def test_elf_character_sheet_shows_metatype_quality_separately_from_karma_cost() -> None:
+    client = TestClient(create_app())
+    _confirm_elf(client)
+
+    response = client.get("/character/sheet")
+
+    assert "Free from metatype:" in response.text
+    assert "Low-Light Vision" in response.text
+    # No quality was purchased -- confirms the metatype-granted quality isn't folded into
+    # quality_names (the purchased-quality list), the actually-meaningful check here.
+    assert "None selected." in response.text
+
+
+def test_human_offerable_catalog_unaffected_by_wp23() -> None:
+    """No metatype quality applies to Human -- the picker/karma math for a Human character must be
+    byte-identical to pre-WP23 behavior."""
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.get("/")
+
+    assert "Free from metatype:" not in response.text
+    for quality in MVP_QUALITIES:
+        assert quality.name in response.text
+
+
 def test_unknown_quality_id_is_rejected() -> None:
     client = TestClient(create_app())
     _confirm_human(client)

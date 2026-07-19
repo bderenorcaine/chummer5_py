@@ -63,8 +63,13 @@ from chummer5.data.priorities import PriorityTable
 from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
 from chummer5.engine.character import Character, create_character, metatype_choices
+from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.lifestyle import create_lifestyle_selection
-from chummer5.engine.qualities import apply_quality_improvements, create_quality_selection
+from chummer5.engine.qualities import (
+    apply_quality_improvements,
+    create_quality_selection,
+    resolve_metatype_qualities,
+)
 from chummer5.engine.resources import (
     Contact,
     create_contact_selection,
@@ -257,8 +262,16 @@ def build_character(
         attribute_points=save.attribute_points,
     )
 
+    # WP23: metatype_qualities is never persisted in CharacterSave (it's 100% determined by
+    # metatype + the current quality catalog -- see this module's own "selections, not derived
+    # values" docstring), so it's re-derived here exactly like a freshly-built Character would.
+    metatype_qualities = resolve_metatype_qualities(character.metatype, qualities)
+    apply_quality_improvements(
+        character, metatype_qualities, source_type=ImprovementSource.METATYPE
+    )
+
     quality_selection = create_quality_selection(save.quality_ids, qualities)
-    apply_quality_improvements(character, quality_selection)
+    apply_quality_improvements(character, quality_selection.qualities)
 
     skill_allocation = create_skill_allocation(
         letter=save.skills_letter,
@@ -288,4 +301,5 @@ def build_character(
         contact_selection=contact_selection,
         resources_selection=resources_selection,
         lifestyle_selection=lifestyle_selection,
+        metatype_qualities=metatype_qualities,
     )

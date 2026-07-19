@@ -60,6 +60,12 @@ class LegacyQuality:
     karma: int  # <bp>; already signed per qualities.xml (negative for Negative-category qualities)
     quality_type: str  # "Positive" or "Negative"
     source: str
+    # <qualitysource>: "Metatype" for a free, auto-granted racial quality (e.g. an Elf's Low-Light
+    # Vision), "Selected" for a player pick, among other legacy-internal values MVP doesn't need to
+    # distinguish. WP23: without this, legacy_import.py couldn't tell a metatype-granted quality
+    # apart from a player-chosen one, and would misreport/mis-import it as a karma-costing pick --
+    # see spec/worklogs/WP23.md.
+    quality_source: str
 
 
 @dataclass(frozen=True)
@@ -223,6 +229,7 @@ def _parse_quality(elem: ET.Element) -> LegacyQuality:
         karma=int(elem.findtext("bp", "0")),
         quality_type=elem.findtext("qualitytype", ""),
         source=elem.findtext("source", ""),
+        quality_source=elem.findtext("qualitysource", ""),
     )
 
 

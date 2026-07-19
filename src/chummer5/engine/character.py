@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from chummer5.data.metatypes import AttributeRange, Metatype
 from chummer5.data.priorities import HeritagePriority, PriorityTable
+from chummer5.data.qualities import Quality
 from chummer5.engine.improvements import ImprovementIndex, ImprovementType
 
 if TYPE_CHECKING:
@@ -141,6 +142,12 @@ class Character:
     spend against one shared Resources-priority budget (see `chummer5.engine.resources
     .create_resources_selection`'s `lifestyle_cost` parameter) rather than independently -- see
     `chummer5.engine.lifestyle`'s module docstring.
+
+    **WP23** adds `metatype_qualities`, the qualities `metatype` grants for free (e.g. Elf -> Low-
+    Light Vision) -- unlike every field above, this is never player-submitted; it's always exactly
+    `chummer5.engine.qualities.resolve_metatype_qualities(metatype, catalog)`'s output, kept in sync
+    with `metatype` by the same "(re)construct a `Character`" call sites that already carry
+    `quality_selection`/etc. forward (see `chummer5.web.app._relink_metatype_qualities`).
     """
 
     metatype: Metatype
@@ -154,6 +161,7 @@ class Character:
     contact_selection: ContactSelection | None = None
     resources_selection: ResourcesSelection | None = None
     lifestyle_selection: LifestyleSelection | None = None
+    metatype_qualities: tuple[Quality, ...] = ()
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]

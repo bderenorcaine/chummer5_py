@@ -83,7 +83,7 @@ from chummer5.data.metatypes import Metatype
 from chummer5.data.priorities import PriorityTable
 from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
-from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character
+from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character, sr5_metatypes
 from chummer5.engine.qualities import mvp_quality_catalog
 from chummer5.engine.resources import Contact
 from chummer5.io.legacy_chum5 import LegacyCharacter, load_chum5, priority_letter
@@ -205,10 +205,35 @@ def import_legacy_character(
             continue
         skill_points[skill.id] = legacy_skill.base
 
+    # WP23: `<qualitysource>Metatype</qualitysource>` isn't exclusively "this metatype's real
+    # racial quality" in the legacy data -- it's the broader "auto-granted at character creation,
+    # not manually picked from the quality list" tag, which also covers e.g. a Talent selection's
+    # Technomancer/Adept/Magician quality (confirmed directly: `Yeti-#ffffff2.chum5`'s own
+    # Technomancer quality is `qualitysource=Metatype` despite Yeti being Human, whose
+    # `qualities_positive`/`qualities_negative` are both empty). Only skip (silently, since
+    # `build_character` re-derives and re-grants it) a `Metatype`-sourced quality whose *name*
+    # actually matches this character's real metatype's racial-quality list -- anything else
+    # `qualitysource=Metatype` still flows through the normal offered/dropped check below, so it
+    # doesn't just vanish with no trace (the module docstring's own rule).
+    metatype_obj = next(
+        (m for m in sr5_metatypes(metatypes) if m.name == legacy.metatype),
+        None,
+    )
+    metatype_quality_names = (
+        frozenset((*metatype_obj.qualities_positive, *metatype_obj.qualities_negative))
+        if metatype_obj is not None
+        else frozenset[str]()
+    )
+
     offered_qualities = {q.id: q for q in mvp_quality_catalog(qualities)}
     quality_ids: list[str] = []
     dropped_qualities: list[str] = []
     for legacy_quality in legacy.qualities:
+        if (
+            legacy_quality.quality_source == "Metatype"
+            and legacy_quality.name in metatype_quality_names
+        ):
+            continue
         if legacy_quality.id in offered_qualities:
             quality_ids.append(legacy_quality.id)
         else:

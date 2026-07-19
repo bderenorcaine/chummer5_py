@@ -161,6 +161,24 @@ def test_yeti_technomancer_quality() -> None:
     assert technomancer.karma == 15
     assert technomancer.quality_type == "Positive"
     assert technomancer.source == "SR5"
+    # WP23: <qualitysource>Metatype</qualitysource> here despite Yeti being Human -- confirms this
+    # tag isn't exclusively "this metatype's real racial quality" (see spec/worklogs/WP23.md and
+    # chummer5.io.legacy_import's own handling of this case).
+    assert technomancer.quality_source == "Metatype"
+
+
+def test_blindfire_low_light_vision_quality_source_is_metatype() -> None:
+    # WP23: Blindfire is an Elf; Low-Light Vision is Elf's real free racial quality, also tagged
+    # qualitysource=Metatype -- the "genuinely metatype-granted" case test_yeti_technomancer_quality
+    # above is deliberately not.
+    character = load_chum5(mundane_fixture_path("Blindfire.chum5"))
+    low_light = next(q for q in character.qualities if q.name == "Low-Light Vision")
+    assert low_light.quality_source == "Metatype"
+    # <bp>4</bp> -- the catalog's flat karma value, recorded even though a Metatype-sourced quality
+    # was never actually paid for; the legacy engine excludes it from the karma total by checking
+    # OriginSource elsewhere (Character.cs), not by zeroing <bp> in the save. Confirms
+    # chummer5.io.legacy_import must exclude it by quality_source, not by a bp==0 shortcut.
+    assert low_light.karma == 4
 
 
 def test_yeti_skill_groups_include_stealth_and_firearms() -> None:

@@ -147,6 +147,8 @@ from chummer5.engine.qualities import (
     apply_quality_improvements,
     create_quality_selection,
     mvp_quality_catalog,
+    offerable_quality_catalog,
+    resolve_metatype_qualities,
 )
 from chummer5.engine.resources import (
     FREE_CONTACT_POINTS_PER_CHARISMA,
@@ -511,8 +513,31 @@ def _relink_quality_improvements(
     """
     if quality_selection is None:
         return character
-    apply_quality_improvements(character, quality_selection)
+    apply_quality_improvements(character, quality_selection.qualities)
     return replace(character, quality_selection=quality_selection)
+
+
+def _relink_metatype_qualities(character: Character) -> Character:
+    """(Re)populate `character.metatype_qualities` from `character.metatype`, keeping its
+    Improvements in sync (WP23).
+
+    Unlike `_relink_quality_improvements` (a player's selection, only ever carried forward
+    unchanged), what belongs here can genuinely change out from under `character.metatype_qualities`
+    -- `submit_priorities` can swap the metatype itself. So this always removes whatever
+    `ImprovementSource.METATYPE` Improvements `character.metatype_qualities` currently names (a
+    no-op on the always-fresh, empty index `submit_attributes` builds, since a fresh `Character`'s
+    `metatype_qualities` defaults to `()`) before resolving `character.metatype`'s *current* free
+    qualities and re-applying -- correct whether metatype changed, stayed the same, or this is the
+    first time it's ever been resolved. Safe to call unconditionally after any (re)construction of
+    `character`.
+    """
+    for quality in character.metatype_qualities:
+        character.improvements.remove_source(ImprovementSource.METATYPE, quality.id)
+    metatype_qualities = resolve_metatype_qualities(character.metatype, QUALITIES)
+    apply_quality_improvements(
+        character, metatype_qualities, source_type=ImprovementSource.METATYPE
+    )
+    return replace(character, metatype_qualities=metatype_qualities)
 
 
 def _relink_contact_selection(
@@ -549,7 +574,7 @@ def _replace_committed_qualities(character: Character, selection: QualitySelecti
     for imp in character.improvements.improvements:
         if imp.source_type == ImprovementSource.QUALITY:
             character.improvements.remove_source(ImprovementSource.QUALITY, imp.source_id)
-    apply_quality_improvements(character, selection)
+    apply_quality_improvements(character, selection.qualities)
     return replace(character, quality_selection=selection)
 
 
@@ -562,21 +587,25 @@ def _quality_selection_context(
     """Context for `_quality_selection.html`. `quality_ids` is whatever should be shown checked --
     the session's committed selection on a clean render, or the raw submitted checkbox values on
     an error-echo render, same shape as the attribute/skill contexts above.
+
+    **WP23**: the pickable rows come from `offerable_quality_catalog(character, QUALITIES)`, not
+    the module-level `MVP_QUALITIES`, so a quality this character's metatype already grants for
+    free (e.g. an Elf's Low-Light Vision) never appears as something to spend karma on again.
     """
     if character is None:
         return {"character": None, "quality_error": error}
+    offered = offerable_quality_catalog(character, QUALITIES)
     ids = set(quality_ids)
-    rows = [{"quality": q, "selected": q.id in ids} for q in MVP_QUALITIES]
-    positive_karma = sum(q.karma for q in MVP_QUALITIES if q.id in ids and q.category == "Positive")
-    negative_karma = -sum(
-        q.karma for q in MVP_QUALITIES if q.id in ids and q.category == "Negative"
-    )
+    rows = [{"quality": q, "selected": q.id in ids} for q in offered]
+    positive_karma = sum(q.karma for q in offered if q.id in ids and q.category == "Positive")
+    negative_karma = -sum(q.karma for q in offered if q.id in ids and q.category == "Negative")
     return {
         "character": character,
         "quality_rows": rows,
         "positive_karma": positive_karma,
         "negative_karma": negative_karma,
         "karma_limit": QUALITY_KARMA_LIMIT,
+        "metatype_qualities": character.metatype_qualities,
         "quality_error": error,
     }
 
@@ -838,6 +867,10 @@ def _character_sheet_context(
         if character.quality_selection is not None
         else []
     )
+    # WP23: shown separately from quality_names -- these were never a karma spend (excluded from
+    # quality_karma_cost below, which stays quality_selection-only), so conflating the two lists
+    # would misrepresent what the player actually chose to buy.
+    metatype_quality_names = [q.name for q in character.metatype_qualities]
     committed_contacts = (
         character.contact_selection.contacts if character.contact_selection is not None else ()
     )
@@ -881,6 +914,7 @@ def _character_sheet_context(
         ],
         "sheet_skill_rows": skill_rows,
         "quality_names": quality_names,
+        "metatype_quality_names": metatype_quality_names,
         "contacts": contact_selection.contacts,
         "gear_rows": [
             {"name": name, "quantity": quantity} for name, quantity in sorted(gear_counts.items())
@@ -1187,6 +1221,11 @@ def create_app() -> FastAPI:
                         attributes_letter=attributes_letter,
                         special_attribute_points=choice.special_attribute_points,
                     )
+                # WP23: the metatype may have just changed (or this may be the first-ever
+                # resolution, on the fresh-Character branch above) -- either way,
+                # `metatype_qualities` needs to reflect `character.metatype` exactly, not whatever
+                # `previous.metatype` granted.
+                character = _relink_metatype_qualities(character)
                 # Contacts are the one carried-forward selection that *does* need recomputing, not
                 # just re-attaching: `ContactSelection.free_points`/`karma_cost` derive from
                 # `character.attribute_value("CHA")`, which this same reconfirmation (a metatype
@@ -1259,6 +1298,9 @@ def create_app() -> FastAPI:
                 # or lifestyle spend (none depend on attribute points), so all three carry forward
                 # by plain reference.
                 character = _relink_quality_improvements(character, previous.quality_selection)
+                # WP23: metatype is unchanged here, but the fresh `create_character()` call above
+                # still needs metatype_qualities' Improvements re-landed onto its new, empty index.
+                character = _relink_metatype_qualities(character)
                 character = _relink_contact_selection(character, previous.contact_selection)
                 character = replace(
                     character,
@@ -1312,8 +1354,13 @@ def create_app() -> FastAPI:
         else:
             form = await request.form()
             quality_ids = [str(value) for value in form.getlist("quality_id")]
+            # WP23: validate against this character's own offerable catalog, not the raw QUALITIES
+            # catalog, so a tampered/stale submission can't buy an already metatype-granted quality
+            # either -- `create_quality_selection` already raises "not an MVP-offered quality id"
+            # for anything not in whatever catalog it's given, so this alone is sufficient.
+            offered = offerable_quality_catalog(session.character, QUALITIES)
             try:
-                selection = create_quality_selection(quality_ids, QUALITIES)
+                selection = create_quality_selection(quality_ids, offered)
             except ValueError as exc:
                 context = _quality_selection_context(session.character, quality_ids, error=str(exc))
             else:
