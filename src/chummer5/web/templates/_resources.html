@@ -17,33 +17,38 @@
     hx-swap="outerHTML"
     hx-trigger="change, input delay:400ms"
   >
-    <table>
-      <thead>
-        <tr>
-          <th>Item</th>
-          <th>Cost</th>
-          <th>Quantity</th>
-          <th>Subtotal</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in gear_rows %}
-        <tr>
-          <td>{{ row.item.name }}</td>
-          <td>{{ row.item.cost }}</td>
-          <td>
-            <input
-              type="number"
-              name="gear_{{ row.item.name }}"
-              value="{{ row.quantity }}"
-              min="0"
-            />
-          </td>
-          <td>{{ row.subtotal }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {% for group in gear_groups %}
+    <details {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
+      <summary>{{ group.category }}</summary>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Cost</th>
+            <th>Quantity</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in group.rows %}
+          <tr>
+            <td>{{ row.item.name }}</td>
+            <td>{{ row.item.cost }}</td>
+            <td>
+              <input
+                type="number"
+                name="gear_{{ row.item.name }}"
+                value="{{ row.quantity }}"
+                min="0"
+              />
+            </td>
+            <td>{{ row.subtotal }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endfor %}
     <button type="submit">Update gear</button>
   </form>
   {% else %}

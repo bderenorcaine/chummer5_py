@@ -97,6 +97,7 @@ environment note), then open http://127.0.0.1:8000/.
 
 from __future__ import annotations
 
+import itertools
 import tempfile
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Mapping
@@ -689,16 +690,29 @@ def _resources_context(
     counts: dict[str, int] = {}
     for name in gear_names:
         counts[name] = counts.get(name, 0) + 1
-    rows: list[dict[str, Any]] = [
+    # WP21: ~330 items instead of 5 -- grouped by category (the catalog is already sorted by
+    # (category, name), so a plain groupby needs no re-sorting) rather than one long flat table, per
+    # the Implementation Plan's explicit instruction. `_character_sheet_context`'s own `gear_rows`
+    # (a different context key, just the *purchased* items) is unaffected -- that list is always
+    # short, no grouping needed there.
+    gear_groups: list[dict[str, Any]] = [
         {
-            "item": item,
-            "quantity": counts.get(item.name, 0),
-            "subtotal": item.cost * counts.get(item.name, 0),
+            "category": category,
+            "rows": [
+                {
+                    "item": item,
+                    "quantity": counts.get(item.name, 0),
+                    "subtotal": item.cost * counts.get(item.name, 0),
+                }
+                for item in items
+            ],
         }
-        for item in STARTER_GEAR_CATALOG
+        for category, items in itertools.groupby(
+            STARTER_GEAR_CATALOG, key=lambda item: item.category or "Other"
+        )
     ]
     budget = starting_nuyen(resources_letter, PRIORITIES)
-    spent = sum(int(row["subtotal"]) for row in rows)
+    spent = sum(int(row["subtotal"]) for group in gear_groups for row in group["rows"])
     budget_warning: str | None = None
     if error is None:
         try:
@@ -712,7 +726,7 @@ def _resources_context(
             )
     return {
         "character": character,
-        "gear_rows": rows,
+        "gear_groups": gear_groups,
         "nuyen_budget": budget,
         "nuyen_spent": spent,
         "nuyen_remaining": budget - spent - lifestyle_cost,

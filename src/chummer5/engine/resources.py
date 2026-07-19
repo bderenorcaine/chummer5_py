@@ -31,13 +31,16 @@ cross-referenced against the core rulebook ("Making Connections", p. 98 — see
 
 **Starting resources.** `starting_nuyen()` is a thin lookup over WP2's `PriorityTable.resources`
 (already cross-validated against all 11 mundane `.chum5` fixtures' `<startingnuyen>` in WP4 — see
-`spec/worklogs/WP4.md`). `STARTER_GEAR_CATALOG` is a deliberately small, hand-curated list of
-flat-cost (non-`Rating`-scaled) SR5-sourced items cross-checked directly against
-`legacy/Chummer/data/{gear,armor,weapons}.xml` — not a general gear-catalog loader, which the
-Implementation Plan explicitly scopes out of MVP ("a deliberately minimal starter-gear purchase
-... explicitly not the full gear catalog"). `create_resources_selection` only validates that every
-selected item is in that small catalog and that the total cost doesn't exceed the Resources-letter
-nuyen budget — there's no equivalent "real characters exceed this" escape hatch here, since nuyen
+`spec/worklogs/WP4.md`). `STARTER_GEAR_CATALOG` was, through WP20, a deliberately small,
+hand-curated list of 5 flat-cost SR5-sourced items — WP21 replaced it with `build_starter_gear_
+catalog()`, built from `chummer5.data.gear`'s real loaders over the full SR5-core, flat-cost
+equipment set (411 items across gear/armor/weapons; see that module's docstring for exactly what
+"flat-cost" excludes and how a handful of real cross-file name collisions are resolved). Still not
+the *complete* gear catalog the Implementation Plan scopes out of MVP (no Rating-scaled items, no
+Availability-cap enforcement — see `build_starter_gear_catalog`'s own docstring and WP21's worklog),
+just a much larger flat-cost slice of it. `create_resources_selection` only validates that every
+selected item is in the catalog and that the total cost doesn't exceed the Resources-letter nuyen
+budget — there's no equivalent "real characters exceed this" escape hatch here, since nuyen
 (unlike contact points) has no legacy provision for going over budget by paying with something
 else at chargen.
 
@@ -54,6 +57,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from chummer5.data.gear import Armor, Gear, Weapon, load_armor, load_gear, load_weapons
 from chummer5.data.priorities import PriorityTable
 from chummer5.engine.character import Character
 
@@ -135,19 +139,83 @@ def create_contact_selection(character: Character, contacts: Iterable[Contact]) 
 
 @dataclass(frozen=True)
 class StarterGearItem:
+    """One purchasable item in the starter-gear catalog.
+
+    **WP21**: `category` and `armor_rating` are new, both optional so every pre-WP21 caller/test
+    constructing a bare `StarterGearItem(name, cost)` keeps working unchanged. `category` is `None`
+    only for hand-authored items in tests, never for anything `build_starter_gear_catalog` produces
+    (every real `chummer5.data.gear` entry carries one). `armor_rating` is set only for armor items;
+    gear/weapons have no analogous "rating" concept.
+    """
+
     name: str
     cost: int
+    category: str | None = None
+    armor_rating: int | None = None
 
 
-# A small, deliberately minimal, hand-curated starter-gear list -- flat-cost SR5-sourced items
-# cross-checked directly against legacy/Chummer/data/{gear,armor,weapons}.xml (none use a
-# Rating-scaled cost formula), not a general gear-catalog loader. See module docstring.
-STARTER_GEAR_CATALOG: tuple[StarterGearItem, ...] = (
-    StarterGearItem("Meta Link", 100),
-    StarterGearItem("Certified Credstick, Standard", 5),
-    StarterGearItem("Armor Jacket", 1000),
-    StarterGearItem("Ares Predator V", 725),
-    StarterGearItem("Combat Knife", 300),
+def build_starter_gear_catalog(
+    gear: Iterable[Gear] = (),
+    armor: Iterable[Armor] = (),
+    weapons: Iterable[Weapon] = (),
+) -> tuple[StarterGearItem, ...]:
+    """Build the purchasable starter-gear catalog from WP21's `chummer5.data.gear` loaders.
+
+    Two exclusions beyond a plain conversion, both documented in `chummer5.data.gear`'s module
+    docstring:
+
+    - **Drops `hidden` gear/weapon entries outright.** `<hide/>` marks an auto-granted weapon
+      *profile* (e.g. buying the real, 1200-cost `Armor`-category "Ballistic Shield" auto-grants a
+      same-named, 0-cost `Exotic Melee Weapons` weapon purely so its melee-attack stats exist
+      somewhere) -- never something the player picks directly, so it's excluded unconditionally
+      rather than only when it happens to collide with another entry's name.
+    - **Drops `armor_stacks` items** (Helmet, Ballistic Shield, Riot Shield) -- their `+N` additive
+      armor bonus is different math from every other item's single rating, out of scope for this WP.
+
+    Even after both exclusions, one real name collision remains (`Vision Magnification`: a 250-cost
+    standalone accessory vs. a 0-cost, `<required>`-gated sensor-housing component -- neither
+    `hidden` nor `armor_stacks`), plus ~30 harmless same-cost duplicates (e.g. `Grenade: Flash-Bang`
+    priced identically as both `Ammunition` gear and a throwable weapon). Both are resolved the same
+    way: **keep the higher-cost entry** -- correct for the genuine collision (0 is never a real
+    standalone price once the two exclusions above have already run) and a no-op for the harmless
+    ones (equal cost either way).
+
+    Sorted by `(category, name)` so the web layer can group rows by category directly off catalog
+    order, without re-sorting itself.
+    """
+    by_name: dict[str, StarterGearItem] = {}
+
+    def _consider(item: StarterGearItem) -> None:
+        existing = by_name.get(item.name)
+        if existing is None or item.cost > existing.cost:
+            by_name[item.name] = item
+
+    for g in gear:
+        if g.hidden:
+            continue
+        _consider(StarterGearItem(name=g.name, cost=g.cost, category=g.category))
+    for a in armor:
+        if a.armor_stacks:
+            continue
+        _consider(
+            StarterGearItem(
+                name=a.name, cost=a.cost, category=a.category, armor_rating=a.armor_rating
+            )
+        )
+    for w in weapons:
+        if w.hidden:
+            continue
+        _consider(StarterGearItem(name=w.name, cost=w.cost, category=w.category))
+
+    return tuple(sorted(by_name.values(), key=lambda item: (item.category or "", item.name)))
+
+
+# The full SR5-core, flat-cost equipment set (WP21) -- see chummer5.data.gear's module docstring for
+# exactly what "flat-cost" excludes (Rating/FixedValues/Variable-cost items, the 3 additive-stacking
+# armor items) and how the 5 real cross-file name collisions are resolved. Parsed once at import
+# time (Project Overview's "parsed once at startup" rule), not a hand-curated stand-in anymore.
+STARTER_GEAR_CATALOG: tuple[StarterGearItem, ...] = build_starter_gear_catalog(
+    load_gear(), load_armor(), load_weapons()
 )
 
 

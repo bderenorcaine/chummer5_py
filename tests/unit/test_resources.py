@@ -150,8 +150,8 @@ def test_create_resources_selection_within_budget() -> None:
     assert selection.nuyen_spent == 400
     assert selection.nuyen_remaining == 5600
     assert selection.gear == (
-        StarterGearItem("Meta Link", 100),
-        StarterGearItem("Combat Knife", 300),
+        StarterGearItem("Meta Link", 100, category="Commlinks"),
+        StarterGearItem("Combat Knife", 300, category="Blades"),
     )
 
 

@@ -413,7 +413,7 @@ separate branch.
   (`baselifestyle`/`months`/`cost`) — the best fixture coverage of any Phase G/H candidate surveyed,
   use it fully rather than only hand-checked cases.
 
-- [ ] **WP21 — Expand the starter-gear catalog to the full flat-cost SR5 equipment set.**
+- [x] **WP21 — Expand the starter-gear catalog to the full flat-cost SR5 equipment set.**
   Goal: grow `STARTER_GEAR_CATALOG` from 5 hand-picked items to the real SR5-core, flat-cost
   gear/armor/weapon catalog — confirmed at **411 items** (266 gear + 11 armor + 134 weapons,
   `source == "SR5"` and a plain integer `<cost>`, no `Rating`/`FixedValues`/`Variable` formula) —
