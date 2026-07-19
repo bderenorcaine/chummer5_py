@@ -1,3 +1,4 @@
+from dataclasses import replace
 from types import MappingProxyType
 
 import pytest
@@ -200,6 +201,42 @@ def test_attribute_value_caps_at_metatype_maximum_even_with_improvements() -> No
 def test_allocatable_attribute_constants_partition_primary_and_special() -> None:
     assert set(PRIMARY_ATTRIBUTES).isdisjoint(SPECIAL_ATTRIBUTES)
     assert set(ALLOCATABLE_ATTRIBUTES) == set(PRIMARY_ATTRIBUTES) | set(SPECIAL_ATTRIBUTES)
+
+
+def test_mundane_character_mag_is_zero_not_metatype_minimum() -> None:
+    # WP25: metatypes.xml's own MAG range for every MVP metatype has a minimum of 1 (the raw
+    # eligibility range) -- but a Mundane character (magic_type is None, the default) must resolve
+    # to 0, not that metatype minimum, since "Talent forced to E" means Mundane never actually has
+    # Magic. Regression guard for the special case in `attribute_value`.
+    human = _human_choice("D")
+    character = create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    assert character.attribute_range("MAG").minimum == 1  # sanity: the raw range does allow it
+    assert character.attribute_value("MAG") == 0
+    assert character.power_points == 0
+
+
+def test_magic_character_mag_is_the_stored_rating_not_a_formula() -> None:
+    human = _human_choice("D")
+    character = create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    magician = replace(character, magic_type="Magician", magic_rating=6)
+    assert magician.attribute_value("MAG") == 6
+    assert magician.power_points == 0  # only Adepts get Power Points
+
+    adept = replace(character, magic_type="Adept", magic_rating=4)
+    assert adept.attribute_value("MAG") == 4
+    assert adept.power_points == 4
 
 
 def test_character_attribute_points_is_read_only_mapping() -> None:

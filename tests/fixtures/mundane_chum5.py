@@ -39,6 +39,16 @@ MUNDANE_FIXTURES: tuple[str, ...] = (
 # just build-method-agnostic derived-stat formulas. See the Implementation Plan's corpus note.
 PRIORITY_BUILD_FIXTURE = "Yeti-#ffffff2.chum5"
 
+# Phase I (WP25+): the corpus's only 2 magic-capable `buildmethod == Priority` fixtures — not
+# "mundane" (both have `<magenabled>True</magenabled>`, so they're deliberately excluded from
+# `MUNDANE_FIXTURES` above), but the ground truth for Magic-type/Magic-rating/tradition/Talent
+# free-skill-grant chargen logic the same way Yeti is for mundane priority allocation. Miko (Elf
+# Magician, Talent letter A, tradition Shinto) and Wesson (Human Adept, Talent letter C, tradition
+# Christian Theurgy) — see the Implementation Plan's Phase I intro for why only these two exist in
+# the 34-file corpus, and `spec/worklogs/WP25.md` for what each one's own `<priorityskills>` free
+# -skill-grant names confirm (Miko: Counterspelling + Spellcasting; Wesson: Pistols).
+MAGIC_PRIORITY_BUILD_FIXTURES = ("Miko.chum5", "Wesson.chum5")
+
 
 def mundane_fixture_path(name: str) -> Path:
     """Resolve a name from `MUNDANE_FIXTURES` to its path under `LEGACY_TESTFILES_DIR`."""

@@ -42,11 +42,27 @@ Of the 11, only **`Yeti-#ffffff2.chum5`** has `<buildmethod>Priority</buildmetho
   WP2's `load_priorities()` data. WP6's attribute-allocation tests will lean on this fixture
   specifically, alongside hand-authored cases checked directly against `priorities.xml`.
 
+### Phase I: `MAGIC_PRIORITY_BUILD_FIXTURES` (WP25+)
+
+Two more `buildmethod == Priority` fixtures, `Miko.chum5` (Elf Magician, Talent letter A) and
+`Wesson.chum5` (Human Adept, Talent letter C) — the corpus's *only* magic-capable Priority-built
+characters (see the Implementation Plan's Phase I intro for why: of 34 fixtures, only 3 are
+`Priority`-built at all, and Yeti is mundane). Deliberately **not** added to `MUNDANE_FIXTURES`
+(both have `<magenabled>True</magenabled>`) — they back Phase I's own Magic-type/Magic-rating/
+tradition/Talent-free-skill-grant tests (`tests/unit/test_magic.py`,
+`tests/integration/test_magic_fixtures.py`) rather than the mundane-corpus derived-stat/priority
+-allocation tests above. See `spec/worklogs/WP25.md` for what each fixture's own `<priorityskills>`
+element confirms about the Talent free-skill grant (Miko: Counterspelling + Spellcasting; Wesson:
+Pistols — the latter a correction to the Implementation Plan's own claim that Wesson's letter grants
+none). Neither fixture's actual tradition (Shinto/Christian Theurgy, both non-`SR5`-sourced) is one
+of this phase's 2 offered traditions (Hermetic/Shamanic) — expected, not a gap; see the phase intro.
+
 ### Files
 
 - `mundane_chum5.py` — `MUNDANE_FIXTURES` (the 11 names), `PRIORITY_BUILD_FIXTURE` (Yeti),
-  `mundane_fixture_path()` (name -> path under `legacy/Chummer.Tests/TestFiles/`). Importable as
-  `tests.fixtures.mundane_chum5` (a PEP 420 namespace package — no `__init__.py` needed; `pytest`'s
-  `python -m pytest` invocation, already this project's documented workaround for the workspace-path
-  mismatch, puts the repo root on `sys.path`).
+  `MAGIC_PRIORITY_BUILD_FIXTURES` (Miko, Wesson — WP25), `mundane_fixture_path()` (name -> path
+  under `legacy/Chummer.Tests/TestFiles/`, works for any fixture name in the corpus, not just the
+  mundane 11). Importable as `tests.fixtures.mundane_chum5` (a PEP 420 namespace package — no
+  `__init__.py` needed; `pytest`'s `python -m pytest` invocation, already this project's documented
+  workaround for the workspace-path mismatch, puts the repo root on `sys.path`).
 - This README.

@@ -36,11 +36,12 @@ from chummer5.data.qualities import Quality
 from chummer5.engine.improvements import ImprovementIndex, ImprovementType
 
 if TYPE_CHECKING:
-    # Deferred to type-checking only: `chummer5.engine.{qualities,resources,skills}` each import
-    # `Character` from this module, so importing them back here at runtime would be circular. Safe
-    # under `from __future__ import annotations` (PEP 563) -- every annotation in this module,
-    # including dataclass field types, is a lazily-evaluated string, so `dataclasses.dataclass`
-    # never needs these names to actually resolve at import time.
+    # Deferred to type-checking only: `chummer5.engine.{qualities,resources,skills,magic}` each
+    # import `Character` from this module, so importing them back here at runtime would be
+    # circular. Safe under `from __future__ import annotations` (PEP 563) -- every annotation in
+    # this module, including dataclass field types, is a lazily-evaluated string, so
+    # `dataclasses.dataclass` never needs these names to actually resolve at import time.
+    from chummer5.data.traditions import Tradition
     from chummer5.engine.lifestyle import LifestyleSelection
     from chummer5.engine.qualities import QualitySelection
     from chummer5.engine.resources import ContactSelection, ResourcesSelection
@@ -148,6 +149,30 @@ class Character:
     `chummer5.engine.qualities.resolve_metatype_qualities(metatype, catalog)`'s output, kept in sync
     with `metatype` by the same "(re)construct a `Character`" call sites that already carry
     `quality_selection`/etc. forward (see `chummer5.web.app._relink_metatype_qualities`).
+
+    **WP25** adds `magic_type`/`magic_rating`/`tradition`/`magic_granted_skill_ids` -- Phase I's
+    Magic-type, Magic-rating, tradition, and Talent-free-skill-grant selection. Deliberately **4
+    flat fields, not one wrapping `MagicSelection` field** -- unlike `skill_allocation`/
+    `quality_selection`/etc. (each a validated bundle a *later* WP reads back out as a whole),
+    `magic_type`/`magic_rating`/`tradition` are each read individually and often (`attribute_value`
+    below dispatches on `magic_type` for every MAG-linked skill's dice pool, not just once per
+    render), so flattening them here avoids an `if character.magic_selection` unwrap at every call
+    site. `chummer5.engine.magic.create_magic_selection` is still the single validated
+    construction path (mirrors `MetatypeChoice`'s relationship to `metatype`/`heritage_letter`/etc.
+    above) -- its `MagicSelection` return value is what a caller unpacks via
+    `dataclasses.replace(character, magic_type=selection.magic_type, ...)`, not stored wholesale.
+    `magic_type` is `None`/`magic_rating` is `0`/`tradition` is `None`/`magic_granted_skill_ids` is
+    `()` for a Mundane character (including every pre-WP25 `Character`, via these fields'
+    defaults) -- the same "unset means Mundane, not merely uncommitted" shape the Project
+    Overview's "Talent forced to E" MVP scoping already established, just no longer hardcoded.
+    Per the Implementation Plan's Phase I intro finding, **MAG is deliberately not added to
+    `SPECIAL_ATTRIBUTES`/`ALLOCATABLE_ATTRIBUTES`** -- it isn't point-bought the way EDG is; the
+    chosen Talent option's `magic` field *is* the finished rating outright. `attribute_value` below
+    special-cases `"MAG"` instead (documented decision, not a default): every other attribute is a
+    formula over `attribute_points`/`improvements`, but nothing about MAG's *value* varies per
+    character beyond `magic_rating` itself (WP35, later, changes this to also account for
+    Essence-driven Magic loss -- see that WP's own scope). Power Points, which Phase I's Adept
+    archetype needs, aren't a stored field at all -- see `power_points` below.
     """
 
     metatype: Metatype
@@ -162,16 +187,44 @@ class Character:
     resources_selection: ResourcesSelection | None = None
     lifestyle_selection: LifestyleSelection | None = None
     metatype_qualities: tuple[Quality, ...] = ()
+    magic_type: str | None = None  # Talent codename: "Magician"/"Adept"; None for Mundane (WP25)
+    magic_rating: int = 0  # the finished MAG rating; 0 for Mundane (WP25)
+    tradition: Tradition | None = None  # Magician only (WP25)
+    magic_granted_skill_ids: tuple[str, ...] = ()  # the Talent free-skill grant's picks (WP25)
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]
 
     def attribute_value(self, code: str) -> int:
-        """`metatype minimum + points spent + Σ improvements`, capped at the metatype maximum."""
+        """`metatype minimum + points spent + Σ improvements`, capped at the metatype maximum.
+
+        **WP25**: `"MAG"` is a special case, not this formula -- see the class docstring's Phase I
+        paragraph. Dispatching here (rather than teaching every caller about MAG) matters because
+        `chummer5.engine.skills.dice_pool` calls this for *every* skill's linked attribute,
+        including Magical Active ones (Spellcasting, Counterspelling, ...), for any character --
+        without this branch, a Mundane character's `attribute_range("MAG")` would silently resolve
+        to the metatype's raw eligibility range (minimum 1 for every MVP metatype) instead of the
+        correct "no Magic at all" 0, since metatype data alone doesn't encode "Talent forced to E".
+        """
+        if code == "MAG":
+            return self.magic_rating
         attribute_range = self.attribute_range(code)
         points = self.attribute_points.get(code, 0)
         bonus = self.improvements.resolve(ImprovementType.ATTRIBUTE, code)
         return min(attribute_range.minimum + points + bonus, attribute_range.maximum)
+
+    @property
+    def power_points(self) -> int:
+        """Adept Power Points: the Magic rating, 1:1, granted free at chargen -- no separate budget
+        to derive (SR5 core rulebook p.278-279, "POWER POINTS": "At character creation, adepts
+        receive Power Points equal to their Magic attribute, while mystic adepts have to buy Power
+        Points with Karma" -- Mystic Adept's split doesn't apply here, since it's out of scope
+        entirely, see Project Overview's 2026-07-19 magic-scoping entry). Computed, not stored --
+        there is nothing here `magic_type`/`magic_rating` don't already determine, so a separate
+        field would just be redundant, staleness-prone state (the same reasoning `BASE_ESSENCE`'s
+        docstring and WP23's "don't persist `metatype_qualities`" decision already used elsewhere).
+        """
+        return self.magic_rating if self.magic_type == "Adept" else 0
 
 
 def create_character(

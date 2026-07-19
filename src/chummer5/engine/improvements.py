@@ -67,12 +67,17 @@ class ImprovementSource(Enum):
 
     Limited to the three kinds of bonus the Project Overview's MVP scope names ("metatype bonuses,
     quality bonuses, priority-derived bonuses") rather than legacy's full ~40-member enum, which
-    covers cyberware/vehicles/spells/etc. that are out of MVP scope entirely.
+    covers cyberware/vehicles/spells/etc. that are out of MVP scope entirely. WP25 (Phase I) adds a
+    4th: `TALENT`, for the Talent-option free-skill grant (`chummer5.engine.magic
+    .apply_magic_skill_grant_improvements`) — a real Improvement source, but not a "priority-derived
+    bonus" in the WP5-era sense (`PRIORITY` has never had a real producer; see that member's own
+    note), so it gets its own name rather than overloading `PRIORITY`.
     """
 
     METATYPE = auto()
     QUALITY = auto()
     PRIORITY = auto()
+    TALENT = auto()
 
 
 @dataclass(frozen=True)

@@ -676,7 +676,7 @@ than this phase silently guessing at generality it doesn't need yet.
   Yeti) unchanged, proving zero behavioral drift; manual walkthrough confirms a 5-letter permutation
   is now required and the priority form round-trips correctly with Talent still implicitly Mundane.
 
-- [ ] **WP25 — Magic type, Magic rating, tradition selection, and the Talent free-skill grant.**
+- [x] **WP25 — Magic type, Magic rating, tradition selection, and the Talent free-skill grant.**
   Goal: let the Talent letter's *option* be chosen (Mundane/Magician/Adept — this phase's offered
   set) and derive `Character`'s Magic rating, Power Points, and (Magician only) tradition and the
   Talent-granted free skill(s).

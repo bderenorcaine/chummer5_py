@@ -27,4 +27,8 @@ htmlcov/
 .DS_Store
 
 # Copyrighted reference material kept locally for rules lookups, not for redistribution.
-/spec/rulebooks/
+# (Only the PDF itself -- spec/rulebooks/learnings.md is this project's own original notes and is
+# meant to be tracked; discovered during WP25 that this rule had been silently swallowing it,
+# so every prior WP's "recorded in learnings.md" claim was never actually committed. See WP25's
+# worklog.)
+/spec/rulebooks/*.pdf
