@@ -21,17 +21,27 @@ from chummer5.engine.character import Character
 
 SESSION_COOKIE_NAME = "chummer5_session"
 
-# The 4 priority letters MVP actually offers a choice over (see chummer5.engine.character and
-# the Project Overview's "Talent forced to E" note — Talent consumes E unconditionally for every
-# mundane MVP character, which is why these four categories only ever draw from A-D).
-PRIORITY_LETTERS = ("A", "B", "C", "D")
+# The 5 priority letters SR5's own priority table uses across all 5 categories (Heritage, Talent,
+# Attributes, Skills, Resources). Through WP23, Talent was a hardcoded, unoffered assumption
+# (always letter E, "Mundane" -- see the Project Overview's "Talent forced to E" note) and this
+# tuple covered only the other four categories' A-D range. WP24 makes Talent a real 5th category a
+# player assigns a letter to (still resolving to Mundane unconditionally -- see
+# `chummer5.web.app._priority_form_context`'s docstring -- no new player-visible capability yet),
+# so the letter range widens to the full A-E every category can legally draw from.
+PRIORITY_LETTERS = ("A", "B", "C", "D", "E")
 
 # An arbitrary-but-valid starting assignment (a permutation of PRIORITY_LETTERS) so the first
 # page a player sees already has a legal selection to adjust, rather than an empty/invalid one.
+# Talent defaults to E specifically (not just "whichever letter is left over") because E is the
+# *only* letter whose Talent option list actually includes "Mundane" (confirmed against
+# `priorities.xml`: A-D's Talent options are all real archetypes -- Magician, Adept, ... -- with no
+# Mundane entry at all) -- so this default reproduces pre-WP24 behavior exactly for every
+# character built without touching the new Talent selector.
 DEFAULT_HERITAGE_LETTER = "A"
 DEFAULT_ATTRIBUTES_LETTER = "B"
 DEFAULT_SKILLS_LETTER = "C"
 DEFAULT_RESOURCES_LETTER = "D"
+DEFAULT_TALENT_LETTER = "E"
 
 
 @dataclass
@@ -54,15 +64,27 @@ class ChargenSession:
     `[item.name for item in character.resources_selection.gear] if character.resources_selection
     else ()`).
 
-    `heritage_letter`/`attributes_letter`/`skills_letter`/`resources_letter`/`metatype_id` remain
-    genuine sibling state, not folded into `Character`: they're the *pre-confirmation* priority-form
-    selection a player is still adjusting, which exists before any `Character` does (the very first
-    page load has no character yet, but still needs a legal starting letter assignment -- see the
-    `DEFAULT_*_LETTER` constants below). Once a metatype+priorities submission is confirmed,
-    `heritage_letter`/`attributes_letter` are duplicated onto the resulting `Character` too (it
-    needs them for its own attribute-range/budget lookups), but `skills_letter`/`resources_letter`/
-    `metatype_id` have no `Character`-side equivalent at all, so this session-level copy remains
-    the only copy for all four regardless.
+    `heritage_letter`/`attributes_letter`/`skills_letter`/`resources_letter`/`talent_letter`/
+    `metatype_id` remain genuine sibling state, not folded into `Character`: they're the
+    *pre-confirmation* priority-form selection a player is still adjusting, which exists before any
+    `Character` does (the very first page load has no character yet, but still needs a legal
+    starting letter assignment -- see the `DEFAULT_*_LETTER` constants below). Once a
+    metatype+priorities submission is confirmed, `heritage_letter`/`attributes_letter` are
+    duplicated onto the resulting `Character` too (it needs them for its own attribute-range/budget
+    lookups), but `skills_letter`/`resources_letter`/`talent_letter`/`metatype_id` have no
+    `Character`-side equivalent at all, so this session-level copy remains the only copy for all
+    four regardless.
+
+    **WP24**: `talent_letter` joins this group as pure plumbing -- a player can now assign Talent
+    any of the 5 letters (see `PRIORITY_LETTERS`' widened range above), but nothing on `Character`
+    reads it yet: `submit_priorities` still resolves Talent's *option* unconditionally to
+    `priorities.mundane_talent()` regardless of which letter was chosen (see
+    `chummer5.web.app._priority_form_context`'s docstring), so there is nothing for a `Character`
+    field to hold yet. `Character` gains its own `talent_letter` only once WP25 needs to look up
+    that letter's real option list against `priorities.talent` -- the same "add the field when
+    something actually reads it" reasoning `skills_letter`/`resources_letter` already follow, not
+    the `heritage_letter`/`attributes_letter` precedent (those two are needed immediately, by
+    `create_character`'s own budget validation).
 
     `character` is only set once a metatype + a full, valid set of priority letters has been
     confirmed (WP14); WP15 replaces it with a new `Character` carrying real attribute-point spend
@@ -89,6 +111,7 @@ class ChargenSession:
     attributes_letter: str = DEFAULT_ATTRIBUTES_LETTER
     skills_letter: str = DEFAULT_SKILLS_LETTER
     resources_letter: str = DEFAULT_RESOURCES_LETTER
+    talent_letter: str = DEFAULT_TALENT_LETTER
     metatype_id: str | None = None
     character: Character | None = None
 

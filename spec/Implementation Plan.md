@@ -654,7 +654,7 @@ do not build a general XPath evaluator for it**; nothing in this phase's offered
 different `xpath` value, and if a future phase does, it should extend the classifier explicitly rather
 than this phase silently guessing at generality it doesn't need yet.
 
-- [ ] **WP24 — Talent as a real 5th priority category (plumbing only; still Mundane-only).**
+- [x] **WP24 — Talent as a real 5th priority category (plumbing only; still Mundane-only).**
   Goal: retire "Talent forced to E" as a hardcoded assumption threaded through the web layer, with
   **zero new player-visible capability yet** — a pure restructuring WP in the same spirit as WP18.
   Deliverables:

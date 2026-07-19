@@ -90,6 +90,18 @@ same reason `quality_selection`/`resources_selection` never needed special-casin
 `submit_attributes` needed one explicit addition (carrying `lifestyle_selection` forward alongside
 `skill_allocation`/`resources_selection`, since it still rebuilds via `create_character()` fresh).
 
+WP24 retires "Talent forced to E" as a hardcoded assumption: the priority form gains a 5th letter
+selector (Talent, alongside Heritage/Attributes/Skills/Resources), and `submit_priorities` validates
+a 5-way A-E permutation instead of a 4-way A-D one. This is deliberately zero new player-visible
+capability -- Talent's chosen *letter* is now real, session-held state
+(`chummer5.web.session.ChargenSession.talent_letter`), but its *option* still resolves
+unconditionally to `priorities.mundane_talent()` (letter E's own "Mundane" entry) regardless of
+which letter was picked, since no other letter's Talent list even contains a Mundane option (see
+`_priority_form_context`'s docstring). `Character` gains no `talent_letter` field of its own in
+this WP -- nothing on `Character` reads it yet, the same reason `skills_letter`/`resources_letter`
+never got one either; WP25 adds it once real archetype selection needs to look the letter up
+against `priorities.talent`.
+
 Run locally: `uv run uvicorn chummer5.web.app:app --reload` (or `python -m uvicorn ...` — same
 `uv run python -m X` workaround as `pytest`/`ruff`/`mypy`, see Project Overview.md's Development
 environment note), then open http://127.0.0.1:8000/.
@@ -182,6 +194,7 @@ from chummer5.io.save_format import (
     to_json,
 )
 from chummer5.web.session import (
+    DEFAULT_TALENT_LETTER,
     PRIORITY_LETTERS,
     SESSION_COOKIE_NAME,
     ChargenSession,
@@ -239,6 +252,7 @@ def _priority_form_context(
     attributes_letter: str,
     skills_letter: str,
     resources_letter: str,
+    talent_letter: str,
     metatype_id: str | None,
     character: object,
     error: str | None,
@@ -248,6 +262,21 @@ def _priority_form_context(
     before being rendered, which folds in one more key this function doesn't set itself:
     `priority_stale_selections` (WP19) -- see that function's docstring for why it's computed
     there instead of here.
+
+    **WP24**: `talent_letter` is a real 5th field a player assigns a letter to, alongside the
+    other four -- `letters`/the duplicate-letter check both widen from a 4-way to a 5-way
+    permutation of `PRIORITY_LETTERS` (now A-E, see `chummer5.web.session`'s docstring) to match.
+    Its chosen *letter* is echoed here like any other selection, but its *option* is not resolved
+    here at all: `submit_priorities` always builds `Character` (indirectly, via `create_character`)
+    against `priorities.mundane_talent()` -- letter E's own "Mundane" option -- regardless of which
+    letter Talent actually landed on. This is deliberate, not an oversight: `priorities.xml` only
+    ever lists a "Mundane" option under letter E (A-D's Talent lists are all real magic/resonance
+    archetypes -- Magician, Adept, Technomancer, ... -- confirmed via direct inspection), so there
+    is no other Mundane-compatible option this WP could resolve to even if it tried. Letting the
+    player assign Talent any letter *now* (rather than only once WP25 adds real archetype picking)
+    is what proves the letter-assignment plumbing works before anything meaningful depends on it --
+    the same "prove the shape before it does anything" sequencing WP14 used for
+    metatype+priority-letter assignment ahead of WP15's spend logic.
     """
     heritage = PRIORITIES.heritage.get(heritage_letter)
     metatype_options = metatype_choices(heritage, METATYPES) if heritage is not None else ()
@@ -257,12 +286,14 @@ def _priority_form_context(
         "attributes_priorities": PRIORITIES.attributes,
         "skills_priorities": PRIORITIES.skills,
         "resources_priorities": PRIORITIES.resources,
+        "talent_priorities": PRIORITIES.talent,
         "metatype_options": metatype_options,
         "selected": {
             "heritage_letter": heritage_letter,
             "attributes_letter": attributes_letter,
             "skills_letter": skills_letter,
             "resources_letter": resources_letter,
+            "talent_letter": talent_letter,
             "metatype_id": metatype_id,
         },
         "character": character,
@@ -907,6 +938,9 @@ def _character_sheet_context(
                 f"{session.resources_letter} — "
                 f"{PRIORITIES.resources[session.resources_letter].name}"
             ),
+            "talent": (
+                f"{session.talent_letter} — {PRIORITIES.talent[session.talent_letter].name}"
+            ),
         },
         "attribute_rows": [
             {"code": code, "value": character.attribute_value(code)}
@@ -1014,11 +1048,20 @@ def _apply_built_character_to_session(
     `chummer5.io.save_format`), so it arrives with the right `ImprovementIndex` already populated,
     unlike `create_character`'s always-empty one (see `_relink_quality_improvements`'s docstring
     for why that matters elsewhere).
+
+    **WP24**: `CharacterSave` has no `talent_letter` field (a save always predates real Talent
+    selection -- WP25's job, not this one's -- so there is nothing meaningful to persist yet; see
+    `chummer5.io.save_format`'s own module docstring for why this format only ever stores
+    player-authored selections, never inert plumbing). `session.talent_letter` resets to
+    `DEFAULT_TALENT_LETTER` here rather than being left at whatever the session happened to hold
+    before the load/import -- the same "every field this WP's chargen routes read is set here"
+    completeness this function already promises for the other four letters.
     """
     session.heritage_letter = save.heritage_letter
     session.attributes_letter = save.attributes_letter
     session.skills_letter = save.skills_letter
     session.resources_letter = save.resources_letter
+    session.talent_letter = DEFAULT_TALENT_LETTER
     session.metatype_id = built.metatype.id
     session.character = built
 
@@ -1138,6 +1181,7 @@ def create_app() -> FastAPI:
             attributes_letter=session.attributes_letter,
             skills_letter=session.skills_letter,
             resources_letter=session.resources_letter,
+            talent_letter=session.talent_letter,
             metatype_id=session.metatype_id,
             character=session.character,
             error=None,
@@ -1165,16 +1209,23 @@ def create_app() -> FastAPI:
         attributes_letter: str = Form(...),
         skills_letter: str = Form(...),
         resources_letter: str = Form(...),
+        talent_letter: str = Form(...),
         metatype_id: str = Form(...),
     ) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
-        submitted_letters = (heritage_letter, attributes_letter, skills_letter, resources_letter)
+        submitted_letters = (
+            heritage_letter,
+            attributes_letter,
+            skills_letter,
+            resources_letter,
+            talent_letter,
+        )
         error: str | None = None
         character = session.character
 
         if sorted(submitted_letters) != sorted(PRIORITY_LETTERS):
             error = (
-                "Heritage, Attributes, Skills, and Resources must each use a different "
+                "Heritage, Talent, Attributes, Skills, and Resources must each use a different "
                 f"priority letter ({', '.join(PRIORITY_LETTERS)}), one each."
             )
         else:
@@ -1235,6 +1286,7 @@ def create_app() -> FastAPI:
                 session.attributes_letter = attributes_letter
                 session.skills_letter = skills_letter
                 session.resources_letter = resources_letter
+                session.talent_letter = talent_letter
                 session.metatype_id = metatype_id
                 session.character = character
 
@@ -1250,6 +1302,7 @@ def create_app() -> FastAPI:
             attributes_letter=attributes_letter,
             skills_letter=skills_letter,
             resources_letter=resources_letter,
+            talent_letter=talent_letter,
             metatype_id=metatype_id,
             character=character,
             error=error,

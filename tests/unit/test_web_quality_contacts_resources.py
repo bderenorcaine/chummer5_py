@@ -40,6 +40,7 @@ def _confirm_human(client: TestClient) -> None:
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -136,6 +137,7 @@ def test_quality_improvements_survive_reconfirming_priorities() -> None:
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -162,6 +164,7 @@ def _confirm_elf(client: TestClient) -> None:
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": elf_choice.metatype.id,
         },
     )
@@ -356,6 +359,7 @@ def test_reconfirming_priorities_with_a_new_resources_letter_keeps_gear() -> Non
             "attributes_letter": "B",
             "skills_letter": "D",
             "resources_letter": "C",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -388,6 +392,7 @@ def test_reconfirming_priorities_with_a_lower_resources_budget_flags_the_existin
             "attributes_letter": "B",
             "skills_letter": "D",
             "resources_letter": "C",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -401,6 +406,7 @@ def test_reconfirming_priorities_with_a_lower_resources_budget_flags_the_existin
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )

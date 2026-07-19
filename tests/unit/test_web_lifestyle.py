@@ -38,6 +38,7 @@ def _confirm_human(client: TestClient) -> None:
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -180,6 +181,7 @@ def test_reconfirming_priorities_keeps_the_lifestyle_selection() -> None:
             "attributes_letter": "B",
             "skills_letter": "D",
             "resources_letter": "C",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -207,6 +209,7 @@ def test_reconfirming_priorities_with_a_lower_resources_budget_flags_the_existin
             "attributes_letter": "C",
             "skills_letter": "D",
             "resources_letter": "A",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -220,6 +223,7 @@ def test_reconfirming_priorities_with_a_lower_resources_budget_flags_the_existin
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )

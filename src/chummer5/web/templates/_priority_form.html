@@ -1,8 +1,9 @@
 <div id="priority-section">
   <h2>Priority &amp; metatype selection</h2>
   <p>
-    Assign each of Heritage, Attributes, Skills, and Resources a different priority letter
-    (A-D). Talent is forced to E — mundane MVP characters don't choose it.
+    Assign each of Heritage, Talent, Attributes, Skills, and Resources a different priority
+    letter (A-E). MVP only supports Mundane characters, so whichever letter you give Talent
+    doesn't unlock anything yet — it always resolves to Mundane.
   </p>
 
   {% if error %}
@@ -34,6 +35,17 @@
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.heritage_letter %}selected{% endif %}>
           {{ heritage_priorities[letter].name }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Talent
+      <select name="talent_letter">
+        {% for letter in letters %}
+        <option value="{{ letter }}" {% if letter == selected.talent_letter %}selected{% endif %}>
+          {{ talent_priorities[letter].name }}
         </option>
         {% endfor %}
       </select>
@@ -85,6 +97,7 @@
     <h2>Confirmed: {{ character.metatype.name }}</h2>
     <ul>
       <li>Heritage {{ selected.heritage_letter }} — {{ heritage_priorities[selected.heritage_letter].name }}</li>
+      <li>Talent {{ selected.talent_letter }} — {{ talent_priorities[selected.talent_letter].name }}</li>
       <li>Attributes {{ selected.attributes_letter }} — {{ attributes_priorities[selected.attributes_letter].name }}</li>
       <li>Skills {{ selected.skills_letter }} — {{ skills_priorities[selected.skills_letter].name }}</li>
       <li>Resources {{ selected.resources_letter }} — {{ resources_priorities[selected.resources_letter].name }}</li>

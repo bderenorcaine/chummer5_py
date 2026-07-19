@@ -35,10 +35,11 @@ def test_index_default_selection_is_a_valid_distinct_permutation() -> None:
 
     response = client.get("/")
 
-    # Default letters (A/B/C/D across Heritage/Attributes/Skills/Resources) are pre-selected and
-    # already form a legal assignment -- confirmed by the metatype select being pre-populated for
-    # Heritage A with Human as an option.
+    # Default letters (A/E/B/C/D across Heritage/Talent/Attributes/Skills/Resources) are
+    # pre-selected and already form a legal assignment -- confirmed by the metatype select being
+    # pre-populated for Heritage A with Human as an option.
     assert "Human" in response.text
+    assert "Talent" in response.text
 
 
 def test_metatype_fragment_matches_engine_for_a_given_heritage_letter() -> None:
@@ -70,6 +71,7 @@ def test_submitting_valid_priorities_and_metatype_matches_engine_output() -> Non
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -100,6 +102,7 @@ def test_submitting_duplicate_priority_letters_is_rejected() -> None:
             "attributes_letter": "A",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -124,6 +127,7 @@ def test_submitting_metatype_not_offered_by_the_chosen_heritage_letter_is_reject
             "attributes_letter": "A",
             "skills_letter": "B",
             "resources_letter": "C",
+            "talent_letter": "E",
             "metatype_id": troll.id,
         },
     )
@@ -131,6 +135,73 @@ def test_submitting_metatype_not_offered_by_the_chosen_heritage_letter_is_reject
     assert response.status_code == 200
     assert "Select a metatype offered" in response.text
     assert "Confirmed:" not in response.text
+
+
+def test_submitting_only_four_distinct_letters_is_rejected() -> None:
+    """WP24: the permutation check now covers Talent too -- a submission that's internally
+    distinct across the 4 pre-WP24 categories but omits Talent (or repeats one of the other four
+    in its place) must still be rejected, not silently accepted as "close enough".
+    """
+    client = TestClient(create_app())
+    client.get("/")
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "talent_letter": "D",  # duplicates resources_letter instead of using E
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "different priority letter" in response.text
+    assert "Confirmed:" not in response.text
+
+
+def test_submitting_talent_at_a_non_e_letter_still_resolves_to_mundane() -> None:
+    """WP24: Talent is a real 5th letter now, but its *option* still resolves unconditionally to
+    Mundane regardless of which letter it lands on -- assigning it Heritage's usual "A" (with
+    Heritage moved to E instead) must produce exactly the same character as any other assignment,
+    since MVP offers no real Talent archetype picker yet (that's WP25).
+    """
+    client = TestClient(create_app())
+    client.get("/")
+
+    heritage = PRIORITIES.heritage["E"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "E",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "talent_letter": "A",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Confirmed: Human" in response.text
+    assert "Talent A" in response.text
+
+    expected = create_character(human_choice, "E", "B", PRIORITIES, {})
+    assert expected.special_attribute_points == human_choice.special_attribute_points
+    assert f"Special attribute points (EDG budget): {expected.special_attribute_points}" in (
+        response.text
+    )
 
 
 def test_sessions_are_isolated_per_cookie() -> None:
@@ -154,6 +225,7 @@ def test_sessions_are_isolated_per_cookie() -> None:
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -164,6 +236,7 @@ def test_sessions_are_isolated_per_cookie() -> None:
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": elf_choice.metatype.id,
         },
     )

@@ -37,6 +37,7 @@ def _confirm_human(client: TestClient) -> None:
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -200,6 +201,7 @@ def test_reconfirming_priorities_with_a_still_fitting_budget_keeps_the_allocatio
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -234,6 +236,7 @@ def test_reconfirming_priorities_with_a_lower_attributes_budget_flags_the_existi
             "attributes_letter": "D",
             "skills_letter": "C",
             "resources_letter": "B",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
@@ -269,6 +272,7 @@ def test_reconfirming_priorities_with_a_lower_skills_budget_flags_the_existing_s
             "attributes_letter": "B",
             "skills_letter": "D",
             "resources_letter": "C",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )

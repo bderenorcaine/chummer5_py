@@ -41,6 +41,7 @@ def _confirm_human(client: TestClient) -> None:
             "attributes_letter": "B",
             "skills_letter": "C",
             "resources_letter": "D",
+            "talent_letter": "E",
             "metatype_id": human_choice.metatype.id,
         },
     )
