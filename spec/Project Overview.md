@@ -97,10 +97,16 @@ Implementation Plan's WP20.
 **Explicitly out of scope for MVP (deferred, not abandoned):**
 - The general-purpose Improvement engine (full type coverage — cyberware/bioware effects, vehicles,
   matrix rules, most of the ~100+ improvement types the legacy engine supports).
-- Magic and Resonance (adepts, magicians, mystic adepts, technomancers) — see above.
+- Magic and Resonance (adepts, magicians, mystic adepts, technomancers) — see above. Magicians and
+  physical Adepts are scoped as Implementation Plan's Phase I. Technomancers/A.I. (Resonance) remain
+  out of scope indefinitely, not just for MVP; **Mystic Adepts are excluded from Phase I too, by
+  explicit product decision (2026-07-19)** rather than deferred smallest-scope pragmatism like every
+  other cut on this page — not currently planned at all, not just "later."
 - Cyberware, bioware, vehicles, drones, full gear catalog beyond a basic purchase flow. (Cyberware/
   bioware specifically need real Essence tracking as a prerequisite, not just new catalog content —
-  see Open Questions below.)
+  see Open Questions below.) Cyberware itself is scoped as Implementation Plan's Phase J (Standard
+  grade, flat-cost/flat-essence items only); bioware, vehicles, drones, and non-Standard cyberware
+  grades remain deferred past that phase too.
 - Career mode (post-chargen karma spending, character aging over time).
 - Plugins.
 - Localization content (structure only, per above).
@@ -307,3 +313,99 @@ doesn't capture `<qualitysource>` at all, so importing a real Elf/Dwarf/Ork/Trol
 (approved) 3`/Troll, `Rez0luti0n2.0`/Dwarf) would now misreport their free racial quality as a
 karma-costing player pick. Scoped as WP23, next on the Implementation Plan — see that entry for the
 fix.
+
+### 2026-07-19 — Magic scoping: two rulings (Mystic Adept out, free-skill grant in), plus the
+research each one resolved or required
+
+Surfaced while scoping Phase I (Magicians & physical Adepts) against real data, then settled by two
+explicit product decisions the same day.
+
+**Ruling 1 — Mystic Adept is out of scope entirely**, not deferred for size/research-cost reasons
+like every other cut in this phase, but simply not being built. This has a convenient technical side
+effect: it retires the one piece of research that would otherwise have blocked WP25 outright — a
+Mystic Adept's Power Point split (flagged unresolved on 2026-07-18) is a Mystic-Adept-only wrinkle; a
+pure Adept's PP is a plain 1:1 Magic-rating grant with nothing to split.
+
+**Ruling 2 — the Talent free-skill grant (`skillqty`/`skillval`/`skilltype`) is in scope**, reversing
+WP2's original "out of MVP scope" framing (written when Talent wasn't a real player choice at all).
+Reading `SelectMetatypePriority.cs` directly (the legacy form that actually applies this grant) shows
+the two `skilltype` values this phase's offered Talent options ever produce are both plain
+category/field filters, not a general expression language: `"magic"` (Magician) means "any skill with
+`category` in `{Magical Active, Pseudo-Magical Active}`"; `"xpath"` (Adept, letter B only) carries one
+specific literal expression — `not(attribute = 'RES' or attribute = 'DEP') and (not(category =
+'Magical Active') or skillgroup = '' or not(skillgroup))` — expressible as a plain predicate over
+`chummer5.data.skills.Skill`'s existing `attribute`/`category`/`skill_group` fields. Both are
+implementable as named, hardcoded predicates (mirroring WP3/WP22's "classify known shapes" method);
+no general XPath evaluator is needed for what this phase actually offers. See Implementation Plan's
+Phase I intro and WP25 for the full detail, including why neither of the phase's own two real
+fixtures can be used to verify the grant's *exact numbers* (Miko's `.chum5` commingles free-grant
+points with regular Skills-priority spend in one `<base>` field; Wesson's Talent letter, C, grants no
+free skill at all) — the mechanism is verified against the traced legacy C# directly instead.
+
+Unrelated to either ruling, still true and unchanged: confirmed against both of the corpus's only
+magic-capable `buildmethod = Priority` fixtures (`Miko.chum5`, an Elf Magician; `Wesson.chum5`, a
+Human Adept), the Magic rating is **not** funded from a priority-derived points budget the way EDG
+is — the chosen Talent option's `magic` field (`chummer5.data.priorities.TalentOption.magic`) *is*
+the finished MAG rating outright. Adding `"MAG"` to
+`chummer5.engine.character.SPECIAL_ATTRIBUTES` (EDG's shape) would silently misimplement this.
+
+### 2026-07-19 — Cyberware scoping: 8 of the 11 curated "mundane" fixtures already carry real
+cyberware, and their stored Essence costs are usually unresolved rating formulas, not numbers
+
+Surfaced while scoping Phase J (Cyberware) against real data. `tests/fixtures/README.md`'s definition
+of "mundane" has only ever been `<magenabled>False</magenabled>` — never "augmentation-free." Checked
+directly: `BLUE`, `Barrett`, `Bastion`, `Blindfire`, `Fuzzy-chargen`, `Gentle Earthquake`,
+`Monomax (approved) 3`, and `SCSi` (8 of the 11 WP4-curated fixtures) each carry between 3 and 16 real
+`<cyberwares>` entries. This is not a latent bug — every derived-stat test that exists today already
+worked around it correctly rather than by accident (`test_cross_corpus_attribute_value_matches_when_
+unaugmented` explicitly skips cyberware-boosted attributes; `social_limit`, the one Essence-dependent
+derived stat, is only ever asserted against real fixture data via `Yeti-#ffffff2.chum5` specifically,
+which has zero cyberware) — but it means Phase J inherits real, ready-to-use fixture coverage for
+Essence math well beyond what a from-scratch catalog WP would normally get.
+
+That coverage comes with a caveat, though: a fixture's per-item `<ess>` field is frequently the source
+catalog's *unresolved* rating formula (e.g. `Rating * 0.3`, `FixedValues(2,3,5)`), not a resolved
+number — the legacy engine evaluates it at read time rather than storing a resolved value per
+purchase. Only a modest, specific subset of real purchases across these 8 fixtures (Datajack, the
+Cyberlimb variants, Smartlink, Bone Lacing (Titanium)) are flat-cost/flat-essence items unaffected by
+this. See Implementation Plan's Phase J intro and WP31-33 for the resulting catalog cut and its
+honest acceptance-criteria caveat (full `<totaless>` reproduction against these fixtures is not a
+realistic bar for Phase J alone).
+
+### 2026-07-19 — Essence-driven Magic loss is a real interaction between Phase I and Phase J, deferred
+to a dedicated WP because neither phase's fixtures can exercise it
+
+SR5 reduces a magically active character's Magic (or Resonance) rating as Essence is lost to
+cyberware/bioware. This connects Phase I (Magicians & physical Adepts) and Phase J (Cyberware)
+directly, but no fixture in the 34-file corpus is simultaneously Priority-built, magic-enabled, and
+cyberware-bearing, so the interaction can't be validated against real data from either phase alone.
+Scoped as Phase J's WP35, deliberately sequenced after both phases' own engine work rather than
+folded into whichever phase happens to land first.
+
+### 2026-07-19 — Adept Drain is real: Drain Resistance is not Magician-only, and one Adept Power
+(Attribute Boost) was nearly misclassified as a permanent flat bonus
+
+A user question ("adepts might have to roll drain, since several adept powers are active rather than
+passive, e.g. Attribute Boost") caught a wrong assumption already written into Phase I before any
+code existed. Checked directly against the rulebook via `pdftotext -layout` (p.309): "Adept Drain:
+Some powers cause Drain. The Drain from adept powers is Stun unless specified in the description, and
+is resisted with Body + Willpower" — a real, named rule, structurally different from a Magician's
+tradition-dependent Drain (which resists with a tradition-chosen attribute pair instead). Two of the
+28 SR5 Adept Powers actually trigger it: Adrenaline Boost and Attribute Boost, both `NOT_YET_SUPPORTED`
+in Phase I's classifier (their effects require in-play test resolution this engine's combat-free scope
+doesn't model) — but Drain Resistance itself is still a real, cheaply-computable derived stat for any
+Adept, using the fixed BOD+WIL formula, independent of which specific powers were bought (the same way
+Physical/Mental/Social Limit are shown regardless of build specifics). Corrected in Implementation
+Plan's WP28.
+
+The same check surfaced a second, sharper find: `cyberware.xml`-style raw-XML inspection showed
+Attribute Boost's `<bonus><selectattribute>` node has the *identical* child tag as Improved Physical
+Attribute's — but no `<val>` child, because Attribute Boost's real magnitude comes from an in-play
+Magic + Rating Test, not a fixed formula. A classifier keyed on "`selectattribute` bonus == flat
+attribute bonus" (a direct, reasonable-looking generalization of `chummer5.data.qualities`'s own
+`_is_flat_attribute_bonus` shape) would have silently applied Attribute Boost as a permanent stat
+increase. Caught before any code was written; see Implementation Plan's WP27 for the corrected
+classifier rule (presence of a `<val>` child is the real discriminator) and the broader finding it
+led to — every Adept Power's bonus value is the literal token `"Rating"`, not a hardcoded int the way
+every quality's `FlatBonus` value already is, so WP27's applier needs a rating-resolution step
+`chummer5.data.qualities` never needed.
