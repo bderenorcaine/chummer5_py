@@ -4,12 +4,27 @@ MVP's "core rulebook only" scope (see `Project Overview.md`) narrows the file's 
 entries to the 96 with `source == "SR5"`. `<bonus>` nodes are a mini-language mirroring the general
 Improvement bonus grammar the legacy engine parses (metatype bonuses, notoriety shifts,
 category-wide skill bonuses, select-a-target choices, ...); MVP does not implement that general
-parser. Instead,
-each in-scope quality's `<bonus>` is classified as `FLAT_BONUS` — an unconditional, flat point bonus
-to one or more specifically-named skills or attributes, the one shape simple enough to feed directly
-into WP5's Improvement engine without a condition/selection sub-parser — or `NOT_YET_SUPPORTED`.
-WP8 offers only `FLAT_BONUS` qualities to the player; `NOT_YET_SUPPORTED` ones are excluded from the
-offered list rather than silently applied with their bonus dropped. See `spec/worklogs/WP3.md`.
+parser. Instead, each in-scope quality's `<bonus>` is classified as one of three `BonusSupport`
+values:
+
+- `FLAT_BONUS` — an unconditional, flat point bonus to one or more specifically-named skills,
+  attributes, or (since WP22) Inherent Limits — the shapes simple enough to feed directly into
+  WP5's Improvement engine without a condition/selection sub-parser.
+- `NO_EFFECT` (WP22) — a verified-inert quality: an empty `<bonus/>` node *and* individually
+  confirmed, via the rulebook text and a `grep` of the legacy C# for by-name special-casing,
+  to produce no computed value anywhere this engine's scope reaches (combat/Matrix/vehicle/
+  perception mechanics MVP doesn't model). Deliberately name-gated (`_VERIFIED_NO_EFFECT_NAMES`),
+  not "any empty `<bonus/>` qualifies" — several other empty-`<bonus/>` SR5 qualities
+  (Human-Looking, the Insomnia pair, ...) are excluded from *this* list because they need a
+  different kind of engine support (a metatype-gate check, a mutual-exclusion check) that WP22
+  didn't build, not because their bonus is unverified. See `spec/worklogs/WP22.md` and
+  `spec/rulebooks/learnings.md`'s WP22 entry for the full per-quality research.
+- `NOT_YET_SUPPORTED` — everything else.
+
+WP8 offers only `FLAT_BONUS` qualities to the player; WP22 widens that to `FLAT_BONUS` and
+`NO_EFFECT` (see `chummer5.engine.qualities.mvp_quality_catalog`). `NOT_YET_SUPPORTED` qualities
+are excluded from the offered list rather than silently applied with their bonus dropped. See
+`spec/worklogs/WP3.md`.
 """
 
 from __future__ import annotations
@@ -35,19 +50,62 @@ CORE_RULEBOOK_SOURCE = "SR5"
 _FLAT_SKILL_FIELDS = frozenset({"name", "bonus"})
 _FLAT_ATTRIBUTE_FIELDS = frozenset({"name", "val"})
 
+# WP22 Tranche 1: the Indomitable trio's <bonus> is a single bare-numeric leaf tag (e.g.
+# <mentallimit>1</mentallimit>, no children, no <condition>) -- flat in the same sense as
+# <specificskill>/<specificattribute> above, just untargeted (there's only one Mental/Physical/
+# Social Limit per character). Maps to the FlatBonus.target_kind values
+# `chummer5.engine.qualities._TARGET_KIND_TO_IMPROVEMENT_TYPE` resolves against the derived-stats
+# global sentinel target (see `chummer5.engine.derived._GLOBAL_TARGET`).
+_LIMIT_BONUS_TAGS = {
+    "mentallimit": "mental_limit",
+    "physicallimit": "physical_limit",
+    "sociallimit": "social_limit",
+}
+
+# WP22 Tranche 2: SR5 qualities individually verified (rulebook text + a `grep` of the legacy C#
+# for by-name special-casing, both turning up nothing) to have zero mechanical effect this engine's
+# scope ever computes -- Gearhead/Juryrigger (vehicle/repair mechanics, no vehicles in MVP), Guts
+# (fear-test resistance, no such test), Natural Hardening (Matrix-attack resistance, no Matrix in
+# MVP), Low-Light Vision/Thermographic Vision (lighting-condition perception, not modeled),
+# Simsense Vertigo (AR/VR/simsense dice-pool penalty, no such test), Unsteady Hands (called-shot
+# penalty, no combat system). See spec/rulebooks/learnings.md's WP22 entry for the citations. Every
+# one of these has an
+# empty `<bonus/>` node in the real data, but this set is name-gated rather than "any empty <bonus/>
+# qualifies" -- see the module docstring for why (other empty-`<bonus/>` qualities need different,
+# not-yet-built engine support, not a NO_EFFECT verdict).
+_VERIFIED_NO_EFFECT_NAMES = frozenset(
+    {
+        "Gearhead",
+        "Guts",
+        "Juryrigger",
+        "Natural Hardening",
+        "Low-Light Vision",
+        "Thermographic Vision",
+        "Simsense Vertigo",
+        "Unsteady Hands",
+    }
+)
+
 
 class BonusSupport(Enum):
-    """Whether a quality's `<bonus>` node was parsed into `Quality.flat_bonuses`."""
+    """Whether/how a quality's `<bonus>` node was parsed. See module docstring for the 3 values."""
 
     FLAT_BONUS = "flat_bonus"
+    NO_EFFECT = "no_effect"
     NOT_YET_SUPPORTED = "not_yet_supported"
 
 
 @dataclass(frozen=True)
 class FlatBonus:
-    """One unconditional, flat point bonus to a specifically-named skill or attribute."""
+    """One unconditional, flat point bonus to a skill, attribute, or (WP22) Inherent Limit.
 
-    target_kind: str  # "skill" or "attribute"
+    `target_name` is the specifically-named skill/attribute for those two kinds; for the 3
+    limit kinds (`"mental_limit"`/`"physical_limit"`/`"social_limit"`) it's `""` — there's only one
+    of each per character, so there's nothing to name (mirrors `chummer5.engine.derived`'s own
+    `_GLOBAL_TARGET` sentinel for the same reason).
+    """
+
+    target_kind: str  # "skill", "attribute", "mental_limit", "physical_limit", or "social_limit"
     target_name: str
     value: int
 
@@ -75,13 +133,18 @@ def _is_flat_attribute_bonus(elem: ET.Element) -> bool:
 
 
 def _classify_bonus(
+    name: str,
     bonus_elem: ET.Element | None,
 ) -> tuple[BonusSupport, tuple[FlatBonus, ...]]:
     """Classify a `<bonus>` node, extracting flat bonuses when every child is a flat shape.
 
     A single unsupported child (or an empty/absent `<bonus>`) marks the whole quality
-    `NOT_YET_SUPPORTED` — MVP never partially applies a quality's effects.
+    `NOT_YET_SUPPORTED` — MVP never partially applies a quality's effects — unless `name` is
+    one of WP22's individually-verified `_VERIFIED_NO_EFFECT_NAMES`, in which case it's
+    `NO_EFFECT` instead.
     """
+    if name in _VERIFIED_NO_EFFECT_NAMES:
+        return BonusSupport.NO_EFFECT, ()
     if bonus_elem is None or len(bonus_elem) == 0:
         return BonusSupport.NOT_YET_SUPPORTED, ()
 
@@ -103,6 +166,14 @@ def _classify_bonus(
                     value=int(child.findtext("val", "0")),
                 )
             )
+        elif child.tag in _LIMIT_BONUS_TAGS and len(child) == 0 and child.text is not None:
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind=_LIMIT_BONUS_TAGS[child.tag],
+                    target_name="",
+                    value=int(child.text),
+                )
+            )
         else:
             return BonusSupport.NOT_YET_SUPPORTED, ()
     return BonusSupport.FLAT_BONUS, tuple(flat_bonuses)
@@ -110,7 +181,7 @@ def _classify_bonus(
 
 def _parse_quality(elem: ET.Element) -> Quality:
     bonus_elem = elem.find("bonus")
-    support, flat_bonuses = _classify_bonus(bonus_elem)
+    support, flat_bonuses = _classify_bonus(elem.findtext("name", ""), bonus_elem)
     raw_bonus = (
         ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
     )

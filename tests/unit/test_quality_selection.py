@@ -13,6 +13,7 @@ from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import BonusSupport, FlatBonus, Quality, load_qualities
 from chummer5.engine.character import create_character, metatype_choices
+from chummer5.engine.derived import mental_limit
 from chummer5.engine.improvements import ImprovementType
 from chummer5.engine.qualities import (
     QUALITY_KARMA_LIMIT,
@@ -62,14 +63,72 @@ def _by_name(name: str) -> Quality:
     return next(q for q in QUALITIES if q.name == name)
 
 
-def test_mvp_quality_catalog_is_exactly_the_three_flat_bonus_qualities() -> None:
-    # Hand-checked against WP3's own count (spec/worklogs/WP3.md): 3 of 96 SR5 qualities are
-    # FLAT_BONUS -- Catlike, Double-Jointed, Natural Athlete. All three happen to be Positive; MVP
-    # currently offers no Negative quality at all (see module docstring).
+def test_mvp_quality_catalog_is_exactly_the_fourteen_offerable_qualities() -> None:
+    # WP8's 3 FLAT_BONUS qualities (Catlike, Double-Jointed, Natural Athlete) + WP22's 3 new
+    # FLAT_BONUS Indomitable qualities + WP22's 8 verified-NO_EFFECT qualities = 14. Two of the
+    # NO_EFFECT qualities (Simsense Vertigo, Unsteady Hands) are Negative -- the first Negative
+    # qualities MVP has ever offered (see module docstring); the other 12 are Positive.
     offered = mvp_quality_catalog(QUALITIES)
-    assert {q.name for q in offered} == {"Catlike", "Double-Jointed", "Natural Athlete"}
-    assert all(q.bonus_support == BonusSupport.FLAT_BONUS for q in offered)
-    assert all(q.category == "Positive" for q in offered)
+    assert {q.name for q in offered} == {
+        "Catlike",
+        "Double-Jointed",
+        "Natural Athlete",
+        "Indomitable (Mental)",
+        "Indomitable (Physical)",
+        "Indomitable (Social)",
+        "Gearhead",
+        "Guts",
+        "Juryrigger",
+        "Natural Hardening",
+        "Low-Light Vision",
+        "Thermographic Vision",
+        "Simsense Vertigo",
+        "Unsteady Hands",
+    }
+    assert all(
+        q.bonus_support in (BonusSupport.FLAT_BONUS, BonusSupport.NO_EFFECT) for q in offered
+    )
+    negative_names = {q.name for q in offered if q.category == "Negative"}
+    assert negative_names == {"Simsense Vertigo", "Unsteady Hands"}
+
+
+def test_mvp_quality_catalog_excludes_qualities_researched_and_rejected_this_wp() -> None:
+    # WP22's Implementation Plan entry names these explicitly as researched-and-excluded, not
+    # silently missing: Astral Beacon/Astral Chameleon/Focused Concentration (magic-gated or
+    # unreachable by mundane characters), Gremlins (Notoriety-gated, a system this project doesn't
+    # model). See spec/rulebooks/learnings.md's WP22 entry for the full research pass, which also
+    # covers Prejudiced/SINner/Home Ground/Code of Honor/Codeblock/Social Stress/Natural
+    # Immunity/Spirit Affinity -- all excluded for needing a free-text "select a target" mechanism
+    # this WP didn't build.
+    offered_names = {q.name for q in mvp_quality_catalog(QUALITIES)}
+    excluded_names = {
+        "Astral Beacon",
+        "Astral Chameleon",
+        "Focused Concentration",
+        "Gremlins",
+        "Home Ground",
+        "Code of Honor",
+        "Codeblock",
+        "Social Stress",
+        "Natural Immunity (Natural)",
+        "Natural Immunity (Synthetic)",
+        "Spirit Affinity",
+        "Prejudiced (Common, Biased)",
+        "Prejudiced (Common, Outspoken)",
+        "Prejudiced (Common, Radical)",
+        "Prejudiced (Specific, Biased)",
+        "Prejudiced (Specific, Outspoken)",
+        "Prejudiced (Specific, Radical)",
+        "SINner (Corporate)",
+        "SINner (National)",
+        "SINner (Corporate Limited)",
+        "SINner (Criminal)",
+    }
+    assert excluded_names.isdisjoint(offered_names)
+    # Every name above is a real SR5 quality, not a typo -- guards this test itself against silently
+    # asserting nothing.
+    real_names = {q.name for q in QUALITIES}
+    assert excluded_names <= real_names
 
 
 def test_mvp_quality_catalog_excludes_not_yet_supported_quality() -> None:
@@ -226,6 +285,50 @@ def test_apply_quality_improvements_multiple_targets_from_one_quality() -> None:
 
     assert character.improvements.resolve(ImprovementType.SKILL, "Running") == 2
     assert character.improvements.resolve(ImprovementType.SKILL, "Gymnastics") == 2
+
+
+def test_apply_quality_improvements_indomitable_raises_mental_limit() -> None:
+    # End-to-end WP22 acceptance check: Indomitable (Mental) actually raises mental_limit() via
+    # chummer5.engine.derived, not just the raw Improvement index.
+    character = _mundane_human_character()
+    indomitable_mental = _by_name("Indomitable (Mental)")
+    selection = create_quality_selection([indomitable_mental.id], QUALITIES)
+    base_limit = mental_limit(character)
+
+    apply_quality_improvements(character, selection)
+
+    assert character.improvements.resolve(ImprovementType.MENTAL_LIMIT, "") == 1
+    assert mental_limit(character) == base_limit + 1
+
+
+def test_apply_quality_improvements_indomitable_trio_raises_all_three_limits() -> None:
+    # All 3 Indomitable qualities selected together: 8*3 = 24 karma, under the 25-karma cap, and
+    # each raises its own Limit independently (no shared UniqueName dedup between them).
+    character = _mundane_human_character()
+    mental = _by_name("Indomitable (Mental)")
+    physical = _by_name("Indomitable (Physical)")
+    social = _by_name("Indomitable (Social)")
+    selection = create_quality_selection([mental.id, physical.id, social.id], QUALITIES)
+    assert selection.positive_karma == 24
+
+    apply_quality_improvements(character, selection)
+
+    assert character.improvements.resolve(ImprovementType.MENTAL_LIMIT, "") == 1
+    assert character.improvements.resolve(ImprovementType.PHYSICAL_LIMIT, "") == 1
+    assert character.improvements.resolve(ImprovementType.SOCIAL_LIMIT, "") == 1
+
+
+def test_apply_quality_improvements_no_effect_quality_adds_no_improvements() -> None:
+    # A verified-NO_EFFECT quality (Gearhead) is selectable and karma-charged, but applies no
+    # Improvement -- flat_bonuses is () by construction, so this is a no-op, not a special case.
+    character = _mundane_human_character()
+    gearhead = _by_name("Gearhead")
+    selection = create_quality_selection([gearhead.id], QUALITIES)
+    assert selection.positive_karma == 11
+
+    apply_quality_improvements(character, selection)
+
+    assert character.improvements.improvements == ()
 
 
 def test_apply_quality_improvements_attribute_target() -> None:

@@ -4,17 +4,22 @@ Composes WP3's quality catalog (`chummer5.data.qualities`) with WP5's Improvemen
 `Character` into a buildable positive/negative quality spend. Mundane MVP scope only — see
 `spec/Project Overview.md`.
 
-**The offered catalog is restricted to `BonusSupport.FLAT_BONUS` qualities, not the full 96-entry
-SR5 catalog.** This follows directly from WP3's own docstring for `chummer5.data.qualities`
-("WP8 offers only `FLAT_BONUS` qualities to the player; `NOT_YET_SUPPORTED` ones are excluded from
-the offered list rather than silently applied with their bonus dropped") and from the Implementation
-Plan's WP8 acceptance criterion ("an explicit test that an unsupported-bonus quality is excluded
-from the offered list rather than silently mis-applied"). Concretely, this means the *only* three
-qualities MVP can offer today are Catlike, Double-Jointed, and Natural Athlete — all three are
-Positive category (see `spec/worklogs/WP8.md` for why no Negative quality currently qualifies) — so
-the negative-quality karma cap below is real, general rules logic that no *current* real-data
-selection can trigger, only synthetic tests (same "prove the rule before real content exercises it"
-pattern WP5 used for the Improvement engine's dedup and WP7 used for the dice-pool formula).
+**The offered catalog is restricted to `BonusSupport.FLAT_BONUS` and (since WP22) `NO_EFFECT`
+qualities, not the full 96-entry SR5 catalog.** This follows directly from WP3's own docstring
+for `chummer5.data.qualities` ("`NOT_YET_SUPPORTED` [qualities] are excluded from the offered
+list rather than silently applied with their bonus dropped") and from the Implementation Plan's
+WP8 acceptance criterion ("an explicit test that an unsupported-bonus quality is excluded from
+the offered list rather than silently mis-applied"). Through WP8, this meant the *only* three
+offerable qualities were Catlike, Double-Jointed, and Natural Athlete, all Positive (see
+`spec/worklogs/WP8.md` for why no Negative quality qualified then) — so the negative-quality
+karma cap below was real, general rules logic that no real-data selection could trigger, only
+synthetic tests. WP22 widens the offered set to 14 (adding the Indomitable trio as new
+`FLAT_BONUS` qualities, plus 8 verified-`NO_EFFECT` ones — see `chummer5.data.qualities`'s
+module docstring and `spec/worklogs/WP22.md`), two of which (Simsense Vertigo, Unsteady Hands)
+are MVP's first-ever offerable Negative qualities. Even together they only sum to 12 karma
+(-5 + -7), well under the 25-karma cap, so the negative-karma-cap tests below still need
+synthetic data to actually exercise the boundary — the "prove the rule before real content
+exercises it" pattern WP5/WP7 established.
 
 **Karma limit: 25 Karma worth of Positive Qualities, 25 Karma worth of Negative Qualities, checked
 independently** — confirmed directly from the core rulebook text (see
@@ -42,19 +47,28 @@ QUALITY_KARMA_LIMIT = 25
 _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "attribute": ImprovementType.ATTRIBUTE,
     "skill": ImprovementType.SKILL,
+    "mental_limit": ImprovementType.MENTAL_LIMIT,
+    "physical_limit": ImprovementType.PHYSICAL_LIMIT,
+    "social_limit": ImprovementType.SOCIAL_LIMIT,
 }
+
+# WP22: FLAT_BONUS has a real Improvement to apply; NO_EFFECT is offerable too -- it's a
+# verified-inert quality (see chummer5.data.qualities module docstring) with an empty
+# flat_bonuses tuple, so apply_quality_improvements is naturally a no-op for it, no special case.
+_OFFERABLE_SUPPORT = (BonusSupport.FLAT_BONUS, BonusSupport.NO_EFFECT)
 
 
 def mvp_quality_catalog(qualities: Iterable[Quality]) -> tuple[Quality, ...]:
     """Restrict a quality catalog to the ones MVP can actually offer a player.
 
     `chummer5.data.qualities.load_qualities()` already restricts to `source == "SR5"`; this narrows
-    further to `BonusSupport.FLAT_BONUS` -- the only bonus shape MVP's Improvement engine can apply
-    correctly. A `NOT_YET_SUPPORTED` quality is excluded entirely rather than offered with its
-    mechanical effect silently dropped, mirroring WP3's own "never partially apply a quality's
-    effects" rule.
+    further to `BonusSupport.FLAT_BONUS` (a bonus shape MVP's Improvement engine can apply
+    correctly) and `BonusSupport.NO_EFFECT` (a verified-inert quality -- no Improvement to apply,
+    but no effect silently dropped either). A `NOT_YET_SUPPORTED` quality is excluded entirely
+    rather than offered with its mechanical effect silently dropped, mirroring WP3's own "never
+    partially apply a quality's effects" rule.
     """
-    return tuple(q for q in qualities if q.bonus_support == BonusSupport.FLAT_BONUS)
+    return tuple(q for q in qualities if q.bonus_support in _OFFERABLE_SUPPORT)
 
 
 @dataclass(frozen=True)

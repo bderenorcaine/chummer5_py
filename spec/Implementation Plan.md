@@ -444,7 +444,7 @@ separate branch.
   research) and that a rating-scaled/`Variable`-cost item is correctly excluded rather than
   mis-parsed; existing gear-purchase fixture tests still pass unchanged.
 
-- [ ] **WP22 — Offer more qualities: verified-inert flavor picks + the Limit-bonus trio.**
+- [x] **WP22 — Offer more qualities: verified-inert flavor picks + the Limit-bonus trio.**
   Goal: widen the offered SR5 quality catalog beyond today's 3 (Catlike, Double-Jointed, Natural
   Athlete), using this session's verified classification of all 93 currently-`NOT_YET_SUPPORTED`
   SR5 qualities — without ever offering a quality whose real mechanical effect would be silently

@@ -42,10 +42,13 @@ class ImprovementType(Enum):
     there's only ever one Physical Limit per character. `ImprovementIndex` still requires a
     `target` key per its `(type, target)` index shape, so `chummer5.engine.derived` resolves these
     against a fixed sentinel target (`""`) rather than adding a second, untargeted resolution path
-    to the index for a distinction nothing in MVP scope currently needs. No MVP-supported quality
-    (WP3/WP8's `FLAT_BONUS` classifier only recognizes flat attribute/skill bonuses) or metatype
-    bonus produces any of these 7 yet -- threaded through for the same reason WP6 threaded
-    `Character.improvements` through before any metatype bonus existed to use it.
+    to the index for a distinction nothing in MVP scope currently needs. Through WP21, no
+    MVP-supported quality (WP3/WP8's `FLAT_BONUS` classifier only recognized flat attribute/skill
+    bonuses) or metatype bonus produced any of these 7 -- threaded through for the same reason WP6
+    threaded `Character.improvements` through before any metatype bonus existed to use it. WP22 is
+    the first real producer: the Indomitable trio's `<mentallimit>`/`<physicallimit>`/
+    `<sociallimit>` bonus nodes resolve to `MENTAL_LIMIT`/`PHYSICAL_LIMIT`/`SOCIAL_LIMIT`
+    respectively (see `chummer5.data.qualities`/`chummer5.engine.qualities`).
     """
 
     ATTRIBUTE = auto()
