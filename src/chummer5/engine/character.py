@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     # under `from __future__ import annotations` (PEP 563) -- every annotation in this module,
     # including dataclass field types, is a lazily-evaluated string, so `dataclasses.dataclass`
     # never needs these names to actually resolve at import time.
+    from chummer5.engine.lifestyle import LifestyleSelection
     from chummer5.engine.qualities import QualitySelection
     from chummer5.engine.resources import ContactSelection, ResourcesSelection
     from chummer5.engine.skills import SkillAllocation
@@ -134,6 +135,12 @@ class Character:
     character stage by stage does so via `dataclasses.replace(character, skill_allocation=...)`
     etc. against its existing `Character`, not by calling `create_character` again (which would
     also hand back a fresh, empty `improvements` index -- see that function's own docstring).
+
+    **WP20** adds a 5th selection, `lifestyle_selection`, the same "`None` until committed" shape.
+    Unlike the other four, its nuyen cost is validated jointly with `resources_selection`'s gear
+    spend against one shared Resources-priority budget (see `chummer5.engine.resources
+    .create_resources_selection`'s `lifestyle_cost` parameter) rather than independently -- see
+    `chummer5.engine.lifestyle`'s module docstring.
     """
 
     metatype: Metatype
@@ -146,6 +153,7 @@ class Character:
     quality_selection: QualitySelection | None = None
     contact_selection: ContactSelection | None = None
     resources_selection: ResourcesSelection | None = None
+    lifestyle_selection: LifestyleSelection | None = None
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]

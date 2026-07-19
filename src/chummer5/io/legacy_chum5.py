@@ -71,6 +71,21 @@ class LegacyContact:
 
 
 @dataclass(frozen=True)
+class LegacyLifestyle:
+    """One raw `<lifestyle>` entry (WP20). `monthly_cost` is `<cost>`'s literal value -- confirmed
+    (see `spec/rulebooks/learnings.md`'s WP20 entry) to already be the tier's flat monthly rate, not
+    pre-multiplied by `months`; `total_cost = monthly_cost * months` is this project's own
+    computation (`chummer5.engine.lifestyle.LifestyleSelection.total_cost`), not a save-format
+    field.
+    """
+
+    base_lifestyle: str  # <baselifestyle>: the catalog tier name, e.g. "Low"
+    months: int
+    monthly_cost: int
+    source: str
+
+
+@dataclass(frozen=True)
 class PrioritySelections:
     """Raw `<priority*>` fields from a saved character, unparsed beyond XML extraction.
 
@@ -119,6 +134,9 @@ class LegacyCharacter:
     qualities: tuple[LegacyQuality, ...]
     contacts: tuple[LegacyContact, ...]
     contact_points_budget: int  # <contactpoints>: cached CHA*3 free-contact-point budget (WP9)
+    # <lifestyles><lifestyle>...</lifestyle></lifestyles>, every entry in document order (WP20;
+    # see LegacyLifestyle's own docstring for why "which one is primary" isn't decided here).
+    lifestyles: tuple[LegacyLifestyle, ...]
     has_cyberware: bool  # <cyberwares> has any children (WP12) -- Cyberware *and* Bioware entries
     # both live under this one wrapper element (`<improvementsource>` distinguishes them, not the
     # element name), so a single presence flag covers both without needing to parse individual
@@ -233,6 +251,26 @@ def _parse_contacts(elem: ET.Element | None) -> tuple[LegacyContact, ...]:
     return tuple(_parse_contact(c) for c in elem.findall("contact"))
 
 
+def _parse_lifestyle(elem: ET.Element) -> LegacyLifestyle:
+    return LegacyLifestyle(
+        base_lifestyle=elem.findtext("baselifestyle", ""),
+        months=int(elem.findtext("months", "0")),
+        monthly_cost=int(elem.findtext("cost", "0")),
+        source=elem.findtext("source", ""),
+    )
+
+
+def _parse_lifestyles(elem: ET.Element | None) -> tuple[LegacyLifestyle, ...]:
+    # Every child in document order, not just the first -- a character may maintain more than one
+    # Lifestyle (core rulebook p. 369: "They may elect to pay other lifestyle costs as well... but
+    # must pay full cost on all lifestyles they maintain"). This parser extracts raw fields only;
+    # which entry counts as the *primary* Lifestyle (MVP's only modeled one) is an interpretation
+    # decision left to `chummer5.io.legacy_import` -- see its own module docstring.
+    if elem is None:
+        return ()
+    return tuple(_parse_lifestyle(lifestyle) for lifestyle in elem.findall("lifestyle"))
+
+
 def _has_children(elem: ET.Element | None) -> bool:
     return elem is not None and len(elem) > 0
 
@@ -270,8 +308,9 @@ def load_chum5(path: Path) -> LegacyCharacter:
     are now included: every `<contact>` entry plus the character-level `<contactpoints>` cached
     free-budget value (see `spec/worklogs/WP9.md`). Cyberware/bioware presence is now flagged (WP12,
     `has_cyberware`) since it's a real blocking condition for import -- see `spec/worklogs/WP12.md`.
+    Lifestyles (WP20) are now included too: every `<lifestyle>` entry, raw (see `LegacyLifestyle`).
     Vehicles/gear/spells/magic/matrix/etc. remain untouched — this parser only extracts what
-    WP6-WP12's engine and import path need to validate against.
+    WP6-WP20's engine and import path need to validate against.
     """
     root = ET.parse(path).getroot()
     newskills_elem = root.find("newskills")
@@ -290,6 +329,7 @@ def load_chum5(path: Path) -> LegacyCharacter:
         qualities=_parse_qualities(root.find("qualities")),
         contacts=_parse_contacts(root.find("contacts")),
         contact_points_budget=int(root.findtext("contactpoints", "0")),
+        lifestyles=_parse_lifestyles(root.find("lifestyles")),
         has_cyberware=_has_children(root.find("cyberwares")),
         karma_remaining=int(root.findtext("karma", "0")),
         build_karma=int(root.findtext("buildkarma", "0")),

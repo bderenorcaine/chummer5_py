@@ -186,3 +186,41 @@ def test_create_resources_selection_rejects_budget_overspend() -> None:
             priorities=PRIORITIES,
             gear_names=[item.name for item in STARTER_GEAR_CATALOG for _ in range(20)],
         )
+
+
+# --- Lifestyle (WP20): shared-budget wiring ----------------------------------------------------
+
+
+def test_create_resources_selection_lifestyle_cost_defaults_to_zero() -> None:
+    """Backward-compatibility check: every pre-WP20 call (no `lifestyle_cost` argument) must
+    behave identically to before WP20 touched this function.
+    """
+    selection = create_resources_selection(
+        letter="E", priorities=PRIORITIES, gear_names=["Meta Link"]
+    )
+    assert selection.lifestyle_cost == 0
+    assert selection.nuyen_spent == 100
+    assert selection.nuyen_remaining == 5900
+
+
+def test_create_resources_selection_folds_lifestyle_cost_into_remaining() -> None:
+    selection = create_resources_selection(
+        letter="E", priorities=PRIORITIES, gear_names=["Meta Link"], lifestyle_cost=2000
+    )
+    assert selection.lifestyle_cost == 2000
+    assert selection.nuyen_spent == 100  # gear-only, unchanged meaning
+    assert selection.nuyen_remaining == 6000 - 100 - 2000
+
+
+def test_create_resources_selection_rejects_combined_gear_and_lifestyle_overspend() -> None:
+    with pytest.raises(ValueError, match=r"gear \(100\) \+ lifestyle \(6000\)"):
+        create_resources_selection(
+            letter="E", priorities=PRIORITIES, gear_names=["Meta Link"], lifestyle_cost=6000
+        )
+
+
+def test_create_resources_selection_allows_lifestyle_alone_up_to_budget() -> None:
+    selection = create_resources_selection(
+        letter="E", priorities=PRIORITIES, gear_names=[], lifestyle_cost=6000
+    )
+    assert selection.nuyen_remaining == 0

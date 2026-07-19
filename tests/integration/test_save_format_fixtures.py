@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from tests.fixtures.mundane_chum5 import PRIORITY_BUILD_FIXTURE, mundane_fixture_path
 
+from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
@@ -33,6 +34,7 @@ METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
+LIFESTYLES = load_lifestyles()
 
 
 def _yeti_save() -> CharacterSave:
@@ -82,6 +84,10 @@ def _yeti_save() -> CharacterSave:
         contacts=contacts,
         resources_letter=resources_letter,
         gear_names=(),
+        # Yeti's own recorded primary Lifestyle (WP20) -- Low, 1 month; unlike qualities/gear, the
+        # lifestyle catalog is complete enough to faithfully reconstruct this, not a stub.
+        lifestyle_tier_name="Low",
+        lifestyle_months=1,
     )
 
 
@@ -102,7 +108,12 @@ def test_yeti_build_save_load_produces_an_equal_reconstruction() -> None:
     reloaded_save = from_json(to_json(save))
 
     built_before = build_character(
-        save, metatypes=METATYPES, priorities=PRIORITIES, skills=SKILLS, qualities=QUALITIES
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
     )
     built_after = build_character(
         reloaded_save,
@@ -110,6 +121,7 @@ def test_yeti_build_save_load_produces_an_equal_reconstruction() -> None:
         priorities=PRIORITIES,
         skills=SKILLS,
         qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
     )
 
     legacy = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
@@ -122,8 +134,11 @@ def test_yeti_build_save_load_produces_an_equal_reconstruction() -> None:
     assert built_before.quality_selection == built_after.quality_selection
     assert built_before.contact_selection == built_after.contact_selection
     assert built_before.resources_selection == built_after.resources_selection
+    assert built_before.lifestyle_selection == built_after.lifestyle_selection
 
     # Cross-check against Yeti's own recorded ground truth too, not just internal self-consistency.
     assert built_after.contact_selection.free_points == legacy.contact_points_budget
     assert built_after.contact_selection.points_spent == 15
     assert built_after.resources_selection.nuyen_budget == legacy.starting_nuyen
+    assert built_after.lifestyle_selection.tier.name == "Low"
+    assert built_after.lifestyle_selection.total_cost == 2000

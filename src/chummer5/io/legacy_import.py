@@ -31,11 +31,24 @@ result:
   a real Magician/Adept's build fundamentally can't be reconstructed from that), cyberware/bioware
   presence (WP10's own finding: MVP's `BASE_ESSENCE = 6` constant is only valid for an
   augmentation-free character — importing one with cyberware and still assuming Essence 6 would
-  silently corrupt Social Limit), and a metavariant (out of MVP scope per WP6's metatype filter --
-  the base metatype's attribute ranges the rest of the import would use don't apply to it).
+  silently corrupt Social Limit), a metavariant (out of MVP scope per WP6's metatype filter --
+  the base metatype's attribute ranges the rest of the import would use don't apply to it), and
+  (WP20) a primary Lifestyle that's either missing entirely or not one of the 6 core-rulebook
+  starting tiers `chummer5.data.lifestyle` offers -- silently defaulting to a tier the character
+  never actually chose (e.g. free "Street") would misrepresent a real nuyen spend, not just omit
+  one, so this is blocking rather than excluded-and-reported like a dropped quality/skill.
   `UnsupportedLegacyCharacterError.reasons` collects *every* blocking issue found in one pass, not
   just the first, so a caller gets one itemized report rather than a fix-one-rerun-find-the-next
   loop.
+
+**Which `<lifestyle>` entry counts as "primary" (WP20).** The legacy save format has no explicit
+"is this the primary Lifestyle" flag (confirmed: no such field exists anywhere in `Lifestyle.cs`,
+only a general `LifestyleType.Standard` -- see `spec/rulebooks/learnings.md`'s WP20 entry). This
+module treats the *first* `<lifestyle>` child in document order as primary, matching every one of
+the 11 curated mundane fixtures (including `BLUE.chum5`, the only one with more than one entry --
+its in-scope Medium tier appears first, its out-of-scope `RF`-sourced "Bolt Hole" second). A
+character's other, non-primary lifestyles (if any) are simply not imported -- consistent with the
+core rulebook's own framing of them as optional extras beyond the one mandatory primary choice.
 
 **Deliberately not blocking: `<resenabled>True</resenabled>` (Resonance/Technomancer).** This is the
 one place this module's scope cut doesn't match the Project Overview's "no magic/resonance" MVP
@@ -65,6 +78,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from chummer5.data.lifestyle import STARTING_TIER_NAMES, LifestyleTier
 from chummer5.data.metatypes import Metatype
 from chummer5.data.priorities import PriorityTable
 from chummer5.data.qualities import Quality
@@ -119,6 +133,15 @@ def _blocking_reasons(legacy: LegacyCharacter) -> tuple[str, ...]:
         )
     if legacy.metavariant is not None:
         reasons.append(f"metavariant {legacy.metavariant!r} is out of MVP scope")
+    if not legacy.lifestyles:
+        reasons.append(
+            "no primary Lifestyle found; SR5 requires selecting one at character creation"
+        )
+    elif legacy.lifestyles[0].base_lifestyle not in STARTING_TIER_NAMES:
+        reasons.append(
+            f"primary Lifestyle {legacy.lifestyles[0].base_lifestyle!r} is not one of the 6 "
+            "core-rulebook starting tiers MVP offers"
+        )
     return tuple(reasons)
 
 
@@ -145,6 +168,7 @@ def import_legacy_character(
     priorities: PriorityTable,
     skills: tuple[Skill, ...],
     qualities: tuple[Quality, ...],
+    lifestyles: tuple[LifestyleTier, ...],
 ) -> ImportResult:
     """Convert an already-parsed `LegacyCharacter` into a validated, built native character.
 
@@ -212,10 +236,21 @@ def import_legacy_character(
         # a basic purchase flow" (Project Overview), so there is nothing this import path was ever
         # going to represent here.
         gear_names=(),
+        # WP20: unlike gear, the lifestyle catalog *is* a complete, real SR5 catalog (all 6
+        # starting tiers), so the character's actual primary Lifestyle is faithfully
+        # reconstructable -- `_blocking_reasons` above already rejected anything this can't
+        # represent (missing, or not one of the 6 tiers).
+        lifestyle_tier_name=legacy.lifestyles[0].base_lifestyle,
+        lifestyle_months=legacy.lifestyles[0].months,
     )
 
     built = build_character(
-        save, metatypes=metatypes, priorities=priorities, skills=skills, qualities=qualities
+        save,
+        metatypes=metatypes,
+        priorities=priorities,
+        skills=skills,
+        qualities=qualities,
+        lifestyles=lifestyles,
     )
 
     return ImportResult(
@@ -233,6 +268,7 @@ def import_chum5(
     priorities: PriorityTable,
     skills: tuple[Skill, ...],
     qualities: tuple[Quality, ...],
+    lifestyles: tuple[LifestyleTier, ...],
 ) -> ImportResult:
     """Parse a `.chum5` file (WP4's `load_chum5`) and import it (see `import_legacy_character`)."""
     return import_legacy_character(
@@ -241,4 +277,5 @@ def import_chum5(
         priorities=priorities,
         skills=skills,
         qualities=qualities,
+        lifestyles=lifestyles,
     )

@@ -21,6 +21,7 @@ from tests.fixtures.mundane_chum5 import (
     mundane_fixture_path,
 )
 
+from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
@@ -33,6 +34,7 @@ METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
+LIFESTYLES = load_lifestyles()
 
 
 def test_imports_yeti_end_to_end() -> None:
@@ -49,6 +51,7 @@ def test_imports_yeti_end_to_end() -> None:
         priorities=PRIORITIES,
         skills=SKILLS,
         qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
     )
 
     character = result.built
@@ -81,6 +84,14 @@ def test_imports_yeti_end_to_end() -> None:
     assert result.built.contact_selection.karma_cost == 0
     assert result.built.resources_selection.nuyen_budget == legacy.starting_nuyen
 
+    # Lifestyle (WP20): Yeti's own recorded primary Lifestyle -- Low, 1 month.
+    assert len(legacy.lifestyles) == 1
+    assert legacy.lifestyles[0].base_lifestyle == "Low"
+    assert result.built.lifestyle_selection is not None
+    assert result.built.lifestyle_selection.tier.name == "Low"
+    assert result.built.lifestyle_selection.months == 1
+    assert result.built.lifestyle_selection.total_cost == 2000
+
 
 def test_rejects_sumtoten_mundane_fixture() -> None:
     """Every mundane fixture except Yeti is SumToTen-built -- out of MVP's priority-chargen scope
@@ -95,6 +106,7 @@ def test_rejects_sumtoten_mundane_fixture() -> None:
             priorities=PRIORITIES,
             skills=SKILLS,
             qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
         )
 
 
@@ -112,5 +124,6 @@ def test_rejects_magic_enabled_priority_character() -> None:
             priorities=PRIORITIES,
             skills=SKILLS,
             qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
         )
     assert exc_info.value.reasons == ("Magic is enabled; MVP does not support magic chargen",)

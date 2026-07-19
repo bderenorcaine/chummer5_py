@@ -11,11 +11,18 @@ from types import MappingProxyType
 
 import pytest
 
+from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import BonusSupport, load_qualities
 from chummer5.data.skills import load_skills
-from chummer5.io.legacy_chum5 import LegacyCharacter, LegacyQuality, LegacySkill, PrioritySelections
+from chummer5.io.legacy_chum5 import (
+    LegacyCharacter,
+    LegacyLifestyle,
+    LegacyQuality,
+    LegacySkill,
+    PrioritySelections,
+)
 from chummer5.io.legacy_import import (
     UnsupportedLegacyCharacterError,
     import_legacy_character,
@@ -25,6 +32,7 @@ METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
+LIFESTYLES = load_lifestyles()
 
 
 def _priorities(
@@ -58,6 +66,12 @@ def _legacy_character(**overrides: object) -> LegacyCharacter:
         contacts=(),
         contact_points_budget=0,
         has_cyberware=False,
+        # A valid default primary Lifestyle (WP20) -- most tests here aren't about lifestyle at
+        # all, so this keeps `_blocking_reasons`'s new lifestyle check from firing incidentally;
+        # tests that specifically exercise that check override this field.
+        lifestyles=(
+            LegacyLifestyle(base_lifestyle="Low", months=1, monthly_cost=2000, source="SR5"),
+        ),
         karma_remaining=0,
         build_karma=25,
         nuyen_remaining=0.0,
@@ -69,12 +83,42 @@ def _legacy_character(**overrides: object) -> LegacyCharacter:
 
 def _import(legacy: LegacyCharacter) -> None:
     import_legacy_character(
-        legacy, metatypes=METATYPES, priorities=PRIORITIES, skills=SKILLS, qualities=QUALITIES
+        legacy,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
     )
 
 
 def test_valid_mundane_priority_character_imports_without_error() -> None:
     _import(_legacy_character())  # no exception
+
+
+def test_imports_the_first_lifestyle_entry_as_primary() -> None:
+    """WP20: the *first* `<lifestyle>` in document order is treated as primary (the legacy format
+    has no explicit "is this primary" flag -- see legacy_import's own module docstring); a second,
+    out-of-scope entry (mirroring `BLUE.chum5`'s real shape) must not block the import.
+    """
+    result = import_legacy_character(
+        _legacy_character(
+            lifestyles=(
+                LegacyLifestyle(base_lifestyle="Medium", months=1, monthly_cost=5000, source="SR5"),
+                LegacyLifestyle(
+                    base_lifestyle="Bolt Hole", months=1, monthly_cost=1000, source="RF"
+                ),
+            )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert result.built.lifestyle_selection is not None
+    assert result.built.lifestyle_selection.tier.name == "Medium"
+    assert result.built.lifestyle_selection.total_cost == 5000
 
 
 def test_rejects_sumtoten_build_method() -> None:
@@ -100,6 +144,30 @@ def test_rejects_cyberware() -> None:
 def test_rejects_metavariant() -> None:
     with pytest.raises(UnsupportedLegacyCharacterError, match="metavariant"):
         _import(_legacy_character(metavariant="Oni"))
+
+
+def test_rejects_no_lifestyle() -> None:
+    """WP20: SR5 requires selecting a primary Lifestyle; a legacy save with none is blocking, not
+    silently defaulted to e.g. the free "Street" tier -- that would misrepresent a real choice.
+    """
+    with pytest.raises(UnsupportedLegacyCharacterError, match="no primary Lifestyle found"):
+        _import(_legacy_character(lifestyles=()))
+
+
+def test_rejects_out_of_scope_primary_lifestyle() -> None:
+    """A primary Lifestyle outside the 6 core-rulebook starting tiers (e.g. an RF-sourced "Bolt
+    Hole") is blocking for the same reason a metavariant is -- MVP's catalog can't represent it.
+    """
+    with pytest.raises(UnsupportedLegacyCharacterError, match="not one of the 6"):
+        _import(
+            _legacy_character(
+                lifestyles=(
+                    LegacyLifestyle(
+                        base_lifestyle="Bolt Hole", months=1, monthly_cost=1000, source="RF"
+                    ),
+                )
+            )
+        )
 
 
 def test_does_not_reject_resonance_enabled() -> None:
@@ -136,6 +204,7 @@ def test_unsupported_quality_is_dropped_and_reported_not_fatal() -> None:
         priorities=PRIORITIES,
         skills=SKILLS,
         qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
     )
     assert result.dropped_qualities == (unsupported.name,)
     assert result.save.quality_ids == ()
@@ -157,6 +226,7 @@ def test_mvp_offered_quality_is_imported() -> None:
         priorities=PRIORITIES,
         skills=SKILLS,
         qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
     )
     assert result.dropped_qualities == ()
     assert result.save.quality_ids == (catlike.id,)
@@ -178,6 +248,7 @@ def test_unresolvable_skill_suid_is_dropped_and_reported_not_fatal() -> None:
         priorities=PRIORITIES,
         skills=SKILLS,
         qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
     )
     assert result.dropped_skills == ("not-a-real-suid",)
     assert result.save.skill_points == {}

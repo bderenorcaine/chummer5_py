@@ -370,7 +370,7 @@ dependency on WP18, but shares files (`engine/qualities.py`, `web/app.py`'s qual
 it — sequence after WP18 anyway to avoid merge conflicts, unless deliberately run in parallel on a
 separate branch.
 
-- [ ] **WP20 — Lifestyle selection.**
+- [x] **WP20 — Lifestyle selection.**
   Goal: add the mandatory core-rulebook Lifestyle chargen step (rulebook, p.369: "A character must
   select one of the lifestyles below to be their primary Lifestyle") — currently absent from the
   engine entirely (confirmed: zero references anywhere in `src/`) despite being squarely within

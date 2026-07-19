@@ -1,0 +1,48 @@
+<div id="lifestyle">
+  {% if character %}
+  <h2>Lifestyle</h2>
+
+  {% if lifestyle_error %}
+  <p class="error">{{ lifestyle_error }}</p>
+  {% endif %}
+  {% if lifestyle_budget_warning %}
+  <p class="warning">{{ lifestyle_budget_warning }}</p>
+  {% endif %}
+
+  <p>
+    Core rulebook, p. 369: every character must select one primary Lifestyle. It shares the same
+    nuyen budget as starter gear ({{ nuyen_budget }} total).
+  </p>
+
+  <form
+    hx-post="/ui/lifestyle"
+    hx-target="#lifestyle"
+    hx-swap="outerHTML"
+    hx-trigger="change, input delay:400ms"
+  >
+    <label>
+      Tier
+      <select name="lifestyle_tier">
+        {% for tier in lifestyle_options %}
+        <option value="{{ tier.name }}" {% if tier.name == selected_tier_name %}selected{% endif %}>
+          {{ tier.name }} ({{ tier.monthly_cost }}¥/month)
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Months
+      <input
+        type="number"
+        name="lifestyle_months"
+        value="{{ selected_months }}"
+        min="{{ min_lifestyle_months }}"
+        max="{{ max_lifestyle_months }}"
+      />
+    </label>
+    <button type="submit">Update lifestyle</button>
+  </form>
+  {% else %}
+  <p>Confirm a metatype and priorities above before selecting a Lifestyle.</p>
+  {% endif %}
+</div>

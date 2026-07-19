@@ -35,6 +35,12 @@ bundling type built for the purpose. WP18 widened `Character` with
 docstring), which makes that wrapper redundant: `build_character` now attaches all four to the
 `Character` it builds via one `dataclasses.replace` call and returns that directly.
 
+**WP20** adds `lifestyle_tier_name`/`lifestyle_months` (required, not optional-with-a-tuple-default
+like `gear_names`/`quality_ids`/`contacts`) -- a saved character always has a concrete primary
+Lifestyle, even the free "Street" tier, since SR5 makes the choice mandatory (see
+`chummer5.engine.lifestyle`'s module docstring); there is no meaningful "no lifestyle yet" save
+state the way there is for e.g. an empty gear list.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -51,11 +57,13 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
+from chummer5.data.lifestyle import LifestyleTier
 from chummer5.data.metatypes import Metatype
 from chummer5.data.priorities import PriorityTable
 from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
 from chummer5.engine.character import Character, create_character, metatype_choices
+from chummer5.engine.lifestyle import create_lifestyle_selection
 from chummer5.engine.qualities import apply_quality_improvements, create_quality_selection
 from chummer5.engine.resources import (
     Contact,
@@ -93,6 +101,8 @@ class CharacterSave:
     contacts: tuple[Contact, ...]
     resources_letter: str
     gear_names: tuple[str, ...]
+    lifestyle_tier_name: str
+    lifestyle_months: int
 
 
 def create_character_save(
@@ -108,6 +118,8 @@ def create_character_save(
     contacts: Iterable[Contact],
     resources_letter: str,
     gear_names: Iterable[str],
+    lifestyle_tier_name: str,
+    lifestyle_months: int,
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -129,6 +141,8 @@ def create_character_save(
         contacts=tuple(contacts),
         resources_letter=resources_letter,
         gear_names=tuple(gear_names),
+        lifestyle_tier_name=lifestyle_tier_name,
+        lifestyle_months=lifestyle_months,
     )
 
 
@@ -154,6 +168,8 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         ],
         "resources_letter": save.resources_letter,
         "gear_names": list(save.gear_names),
+        "lifestyle_tier_name": save.lifestyle_tier_name,
+        "lifestyle_months": save.lifestyle_months,
     }
 
 
@@ -183,6 +199,8 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         ),
         resources_letter=data["resources_letter"],
         gear_names=data["gear_names"],
+        lifestyle_tier_name=data["lifestyle_tier_name"],
+        lifestyle_months=data["lifestyle_months"],
     )
 
 
@@ -202,6 +220,7 @@ def build_character(
     priorities: PriorityTable,
     skills: tuple[Skill, ...],
     qualities: tuple[Quality, ...],
+    lifestyles: tuple[LifestyleTier, ...],
 ) -> Character:
     """Reconstruct a fully-populated `Character` from a `CharacterSave`, re-running the same
     `create_*` validation each selection already has (see module docstring).
@@ -251,8 +270,15 @@ def build_character(
 
     contact_selection = create_contact_selection(character, save.contacts)
 
+    lifestyle_selection = create_lifestyle_selection(
+        save.lifestyle_tier_name, save.lifestyle_months, lifestyles
+    )
+
     resources_selection = create_resources_selection(
-        save.resources_letter, priorities, gear_names=save.gear_names
+        save.resources_letter,
+        priorities,
+        gear_names=save.gear_names,
+        lifestyle_cost=lifestyle_selection.total_cost,
     )
 
     return replace(
@@ -261,4 +287,5 @@ def build_character(
         quality_selection=quality_selection,
         contact_selection=contact_selection,
         resources_selection=resources_selection,
+        lifestyle_selection=lifestyle_selection,
     )

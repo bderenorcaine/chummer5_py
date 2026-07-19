@@ -77,6 +77,19 @@ longer called from `submit_priorities` (calling it after a `replace` that alread
 which WP19 leaves on its pre-existing `create_character()`-fresh shape — see `spec/worklogs/WP19.md`
 for why only `submit_priorities` needed the switch.
 
+WP20 adds a new fragment/route, `POST /ui/lifestyle` (`chummer5.engine.lifestyle`'s
+`create_lifestyle_selection`), for SR5's mandatory primary-Lifestyle purchase -- a new peer section
+alongside Resources, not folded into `_resources.html`/`submit_resources`, even though both spend
+from the same Resources-priority nuyen budget (see `_lifestyle_context`'s docstring for that shared-
+budget wiring). `_chargen_body_context` computes the cross-section numbers each side needs
+(`gear_cost` for `_lifestyle_context`, `lifestyle_cost` for `_resources_context`) and folds
+`_lifestyle_context`'s own `lifestyle_budget_warning` into the same `priority_stale_selections`
+aggregate WP19 introduced. `submit_priorities`'s `dataclasses.replace`-in-place carries a committed
+`lifestyle_selection` forward automatically (an untouched field survives `replace` by reference, the
+same reason `quality_selection`/`resources_selection` never needed special-casing there);
+`submit_attributes` needed one explicit addition (carrying `lifestyle_selection` forward alongside
+`skill_allocation`/`resources_selection`, since it still rebuilds via `create_character()` fresh).
+
 Run locally: `uv run uvicorn chummer5.web.app:app --reload` (or `python -m uvicorn ...` — same
 `uv run python -m X` workaround as `pytest`/`ruff`/`mypy`, see Project Overview.md's Development
 environment note), then open http://127.0.0.1:8000/.
@@ -98,6 +111,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.datastructures import FormData, UploadFile
 
+from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
@@ -121,6 +135,11 @@ from chummer5.engine.derived import (
     stun_condition_monitor,
 )
 from chummer5.engine.improvements import ImprovementIndex, ImprovementSource
+from chummer5.engine.lifestyle import (
+    MAX_LIFESTYLE_MONTHS,
+    MIN_LIFESTYLE_MONTHS,
+    create_lifestyle_selection,
+)
 from chummer5.engine.qualities import (
     QUALITY_KARMA_LIMIT,
     QualitySelection,
@@ -176,10 +195,18 @@ METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
+LIFESTYLES = load_lifestyles()
 
 # The MVP-offered quality catalog (see chummer5.engine.qualities): 3 FLAT_BONUS qualities, all
 # Positive. Computed once, mirroring MUNDANE_SKILLS/MUNDANE_SKILL_GROUPS below.
 MVP_QUALITIES = mvp_quality_catalog(QUALITIES)
+
+# WP20: the tier/months a fresh (or not-yet-visited) Lifestyle section pre-fills -- "Street" is the
+# rulebook's own free tier ("Hey pal, life ain't all bad. It's free."), so this default never costs
+# anything until the player actively picks something else, the same "starts at a legal, harmless
+# default" precedent DEFAULT_HERITAGE_LETTER et al. already set in chummer5.web.session.
+DEFAULT_LIFESTYLE_TIER_NAME = "Street"
+DEFAULT_LIFESTYLE_MONTHS = MIN_LIFESTYLE_MONTHS
 
 # Fixed number of contact-input rows the UI offers -- there's no client-side add/remove, so this
 # is a plain, generously-sized table (mirrors the fixed-row attribute/skill tables) rather than
@@ -310,6 +337,19 @@ def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str
             quantity = 0
         names.extend([item.name] * max(quantity, 0))
     return tuple(names)
+
+
+def _parse_lifestyle_months(form: FormData) -> int:
+    """Read `lifestyle_months` off a submitted form, clamping an unparseable value to 0 -- the
+    same "let the engine validate what it's already responsible for" choice `_parse_gear` makes for
+    a negative gear quantity. `create_lifestyle_selection`'s own 1-100 range check is what rejects
+    0 (or anything else out of range) with a specific message, not this parser.
+    """
+    raw = form.get("lifestyle_months")
+    try:
+        return int(str(raw)) if raw is not None else 0
+    except ValueError:
+        return 0
 
 
 def _attribute_allocation_context(
@@ -578,7 +618,9 @@ def _contacts_context(
     }
 
 
-def _resources_selection_for_display(letter: str, gear_names: Iterable[str]) -> ResourcesSelection:
+def _resources_selection_for_display(
+    letter: str, gear_names: Iterable[str], lifestyle_cost: int
+) -> ResourcesSelection:
     """Recompute a `ResourcesSelection`'s nuyen totals against `letter`'s *current* budget, without
     `create_resources_selection`'s "spend must not exceed budget" check.
 
@@ -590,6 +632,11 @@ def _resources_selection_for_display(letter: str, gear_names: Iterable[str]) -> 
     `_character_sheet_context` reads `resources_selection.nuyen_budget`/`.nuyen_remaining` straight
     off the stored object -- so it needs a freshly-recomputed one, and needs it to not raise on an
     over-budget carry-forward the way `create_resources_selection` deliberately does.
+
+    **WP20**: `lifestyle_cost` (the character's currently-selected `lifestyle_selection.total_cost`,
+    or 0 if none yet) folds into `nuyen_remaining` the same way `create_resources_selection` folds
+    it in -- passed in rather than recomputed, since this function has no reason to know about
+    `chummer5.engine.lifestyle` beyond the one number it needs to share a budget with.
     """
     by_name = {item.name: item for item in STARTER_GEAR_CATALOG}
     selected = tuple(by_name[name] for name in gear_names if name in by_name)
@@ -600,7 +647,8 @@ def _resources_selection_for_display(letter: str, gear_names: Iterable[str]) -> 
         nuyen_budget=budget,
         gear=selected,
         nuyen_spent=spent,
-        nuyen_remaining=budget - spent,
+        nuyen_remaining=budget - spent - lifestyle_cost,
+        lifestyle_cost=lifestyle_cost,
     )
 
 
@@ -608,6 +656,7 @@ def _resources_context(
     character: Character | None,
     resources_letter: str,
     gear_names: tuple[str, ...],
+    lifestyle_cost: int,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -624,6 +673,16 @@ def _resources_context(
     `_priority_form_context`/`_attribute_allocation_context`/`_skill_allocation_context` as the
     three to extend) -- included anyway since gear is carried forward exactly like skill points are,
     and a stale gear purchase deserves the same explanation, not silence.
+
+    **WP20**: `lifestyle_cost` (the character's currently-selected `lifestyle_selection.total_cost`,
+    or 0 if none yet) is folded into the displayed remaining budget and the re-validation call, so
+    gear and the primary Lifestyle correctly share one Resources-priority nuyen budget instead of
+    each silently assuming the whole thing for itself. Not a bidirectional live update, though: this
+    section's own `hx-target` only swaps `#resources`, so buying gear here doesn't refresh
+    `#lifestyle`'s own displayed remaining-budget number (or vice versa) until the next full page
+    render -- a deliberate, documented scope boundary (see this WP's worklog), not an oversight;
+    both sections' *validation* (whether a submission is actually accepted) is always correct
+    regardless, since both call the same joint `create_resources_selection` check.
     """
     if character is None:
         return {"character": None, "resources_error": error}
@@ -643,7 +702,9 @@ def _resources_context(
     budget_warning: str | None = None
     if error is None:
         try:
-            create_resources_selection(resources_letter, PRIORITIES, gear_names)
+            create_resources_selection(
+                resources_letter, PRIORITIES, gear_names, lifestyle_cost=lifestyle_cost
+            )
         except ValueError as exc:
             budget_warning = (
                 f"No longer fits since priorities were last confirmed: {exc}. "
@@ -654,9 +715,71 @@ def _resources_context(
         "gear_rows": rows,
         "nuyen_budget": budget,
         "nuyen_spent": spent,
-        "nuyen_remaining": budget - spent,
+        "nuyen_remaining": budget - spent - lifestyle_cost,
         "resources_error": error,
         "resources_budget_warning": budget_warning,
+    }
+
+
+def _lifestyle_context(
+    character: Character | None,
+    resources_letter: str,
+    tier_name: str,
+    months: int,
+    gear_cost: int,
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_lifestyle.html`: WP20's mandatory primary-Lifestyle purchase (core rulebook,
+    p. 369), drawing from the same Resources-priority nuyen budget `_resources_context` validates
+    gear against. `gear_cost` is the character's *currently committed* gear spend
+    (`resources_selection.nuyen_spent`, or 0 if none yet) -- passed in rather than recomputed here,
+    the mirror image of `_resources_context`'s own `lifestyle_cost` parameter (see its docstring for
+    why this cross-section number is threaded through rather than each section reaching into the
+    other's catalog/state directly).
+
+    Same `error`-gated re-validation pattern as `_resources_context`/`_skill_allocation_context`:
+    when `error` is unset (i.e. this isn't redisplaying a submission this same request just
+    rejected), re-derives whether the currently-selected tier/months still fits the combined budget,
+    surfacing a distinct `lifestyle_budget_warning` rather than silently going over on the next
+    render.
+    """
+    if character is None:
+        return {
+            "character": None,
+            "lifestyle_options": LIFESTYLES,
+            "selected_tier_name": tier_name,
+            "selected_months": months,
+            "min_lifestyle_months": MIN_LIFESTYLE_MONTHS,
+            "max_lifestyle_months": MAX_LIFESTYLE_MONTHS,
+            "lifestyle_error": error,
+        }
+    budget = starting_nuyen(resources_letter, PRIORITIES)
+    budget_warning: str | None = None
+    if error is None:
+        try:
+            selection = create_lifestyle_selection(tier_name, months, LIFESTYLES)
+        except ValueError as exc:
+            budget_warning = str(exc)
+        else:
+            total_spent = gear_cost + selection.total_cost
+            if total_spent > budget:
+                budget_warning = (
+                    "No longer fits since priorities were last confirmed: gear "
+                    f"({gear_cost}) + lifestyle ({selection.total_cost}) spend {total_spent} "
+                    f"exceeds Resources priority {resources_letter}'s nuyen budget of {budget}. "
+                    "Adjust the lifestyle below to continue."
+                )
+    return {
+        "character": character,
+        "lifestyle_options": LIFESTYLES,
+        "selected_tier_name": tier_name,
+        "selected_months": months,
+        "min_lifestyle_months": MIN_LIFESTYLE_MONTHS,
+        "max_lifestyle_months": MAX_LIFESTYLE_MONTHS,
+        "nuyen_budget": budget,
+        "lifestyle_error": error,
+        "lifestyle_budget_warning": budget_warning,
     }
 
 
@@ -710,8 +833,11 @@ def _character_sheet_context(
         if character.resources_selection is not None
         else ()
     )
+    lifestyle_selection = character.lifestyle_selection
     resources_selection = _resources_selection_for_display(
-        session.resources_letter, committed_gear_names
+        session.resources_letter,
+        committed_gear_names,
+        lifestyle_selection.total_cost if lifestyle_selection is not None else 0,
     )
     gear_counts: dict[str, int] = {}
     for item in resources_selection.gear:
@@ -745,6 +871,13 @@ def _character_sheet_context(
         "gear_rows": [
             {"name": name, "quantity": quantity} for name, quantity in sorted(gear_counts.items())
         ],
+        "lifestyle_tier_name": (
+            lifestyle_selection.tier.name if lifestyle_selection is not None else None
+        ),
+        "lifestyle_months": lifestyle_selection.months if lifestyle_selection is not None else None,
+        "lifestyle_cost": (
+            lifestyle_selection.total_cost if lifestyle_selection is not None else 0
+        ),
         "nuyen_budget": resources_selection.nuyen_budget,
         "nuyen_remaining": resources_selection.nuyen_remaining,
         "quality_karma_cost": (
@@ -767,6 +900,12 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     """Build a `CharacterSave` (WP11) from a session's currently committed selections -- the
     inverse of `_apply_built_character_to_session` below. Only called once `session.character` is
     confirmed non-`None` (see `download_save`).
+
+    **WP20**: unlike the other selections, a save's `lifestyle_tier_name`/`lifestyle_months` are
+    never left as an "empty" placeholder when uncommitted -- `CharacterSave` requires a concrete
+    Lifestyle (see its own docstring), so an as-yet-unvisited Lifestyle section falls back to
+    `DEFAULT_LIFESTYLE_TIER_NAME`/`DEFAULT_LIFESTYLE_MONTHS` (the free "Street" tier, 1 month)
+    rather than leaving the save in a state `build_character` couldn't reconstruct.
     """
     character = session.character
     assert character is not None
@@ -784,6 +923,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.resources_selection is not None
         else ()
     )
+    lifestyle_selection = character.lifestyle_selection
     return create_character_save(
         metatype_name=character.metatype.name,
         heritage_letter=session.heritage_letter,
@@ -796,6 +936,16 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         contacts=contacts,
         resources_letter=session.resources_letter,
         gear_names=gear_names,
+        lifestyle_tier_name=(
+            lifestyle_selection.tier.name
+            if lifestyle_selection is not None
+            else DEFAULT_LIFESTYLE_TIER_NAME
+        ),
+        lifestyle_months=(
+            lifestyle_selection.months
+            if lifestyle_selection is not None
+            else DEFAULT_LIFESTYLE_MONTHS
+        ),
     )
 
 
@@ -867,11 +1017,32 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.resources_selection is not None
         else ()
     )
-    resources_ctx = _resources_context(character, session.resources_letter, gear_names)
+    lifestyle_selection = character.lifestyle_selection if character is not None else None
+    lifestyle_tier_name = (
+        lifestyle_selection.tier.name
+        if lifestyle_selection is not None
+        else DEFAULT_LIFESTYLE_TIER_NAME
+    )
+    lifestyle_months = (
+        lifestyle_selection.months if lifestyle_selection is not None else DEFAULT_LIFESTYLE_MONTHS
+    )
+    lifestyle_cost = lifestyle_selection.total_cost if lifestyle_selection is not None else 0
+    gear_cost = (
+        character.resources_selection.nuyen_spent
+        if character is not None and character.resources_selection is not None
+        else 0
+    )
+    resources_ctx = _resources_context(
+        character, session.resources_letter, gear_names, lifestyle_cost
+    )
+    lifestyle_ctx = _lifestyle_context(
+        character, session.resources_letter, lifestyle_tier_name, lifestyle_months, gear_cost
+    )
     stale = bool(
         attribute_ctx.get("attribute_budget_warning")
         or skill_ctx.get("skill_budget_warning")
         or resources_ctx.get("resources_budget_warning")
+        or lifestyle_ctx.get("lifestyle_budget_warning")
     )
     priority_ctx = {**priority_ctx, "priority_stale_selections": stale}
     return {
@@ -880,6 +1051,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         **skill_ctx,
         **quality_ctx,
         **contact_ctx,
+        **lifestyle_ctx,
         **resources_ctx,
     }
 
@@ -1067,16 +1239,18 @@ def create_app() -> FastAPI:
                 )
             else:
                 # See the identical comment in submit_priorities -- a fresh Character means fresh
-                # skill_allocation/quality_selection/contact_selection/resources_selection (all
-                # `None`) and a fresh, empty ImprovementIndex. Unlike submit_priorities, an
-                # attribute-point edit alone doesn't invalidate skill or gear spend (neither
-                # depends on attribute points), so both carry forward by plain reference.
+                # skill_allocation/quality_selection/contact_selection/resources_selection/
+                # lifestyle_selection (all `None`) and a fresh, empty ImprovementIndex. Unlike
+                # submit_priorities, an attribute-point edit alone doesn't invalidate skill, gear,
+                # or lifestyle spend (none depend on attribute points), so all three carry forward
+                # by plain reference.
                 character = _relink_quality_improvements(character, previous.quality_selection)
                 character = _relink_contact_selection(character, previous.contact_selection)
                 character = replace(
                     character,
                     skill_allocation=previous.skill_allocation,
                     resources_selection=previous.resources_selection,
+                    lifestyle_selection=previous.lifestyle_selection,
                 )
                 session.character = character
                 context = _attribute_allocation_context(character, attribute_points)
@@ -1160,24 +1334,88 @@ def create_app() -> FastAPI:
     async def submit_resources(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
         if session.character is None:
-            context = _resources_context(None, session.resources_letter, ())
+            context = _resources_context(None, session.resources_letter, (), 0)
         else:
             form = await request.form()
             gear_names = _parse_gear(form, STARTER_GEAR_CATALOG)
+            lifestyle_selection = session.character.lifestyle_selection
+            lifestyle_cost = (
+                lifestyle_selection.total_cost if lifestyle_selection is not None else 0
+            )
             try:
                 selection = create_resources_selection(
-                    session.resources_letter, PRIORITIES, gear_names
+                    session.resources_letter,
+                    PRIORITIES,
+                    gear_names,
+                    lifestyle_cost=lifestyle_cost,
                 )
             except ValueError as exc:
                 context = _resources_context(
-                    session.character, session.resources_letter, gear_names, error=str(exc)
+                    session.character,
+                    session.resources_letter,
+                    gear_names,
+                    lifestyle_cost,
+                    error=str(exc),
                 )
             else:
                 session.character = replace(session.character, resources_selection=selection)
                 context = _resources_context(
-                    session.character, session.resources_letter, gear_names
+                    session.character, session.resources_letter, gear_names, lifestyle_cost
                 )
         response = templates.TemplateResponse(request, "_resources.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/lifestyle", response_class=HTMLResponse)
+    async def submit_lifestyle(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None:
+            context = _lifestyle_context(
+                None,
+                session.resources_letter,
+                DEFAULT_LIFESTYLE_TIER_NAME,
+                DEFAULT_LIFESTYLE_MONTHS,
+                0,
+            )
+        else:
+            form = await request.form()
+            tier_name = str(form.get("lifestyle_tier") or "")
+            months = _parse_lifestyle_months(form)
+            resources_selection = session.character.resources_selection
+            gear_names = (
+                tuple(item.name for item in resources_selection.gear)
+                if resources_selection is not None
+                else ()
+            )
+            gear_cost = resources_selection.nuyen_spent if resources_selection is not None else 0
+            try:
+                lifestyle_selection = create_lifestyle_selection(tier_name, months, LIFESTYLES)
+                new_resources_selection = create_resources_selection(
+                    session.resources_letter,
+                    PRIORITIES,
+                    gear_names,
+                    lifestyle_cost=lifestyle_selection.total_cost,
+                )
+            except ValueError as exc:
+                context = _lifestyle_context(
+                    session.character,
+                    session.resources_letter,
+                    tier_name,
+                    months,
+                    gear_cost,
+                    error=str(exc),
+                )
+            else:
+                session.character = replace(
+                    session.character,
+                    lifestyle_selection=lifestyle_selection,
+                    resources_selection=new_resources_selection,
+                )
+                context = _lifestyle_context(
+                    session.character, session.resources_letter, tier_name, months, gear_cost
+                )
+        response = templates.TemplateResponse(request, "_lifestyle.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
         return response
@@ -1228,6 +1466,7 @@ def create_app() -> FastAPI:
                     priorities=PRIORITIES,
                     skills=SKILLS,
                     qualities=QUALITIES,
+                    lifestyles=LIFESTYLES,
                 )
             # A user-supplied file's shape is never trusted beyond this point -- malformed JSON
             # (ValueError, via json.JSONDecodeError/UnicodeDecodeError), a missing field
@@ -1270,6 +1509,7 @@ def create_app() -> FastAPI:
                         priorities=PRIORITIES,
                         skills=SKILLS,
                         qualities=QUALITIES,
+                        lifestyles=LIFESTYLES,
                     )
                 except UnsupportedLegacyCharacterError as exc:
                     error = "Cannot import: " + "; ".join(exc.reasons)

@@ -40,6 +40,13 @@ selected item is in that small catalog and that the total cost doesn't exceed th
 nuyen budget — there's no equivalent "real characters exceed this" escape hatch here, since nuyen
 (unlike contact points) has no legacy provision for going over budget by paying with something
 else at chargen.
+
+**Lifestyle (WP20).** `chummer5.engine.lifestyle.LifestyleSelection` (the mandatory primary-
+Lifestyle purchase, core rulebook p. 369) draws from this same nuyen budget rather than a separate
+one — `create_resources_selection`'s `lifestyle_cost` parameter folds its already-computed total
+cost into the one joint over-budget check, instead of `chummer5.engine.lifestyle` duplicating a
+second budget validator of its own. See that module's docstring for why lifestyle cost validation
+lives here and not there.
 """
 
 from __future__ import annotations
@@ -146,13 +153,22 @@ STARTER_GEAR_CATALOG: tuple[StarterGearItem, ...] = (
 
 @dataclass(frozen=True)
 class ResourcesSelection:
-    """A Resources-priority-letter's nuyen budget plus a validated starter-gear spend."""
+    """A Resources-priority-letter's nuyen budget plus a validated starter-gear spend.
+
+    **WP20**: `lifestyle_cost` (default 0) is the character's separately-selected
+    `chummer5.engine.lifestyle.LifestyleSelection.total_cost`, folded into `nuyen_remaining` here
+    rather than in a second, independent check -- see `create_resources_selection`'s docstring and
+    `chummer5.engine.lifestyle`'s module docstring for why the two selections share one budget.
+    `nuyen_spent` itself stays gear-only (unchanged meaning from WP9), so existing callers reading
+    "how much was spent on gear" don't need to account for lifestyle separately.
+    """
 
     resources_letter: str
     nuyen_budget: int
     gear: tuple[StarterGearItem, ...]
     nuyen_spent: int
     nuyen_remaining: int
+    lifestyle_cost: int = 0
 
 
 def starting_nuyen(letter: str, priorities: PriorityTable) -> int:
@@ -164,13 +180,19 @@ def create_resources_selection(
     priorities: PriorityTable,
     gear_names: Iterable[str],
     catalog: Iterable[StarterGearItem] = STARTER_GEAR_CATALOG,
+    *,
+    lifestyle_cost: int = 0,
 ) -> ResourcesSelection:
-    """Build a `ResourcesSelection`, validating the gear spend against the nuyen budget.
+    """Build a `ResourcesSelection`, validating the combined gear + lifestyle spend against the
+    nuyen budget.
 
     Validates: every name in `gear_names` is a `catalog` item's name (repeats allowed -- buying two
     Certified Credsticks is a normal purchase, unlike a quality or skill that can't be picked
-    twice); summed cost doesn't exceed `letter`'s nuyen budget. Does not require the full budget to
-    be spent, mirroring WP6/WP7/WP8's identical choice.
+    twice); `gear` cost plus `lifestyle_cost` together don't exceed `letter`'s nuyen budget (WP20:
+    a character's primary Lifestyle draws from this same pool, confirmed against every one of the
+    11 curated mundane fixtures -- see `spec/rulebooks/learnings.md`'s WP20 entry). Does not
+    require the full budget to be spent, mirroring WP6/WP7/WP8's identical choice. `lifestyle_cost`
+    defaults to 0 so every pre-WP20 call site (gear-only, no lifestyle yet selected) is unaffected.
     """
     by_name = {item.name: item for item in catalog}
     names = list(gear_names)
@@ -182,7 +204,13 @@ def create_resources_selection(
     selected = tuple(by_name[name] for name in names)
     budget = starting_nuyen(letter, priorities)
     spent = sum(item.cost for item in selected)
-    if spent > budget:
+    total_spent = spent + lifestyle_cost
+    if total_spent > budget:
+        if lifestyle_cost:
+            raise ValueError(
+                f"gear ({spent}) + lifestyle ({lifestyle_cost}) spend {total_spent} exceeds "
+                f"Resources priority {letter}'s nuyen budget of {budget}"
+            )
         raise ValueError(
             f"gear spend {spent} exceeds Resources priority {letter}'s nuyen budget of {budget}"
         )
@@ -192,5 +220,6 @@ def create_resources_selection(
         nuyen_budget=budget,
         gear=selected,
         nuyen_spent=spent,
-        nuyen_remaining=budget - spent,
+        nuyen_remaining=budget - total_spent,
+        lifestyle_cost=lifestyle_cost,
     )

@@ -24,6 +24,7 @@ from tests.fixtures.mundane_chum5 import (
     mundane_fixture_path,
 )
 
+from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import Metatype, load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
@@ -45,6 +46,7 @@ from chummer5.engine.derived import (
     stun_condition_monitor,
 )
 from chummer5.engine.improvements import ImprovementIndex, ImprovementType
+from chummer5.engine.lifestyle import create_lifestyle_selection
 from chummer5.engine.qualities import apply_quality_improvements, create_quality_selection
 from chummer5.engine.resources import (
     Contact,
@@ -59,6 +61,7 @@ METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
+LIFESTYLES = load_lifestyles()
 
 
 def test_yeti_priority_build_matches_engine_end_to_end() -> None:
@@ -264,6 +267,27 @@ def test_cross_corpus_contact_free_budget_matches_cha_times_three() -> None:
     assert checked == len(MUNDANE_FIXTURES)
 
 
+def test_cross_corpus_lifestyle_cost_matches_tier_monthly_rate_times_months() -> None:
+    """WP20: every mundane fixture's primary Lifestyle (the first `<lifestyle>` entry -- see
+    `chummer5.io.legacy_import`'s module docstring for why "first" is this project's own
+    "primary" convention) reproduces `chummer5.engine.lifestyle.create_lifestyle_selection`'s
+    `tier.monthly_cost * months` formula against real legacy-computed data -- build-method-
+    agnostic, the same "all 11, not just Yeti" scope every prior WP's *derived-value* fixture test
+    uses (see tests/fixtures/README.md), since a Lifestyle's cost has nothing to do with how the
+    rest of the character's points were allocated.
+    """
+    checked = 0
+    for fixture_name in MUNDANE_FIXTURES:
+        legacy = load_chum5(mundane_fixture_path(fixture_name))
+        assert legacy.lifestyles, fixture_name
+        primary = legacy.lifestyles[0]
+        selection = create_lifestyle_selection(primary.base_lifestyle, primary.months, LIFESTYLES)
+        assert selection.tier.monthly_cost == primary.monthly_cost, fixture_name
+        assert selection.total_cost == primary.monthly_cost * primary.months, fixture_name
+        checked += 1
+    assert checked == len(MUNDANE_FIXTURES)
+
+
 def test_yeti_contacts_match_engine_end_to_end() -> None:
     """Yeti's two contacts ((3,3) and (5,4)) sum to exactly its free budget (15 == CHA 5 * 3), so
     `karma_cost` comes out to 0 -- a clean, real-data confirmation of both the budget formula and
@@ -377,8 +401,22 @@ def test_yeti_full_character_regression_end_to_end() -> None:
     # starter-gear stub (see spec/worklogs/WP9.md), so only the nuyen budget itself is checked.
     resources_letter = priority_letter(legacy.priorities.resources)
     assert starting_nuyen(resources_letter, PRIORITIES) == legacy.starting_nuyen
-    resources_selection = create_resources_selection(resources_letter, PRIORITIES, gear_names=())
+
+    # Lifestyle (WP20) -- unlike gear, Yeti's real primary Lifestyle *is* reconstructable, so it's
+    # wired into the same joint nuyen-budget check gear draws from.
+    assert legacy.lifestyles[0].base_lifestyle == "Low"
+    lifestyle_selection = create_lifestyle_selection(
+        legacy.lifestyles[0].base_lifestyle, legacy.lifestyles[0].months, LIFESTYLES
+    )
+    assert lifestyle_selection.total_cost == 2000
+    resources_selection = create_resources_selection(
+        resources_letter,
+        PRIORITIES,
+        gear_names=(),
+        lifestyle_cost=lifestyle_selection.total_cost,
+    )
     assert resources_selection.nuyen_budget == legacy.starting_nuyen
+    assert resources_selection.nuyen_remaining == legacy.starting_nuyen - 2000
 
     # Derived stats -- hand-computed from Yeti's own recorded attribute totals (see docstring).
     assert (character.attribute_value("BOD"), character.attribute_value("REA")) == (4, 2)

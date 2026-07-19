@@ -75,6 +75,13 @@
   <p>None.</p>
   {% endif %}
 
+  <h3>Lifestyle</h3>
+  {% if lifestyle_tier_name %}
+  <p>{{ lifestyle_tier_name }} ({{ lifestyle_months }} month{{ 's' if lifestyle_months != 1 else '' }}, {{ lifestyle_cost }}¥).</p>
+  {% else %}
+  <p>None selected.</p>
+  {% endif %}
+
   <h3>Gear</h3>
   {% if gear_rows %}
   <ul>

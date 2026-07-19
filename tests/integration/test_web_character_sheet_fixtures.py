@@ -11,6 +11,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from tests.fixtures.mundane_chum5 import PRIORITY_BUILD_FIXTURE, mundane_fixture_path
 
+from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
@@ -31,6 +32,7 @@ METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
+LIFESTYLES = load_lifestyles()
 
 
 def test_importing_yeti_through_the_web_layer_matches_the_engine_directly() -> None:
@@ -40,6 +42,7 @@ def test_importing_yeti_through_the_web_layer_matches_the_engine_directly() -> N
         priorities=PRIORITIES,
         skills=SKILLS,
         qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
     )
     expected_character = expected.built
 
@@ -68,9 +71,11 @@ def test_importing_yeti_through_the_web_layer_matches_the_engine_directly() -> N
     assert f"{stun_condition_monitor(expected_character)} boxes" in sheet.text
     assert f"{initiative_dice(expected_character)}D6" in sheet.text
 
-    # The imported contacts/gear/nuyen also show up on the sheet, matching the direct-import path.
+    # The imported contacts/gear/lifestyle/nuyen also show up on the sheet, matching the
+    # direct-import path.
     for contact in expected.built.contact_selection.contacts:
         assert contact.name in sheet.text
+    assert expected.built.lifestyle_selection.tier.name in sheet.text
     assert (
         f"Nuyen remaining: {expected.built.resources_selection.nuyen_remaining} / "
         f"{expected.built.resources_selection.nuyen_budget}."
