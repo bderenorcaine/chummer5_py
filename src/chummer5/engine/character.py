@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     # `dataclasses.dataclass` never needs these names to actually resolve at import time.
     from chummer5.data.traditions import Tradition
     from chummer5.engine.lifestyle import LifestyleSelection
-    from chummer5.engine.magic import SpellSelection
+    from chummer5.engine.magic import PowerSelection, SpellSelection
     from chummer5.engine.qualities import QualitySelection
     from chummer5.engine.resources import ContactSelection, ResourcesSelection
     from chummer5.engine.skills import SkillAllocation
@@ -181,6 +181,14 @@ class Character:
     spell is a chargen-time roster entry, not a computed value -- see `chummer5.engine.magic`'s
     module docstring), so it stays a single wrapping field (mirrors `quality_selection`/
     `contact_selection`'s shape) rather than being flattened the way the Phase I magic fields were.
+
+    **WP27** adds `power_selection: PowerSelection | None` -- an Adept's purchased Powers, the same
+    "`None` until committed" wrapping-field shape as `spell_selection` (nothing reads it piecemeal
+    either). Unlike a spell, a purchased Power's `FLAT_BONUS` effects *do* feed `improvements` (via
+    `chummer5.engine.magic.apply_power_improvements`, mirroring `quality_selection`'s relationship
+    to `apply_quality_improvements`) -- `power_selection` itself still just holds the validated
+    roster + Power Point spend, the same "selection is a record, Improvements are a side effect of
+    applying it" split every prior selection type already has.
     """
 
     metatype: Metatype
@@ -200,6 +208,7 @@ class Character:
     tradition: Tradition | None = None  # Magician only (WP25)
     magic_granted_skill_ids: tuple[str, ...] = ()  # the Talent free-skill grant's picks (WP25)
     spell_selection: SpellSelection | None = None  # Magician's chosen spells (WP26)
+    power_selection: PowerSelection | None = None  # Adept's purchased Powers (WP27)
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]

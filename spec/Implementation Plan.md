@@ -737,7 +737,7 @@ than this phase silently guessing at generality it doesn't need yet.
   all 10 of her real spell names resolve against the SR5-scoped catalog — flag, don't silently drop,
   any that don't.
 
-- [ ] **WP27 — Adept power selection.**
+- [x] **WP27 — Adept power selection.**
   Goal: let an Adept spend Power Points on Adept Powers.
 
   **A real trap, caught before implementation rather than after: `<bonus><selectattribute>` is not

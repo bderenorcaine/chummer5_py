@@ -71,13 +71,17 @@ class ImprovementSource(Enum):
     4th: `TALENT`, for the Talent-option free-skill grant (`chummer5.engine.magic
     .apply_magic_skill_grant_improvements`) — a real Improvement source, but not a "priority-derived
     bonus" in the WP5-era sense (`PRIORITY` has never had a real producer; see that member's own
-    note), so it gets its own name rather than overloading `PRIORITY`.
+    note), so it gets its own name rather than overloading `PRIORITY`. WP27 adds a 5th:
+    `ADEPT_POWER`, for `chummer5.engine.magic.apply_power_improvements` — each selected power is
+    its own source instance (keyed by the power's own id, mirroring `QUALITY`'s per-quality
+    `source_id`), distinct from `TALENT`'s single shared grant.
     """
 
     METATYPE = auto()
     QUALITY = auto()
     PRIORITY = auto()
     TALENT = auto()
+    ADEPT_POWER = auto()
 
 
 @dataclass(frozen=True)

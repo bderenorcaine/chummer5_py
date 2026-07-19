@@ -1,20 +1,25 @@
 from dataclasses import replace
+from decimal import Decimal
 from types import MappingProxyType
 
 import pytest
 
 from chummer5.data.metatypes import load_metatypes
+from chummer5.data.powers import load_powers
 from chummer5.data.priorities import load_priorities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import Character, create_character, metatype_choices
-from chummer5.engine.improvements import ImprovementType
+from chummer5.engine.improvements import ImprovementSource, ImprovementType
 from chummer5.engine.magic import (
     MagicSelection,
+    PowerSelection,
     SpellSelection,
     apply_magic_skill_grant_improvements,
+    apply_power_improvements,
     create_magic_selection,
+    create_power_selection,
     create_spell_selection,
     magic_skill_grant_eligible_skills,
     offered_talent_options,
@@ -25,6 +30,7 @@ PRIORITIES = load_priorities()
 TRADITIONS = load_traditions()
 SKILLS = load_skills()
 SPELLS = load_spells()
+POWERS = load_powers()
 METATYPES = load_metatypes()
 
 HERMETIC_ID = next(t.id for t in TRADITIONS if t.name == "Hermetic")
@@ -291,3 +297,179 @@ def test_spell_selection_zero_budget_rejects_any_pick() -> None:
 def test_spell_selection_empty_pick_with_zero_budget_is_fine() -> None:
     selection = create_spell_selection([], SPELLS, budget=0)
     assert selection == SpellSelection(spells=(), budget=0)
+
+
+# -- create_power_selection (WP27) -----------------------------------------------------------
+
+ENHANCED_PERCEPTION_ID = next(p.id for p in POWERS if p.name == "Enhanced Perception")
+IMPROVED_PHYSICAL_ATTRIBUTE_ID = next(
+    p.id for p in POWERS if p.name == "Improved Physical Attribute"
+)
+IMPROVED_POTENTIAL_PHYSICAL_ID = next(
+    p.id for p in POWERS if p.name == "Improved Potential (Physical)"
+)
+VOICE_CONTROL_ID = next(p.id for p in POWERS if p.name == "Voice Control")
+ATTRIBUTE_BOOST_ID = next(p.id for p in POWERS if p.name == "Attribute Boost")  # NOT_YET_SUPPORTED
+
+
+def test_power_selection_within_budget() -> None:
+    selection = create_power_selection(
+        [(ENHANCED_PERCEPTION_ID, 1, None)], POWERS, power_point_budget=4
+    )
+    assert selection.power_points_spent == Decimal("0.5")
+    assert selection.power_point_budget == 4
+    assert len(selection.picks) == 1
+    assert selection.picks[0].power.name == "Enhanced Perception"
+    assert selection.picks[0].rating == 1
+    assert selection.picks[0].selected_attribute is None
+
+
+def test_power_selection_allows_partial_spend() -> None:
+    selection = create_power_selection([], POWERS, power_point_budget=4)
+    assert selection == PowerSelection(
+        picks=(), power_points_spent=Decimal(0), power_point_budget=4
+    )
+
+
+def test_power_selection_rejects_unknown_id() -> None:
+    with pytest.raises(ValueError, match="not an MVP-offered power id"):
+        create_power_selection([("not-a-real-id", 1, None)], POWERS, power_point_budget=4)
+
+
+def test_power_selection_rejects_not_yet_supported_power() -> None:
+    # Attribute Boost is a real SR5 power but NOT_YET_SUPPORTED (see test_powers.py) -- it's
+    # excluded from mvp_power_catalog, so it's rejected the same way an unknown id is.
+    with pytest.raises(ValueError, match="not an MVP-offered power id"):
+        create_power_selection([(ATTRIBUTE_BOOST_ID, 1, None)], POWERS, power_point_budget=4)
+
+
+def test_power_selection_rejects_duplicate_pick() -> None:
+    with pytest.raises(ValueError, match="selected more than once"):
+        create_power_selection(
+            [(ENHANCED_PERCEPTION_ID, 1, None), (ENHANCED_PERCEPTION_ID, 1, None)],
+            POWERS,
+            power_point_budget=4,
+        )
+
+
+def test_power_selection_rejects_exceeding_budget() -> None:
+    # Improved Physical Attribute costs 1 PP/level; rating 3 = 3 PP, over a budget of 2.
+    with pytest.raises(ValueError, match="out of range 1..2"):
+        create_power_selection(
+            [(IMPROVED_PHYSICAL_ATTRIBUTE_ID, 3, "BOD")], POWERS, power_point_budget=2
+        )
+
+
+def test_power_selection_rejects_total_spend_exceeding_budget() -> None:
+    # Two picks each individually within their own rating cap, but their summed cost exceeds budget.
+    with pytest.raises(ValueError, match="exceeding the budget of 1"):
+        create_power_selection(
+            [
+                (IMPROVED_PHYSICAL_ATTRIBUTE_ID, 1, "BOD"),
+                (IMPROVED_POTENTIAL_PHYSICAL_ID, 1, None),
+            ],
+            POWERS,
+            power_point_budget=1,
+        )
+
+
+def test_power_selection_rejects_rating_below_one() -> None:
+    with pytest.raises(ValueError, match="out of range 1.."):
+        create_power_selection([(ENHANCED_PERCEPTION_ID, 0, None)], POWERS, power_point_budget=4)
+
+
+def test_power_selection_rejects_rating_above_power_point_budget_cap() -> None:
+    # Rulebook p.308: max levels of any one power is the lesser of the power's own limit and the
+    # Magic rating. Voice Control's own limit is 20, but a budget of 2 caps it at 2.
+    with pytest.raises(ValueError, match="out of range 1..2"):
+        create_power_selection([(VOICE_CONTROL_ID, 3, None)], POWERS, power_point_budget=2)
+
+
+def test_power_selection_rejects_nonlevels_power_with_rating_other_than_one() -> None:
+    with pytest.raises(ValueError, match="has no levels; rating must be 1"):
+        create_power_selection(
+            [(IMPROVED_POTENTIAL_PHYSICAL_ID, 2, None)], POWERS, power_point_budget=4
+        )
+
+
+def test_power_selection_select_attribute_requires_selected_attribute() -> None:
+    with pytest.raises(ValueError, match="requires a selected attribute"):
+        create_power_selection(
+            [(IMPROVED_PHYSICAL_ATTRIBUTE_ID, 1, None)], POWERS, power_point_budget=4
+        )
+
+
+def test_power_selection_select_attribute_rejects_ineligible_attribute() -> None:
+    with pytest.raises(ValueError, match="not eligible"):
+        create_power_selection(
+            [(IMPROVED_PHYSICAL_ATTRIBUTE_ID, 1, "LOG")], POWERS, power_point_budget=4
+        )
+
+
+def test_power_selection_rejects_selected_attribute_when_not_needed() -> None:
+    with pytest.raises(ValueError, match="does not accept a selected attribute"):
+        create_power_selection(
+            [(ENHANCED_PERCEPTION_ID, 1, "BOD")], POWERS, power_point_budget=4
+        )
+
+
+def test_power_selection_select_attribute_success() -> None:
+    selection = create_power_selection(
+        [(IMPROVED_PHYSICAL_ATTRIBUTE_ID, 2, "AGI")], POWERS, power_point_budget=4
+    )
+    assert selection.power_points_spent == Decimal("2")
+    assert selection.picks[0].selected_attribute == "AGI"
+    assert selection.picks[0].rating == 2
+
+
+# -- apply_power_improvements ------------------------------------------------------------------
+
+
+def test_apply_power_improvements_select_attribute_raises_the_chosen_attribute() -> None:
+    character = _mundane_human()
+    selection = create_power_selection(
+        [(IMPROVED_PHYSICAL_ATTRIBUTE_ID, 2, "AGI")], POWERS, power_point_budget=4
+    )
+    apply_power_improvements(character, selection)
+    assert character.improvements.resolve(ImprovementType.ATTRIBUTE, "AGI") == 2
+    assert character.improvements.resolve(ImprovementType.ATTRIBUTE, "BOD") == 0
+
+
+def test_apply_power_improvements_limit_bonus() -> None:
+    character = _mundane_human()
+    selection = create_power_selection(
+        [(IMPROVED_POTENTIAL_PHYSICAL_ID, 1, None)], POWERS, power_point_budget=4
+    )
+    apply_power_improvements(character, selection)
+    assert character.improvements.resolve(ImprovementType.PHYSICAL_LIMIT, "") == 1
+
+
+def test_apply_power_improvements_enhanced_perception_raises_two_named_skills() -> None:
+    # Enhanced Perception's own <limit> is 1 (confirmed in the raw XML) despite levels=True, so
+    # rating is capped at 1 regardless of Power Point budget.
+    character = _mundane_human()
+    selection = create_power_selection(
+        [(ENHANCED_PERCEPTION_ID, 1, None)], POWERS, power_point_budget=4
+    )
+    apply_power_improvements(character, selection)
+    assert character.improvements.resolve(ImprovementType.SKILL, "Perception") == 1
+    assert character.improvements.resolve(ImprovementType.SKILL, "Assensing") == 1
+
+
+def test_apply_power_improvements_voice_control_raises_limit_and_skill_together() -> None:
+    character = _mundane_human()
+    selection = create_power_selection([(VOICE_CONTROL_ID, 3, None)], POWERS, power_point_budget=4)
+    apply_power_improvements(character, selection)
+    assert character.improvements.resolve(ImprovementType.SOCIAL_LIMIT, "") == 3
+    assert character.improvements.resolve(ImprovementType.SKILL, "Impersonation") == 3
+
+
+def test_apply_power_improvements_source_id_is_the_powers_own_id() -> None:
+    character = _mundane_human()
+    selection = create_power_selection(
+        [(IMPROVED_POTENTIAL_PHYSICAL_ID, 1, None)], POWERS, power_point_budget=4
+    )
+    apply_power_improvements(character, selection)
+    (improvement,) = character.improvements.improvements
+    assert improvement.source_type == ImprovementSource.ADEPT_POWER
+    assert improvement.source_id == IMPROVED_POTENTIAL_PHYSICAL_ID
