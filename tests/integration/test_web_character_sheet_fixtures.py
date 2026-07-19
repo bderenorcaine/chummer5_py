@@ -88,11 +88,11 @@ def test_importing_a_blocked_legacy_character_through_the_web_layer_reports_ever
     unresolvable_tradition` to isolate that blocking reason against real data (WP28 replaced the
     older blanket "Magic is enabled" rejection this test used to check for); this test confirms the
     same rejection surfaces correctly through the web route, not just the underlying `import_chum5`
-    call. The web layer itself needs no changes for this -- `import_chum5`'s new `traditions`/
-    `spells`/`powers` parameters all default to `()` (see `chummer5.io.save_format`'s WP28
-    docstring), and an empty tradition catalog already can't resolve Miko's Shinto tradition either
-    way, so `chummer5.web.app`'s existing call site (which passes none of the three, since real
-    Talent selection isn't a web feature until WP29) still produces the correct rejection.
+    call. **WP29** wires `chummer5.web.app`'s import route up to the real `TRADITIONS`/`SPELLS`/
+    `POWERS` catalogs (previously all defaulted to `()`, since no web feature consumed them before
+    this WP) -- the assertion here is unchanged either way, since Miko's tradition (Shinto, `SG`-
+    sourced) still isn't one of the real 2-entry SR5 catalog's names any more than it was resolvable
+    against an empty one.
     """
     from tests.fixtures.mundane_chum5 import LEGACY_TESTFILES_DIR
 

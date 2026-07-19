@@ -1,0 +1,53 @@
+<div id="spell-selection">
+  {% if character and character.magic_type == "Magician" %}
+  <h2>Spells</h2>
+
+  {% if spell_error %}
+  <p class="error">{{ spell_error }}</p>
+  {% endif %}
+
+  <p>Spells chosen: {{ spells_selected }} / {{ spell_budget }} ({{ spells_remaining }} remaining).</p>
+
+  <form
+    hx-post="/ui/spells"
+    hx-target="#spell-selection"
+    hx-swap="outerHTML"
+    hx-trigger="change"
+  >
+    <table>
+      <thead>
+        <tr>
+          <th>Select</th>
+          <th>Spell</th>
+          <th>Category</th>
+          <th>Type</th>
+          <th>Range</th>
+          <th>Duration</th>
+          <th>DV</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in spell_rows %}
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              name="spell_id"
+              value="{{ row.spell.id }}"
+              {% if row.selected %}checked{% endif %}
+            />
+          </td>
+          <td>{{ row.spell.name }}</td>
+          <td>{{ row.spell.category }}</td>
+          <td>{{ row.spell.type }}</td>
+          <td>{{ row.spell.range }}</td>
+          <td>{{ row.spell.duration }}</td>
+          <td>{{ row.spell.dv }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Update spells</button>
+  </form>
+  {% endif %}
+</div>

@@ -1,0 +1,52 @@
+<div id="talent-selection">
+  {% if character %}
+  <h2>Talent</h2>
+  <p>
+    Talent priority {{ talent_letter }} — {{ talent_letter_name }}.
+    {% if character.magic_type %}
+    Confirmed: {{ character.magic_type }}{% if character.tradition %} ({{ character.tradition.name }}){% endif %} —
+    Magic {{ character.magic_rating }}.
+    {% else %}
+    Not yet confirmed — MVP defaults to Mundane until you confirm below.
+    {% endif %}
+  </p>
+
+  {% if talent_error %}
+  <p class="error">{{ talent_error }}</p>
+  {% endif %}
+  {% if talent_budget_warning %}
+  <p class="warning">{{ talent_budget_warning }}</p>
+  {% endif %}
+
+  <form
+    id="talent-form"
+    hx-post="/ui/talent"
+    hx-target="#talent-selection"
+    hx-swap="outerHTML"
+  >
+    <input type="hidden" name="talent_letter" value="{{ talent_letter }}" />
+
+    {% for option in talent_options %}
+    <label>
+      <input
+        type="radio"
+        name="talent_codename"
+        value="{{ option.codename }}" {% if option.codename == selected_codename %}checked{% endif %}
+        hx-get="/ui/talent-options"
+        hx-trigger="change"
+        hx-target="#talent-options-fragment"
+        hx-swap="outerHTML"
+        hx-include="[name='talent_letter'], [name='talent_codename']:checked"
+      />
+      {{ option.name }}
+    </label>
+    {% endfor %}
+
+    {% include "_talent_options.html" %}
+
+    <button type="submit">Confirm Talent</button>
+  </form>
+  {% else %}
+  <p>Confirm a metatype and priorities above before selecting Talent.</p>
+  {% endif %}
+</div>

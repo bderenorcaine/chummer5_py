@@ -836,7 +836,7 @@ than this phase silently guessing at generality it doesn't need yet.
   non-SR5-tradition or non-offered-codename fixture, of which the corpus has several among the 23
   non-mundane fixtures) produces a specific itemized reason, not a crash.
 
-- [ ] **WP29 — Magic chargen UI + character sheet.**
+- [x] **WP29 — Magic chargen UI + character sheet.**
   Goal: expose Talent/tradition/spell/power selection through the browser, and show Magic
   rating/spells/powers/Drain on the character sheet.
   Deliverables:

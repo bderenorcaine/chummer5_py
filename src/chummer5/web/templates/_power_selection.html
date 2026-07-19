@@ -1,0 +1,62 @@
+<div id="power-selection">
+  {% if character and character.magic_type == "Adept" %}
+  <h2>Adept Powers</h2>
+
+  {% if power_error %}
+  <p class="error">{{ power_error }}</p>
+  {% endif %}
+
+  <p>
+    Power Points spent: {{ power_points_spent }} / {{ power_point_budget }}
+    ({{ power_points_remaining }} remaining).
+  </p>
+
+  <form
+    hx-post="/ui/powers"
+    hx-target="#power-selection"
+    hx-swap="outerHTML"
+    hx-trigger="change"
+  >
+    <table>
+      <thead>
+        <tr>
+          <th>Power</th>
+          <th>Points/level</th>
+          <th>Rating</th>
+          <th>Attribute</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in power_rows %}
+        <tr>
+          <td>{{ row.power.name }}</td>
+          <td>{{ row.power.points }}</td>
+          <td>
+            <input
+              type="number"
+              name="power_rating_{{ row.power.id }}"
+              min="0"
+              max="{{ row.power.limit }}"
+              value="{{ row.rating }}"
+            />
+          </td>
+          <td>
+            {% if row.attribute_options %}
+            <select name="power_attribute_{{ row.power.id }}">
+              <option value="">--</option>
+              {% for attribute in row.attribute_options %}
+              <option value="{{ attribute }}" {% if attribute == row.selected_attribute %}selected{% endif %}>
+                {{ attribute }}
+              </option>
+              {% endfor %}
+            </select>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Update powers</button>
+  </form>
+  {% endif %}
+</div>

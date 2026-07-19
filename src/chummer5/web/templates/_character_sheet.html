@@ -44,6 +44,41 @@
   <p>No skills rated above 0.</p>
   {% endif %}
 
+  {% if magic_type %}
+  <h3>Magic</h3>
+  <ul>
+    <li>Type: {{ magic_type }}</li>
+    <li>Magic rating: {{ magic_rating }}</li>
+    {% if tradition_name %}
+    <li>Tradition: {{ tradition_name }}</li>
+    {% endif %}
+    {% if magic_type == "Adept" %}
+    <li>Power Points: {{ power_points }}</li>
+    {% endif %}
+    <li>Drain Resistance: {{ drain_resistance }}</li>
+  </ul>
+
+  {% if spell_names %}
+  <h4>Spells</h4>
+  <ul>
+    {% for name in spell_names %}
+    <li>{{ name }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if power_rows %}
+  <h4>Adept Powers</h4>
+  <ul>
+    {% for row in power_rows %}
+    <li>
+      {{ row.name }} (rating {{ row.rating }}{% if row.selected_attribute %}, {{ row.selected_attribute }}{% endif %})
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% endif %}
+
   <h3>Qualities</h3>
   {% if quality_names %}
   <ul>

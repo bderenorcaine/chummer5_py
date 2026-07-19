@@ -114,6 +114,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -126,9 +127,12 @@ from starlette.datastructures import FormData, UploadFile
 
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
+from chummer5.data.powers import Power, load_powers
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
+from chummer5.data.spells import load_spells
+from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import (
     ALLOCATABLE_ATTRIBUTES,
     PRIMARY_ATTRIBUTES,
@@ -139,6 +143,7 @@ from chummer5.engine.character import (
     metatype_choices,
 )
 from chummer5.engine.derived import (
+    drain_resistance,
     initiative_dice,
     initiative_value,
     mental_limit,
@@ -152,6 +157,19 @@ from chummer5.engine.lifestyle import (
     MAX_LIFESTYLE_MONTHS,
     MIN_LIFESTYLE_MONTHS,
     create_lifestyle_selection,
+)
+from chummer5.engine.magic import (
+    MAGIC_SKILL_GRANT_SOURCE_ID,
+    MagicSelection,
+    PowerSelection,
+    apply_magic_skill_grant_improvements,
+    apply_power_improvements,
+    create_magic_selection,
+    create_power_selection,
+    create_spell_selection,
+    magic_skill_grant_eligible_skills,
+    mvp_power_catalog,
+    offered_talent_options,
 )
 from chummer5.engine.qualities import (
     QUALITY_KARMA_LIMIT,
@@ -187,6 +205,7 @@ from chummer5.io.legacy_import import (
     import_chum5,
 )
 from chummer5.io.save_format import (
+    DEFAULT_TALENT_CODENAME,
     CharacterSave,
     build_character,
     create_character_save,
@@ -194,7 +213,6 @@ from chummer5.io.save_format import (
     to_json,
 )
 from chummer5.web.session import (
-    DEFAULT_TALENT_LETTER,
     PRIORITY_LETTERS,
     SESSION_COOKIE_NAME,
     ChargenSession,
@@ -212,10 +230,18 @@ PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
+# WP29 (Phase I's UI): Talent/tradition/spell/power catalogs, loaded once like every other
+# `chummer5.data` catalog above.
+TRADITIONS = load_traditions()
+SPELLS = load_spells()
+POWERS = load_powers()
 
 # The MVP-offered quality catalog (see chummer5.engine.qualities): 3 FLAT_BONUS qualities, all
 # Positive. Computed once, mirroring MUNDANE_SKILLS/MUNDANE_SKILL_GROUPS below.
 MVP_QUALITIES = mvp_quality_catalog(QUALITIES)
+
+# The MVP-offered Adept Power catalog (see chummer5.engine.magic): 6 FLAT_BONUS powers.
+MVP_POWERS = mvp_power_catalog(POWERS)
 
 # WP20: the tier/months a fresh (or not-yet-visited) Lifestyle section pre-fills -- "Street" is the
 # rulebook's own free tier ("Hey pal, life ain't all bad. It's free."), so this default never costs
@@ -229,14 +255,21 @@ DEFAULT_LIFESTYLE_MONTHS = MIN_LIFESTYLE_MONTHS
 # dynamic HTML. A row with a blank name is treated as "no contact here" by `_parse_contacts`.
 MAX_CONTACT_ROWS = 8
 
-# MVP is mundane-only (Talent forced to E -- see Project Overview's MVP scope), so a fresh
-# character's MAG/RES are always 0 and can never be raised in chargen. The 12 skills linked to
-# those attributes (Alchemy, Summoning, Compiling, ...) would show a permanently-crippled dice
-# pool (rating + 0, and none of them allow defaulting) if offered here -- excluded from the
+# MVP's regular Skills-priority point-buy UI stays mundane-only even after WP29 -- a Mundane
+# character's MAG/RES are always 0 and can never be raised in chargen (RES/Resonance stays out of
+# scope permanently, per the Project Overview), and the 12 skills linked to those attributes
+# (Alchemy, Summoning, Compiling, ...) would show a permanently-crippled dice pool (rating + 0, and
+# none of them allow defaulting) if offered here for a Mundane build -- excluded from the
 # allocation UI for the same "excluded, not silently broken" reason WP2/WP3 exclude non-SR5
 # metatypes/qualities from their catalogs. This is a UI-layer curation, not an engine change:
 # `create_skill_allocation` itself is still generic and would accept points on these skills if
-# submitted directly (e.g. via a hand-crafted request).
+# submitted directly (e.g. via a hand-crafted request). **WP29 note**: a Magician's Talent
+# free-skill grant can still raise a Magical Active skill's rating above 0 via a pure Improvement,
+# entirely independent of this buy UI (see `chummer5.engine.magic
+# .apply_magic_skill_grant_improvements`'s own docstring) -- widening `MUNDANE_SKILLS` itself so a
+# Magician/Adept could spend *additional* Skills-priority points on Magical Active skills beyond
+# that grant is a real, deliberately deferred follow-on (see this WP's worklog), not something this
+# constant's exclusion silently breaks.
 _MAGIC_ATTRIBUTES = ("MAG", "RES")
 MUNDANE_SKILLS = tuple(
     sorted((s for s in SKILLS if s.attribute not in _MAGIC_ATTRIBUTES), key=lambda s: s.name)
@@ -244,6 +277,10 @@ MUNDANE_SKILLS = tuple(
 MUNDANE_SKILL_GROUPS = tuple(
     sorted({s.skill_group for s in MUNDANE_SKILLS if s.skill_group is not None})
 )
+# WP29: the character sheet's read-only skill list needs every skill (so a Magician's granted
+# Magical Active skill shows up there too, see `_character_sheet_context`), sorted the same way
+# `MUNDANE_SKILLS` already is.
+ALL_SKILLS_SORTED = tuple(sorted(SKILLS, key=lambda s: s.name))
 
 
 def _priority_form_context(
@@ -384,6 +421,31 @@ def _parse_lifestyle_months(form: FormData) -> int:
         return int(str(raw)) if raw is not None else 0
     except ValueError:
         return 0
+
+
+def _parse_power_picks(
+    form: FormData, catalog: Iterable[Power]
+) -> tuple[tuple[str, int, str | None], ...]:
+    """Read `power_rating_{id}`/`power_attribute_{id}` fields off a submitted form into
+    `create_power_selection`'s own `(power_id, rating, selected_attribute)` triple shape (WP29).
+
+    A rating of 0 (the default for a power the player didn't touch) means "not purchased" -- the
+    same "absence means 0" convention `_parse_points` already established -- so it's simply omitted
+    from the result rather than passed through as an invalid `rating < 1` pick.
+    """
+    picks: list[tuple[str, int, str | None]] = []
+    for power in catalog:
+        raw_rating = form.get(f"power_rating_{power.id}")
+        try:
+            rating = int(str(raw_rating)) if raw_rating is not None else 0
+        except ValueError:
+            rating = 0
+        if rating <= 0:
+            continue
+        raw_attribute = form.get(f"power_attribute_{power.id}")
+        selected_attribute = str(raw_attribute) if raw_attribute else None
+        picks.append((power.id, rating, selected_attribute))
+    return tuple(picks)
 
 
 def _attribute_allocation_context(
@@ -591,6 +653,108 @@ def _relink_contact_selection(
     return replace(
         character, contact_selection=create_contact_selection(character, contact_selection.contacts)
     )
+
+
+def _remove_adept_power_improvements(character: Character) -> None:
+    """Remove every currently-held `ADEPT_POWER`-sourced Improvement from `character.improvements`.
+
+    Each purchased power is its own source instance (`source_id` is the power's own id, per
+    `apply_power_improvements`), so retracting "every power this character has" means one
+    `remove_source` call per distinct id, not a single shared one the way the Talent free-skill
+    grant's `MAGIC_SKILL_GRANT_SOURCE_ID` is. `character.improvements.improvements` is a snapshot
+    tuple (see `ImprovementIndex`), so it's safe to iterate while `remove_source` mutates the
+    underlying list -- the same pattern `_replace_committed_qualities` below already uses for
+    `QUALITY`-sourced Improvements.
+    """
+    for imp in character.improvements.improvements:
+        if imp.source_type == ImprovementSource.ADEPT_POWER:
+            character.improvements.remove_source(ImprovementSource.ADEPT_POWER, imp.source_id)
+
+
+def _relink_magic_selection(
+    character: Character, talent_letter: str, previous: Character
+) -> Character:
+    """Re-apply a carried-forward Talent selection's free-skill-grant Improvements (and a carried-
+    forward Adept power selection's Improvements) onto a freshly built `Character`, and re-attach
+    `magic_type`/`magic_rating`/`tradition`/`magic_granted_skill_ids`/`spell_selection`/
+    `power_selection` themselves.
+
+    Mirrors `_relink_quality_improvements`/`_relink_metatype_qualities`: `create_character()`
+    always starts every one of those fields at its Mundane/unset default and a brand-new, empty
+    `ImprovementIndex` (see that function's docstring) -- `submit_attributes` is the one route that
+    still rebuilds this way (WP19 left it that way; see its own worklog), so without this helper a
+    Magician/Adept's entire Talent selection would silently reset to Mundane on the very next
+    attribute-point edit.
+
+    Re-derives the Talent selection via `create_magic_selection` (using `talent_letter` -- the
+    session's *current* one, not necessarily whatever letter was in effect when `previous` was
+    built) rather than trusting `previous`'s own snapshot, the same "recompute, don't just
+    re-attach" reasoning `_relink_contact_selection` already uses -- `Character` has no field for
+    the free-skill grant's *rating* (only the granted skill *ids*), so the rating has to be
+    re-resolved from the matched Talent option regardless. Safe to call unconditionally: a no-op if
+    `previous.magic_type is None` (still Mundane, nothing to carry).
+    """
+    if previous.magic_type is None:
+        return character
+    selection = create_magic_selection(
+        talent_letter,
+        previous.magic_type,
+        previous.tradition.id if previous.tradition is not None else None,
+        previous.magic_granted_skill_ids,
+        PRIORITIES,
+        TRADITIONS,
+        SKILLS,
+    )
+    apply_magic_skill_grant_improvements(character, selection, SKILLS)
+    character = replace(
+        character,
+        magic_type=selection.magic_type,
+        magic_rating=selection.magic_rating,
+        tradition=selection.tradition,
+        magic_granted_skill_ids=selection.granted_skill_ids,
+        spell_selection=previous.spell_selection,
+        power_selection=previous.power_selection,
+    )
+    if previous.power_selection is not None:
+        apply_power_improvements(character, previous.power_selection)
+    return character
+
+
+def _replace_committed_talent(character: Character, selection: MagicSelection) -> Character:
+    """Swap whatever `TALENT`-sourced free-skill-grant Improvement `character.improvements`
+    currently holds for `selection`'s, and re-attach the 4 flat magic fields.
+
+    A (re)confirmed Talent selection also resets `spell_selection`/`power_selection` to `None` and
+    drops any `ADEPT_POWER`-sourced Improvements -- a changed archetype (Mundane -> Magician,
+    Magician -> Adept, or even a changed tradition/letter) invalidates whatever spell/power budget
+    those selections were validated against, and there is no sensible partial-carry-forward the way
+    there is for e.g. attribute points against a resized budget (see this WP's worklog for the full
+    reasoning). The player re-picks spells/powers after any Talent change, the same "start that
+    stage over" behavior a metatype swap already gives `skill_allocation` et al. pre-WP19 -- Talent
+    is foundational in the same way, just narrower in what it resets.
+    """
+    character.improvements.remove_source(ImprovementSource.TALENT, MAGIC_SKILL_GRANT_SOURCE_ID)
+    _remove_adept_power_improvements(character)
+    apply_magic_skill_grant_improvements(character, selection, SKILLS)
+    return replace(
+        character,
+        magic_type=selection.magic_type,
+        magic_rating=selection.magic_rating,
+        tradition=selection.tradition,
+        magic_granted_skill_ids=selection.granted_skill_ids,
+        spell_selection=None,
+        power_selection=None,
+    )
+
+
+def _replace_committed_powers(character: Character, selection: PowerSelection) -> Character:
+    """Swap whatever `ADEPT_POWER`-sourced Improvements `character.improvements` currently holds
+    for `selection`'s, and re-attach `selection` as `character.power_selection` -- mirrors
+    `_replace_committed_qualities`'s identical shape.
+    """
+    _remove_adept_power_improvements(character)
+    apply_power_improvements(character, selection)
+    return replace(character, power_selection=selection)
 
 
 def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
@@ -857,6 +1021,161 @@ def _lifestyle_context(
     }
 
 
+def _default_talent_codename(talent_letter: str) -> str:
+    """The codename a fresh (or not-yet-visited) Talent section pre-fills for `talent_letter` --
+    its first offered option (`"Mundane"` at letter E, since no other A-D letter offers one -- see
+    `chummer5.web.session`'s own docstring), the same "starts at a legal, harmless default"
+    precedent `DEFAULT_LIFESTYLE_TIER_NAME` et al. already set.
+    """
+    options = offered_talent_options(talent_letter, PRIORITIES)
+    return options[0].codename if options else DEFAULT_TALENT_CODENAME
+
+
+def _talent_selection_context(
+    character: Character | None,
+    talent_letter: str,
+    talent_codename: str,
+    tradition_id: str | None,
+    granted_skill_ids: tuple[str, ...],
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_talent_selection.html` (WP29): Phase I's Magic-type/tradition/free-skill-grant
+    selection reaching the browser, echo-the-submission shaped like every other chargen form here.
+    `talent_codename`/`tradition_id`/`granted_skill_ids` are whatever should be shown selected --
+    the character's own committed values on a clean render, or the raw submitted form values on an
+    error-echo render, mirroring `_quality_selection_context`'s identical `quality_ids` parameter.
+
+    **WP19-style staleness re-validation**: when `error` is unset and a Talent selection is already
+    committed (`character.magic_type is not None`), re-runs `create_magic_selection` against the
+    *current* `talent_letter` purely to derive `talent_budget_warning` -- a priorities
+    reconfirmation can change which letter Talent sits on, or which options that letter even offers,
+    the same way it can shrink an attribute/skill/resources budget (see `_attribute_allocation_
+    context`'s identical pattern).
+    """
+    if character is None:
+        return {"character": None, "talent_error": error}
+    options = offered_talent_options(talent_letter, PRIORITIES)
+    selected_option = next((o for o in options if o.codename == talent_codename), None)
+    eligible_skills = (
+        magic_skill_grant_eligible_skills(selected_option, SKILLS)
+        if selected_option is not None
+        else ()
+    )
+    budget_warning: str | None = None
+    if error is None and character.magic_type is not None:
+        try:
+            create_magic_selection(
+                talent_letter,
+                character.magic_type,
+                character.tradition.id if character.tradition is not None else None,
+                character.magic_granted_skill_ids,
+                PRIORITIES,
+                TRADITIONS,
+                SKILLS,
+            )
+        except ValueError as exc:
+            budget_warning = (
+                f"No longer fits since priorities were last confirmed: {exc}. "
+                "Reconfirm Talent below to continue."
+            )
+    return {
+        "character": character,
+        "talent_letter": talent_letter,
+        "talent_letter_name": PRIORITIES.talent[talent_letter].name,
+        "talent_options": options,
+        "selected_codename": talent_codename,
+        "traditions": TRADITIONS,
+        "selected_tradition_id": tradition_id,
+        "eligible_skills": eligible_skills,
+        "selected_skill_ids": set(granted_skill_ids),
+        "skill_qty": selected_option.skill_qty if selected_option is not None else None,
+        "talent_error": error,
+        "talent_budget_warning": budget_warning,
+    }
+
+
+def _spell_selection_context(
+    character: Character | None,
+    talent_letter: str,
+    spell_ids: Iterable[str],
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_spell_selection.html` (WP29): WP26's `create_spell_selection` reaching the
+    browser, gated to Magician only (see `_chargen_body.html`'s own gating note). `spell_ids` is
+    whatever should be shown checked, same echo-the-submission shape as `_quality_selection_
+    context`'s `quality_ids`.
+    """
+    if character is None:
+        return {"character": None, "spell_error": error}
+    if character.magic_type != "Magician":
+        return {"character": character, "spell_error": error}
+    magician_option = next(
+        (o for o in offered_talent_options(talent_letter, PRIORITIES) if o.codename == "Magician"),
+        None,
+    )
+    budget = (magician_option.spells or 0) if magician_option is not None else 0
+    ids = set(spell_ids)
+    rows = [{"spell": spell, "selected": spell.id in ids} for spell in SPELLS]
+    return {
+        "character": character,
+        "spell_rows": rows,
+        "spell_budget": budget,
+        "spells_selected": len(ids),
+        "spells_remaining": budget - len(ids),
+        "spell_error": error,
+    }
+
+
+def _power_selection_context(
+    character: Character | None,
+    picks: Iterable[tuple[str, int, str | None]],
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_power_selection.html` (WP29): WP27's `create_power_selection` reaching the
+    browser, gated to Adept only. `picks` is whatever should be shown filled in -- the character's
+    own committed `power_selection.picks` on a clean render, or the raw submitted `(power_id,
+    rating, selected_attribute)` triples on an error-echo render.
+    """
+    if character is None:
+        return {"character": None, "power_error": error}
+    if character.magic_type != "Adept":
+        return {"character": character, "power_error": error}
+    picked = {power_id: (rating, attribute) for power_id, rating, attribute in picks}
+    rows = []
+    spent = Decimal(0)
+    for power in MVP_POWERS:
+        rating, selected_attribute = picked.get(power.id, (0, None))
+        select_attribute_bonus = next(
+            (fb for fb in power.flat_bonuses if fb.target_kind == "select_attribute"), None
+        )
+        rows.append(
+            {
+                "power": power,
+                "rating": rating,
+                "selected_attribute": selected_attribute,
+                "attribute_options": (
+                    select_attribute_bonus.attribute_options
+                    if select_attribute_bonus is not None
+                    else ()
+                ),
+            }
+        )
+        if rating > 0:
+            spent += power.points * rating
+    budget = character.power_points
+    return {
+        "character": character,
+        "power_rows": rows,
+        "power_point_budget": budget,
+        "power_points_spent": spent,
+        "power_points_remaining": budget - spent,
+        "power_error": error,
+    }
+
+
 def _character_sheet_context(
     session: ChargenSession, *, error: str | None = None, info: str | None = None
 ) -> dict[str, Any]:
@@ -884,10 +1203,20 @@ def _character_sheet_context(
         return {"character": None, "sheet_error": error, "sheet_info": info}
 
     allocation = character.skill_allocation
+    # WP29: the full `SKILLS` catalog, not `MUNDANE_SKILLS` -- a Magician's Talent free-skill grant
+    # (chummer5.engine.magic.apply_magic_skill_grant_improvements) can raise a Magical Active
+    # skill's rating above 0 via a pure Improvement, with no `SkillAllocation` points spent on it at
+    # all (see that function's own docstring for why it deliberately never touches the buy-UI's
+    # budget), so a Magician/Adept's granted skill(s) would otherwise never appear here even though
+    # they have a real, nonzero dice pool. Safe for a Mundane character too: no skill this catalog
+    # adds back (Magical Active/RES-linked) can ever have nonzero `SkillAllocation` points or
+    # Improvements for one (MUNDANE_SKILLS's exclusion from the *buy* UI still stands -- see that
+    # constant's own comment -- so nothing offers points on them), so `rating` stays 0 and the
+    # `rating > 0` filter below excludes them exactly as before this WP.
     skill_rows = (
         [
             {"skill": skill, "rating": rating, "pool": dice_pool(character, allocation, skill)}
-            for skill in MUNDANE_SKILLS
+            for skill in ALL_SKILLS_SORTED
             if (rating := skill_rating(character, allocation, skill)) > 0
         ]
         if allocation is not None
@@ -973,6 +1302,31 @@ def _character_sheet_context(
         "social_limit": social_limit(character),
         "physical_cm": physical_condition_monitor(character),
         "stun_cm": stun_condition_monitor(character),
+        # WP29: hidden entirely (not shown as zeroes) for Mundane -- `magic_type` gates the whole
+        # block in `_character_sheet.html`, mirroring how `lifestyle_tier_name`/etc. already gate
+        # their own "None until committed" sections.
+        "magic_type": character.magic_type,
+        "magic_rating": character.magic_rating,
+        "tradition_name": character.tradition.name if character.tradition is not None else None,
+        "power_points": character.power_points,
+        "drain_resistance": drain_resistance(character),
+        "spell_names": (
+            [spell.name for spell in character.spell_selection.spells]
+            if character.spell_selection is not None
+            else []
+        ),
+        "power_rows": (
+            [
+                {
+                    "name": pick.power.name,
+                    "rating": pick.rating,
+                    "selected_attribute": pick.selected_attribute,
+                }
+                for pick in character.power_selection.picks
+            ]
+            if character.power_selection is not None
+            else []
+        ),
         "sheet_error": error,
         "sheet_info": info,
     }
@@ -988,6 +1342,16 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     Lifestyle (see its own docstring), so an as-yet-unvisited Lifestyle section falls back to
     `DEFAULT_LIFESTYLE_TIER_NAME`/`DEFAULT_LIFESTYLE_MONTHS` (the free "Street" tier, 1 month)
     rather than leaving the save in a state `build_character` couldn't reconstruct.
+
+    **WP29**: `talent_letter`/`talent_codename`/`tradition_id`/`granted_skill_ids`/`spell_ids`/
+    `power_picks` now thread through the character's *real* committed Talent selection instead of
+    always defaulting to Mundane (`CharacterSave`'s own pre-WP29 fallback -- see its module
+    docstring) -- `session.talent_letter` is the session-side letter (never folded onto `Character`
+    itself, same as `skills_letter`/`resources_letter`; see `chummer5.web.session`'s docstring),
+    while the codename/tradition/grant/spell/power picks all come straight off `character`'s own
+    flat fields and `spell_selection`/`power_selection`, falling back to Mundane defaults only for
+    an as-yet-uncommitted Talent selection (`character.magic_type is None`), mirroring the
+    Lifestyle fallback immediately above.
     """
     character = session.character
     assert character is not None
@@ -1006,6 +1370,19 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         else ()
     )
     lifestyle_selection = character.lifestyle_selection
+    spell_ids = (
+        tuple(spell.id for spell in character.spell_selection.spells)
+        if character.spell_selection is not None
+        else ()
+    )
+    power_picks = (
+        tuple(
+            (pick.power.id, pick.rating, pick.selected_attribute)
+            for pick in character.power_selection.picks
+        )
+        if character.power_selection is not None
+        else ()
+    )
     return create_character_save(
         metatype_name=character.metatype.name,
         heritage_letter=session.heritage_letter,
@@ -1028,6 +1405,12 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
             if lifestyle_selection is not None
             else DEFAULT_LIFESTYLE_MONTHS
         ),
+        talent_letter=session.talent_letter,
+        talent_codename=character.magic_type or DEFAULT_TALENT_CODENAME,
+        tradition_id=character.tradition.id if character.tradition is not None else None,
+        granted_skill_ids=character.magic_granted_skill_ids,
+        spell_ids=spell_ids,
+        power_picks=power_picks,
     )
 
 
@@ -1049,19 +1432,19 @@ def _apply_built_character_to_session(
     unlike `create_character`'s always-empty one (see `_relink_quality_improvements`'s docstring
     for why that matters elsewhere).
 
-    **WP24**: `CharacterSave` has no `talent_letter` field (a save always predates real Talent
-    selection -- WP25's job, not this one's -- so there is nothing meaningful to persist yet; see
-    `chummer5.io.save_format`'s own module docstring for why this format only ever stores
-    player-authored selections, never inert plumbing). `session.talent_letter` resets to
-    `DEFAULT_TALENT_LETTER` here rather than being left at whatever the session happened to hold
-    before the load/import -- the same "every field this WP's chargen routes read is set here"
-    completeness this function already promises for the other four letters.
+    **WP29**: `session.talent_letter` is set from `save.talent_letter` (WP28's field, unused by
+    this function until now -- WP24-WP28 all left this hardcoded to `DEFAULT_TALENT_LETTER` since
+    no save this project's own web layer produced before WP29 could ever carry a real one; see
+    `chummer5.io.save_format`'s module docstring). A save/import predating WP28 entirely still
+    defaults to `DEFAULT_TALENT_LETTER` via `CharacterSave`'s own field default (`_dict_to_save`'s
+    `.get(..., default)` read), so this assignment is correct for every save format version this
+    project has ever written, not just post-WP29 ones.
     """
     session.heritage_letter = save.heritage_letter
     session.attributes_letter = save.attributes_letter
     session.skills_letter = save.skills_letter
     session.resources_letter = save.resources_letter
-    session.talent_letter = DEFAULT_TALENT_LETTER
+    session.talent_letter = save.talent_letter
     session.metatype_id = built.metatype.id
     session.character = built
 
@@ -1081,8 +1464,45 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     both of its call sites to compute them first and pass the flag in) -- `_priority_form.html` is
     only ever rendered from this merged dict (see both call sites below), so it reads
     `priority_stale_selections` like any other key regardless of which function actually set it.
+
+    **WP29** folds in `_talent_selection_context`/`_spell_selection_context`/`_power_selection_
+    context` the same way, including `talent_budget_warning` into the `priority_stale_selections`
+    aggregate above -- a priorities reconfirmation can move Talent to a letter that no longer offers
+    the committed codename/tradition, the same "no longer fits" staleness every other carried-
+    forward selection can hit.
     """
     character = session.character
+    # WP29: Talent/tradition/free-skill-grant, spells, and powers -- computed first since Talent is
+    # SR5's own "Step Three," ahead of Attributes/Skills, and the other two depend on `magic_type`.
+    talent_codename = (
+        character.magic_type
+        if character is not None and character.magic_type is not None
+        else _default_talent_codename(session.talent_letter)
+    )
+    tradition_id = (
+        character.tradition.id
+        if character is not None and character.tradition is not None
+        else None
+    )
+    granted_skill_ids = character.magic_granted_skill_ids if character is not None else ()
+    talent_ctx = _talent_selection_context(
+        character, session.talent_letter, talent_codename, tradition_id, granted_skill_ids
+    )
+    spell_ids = (
+        tuple(spell.id for spell in character.spell_selection.spells)
+        if character is not None and character.spell_selection is not None
+        else ()
+    )
+    spell_ctx = _spell_selection_context(character, session.talent_letter, spell_ids)
+    power_picks = (
+        tuple(
+            (pick.power.id, pick.rating, pick.selected_attribute)
+            for pick in character.power_selection.picks
+        )
+        if character is not None and character.power_selection is not None
+        else ()
+    )
+    power_ctx = _power_selection_context(character, power_picks)
     attribute_points = character.attribute_points if character is not None else {}
     attribute_ctx = _attribute_allocation_context(character, attribute_points)
     allocation = character.skill_allocation if character is not None else None
@@ -1130,7 +1550,8 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         character, session.resources_letter, lifestyle_tier_name, lifestyle_months, gear_cost
     )
     stale = bool(
-        attribute_ctx.get("attribute_budget_warning")
+        talent_ctx.get("talent_budget_warning")
+        or attribute_ctx.get("attribute_budget_warning")
         or skill_ctx.get("skill_budget_warning")
         or resources_ctx.get("resources_budget_warning")
         or lifestyle_ctx.get("lifestyle_budget_warning")
@@ -1138,8 +1559,11 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     priority_ctx = {**priority_ctx, "priority_stale_selections": stale}
     return {
         **priority_ctx,
+        **talent_ctx,
         **attribute_ctx,
         **skill_ctx,
+        **spell_ctx,
+        **power_ctx,
         **quality_ctx,
         **contact_ctx,
         **lifestyle_ctx,
@@ -1201,6 +1625,34 @@ def create_app() -> FastAPI:
             "selected": {"metatype_id": None},
         }
         return templates.TemplateResponse(request, "_metatype_select.html", context)
+
+    @app.get("/ui/talent-options", response_class=HTMLResponse)
+    def talent_options_fragment(
+        request: Request, talent_letter: str, talent_codename: str
+    ) -> HTMLResponse:
+        """WP29: mirrors `metatype_options_fragment` above -- refreshes the tradition dropdown and
+        free-skill-grant checkboxes inside `_talent_selection.html` when the player picks a
+        different Talent codename, without a full-page/full-body round trip. Unlike the metatype
+        fragment, this one is triggered by the codename radio group *inside* `_talent_selection
+        .html` itself, not by the Talent letter selector in `_priority_form.html` -- changing the
+        letter there only takes effect (and refreshes which codenames are even offered) once the
+        priority form is actually submitted, the same "no live cross-section refresh" scope
+        boundary WP20 already documented for gear/Lifestyle.
+        """
+        options = offered_talent_options(talent_letter, PRIORITIES)
+        option = next((o for o in options if o.codename == talent_codename), None)
+        eligible_skills = (
+            magic_skill_grant_eligible_skills(option, SKILLS) if option is not None else ()
+        )
+        context: dict[str, Any] = {
+            "selected_codename": talent_codename,
+            "traditions": TRADITIONS,
+            "selected_tradition_id": None,
+            "eligible_skills": eligible_skills,
+            "selected_skill_ids": set(),
+            "skill_qty": option.skill_qty if option is not None else None,
+        }
+        return templates.TemplateResponse(request, "_talent_options.html", context)
 
     @app.post("/ui/priorities", response_class=HTMLResponse)
     def submit_priorities(
@@ -1355,6 +1807,10 @@ def create_app() -> FastAPI:
                 # still needs metatype_qualities' Improvements re-landed onto its new, empty index.
                 character = _relink_metatype_qualities(character)
                 character = _relink_contact_selection(character, previous.contact_selection)
+                # WP29: same reasoning -- Talent/tradition/free-skill-grant Improvements, and the
+                # Adept power selection's own Improvements, need re-landing on this fresh index too,
+                # or a Magician/Adept would silently reset to Mundane on the next attribute edit.
+                character = _relink_magic_selection(character, session.talent_letter, previous)
                 character = replace(
                     character,
                     skill_allocation=previous.skill_allocation,
@@ -1364,6 +1820,50 @@ def create_app() -> FastAPI:
                 session.character = character
                 context = _attribute_allocation_context(character, attribute_points)
         response = templates.TemplateResponse(request, "_attribute_allocation.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/talent", response_class=HTMLResponse)
+    async def submit_talent(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None:
+            context = _talent_selection_context(None, session.talent_letter, "Mundane", None, ())
+        else:
+            form = await request.form()
+            talent_codename = str(form.get("talent_codename") or "")
+            raw_tradition_id = form.get("tradition_id")
+            tradition_id = str(raw_tradition_id) if raw_tradition_id else None
+            granted_skill_ids = tuple(str(v) for v in form.getlist("granted_skill_id"))
+            try:
+                selection = create_magic_selection(
+                    session.talent_letter,
+                    talent_codename,
+                    tradition_id,
+                    granted_skill_ids,
+                    PRIORITIES,
+                    TRADITIONS,
+                    SKILLS,
+                )
+            except ValueError as exc:
+                context = _talent_selection_context(
+                    session.character,
+                    session.talent_letter,
+                    talent_codename,
+                    tradition_id,
+                    granted_skill_ids,
+                    error=str(exc),
+                )
+            else:
+                session.character = _replace_committed_talent(session.character, selection)
+                context = _talent_selection_context(
+                    session.character,
+                    session.talent_letter,
+                    selection.magic_type or "Mundane",
+                    tradition_id,
+                    selection.granted_skill_ids,
+                )
+        response = templates.TemplateResponse(request, "_talent_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
         return response
@@ -1395,6 +1895,59 @@ def create_app() -> FastAPI:
                     session.character, session.skills_letter, skill_points, group_points
                 )
         response = templates.TemplateResponse(request, "_skill_allocation.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/spells", response_class=HTMLResponse)
+    async def submit_spells(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None or session.character.magic_type != "Magician":
+            context = _spell_selection_context(session.character, session.talent_letter, ())
+        else:
+            form = await request.form()
+            spell_ids = [str(v) for v in form.getlist("spell_id")]
+            magician_option = next(
+                (
+                    o
+                    for o in offered_talent_options(session.talent_letter, PRIORITIES)
+                    if o.codename == "Magician"
+                ),
+                None,
+            )
+            budget = (magician_option.spells or 0) if magician_option is not None else 0
+            try:
+                selection = create_spell_selection(spell_ids, SPELLS, budget)
+            except ValueError as exc:
+                context = _spell_selection_context(
+                    session.character, session.talent_letter, spell_ids, error=str(exc)
+                )
+            else:
+                session.character = replace(session.character, spell_selection=selection)
+                context = _spell_selection_context(
+                    session.character, session.talent_letter, spell_ids
+                )
+        response = templates.TemplateResponse(request, "_spell_selection.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/powers", response_class=HTMLResponse)
+    async def submit_powers(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None or session.character.magic_type != "Adept":
+            context = _power_selection_context(session.character, ())
+        else:
+            form = await request.form()
+            picks = _parse_power_picks(form, MVP_POWERS)
+            try:
+                selection = create_power_selection(picks, POWERS, session.character.power_points)
+            except ValueError as exc:
+                context = _power_selection_context(session.character, picks, error=str(exc))
+            else:
+                session.character = _replace_committed_powers(session.character, selection)
+                context = _power_selection_context(session.character, picks)
+        response = templates.TemplateResponse(request, "_power_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
         return response
@@ -1581,6 +2134,9 @@ def create_app() -> FastAPI:
                     skills=SKILLS,
                     qualities=QUALITIES,
                     lifestyles=LIFESTYLES,
+                    traditions=TRADITIONS,
+                    spells=SPELLS,
+                    powers=POWERS,
                 )
             # A user-supplied file's shape is never trusted beyond this point -- malformed JSON
             # (ValueError, via json.JSONDecodeError/UnicodeDecodeError), a missing field
@@ -1624,6 +2180,9 @@ def create_app() -> FastAPI:
                         skills=SKILLS,
                         qualities=QUALITIES,
                         lifestyles=LIFESTYLES,
+                        traditions=TRADITIONS,
+                        spells=SPELLS,
+                        powers=POWERS,
                     )
                 except UnsupportedLegacyCharacterError as exc:
                     error = "Cannot import: " + "; ".join(exc.reasons)
@@ -1640,6 +2199,18 @@ def create_app() -> FastAPI:
                     if result.dropped_skills:
                         messages.append(
                             "Dropped skills (unresolvable): " + ", ".join(result.dropped_skills)
+                        )
+                    # WP29: surfaced now that a real Magician/Adept import can actually succeed
+                    # (WP28 added these fields to `ImportResult`, but nothing reached the browser
+                    # for them until this WP wired traditions/spells/powers into this route at all).
+                    if result.dropped_spells:
+                        messages.append(
+                            "Dropped spells (not SR5-scoped): " + ", ".join(result.dropped_spells)
+                        )
+                    if result.dropped_powers:
+                        messages.append(
+                            "Dropped powers (not MVP-supported): "
+                            + ", ".join(result.dropped_powers)
                         )
                     info = " ".join(messages)
         context = _character_sheet_context(session, error=error, info=info)
