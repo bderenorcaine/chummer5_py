@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from chummer5.data.priorities import PriorityTable, TalentOption
 from chummer5.data.skills import Skill
+from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
@@ -231,3 +232,48 @@ def apply_magic_skill_grant_improvements(
                 source_id=MAGIC_SKILL_GRANT_SOURCE_ID,
             )
         )
+
+
+@dataclass(frozen=True)
+class SpellSelection:
+    """A validated set of spells picked against a Magician's Talent-option spell budget (WP26).
+
+    `budget` is carried alongside `spells` (rather than left for a caller to re-derive) so a render
+    can show "N of budget spells chosen" without re-looking-up the Talent option. There is no
+    equivalent `apply_*_improvements` function for spells, unlike qualities/the Talent skill grant
+    -- per the module docstring, a spell has no chargen-time computed effect to apply; it is purely
+    a roster entry.
+    """
+
+    spells: tuple[Spell, ...]
+    budget: int
+
+
+def create_spell_selection(
+    spell_ids: Iterable[str], catalog: Iterable[Spell], budget: int
+) -> SpellSelection:
+    """Build a `SpellSelection`, validating against `catalog` and `budget`.
+
+    Validates: every id resolves against `catalog` (the SR5-scoped spell list --
+    `chummer5.data.spells.load_spells()`); no spell is picked more than once; the total picked
+    doesn't exceed `budget`. `budget` is the caller's responsibility to resolve correctly (a
+    Magician's chosen Talent option's `spells` field -- see `chummer5.data.priorities.TalentOption
+    .spells` -- or 0 for Adept/Mundane, which never have one); this function has no `magic_type`
+    parameter of its own; passing `budget=0` already rejects any pick for a character with no spell
+    grant at all, so there's nothing else for it to check.
+    """
+    ids = list(spell_ids)
+    by_id = {s.id: s for s in catalog}
+
+    unknown = sorted({sid for sid in ids if sid not in by_id})
+    if unknown:
+        raise ValueError(f"not an SR5-scoped spell id: {unknown}")
+
+    duplicates = sorted({sid for sid in ids if ids.count(sid) > 1})
+    if duplicates:
+        raise ValueError(f"spell selected more than once: {duplicates}")
+
+    if len(ids) > budget:
+        raise ValueError(f"{len(ids)} spells selected, exceeding the budget of {budget}")
+
+    return SpellSelection(spells=tuple(by_id[sid] for sid in ids), budget=budget)

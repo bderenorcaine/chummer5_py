@@ -6,13 +6,16 @@ import pytest
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.skills import load_skills
+from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.improvements import ImprovementType
 from chummer5.engine.magic import (
     MagicSelection,
+    SpellSelection,
     apply_magic_skill_grant_improvements,
     create_magic_selection,
+    create_spell_selection,
     magic_skill_grant_eligible_skills,
     offered_talent_options,
 )
@@ -21,6 +24,7 @@ from chummer5.engine.skills import SkillAllocation, dice_pool
 PRIORITIES = load_priorities()
 TRADITIONS = load_traditions()
 SKILLS = load_skills()
+SPELLS = load_spells()
 METATYPES = load_metatypes()
 
 HERMETIC_ID = next(t.id for t in TRADITIONS if t.name == "Hermetic")
@@ -239,3 +243,51 @@ def test_free_skill_grant_shows_up_in_dice_pool_without_skill_allocation_budget(
     # rating 2 (the grant) + AGI 1 (Human's bare metatype minimum, unspent) = 3; no points were
     # spent from any Skills-priority budget to get there.
     assert dice_pool(character, empty_allocation, pistols) == 2 + character.attribute_value("AGI")
+
+
+# -- create_spell_selection (WP26) ---------------------------------------------------------------
+
+MANABOLT_ID = next(s.id for s in SPELLS if s.name == "Manabolt")
+STUNBOLT_ID = next(s.id for s in SPELLS if s.name == "Stunbolt")
+HEAL_ID = next(s.id for s in SPELLS if s.name == "Heal")
+
+
+def test_spell_selection_within_budget() -> None:
+    selection = create_spell_selection([MANABOLT_ID, STUNBOLT_ID], SPELLS, budget=10)
+    assert selection == SpellSelection(
+        spells=tuple(s for s in SPELLS if s.id in {MANABOLT_ID, STUNBOLT_ID}),
+        budget=10,
+    )
+
+
+def test_spell_selection_allows_partial_spend() -> None:
+    # Mirrors every other create_* function's "doesn't require the full budget to be spent" rule.
+    selection = create_spell_selection([MANABOLT_ID], SPELLS, budget=10)
+    assert len(selection.spells) == 1
+
+
+def test_spell_selection_rejects_unknown_id() -> None:
+    with pytest.raises(ValueError, match="not an SR5-scoped spell id"):
+        create_spell_selection(["not-a-real-id"], SPELLS, budget=10)
+
+
+def test_spell_selection_rejects_duplicates() -> None:
+    with pytest.raises(ValueError, match="selected more than once"):
+        create_spell_selection([MANABOLT_ID, MANABOLT_ID], SPELLS, budget=10)
+
+
+def test_spell_selection_rejects_exceeding_budget() -> None:
+    with pytest.raises(ValueError, match="exceeding the budget of 2"):
+        create_spell_selection([MANABOLT_ID, STUNBOLT_ID, HEAL_ID], SPELLS, budget=2)
+
+
+def test_spell_selection_zero_budget_rejects_any_pick() -> None:
+    # Adept/Mundane characters have no spell grant at all -- a caller passing budget=0 for either
+    # already gets the right rejection with no magic_type check needed inside this function.
+    with pytest.raises(ValueError, match="exceeding the budget of 0"):
+        create_spell_selection([MANABOLT_ID], SPELLS, budget=0)
+
+
+def test_spell_selection_empty_pick_with_zero_budget_is_fine() -> None:
+    selection = create_spell_selection([], SPELLS, budget=0)
+    assert selection == SpellSelection(spells=(), budget=0)

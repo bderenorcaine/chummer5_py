@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     # `dataclasses.dataclass` never needs these names to actually resolve at import time.
     from chummer5.data.traditions import Tradition
     from chummer5.engine.lifestyle import LifestyleSelection
+    from chummer5.engine.magic import SpellSelection
     from chummer5.engine.qualities import QualitySelection
     from chummer5.engine.resources import ContactSelection, ResourcesSelection
     from chummer5.engine.skills import SkillAllocation
@@ -173,6 +174,13 @@ class Character:
     character beyond `magic_rating` itself (WP35, later, changes this to also account for
     Essence-driven Magic loss -- see that WP's own scope). Power Points, which Phase I's Adept
     archetype needs, aren't a stored field at all -- see `power_points` below.
+
+    **WP26** adds `spell_selection: SpellSelection | None` -- a Magician's chosen spells, the same
+    "`None` until committed" shape every other selection field already has. Unlike `magic_type`/
+    `magic_rating`/etc., nothing in this engine reads `spell_selection` to compute another value (a
+    spell is a chargen-time roster entry, not a computed value -- see `chummer5.engine.magic`'s
+    module docstring), so it stays a single wrapping field (mirrors `quality_selection`/
+    `contact_selection`'s shape) rather than being flattened the way the Phase I magic fields were.
     """
 
     metatype: Metatype
@@ -191,6 +199,7 @@ class Character:
     magic_rating: int = 0  # the finished MAG rating; 0 for Mundane (WP25)
     tradition: Tradition | None = None  # Magician only (WP25)
     magic_granted_skill_ids: tuple[str, ...] = ()  # the Talent free-skill grant's picks (WP25)
+    spell_selection: SpellSelection | None = None  # Magician's chosen spells (WP26)
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]

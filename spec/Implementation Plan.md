@@ -720,7 +720,7 @@ than this phase silently guessing at generality it doesn't need yet.
   hand-verified against the traced rule only, the same "no real fixture, verify by hand" honesty
   this project already applies elsewhere (e.g. WP8's quality karma cap).
 
-- [ ] **WP26 — Spell selection (Magician).**
+- [x] **WP26 — Spell selection (Magician).**
   Goal: let a Magician pick spells up to their Talent option's `spells` budget (Miko: 10, at
   letter A).
   Deliverables:
