@@ -69,6 +69,30 @@ class LegacyQuality:
 
 
 @dataclass(frozen=True)
+class LegacySpell:
+    """One raw `<spells><spell>` entry (WP28). A Magician's chosen spells -- a chargen-time roster
+    entry, not a computed value (see `chummer5.engine.magic`'s module docstring), so nothing beyond
+    `name`/`source` is needed to cross-reference against `chummer5.data.spells.load_spells()`.
+    """
+
+    name: str
+    source: str
+
+
+@dataclass(frozen=True)
+class LegacyPower:
+    """One raw `<powers><power>` entry (WP28). `extra` is the select-a-target text (e.g. which
+    attribute Improved Physical Attribute boosts) -- the same shape as `LegacyQuality.extra`; empty
+    for a power with no `select_attribute`-shaped bonus.
+    """
+
+    name: str
+    rating: int
+    levels: bool
+    extra: str
+
+
+@dataclass(frozen=True)
 class LegacyContact:
     name: str
     connection: int
@@ -147,6 +171,12 @@ class LegacyCharacter:
     # both live under this one wrapper element (`<improvementsource>` distinguishes them, not the
     # element name), so a single presence flag covers both without needing to parse individual
     # entries MVP has no use for otherwise. See spec/worklogs/WP12.md.
+    # WP28: <tradition><name> -- always present in the save format (even for a mundane character,
+    # where it's a meaningless placeholder never consumed downstream) since the legacy engine
+    # always instantiates one; "" if somehow absent entirely.
+    tradition_name: str
+    spells: tuple[LegacySpell, ...]  # <spells><spell>... (WP28) -- a Magician's chosen spells
+    powers: tuple[LegacyPower, ...]  # <powers><power>... (WP28) -- an Adept's purchased powers
     karma_remaining: int
     build_karma: int
     nuyen_remaining: float
@@ -278,6 +308,31 @@ def _parse_lifestyles(elem: ET.Element | None) -> tuple[LegacyLifestyle, ...]:
     return tuple(_parse_lifestyle(lifestyle) for lifestyle in elem.findall("lifestyle"))
 
 
+def _parse_spell(elem: ET.Element) -> LegacySpell:
+    return LegacySpell(name=elem.findtext("name", ""), source=elem.findtext("source", ""))
+
+
+def _parse_spells(elem: ET.Element | None) -> tuple[LegacySpell, ...]:
+    if elem is None:
+        return ()
+    return tuple(_parse_spell(s) for s in elem.findall("spell"))
+
+
+def _parse_power(elem: ET.Element) -> LegacyPower:
+    return LegacyPower(
+        name=elem.findtext("name", ""),
+        rating=int(elem.findtext("rating", "1")),
+        levels=_parse_bool(elem.findtext("levels")),
+        extra=elem.findtext("extra", ""),
+    )
+
+
+def _parse_powers(elem: ET.Element | None) -> tuple[LegacyPower, ...]:
+    if elem is None:
+        return ()
+    return tuple(_parse_power(p) for p in elem.findall("power"))
+
+
 def _has_children(elem: ET.Element | None) -> bool:
     return elem is not None and len(elem) > 0
 
@@ -316,8 +371,11 @@ def load_chum5(path: Path) -> LegacyCharacter:
     free-budget value (see `spec/worklogs/WP9.md`). Cyberware/bioware presence is now flagged (WP12,
     `has_cyberware`) since it's a real blocking condition for import -- see `spec/worklogs/WP12.md`.
     Lifestyles (WP20) are now included too: every `<lifestyle>` entry, raw (see `LegacyLifestyle`).
-    Vehicles/gear/spells/magic/matrix/etc. remain untouched — this parser only extracts what
-    WP6-WP20's engine and import path need to validate against.
+    WP28 adds `tradition_name`/`spells`/`powers` -- Phase I's magic-relevant raw fields beyond the
+    `magic_enabled` boolean already parsed since WP4 (`MAG`'s own resolved rating needs no new field
+    at all: `attributes["MAG"].total_value` already resolves generically, the same way every other
+    attribute does). Vehicles/gear/matrix/etc. remain untouched — this parser only extracts what
+    WP6-WP28's engine and import path need to validate against.
     """
     root = ET.parse(path).getroot()
     newskills_elem = root.find("newskills")
@@ -338,6 +396,9 @@ def load_chum5(path: Path) -> LegacyCharacter:
         contact_points_budget=int(root.findtext("contactpoints", "0")),
         lifestyles=_parse_lifestyles(root.find("lifestyles")),
         has_cyberware=_has_children(root.find("cyberwares")),
+        tradition_name=root.findtext("tradition/name", ""),
+        spells=_parse_spells(root.find("spells")),
+        powers=_parse_powers(root.find("powers")),
         karma_remaining=int(root.findtext("karma", "0")),
         build_karma=int(root.findtext("buildkarma", "0")),
         nuyen_remaining=float(root.findtext("nuyen", "0")),

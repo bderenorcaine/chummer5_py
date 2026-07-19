@@ -48,7 +48,12 @@ class ImprovementType(Enum):
     threaded `Character.improvements` through before any metatype bonus existed to use it. WP22 is
     the first real producer: the Indomitable trio's `<mentallimit>`/`<physicallimit>`/
     `<sociallimit>` bonus nodes resolve to `MENTAL_LIMIT`/`PHYSICAL_LIMIT`/`SOCIAL_LIMIT`
-    respectively (see `chummer5.data.qualities`/`chummer5.engine.qualities`).
+    respectively (see `chummer5.data.qualities`/`chummer5.engine.qualities`). WP28 adds an 8th,
+    `DRAIN_RESISTANCE`, for `chummer5.engine.derived.drain_resistance` -- another character-wide
+    total (one Drain Resistance pool per character, same as the others above), threaded through for
+    the same "no current producer, but the derived stat itself needs somewhere to resolve Σ
+    improvements against" reason as every other member here; nothing in this project's scope
+    produces one yet (checked directly -- no SR5-core quality/power's `<bonus>` targets Drain).
     """
 
     ATTRIBUTE = auto()
@@ -60,6 +65,7 @@ class ImprovementType(Enum):
     SOCIAL_LIMIT = auto()
     PHYSICAL_CM = auto()
     STUN_CM = auto()
+    DRAIN_RESISTANCE = auto()
 
 
 class ImprovementSource(Enum):

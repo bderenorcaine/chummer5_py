@@ -132,3 +132,34 @@ def stun_condition_monitor(character: Character) -> int:
     """`Character.StunCM`: 8 + ceil(WIL / 2) + Σ improvements."""
     total = BASE_STUN_CM + _ceil_div(character.attribute_value("WIL"), 2)
     return total + character.improvements.resolve(ImprovementType.STUN_CM, _GLOBAL_TARGET)
+
+
+def drain_resistance(character: Character) -> int | None:
+    """Drain Resistance: the dice pool used to resist Drain, resolved via a fixed attribute pair
+    plus Σ improvements. `None` for a Mundane character (`magic_type is None`) -- there is nothing
+    to resist Drain with, the same "not meaningful" carve-out `BASE_ESSENCE`'s own docstring uses
+    for a similarly not-applicable case.
+
+    Two different formulas, per WP27's own correction to this phase's earlier framing (Drain
+    Resistance is not Magician-only):
+    - **Magician**: `character.tradition`'s own `drain_attributes` pair (core rulebook p.278,
+      "TRADITIONS": "Each tradition's description also includes the Attributes used in the Drain
+      Resistance Test for spellcasters of this tradition" -- confirmed directly in prose for both
+      offered traditions, p.278-279: Hermetic is "Logic + Willpower", Shamanic is "Charisma +
+      Willpower", matching `chummer5.data.traditions.load_traditions()`'s own parsed
+      `drain_attributes`).
+    - **Adept**: fixed `BOD + WIL` (core rulebook p.308, "USING POWERS": "Adept Drain: Some powers
+      cause Drain. The Drain from adept powers is Stun unless specified in the description, and is
+      resisted with Body + Willpower" -- unlike a Magician's tradition-dependent pair, this is the
+      same formula for every Adept regardless of which powers were actually bought, the same
+      "shown regardless of build specifics" shape Physical/Mental/Social Limit already have).
+    """
+    if character.magic_type == "Magician":
+        assert character.tradition is not None
+        attr_a, attr_b = character.tradition.drain_attributes
+    elif character.magic_type == "Adept":
+        attr_a, attr_b = "BOD", "WIL"
+    else:
+        return None
+    total = character.attribute_value(attr_a) + character.attribute_value(attr_b)
+    return total + character.improvements.resolve(ImprovementType.DRAIN_RESISTANCE, _GLOBAL_TARGET)

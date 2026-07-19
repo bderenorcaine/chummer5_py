@@ -41,6 +41,21 @@ Lifestyle, even the free "Street" tier, since SR5 makes the choice mandatory (se
 `chummer5.engine.lifestyle`'s module docstring); there is no meaningful "no lifestyle yet" save
 state the way there is for e.g. an empty gear list.
 
+**WP28** adds `talent_letter`/`talent_codename`/`tradition_id`/`granted_skill_ids`/`spell_ids`/
+`power_picks` -- Phase I's Magic-type/tradition/spell/power selections, threaded through the same
+"selections, not derived values" way every prior selection type already is. Unlike Lifestyle, these
+default to Mundane (`talent_letter = DEFAULT_TALENT_LETTER`, `talent_codename = "Mundane"`, every
+other new field empty/`None`) rather than being unconditionally required -- WP24 already established
+"unset means Mundane" as the correct default shape for Talent (`Character.magic_type: str | None =
+None`'s own default), and WP29 (the web UI for magic chargen) hasn't landed yet, so every save this
+project's own web layer currently produces *is* Mundane -- defaulting these fields keeps every
+pre-WP28 call site (`chummer5.web.app`'s save/load routes included) working unchanged rather than
+forcing a mechanical "pass Mundane explicitly everywhere" edit for a UI capability that doesn't
+exist yet. `DEFAULT_TALENT_LETTER` is its own module-local constant here, not imported from
+`chummer5.web.session` (which defines an identically-valued one for the same reason) -- `io` must
+not depend on `web`. A future WP29 would simply stop relying on the default once the web layer has
+real Talent selections to pass.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -59,12 +74,23 @@ from typing import Any
 
 from chummer5.data.lifestyle import LifestyleTier
 from chummer5.data.metatypes import Metatype
+from chummer5.data.powers import Power
 from chummer5.data.priorities import PriorityTable
 from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
+from chummer5.data.spells import Spell
+from chummer5.data.traditions import Tradition
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.lifestyle import create_lifestyle_selection
+from chummer5.engine.magic import (
+    apply_magic_skill_grant_improvements,
+    apply_power_improvements,
+    create_magic_selection,
+    create_power_selection,
+    create_spell_selection,
+    offered_talent_options,
+)
 from chummer5.engine.qualities import (
     apply_quality_improvements,
     create_quality_selection,
@@ -81,6 +107,16 @@ from chummer5.engine.skills import create_skill_allocation
 # MVP has exactly one version; there is no migration path yet because there is nothing to migrate
 # from.
 FORMAT_VERSION = 1
+
+# See the module docstring's WP28 paragraph for why this duplicates (rather than imports)
+# `chummer5.web.session.DEFAULT_TALENT_LETTER`'s value.
+DEFAULT_TALENT_LETTER = "E"
+DEFAULT_TALENT_CODENAME = "Mundane"
+
+# One `(power_id, rating, selected_attribute)` triple, as `create_power_selection` already takes --
+# see that function's own docstring. Named here so `CharacterSave.power_picks`'s element type has a
+# readable name instead of an inline tuple annotation repeated at every use site.
+PowerPickTriple = tuple[str, int, str | None]
 
 
 @dataclass(frozen=True)
@@ -108,6 +144,12 @@ class CharacterSave:
     gear_names: tuple[str, ...]
     lifestyle_tier_name: str
     lifestyle_months: int
+    talent_letter: str = DEFAULT_TALENT_LETTER
+    talent_codename: str = DEFAULT_TALENT_CODENAME
+    tradition_id: str | None = None
+    granted_skill_ids: tuple[str, ...] = ()
+    spell_ids: tuple[str, ...] = ()
+    power_picks: tuple[PowerPickTriple, ...] = ()
 
 
 def create_character_save(
@@ -125,6 +167,12 @@ def create_character_save(
     gear_names: Iterable[str],
     lifestyle_tier_name: str,
     lifestyle_months: int,
+    talent_letter: str = DEFAULT_TALENT_LETTER,
+    talent_codename: str = DEFAULT_TALENT_CODENAME,
+    tradition_id: str | None = None,
+    granted_skill_ids: Iterable[str] = (),
+    spell_ids: Iterable[str] = (),
+    power_picks: Iterable[PowerPickTriple] = (),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -148,6 +196,12 @@ def create_character_save(
         gear_names=tuple(gear_names),
         lifestyle_tier_name=lifestyle_tier_name,
         lifestyle_months=lifestyle_months,
+        talent_letter=talent_letter,
+        talent_codename=talent_codename,
+        tradition_id=tradition_id,
+        granted_skill_ids=tuple(granted_skill_ids),
+        spell_ids=tuple(spell_ids),
+        power_picks=tuple(power_picks),
     )
 
 
@@ -175,6 +229,15 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "gear_names": list(save.gear_names),
         "lifestyle_tier_name": save.lifestyle_tier_name,
         "lifestyle_months": save.lifestyle_months,
+        "talent_letter": save.talent_letter,
+        "talent_codename": save.talent_codename,
+        "tradition_id": save.tradition_id,
+        "granted_skill_ids": list(save.granted_skill_ids),
+        "spell_ids": list(save.spell_ids),
+        "power_picks": [
+            {"power_id": power_id, "rating": rating, "selected_attribute": selected_attribute}
+            for power_id, rating, selected_attribute in save.power_picks
+        ],
     }
 
 
@@ -206,6 +269,19 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         gear_names=data["gear_names"],
         lifestyle_tier_name=data["lifestyle_tier_name"],
         lifestyle_months=data["lifestyle_months"],
+        # `.get(..., default)`, not `data[...]`: a save written before WP28 has none of these keys
+        # at all -- still the same FORMAT_VERSION (1), since this is a purely additive, backward-
+        # compatible shape change (every new field already defaults to Mundane), not the kind of
+        # breaking schema change `FORMAT_VERSION` exists to gate.
+        talent_letter=data.get("talent_letter", DEFAULT_TALENT_LETTER),
+        talent_codename=data.get("talent_codename", DEFAULT_TALENT_CODENAME),
+        tradition_id=data.get("tradition_id"),
+        granted_skill_ids=data.get("granted_skill_ids", ()),
+        spell_ids=data.get("spell_ids", ()),
+        power_picks=(
+            (p["power_id"], p["rating"], p["selected_attribute"])
+            for p in data.get("power_picks", ())
+        ),
     )
 
 
@@ -226,6 +302,9 @@ def build_character(
     skills: tuple[Skill, ...],
     qualities: tuple[Quality, ...],
     lifestyles: tuple[LifestyleTier, ...],
+    traditions: tuple[Tradition, ...] = (),
+    spells: tuple[Spell, ...] = (),
+    powers: tuple[Power, ...] = (),
 ) -> Character:
     """Reconstruct a fully-populated `Character` from a `CharacterSave`, re-running the same
     `create_*` validation each selection already has (see module docstring).
@@ -242,6 +321,12 @@ def build_character(
     `metatypes`/`priorities`/`skills`/`qualities` are the static rules catalogs (WP2/WP3's loader
     output) -- passed in rather than loaded here, mirroring how every other engine module takes
     catalogs as parameters instead of loading its own copy.
+
+    **WP28**: `traditions`/`spells`/`powers` default to `()`, unlike `metatypes`/`priorities`/etc.
+    -- mirrors `CharacterSave`'s own Mundane-defaulted new fields (see this module's docstring):
+    a Mundane save (`save.talent_codename == "Mundane"`, every pre-WP28 save's shape) never
+    resolves a tradition or spell/power picks against these catalogs at all, so a caller building
+    only Mundane characters (every existing call site, until WP29) has nothing new to pass.
     """
     heritage = priorities.heritage[save.heritage_letter]
     choice = next(
@@ -294,6 +379,43 @@ def build_character(
         lifestyle_cost=lifestyle_selection.total_cost,
     )
 
+    # WP28: Magic-type/tradition/free-skill-grant. `apply_magic_skill_grant_improvements` mutates
+    # `character.improvements` in place, the same "call it, don't just build the selection" shape
+    # `apply_quality_improvements` above already has.
+    magic_selection = create_magic_selection(
+        save.talent_letter,
+        save.talent_codename,
+        save.tradition_id,
+        save.granted_skill_ids,
+        priorities,
+        traditions,
+        skills,
+    )
+    apply_magic_skill_grant_improvements(character, magic_selection, skills)
+
+    # Spell/power budgets are each the matched Talent option's own field -- 0 for whichever of the
+    # two doesn't apply to `magic_selection.magic_type`, which is exactly what lets
+    # `create_spell_selection`/`create_power_selection` reject a mismatched save's picks (e.g. an
+    # Adept save somehow carrying `spell_ids`) via their own existing budget check rather than a
+    # special case here.
+    spell_budget = 0
+    power_point_budget = 0
+    if magic_selection.magic_type == "Magician":
+        magician_option = next(
+            o
+            for o in offered_talent_options(save.talent_letter, priorities)
+            if o.codename == "Magician"
+        )
+        spell_budget = magician_option.spells or 0
+    elif magic_selection.magic_type == "Adept":
+        power_point_budget = magic_selection.magic_rating
+
+    spell_selection = create_spell_selection(save.spell_ids, spells, budget=spell_budget)
+    power_selection = create_power_selection(
+        save.power_picks, powers, power_point_budget=power_point_budget
+    )
+    apply_power_improvements(character, power_selection)
+
     return replace(
         character,
         skill_allocation=skill_allocation,
@@ -302,4 +424,10 @@ def build_character(
         resources_selection=resources_selection,
         lifestyle_selection=lifestyle_selection,
         metatype_qualities=metatype_qualities,
+        magic_type=magic_selection.magic_type,
+        magic_rating=magic_selection.magic_rating,
+        tradition=magic_selection.tradition,
+        magic_granted_skill_ids=magic_selection.granted_skill_ids,
+        spell_selection=spell_selection,
+        power_selection=power_selection,
     )

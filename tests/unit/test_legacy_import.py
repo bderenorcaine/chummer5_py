@@ -13,14 +13,20 @@ import pytest
 
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
+from chummer5.data.powers import load_powers
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import BonusSupport, load_qualities
 from chummer5.data.skills import load_skills
+from chummer5.data.spells import load_spells
+from chummer5.data.traditions import load_traditions
 from chummer5.io.legacy_chum5 import (
+    LegacyAttribute,
     LegacyCharacter,
     LegacyLifestyle,
+    LegacyPower,
     LegacyQuality,
     LegacySkill,
+    LegacySpell,
     PrioritySelections,
 )
 from chummer5.io.legacy_import import (
@@ -33,19 +39,28 @@ PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
+TRADITIONS = load_traditions()
+SPELLS = load_spells()
+POWERS = load_powers()
 
 
 def _priorities(
-    heritage: str = "D", attributes: str = "A", skills: str = "C", resources: str = "B"
+    heritage: str = "D",
+    attributes: str = "A",
+    skills: str = "C",
+    resources: str = "B",
+    talent: str = "E,0",
+    talent_codename: str = "Mundane",
+    talent_bonus_skills: tuple[str, ...] = (),
 ) -> PrioritySelections:
     return PrioritySelections(
         heritage=f"{heritage},1",
         attributes=f"{attributes},1",
-        talent="E,0",
+        talent=talent,
         skills=f"{skills},1",
         resources=f"{resources},1",
-        talent_codename="Mundane",
-        talent_bonus_skills=(),
+        talent_codename=talent_codename,
+        talent_bonus_skills=talent_bonus_skills,
     )
 
 
@@ -72,6 +87,9 @@ def _legacy_character(**overrides: object) -> LegacyCharacter:
         lifestyles=(
             LegacyLifestyle(base_lifestyle="Low", months=1, monthly_cost=2000, source="SR5"),
         ),
+        tradition_name="",
+        spells=(),
+        powers=(),
         karma_remaining=0,
         build_karma=25,
         nuyen_remaining=0.0,
@@ -89,6 +107,9 @@ def _import(legacy: LegacyCharacter) -> None:
         skills=SKILLS,
         qualities=QUALITIES,
         lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
     )
 
 
@@ -131,14 +152,126 @@ def test_rejects_non_standard_gameplay_option() -> None:
         _import(_legacy_character(game_option="Prime Runner"))
 
 
-def test_rejects_magic_enabled() -> None:
-    with pytest.raises(UnsupportedLegacyCharacterError, match="Magic is enabled"):
-        _import(_legacy_character(magic_enabled=True))
+def test_rejects_unsupported_talent_codename() -> None:
+    """WP28 replaces the old blanket "Magic is enabled" rejection -- a Talent codename outside this
+    project's offered set (Mystic Adept/Technomancer/A.I./Aspected Magician/etc.) is still
+    unbuildable, just with a precise reason now.
+    """
+    with pytest.raises(
+        UnsupportedLegacyCharacterError, match="Talent option 'Mystic Adept' is not supported"
+    ):
+        _import(
+            _legacy_character(
+                magic_enabled=True,
+                priorities=_priorities(talent="A,1", talent_codename="Mystic Adept"),
+            )
+        )
+
+
+def test_rejects_magician_with_unresolvable_tradition() -> None:
+    """A Magician's tradition must resolve to one of the 2 SR5-core traditions this phase offers
+    (Hermetic/Shamanic) -- there is no sensible "import without a tradition" fallback the way there
+    is for a dropped quality/skill/spell/power, so this blocks the whole import. Confirmed against
+    this phase's own real fixture: Miko (Elf Magician)'s own tradition is Shinto (`SG`-sourced), so
+    she hits exactly this reason -- see spec/worklogs/WP28.md.
+    """
+    with pytest.raises(
+        UnsupportedLegacyCharacterError,
+        match="tradition 'Shinto' is not one of the SR5-core traditions",
+    ):
+        _import(
+            _legacy_character(
+                magic_enabled=True,
+                priorities=_priorities(talent="A,1", talent_codename="Magician"),
+                tradition_name="Shinto",
+            )
+        )
+
+
+def test_accepts_magician_with_an_offered_tradition() -> None:
+    """The positive case the two rejection tests above exist to contrast with -- a Magician whose
+    tradition really is one of the 2 offered ones (Hermetic) must import cleanly. Letter C's
+    Magician option grants no free skill (`skill_qty is None`), so this test doesn't also have to
+    supply one -- see `test_talent_free_skill_grant_resolves_by_name_and_reaches_the_built_
+    character` below for that path specifically.
+    """
+    result = import_legacy_character(
+        _legacy_character(
+            magic_enabled=True,
+            priorities=_priorities(talent="C,1", talent_codename="Magician"),
+            tradition_name="Hermetic",
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert result.built.magic_type == "Magician"
+    assert result.built.tradition is not None
+    assert result.built.tradition.name == "Hermetic"
+    magician_option = next(o for o in PRIORITIES.talent["C"].options if o.codename == "Magician")
+    assert result.built.magic_rating == magician_option.magic
+
+
+def test_accepts_adept_with_no_tradition_needed() -> None:
+    """Unlike a Magician, an Adept doesn't pick a tradition at all -- `tradition_name` is simply
+    never consulted for this codename (see `_blocking_reasons`). Letter D's Adept option grants no
+    free skill either (`skill_qty is None`), keeping this test focused on the tradition question
+    alone.
+    """
+    result = import_legacy_character(
+        _legacy_character(
+            magic_enabled=True,
+            priorities=_priorities(talent="D,1", talent_codename="Adept"),
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert result.built.magic_type == "Adept"
+    assert result.built.tradition is None
 
 
 def test_rejects_cyberware() -> None:
     with pytest.raises(UnsupportedLegacyCharacterError, match="cyberware/bioware"):
         _import(_legacy_character(has_cyberware=True))
+
+
+def test_rejects_karma_bought_attribute_points() -> None:
+    """WP28: a real, previously-latent gap surfaced while researching Wesson's own fixture -- MVP's
+    `create_character` only validates priority-derived attribute points against the priority
+    budget, with no accommodation for a real, standard SR5 rule (spending Karma to buy extra
+    attribute points at chargen, beyond the priority budget). `import_legacy_character`'s
+    pre-existing `attribute_points` formula silently combined both sources before this WP; this
+    test proves the new guard fires instead, mirroring cyberware/metavariant's treatment.
+    """
+    with pytest.raises(UnsupportedLegacyCharacterError, match="Karma-bought attribute points"):
+        _import(
+            _legacy_character(
+                attributes=MappingProxyType(
+                    {
+                        "EDG": LegacyAttribute(
+                            name="EDG",
+                            metatype_min=2,
+                            metatype_max=7,
+                            metatype_aug_max=7,
+                            base=1,
+                            karma=1,
+                            total_value=4,
+                        )
+                    }
+                )
+            )
+        )
 
 
 def test_rejects_metavariant() -> None:
@@ -179,12 +312,17 @@ def test_does_not_reject_resonance_enabled() -> None:
 
 
 def test_itemizes_every_blocking_reason_in_one_pass() -> None:
-    legacy = _legacy_character(build_method="SumtoTen", magic_enabled=True, has_cyberware=True)
+    legacy = _legacy_character(
+        build_method="SumtoTen",
+        magic_enabled=True,
+        priorities=_priorities(talent="A,1", talent_codename="Mystic Adept"),
+        has_cyberware=True,
+    )
     with pytest.raises(UnsupportedLegacyCharacterError) as exc_info:
         _import(legacy)
     assert len(exc_info.value.reasons) == 3
     assert any("Priority-built" in r for r in exc_info.value.reasons)
-    assert any("Magic is enabled" in r for r in exc_info.value.reasons)
+    assert any("Talent option 'Mystic Adept' is not supported" in r for r in exc_info.value.reasons)
     assert any("cyberware/bioware" in r for r in exc_info.value.reasons)
 
 
@@ -315,3 +453,119 @@ def test_unresolvable_skill_suid_is_dropped_and_reported_not_fatal() -> None:
     )
     assert result.dropped_skills == ("not-a-real-suid",)
     assert result.save.skill_points == {}
+
+
+def test_talent_free_skill_grant_resolves_by_name_and_reaches_the_built_character() -> None:
+    """`legacy.priorities.talent_bonus_skills` is a tuple of skill *names* -- this WP resolves each
+    against `chummer5.data.skills.load_skills()` by name and passes the resulting ids through to
+    `create_magic_selection`, the same free-skill-grant mechanism WP25 built.
+    """
+    result = import_legacy_character(
+        _legacy_character(
+            magic_enabled=True,
+            priorities=_priorities(
+                talent="A,1",
+                talent_codename="Magician",
+                talent_bonus_skills=("Spellcasting", "Counterspelling"),
+            ),
+            tradition_name="Hermetic",
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert set(result.save.granted_skill_ids) == {
+        next(s.id for s in SKILLS if s.name == "Spellcasting"),
+        next(s.id for s in SKILLS if s.name == "Counterspelling"),
+    }
+    assert result.built.magic_granted_skill_ids == result.save.granted_skill_ids
+
+
+def test_non_sr5_spell_is_dropped_and_reported_not_fatal() -> None:
+    """Mirrors the quality/skill precedent exactly -- a spell that isn't `source == "SR5"` (this
+    project's spell catalog scope, WP26) is excluded from the imported `CharacterSave` and reported
+    via `ImportResult.dropped_spells`, not silently lost with no trace.
+    """
+    sr5_spell = next(s for s in SPELLS if s.name == "Manabolt")
+    result = import_legacy_character(
+        _legacy_character(
+            magic_enabled=True,
+            # Letter C's Magician option grants no free skill (skill_qty is None), keeping this
+            # test focused on the spell question alone.
+            priorities=_priorities(talent="C,1", talent_codename="Magician"),
+            tradition_name="Hermetic",
+            spells=(
+                LegacySpell(name=sr5_spell.name, source="SR5"),
+                LegacySpell(name="Calm Animal", source="SG"),
+            ),
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert result.dropped_spells == ("Calm Animal",)
+    assert result.save.spell_ids == (sr5_spell.id,)
+    assert sr5_spell.id in {s.id for s in result.built.spell_selection.spells}
+
+
+def test_not_yet_supported_power_is_dropped_and_reported_not_fatal() -> None:
+    """Mirrors the quality/skill/spell precedent -- a power that isn't in `mvp_power_catalog`
+    (non-SR5-sourced, or SR5 but `NOT_YET_SUPPORTED`, per WP27) is excluded and reported via
+    `ImportResult.dropped_powers`, never half-applied.
+    """
+    result = import_legacy_character(
+        _legacy_character(
+            magic_enabled=True,
+            priorities=_priorities(talent="D,1", talent_codename="Adept"),
+            powers=(
+                LegacyPower(name="Attribute Boost", rating=1, levels=True, extra=""),
+                LegacyPower(name="Not A Real Power", rating=1, levels=False, extra=""),
+            ),
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert set(result.dropped_powers) == {"Attribute Boost", "Not A Real Power"}
+    assert result.save.power_picks == ()
+    assert result.built.power_selection is not None
+    assert result.built.power_selection.picks == ()
+
+
+def test_flat_bonus_power_is_imported_with_its_rating() -> None:
+    ipa = next(p for p in POWERS if p.name == "Improved Physical Attribute")
+    result = import_legacy_character(
+        _legacy_character(
+            magic_enabled=True,
+            priorities=_priorities(talent="D,1", talent_codename="Adept"),
+            powers=(LegacyPower(name=ipa.name, rating=2, levels=True, extra="BOD"),),
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert result.dropped_powers == ()
+    assert result.save.power_picks == ((ipa.id, 2, "BOD"),)
+    (pick,) = result.built.power_selection.picks
+    assert pick.rating == 2
+    assert pick.selected_attribute == "BOD"

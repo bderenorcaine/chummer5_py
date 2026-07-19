@@ -409,3 +409,25 @@ classifier rule (presence of a `<val>` child is the real discriminator) and the 
 led to — every Adept Power's bonus value is the literal token `"Rating"`, not a hardcoded int the way
 every quality's `FlatBonus` value already is, so WP27's applier needs a rating-resolution step
 `chummer5.data.qualities` never needed.
+
+### 2026-07-19 — Karma-bought attribute points at character creation were never modeled, a general
+legacy-import gap, not a magic-specific one
+
+Surfaced while pursuing WP28's own acceptance criterion (importing `Wesson.chum5` end to end).
+`chummer5.io.legacy_import.import_legacy_character`'s `attribute_points` formula has read
+`legacy.attributes[code].base + legacy.attributes[code].karma` since WP12 — combining
+priority-derived points (`base`) with points bought afterward with Karma, beyond the priority
+budget (`karma`), into one number, then validating that combined total against `create_character`'s
+priority-budget-only check. This was never actually exercised with a nonzero `karma` value before
+WP28: Yeti (the sole Priority-built fixture among the curated mundane 11) has `karma == 0` on every
+allocatable attribute. Wesson does not — his real `<attribute name="EDG"><base>1</base>
+<karma>1</karma></attribute>` against Heritage E's 1-point special-attribute-points budget for
+Human means he spent 1 Karma-bought EDG point beyond that budget, a real, standard SR5
+chargen-time Karma-for-attribute-points purchase this engine has never modeled at all. Not
+magic-specific — any future Priority-built fixture with nonzero attribute `karma` would hit the
+same gap regardless of Talent. Fixed in WP28 by rejecting it as a new, itemized legacy-import
+blocking reason (mirroring cyberware/metavariant), not by implementing the underlying mechanic —
+modeling real Karma-for-attribute-points spend at chargen (which would need a tracked
+starting-Karma budget this engine has no concept of at all) remains out of scope, unraised as its
+own candidate WP for now since nothing currently blocks on it. See Implementation Plan's WP28 and
+`spec/worklogs/WP28.md` for the full research.

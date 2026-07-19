@@ -83,10 +83,16 @@ def test_importing_yeti_through_the_web_layer_matches_the_engine_directly() -> N
 
 
 def test_importing_a_blocked_legacy_character_through_the_web_layer_reports_every_reason() -> None:
-    """`Miko.chum5` (Magic enabled, otherwise clean) is already used by
-    `tests/integration/test_legacy_import_fixtures.py` to isolate the "Magic is enabled" blocking
-    reason against real data; this test confirms that same rejection surfaces correctly through the
-    web route, not just the underlying `import_chum5` call.
+    """`Miko.chum5` (Magic enabled, otherwise clean except for her own non-SR5 tradition) is already
+    used by `tests/integration/test_legacy_import_fixtures.py::test_rejects_miko_for_her_own_
+    unresolvable_tradition` to isolate that blocking reason against real data (WP28 replaced the
+    older blanket "Magic is enabled" rejection this test used to check for); this test confirms the
+    same rejection surfaces correctly through the web route, not just the underlying `import_chum5`
+    call. The web layer itself needs no changes for this -- `import_chum5`'s new `traditions`/
+    `spells`/`powers` parameters all default to `()` (see `chummer5.io.save_format`'s WP28
+    docstring), and an empty tradition catalog already can't resolve Miko's Shinto tradition either
+    way, so `chummer5.web.app`'s existing call site (which passes none of the three, since real
+    Talent selection isn't a web feature until WP29) still produces the correct rejection.
     """
     from tests.fixtures.mundane_chum5 import LEGACY_TESTFILES_DIR
 
@@ -102,7 +108,11 @@ def test_importing_a_blocked_legacy_character_through_the_web_layer_reports_ever
 
     assert response.status_code == 200
     assert "Cannot import" in response.text
-    assert "Magic is enabled" in response.text
+    # Jinja2 autoescapes the quotes around 'Shinto' as HTML entities -- match the substring either
+    # side of them instead of the literal apostrophes.
+    assert "tradition" in response.text
+    assert "Shinto" in response.text
+    assert "is not one of the SR5-core traditions" in response.text
     # A blocked import must not leave a half-applied character behind.
     sheet = client.get("/character/sheet")
     assert "Confirm a metatype and priorities" in sheet.text

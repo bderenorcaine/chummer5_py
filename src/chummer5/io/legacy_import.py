@@ -19,7 +19,12 @@ result:
   treatment for a skill whose `<suid>` doesn't resolve against the loaded skill catalog
   (`ImportResult.dropped_skills`) — in practice this doesn't fire for any curated fixture (every
   `skills.xml` entry is `source == "SR5"`, so every legitimate active-skill `<suid>` resolves), but
-  the reporting exists for the same "don't let something vanish with no trace" reason.
+  the reporting exists for the same "don't let something vanish with no trace" reason. **WP28**
+  extends this same treatment to a Magician's spells (`ImportResult.dropped_spells` — a spell has no
+  chargen-time computed effect, so dropping one that isn't `source == "SR5"` loses nothing an
+  MVP-covered value depends on, mirroring the quality/skill precedent exactly) and an Adept's powers
+  (`ImportResult.dropped_powers` — a power not in `mvp_power_catalog` (non-SR5-sourced, or SR5 but
+  `NOT_YET_SUPPORTED`) is dropped the same way an unsupported quality is, not half-applied).
 - **Blocking, itemized, fatal.** Content that would make an *already-imported* value silently wrong,
   not just incomplete, is rejected outright via `UnsupportedLegacyCharacterError` before any
   selection is built at all: a non-Priority build method (MVP's engine only understands
@@ -27,16 +32,28 @@ result:
   own finding, so there's no budget to validate against), a non-`Standard` `<gameplayoption>` (WP2's
   `load_priorities()` only loads the Standard resources table, so a Prime Runner/Street Level
   character's nuyen budget would silently resolve to the *Standard* table's number for the same
-  letter — wrong, not just incomplete), Magic enabled (MVP's Talent is forced to E/Mundane always;
-  a real Magician/Adept's build fundamentally can't be reconstructed from that), cyberware/bioware
-  presence (WP10's own finding: MVP's `BASE_ESSENCE = 6` constant is only valid for an
-  augmentation-free character — importing one with cyberware and still assuming Essence 6 would
-  silently corrupt Social Limit), a metavariant (out of MVP scope per WP6's metatype filter --
-  the base metatype's attribute ranges the rest of the import would use don't apply to it), and
-  (WP20) a primary Lifestyle that's either missing entirely or not one of the 6 core-rulebook
-  starting tiers `chummer5.data.lifestyle` offers -- silently defaulting to a tier the character
-  never actually chose (e.g. free "Street") would misrepresent a real nuyen spend, not just omit
-  one, so this is blocking rather than excluded-and-reported like a dropped quality/skill.
+  letter — wrong, not just incomplete), cyberware/bioware presence (WP10's own finding: MVP's
+  `BASE_ESSENCE = 6` constant is only valid for an augmentation-free character — importing one with
+  cyberware and still assuming Essence 6 would silently corrupt Social Limit), a metavariant (out of
+  MVP scope per WP6's metatype filter -- the base metatype's attribute ranges the rest of the import
+  would use don't apply to it), and (WP20) a primary Lifestyle that's either missing entirely or not
+  one of the 6 core-rulebook starting tiers `chummer5.data.lifestyle` offers -- silently defaulting
+  to a tier the character never actually chose (e.g. free "Street") would misrepresent a real nuyen
+  spend, not just omit one, so this is blocking rather than excluded-and-reported like a dropped
+  quality/skill. **WP28** replaces the old blanket "Magic is enabled" rejection with two narrower,
+  itemized checks fired only when `legacy.magic_enabled`: a Talent codename outside this project's
+  offered set (`chummer5.engine.magic.OFFERED_TALENT_CODENAMES` — Mystic Adept/Technomancer/A.I./
+  Aspected Magician/etc. are all still unrepresentable, exactly as unbuildable as before, just with
+  a precise reason now); and, Magician-specific, a tradition name that isn't one of the 2 SR5-core
+  traditions this phase offers (Hermetic/Shamanic) — unlike a dropped quality, there is no sensible
+  "import without a tradition" fallback for a Magician (`chummer5.engine.magic
+  .create_magic_selection` itself requires one), so an unresolvable tradition blocks the whole
+  import rather than being silently dropped. **Confirmed against this phase's own two real
+  fixtures**: Miko (Elf Magician) hits exactly this second check — her tradition, Shinto, is
+  `SG`-sourced, not one of the 2 offered — so she is *still* rejected after this WP, just with an
+  honest, specific reason instead of a blanket one (see `spec/worklogs/WP28.md` for why this
+  corrects the Implementation Plan's own more optimistic acceptance text). Wesson (Human Adept)
+  needs no tradition at all and imports cleanly.
   `UnsupportedLegacyCharacterError.reasons` collects *every* blocking issue found in one pass, not
   just the first, so a caller gets one itemized report rather than a fix-one-rerun-find-the-next
   loop.
@@ -80,14 +97,20 @@ from pathlib import Path
 
 from chummer5.data.lifestyle import STARTING_TIER_NAMES, LifestyleTier
 from chummer5.data.metatypes import Metatype
+from chummer5.data.powers import Power
 from chummer5.data.priorities import PriorityTable
 from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
+from chummer5.data.spells import Spell
+from chummer5.data.traditions import Tradition
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character, sr5_metatypes
+from chummer5.engine.magic import OFFERED_TALENT_CODENAMES, mvp_power_catalog
 from chummer5.engine.qualities import mvp_quality_catalog
 from chummer5.engine.resources import Contact
 from chummer5.io.legacy_chum5 import LegacyCharacter, load_chum5, priority_letter
 from chummer5.io.save_format import (
+    DEFAULT_TALENT_CODENAME,
+    DEFAULT_TALENT_LETTER,
     CharacterSave,
     build_character,
     create_character_save,
@@ -113,7 +136,9 @@ class UnsupportedLegacyCharacterError(ValueError):
         super().__init__("cannot import: " + "; ".join(reasons))
 
 
-def _blocking_reasons(legacy: LegacyCharacter) -> tuple[str, ...]:
+def _blocking_reasons(
+    legacy: LegacyCharacter, traditions: tuple[Tradition, ...]
+) -> tuple[str, ...]:
     reasons = []
     if legacy.build_method != PRIORITY_BUILD_METHOD:
         reasons.append(
@@ -126,13 +151,36 @@ def _blocking_reasons(legacy: LegacyCharacter) -> tuple[str, ...]:
             "Standard-only"
         )
     if legacy.magic_enabled:
-        reasons.append("Magic is enabled; MVP does not support magic chargen")
+        codename = legacy.priorities.talent_codename
+        if codename not in OFFERED_TALENT_CODENAMES:
+            reasons.append(
+                f"Talent option {codename!r} is not supported; MVP magic chargen only supports "
+                "Magician and Adept"
+            )
+        elif codename == "Magician":
+            tradition_names = {t.name for t in traditions}
+            if legacy.tradition_name not in tradition_names:
+                reasons.append(
+                    f"tradition {legacy.tradition_name!r} is not one of the SR5-core traditions "
+                    "MVP offers (Hermetic, Shamanic)"
+                )
     if legacy.has_cyberware:
         reasons.append(
             "character has cyberware/bioware; MVP does not model Essence-reducing augmentation"
         )
     if legacy.metavariant is not None:
         reasons.append(f"metavariant {legacy.metavariant!r} is out of MVP scope")
+    karma_bought_attributes = sorted(
+        code
+        for code in ALLOCATABLE_ATTRIBUTES
+        if code in legacy.attributes and legacy.attributes[code].karma > 0
+    )
+    if karma_bought_attributes:
+        reasons.append(
+            "character has Karma-bought attribute points beyond the priority budget on "
+            f"{', '.join(karma_bought_attributes)}; MVP's engine only models priority-derived "
+            "attribute points, not chargen-time Karma spend on attributes"
+        )
     if not legacy.lifestyles:
         reasons.append(
             "no primary Lifestyle found; SR5 requires selecting one at character creation"
@@ -159,6 +207,8 @@ class ImportResult:
     built: Character
     dropped_qualities: tuple[str, ...]
     dropped_skills: tuple[str, ...]
+    dropped_spells: tuple[str, ...]  # WP28: non-SR5-sourced spells, dropped and reported
+    dropped_powers: tuple[str, ...]  # WP28: non-SR5-sourced or NOT_YET_SUPPORTED powers, likewise
 
 
 def import_legacy_character(
@@ -169,20 +219,33 @@ def import_legacy_character(
     skills: tuple[Skill, ...],
     qualities: tuple[Quality, ...],
     lifestyles: tuple[LifestyleTier, ...],
+    traditions: tuple[Tradition, ...] = (),
+    spells: tuple[Spell, ...] = (),
+    powers: tuple[Power, ...] = (),
 ) -> ImportResult:
     """Convert an already-parsed `LegacyCharacter` into a validated, built native character.
 
     Raises `UnsupportedLegacyCharacterError` for blocking content (see module docstring). Excludes
-    (and reports via `ImportResult.dropped_*`) qualities and skills MVP's engine doesn't otherwise
-    model, then builds the result through WP11's `build_character()` so a caller gets back a
-    ready-to-use character, not just a save file.
+    (and reports via `ImportResult.dropped_*`) qualities, skills, spells, and powers MVP's engine
+    doesn't otherwise model, then builds the result through WP11's `build_character()` so a caller
+    gets back a ready-to-use character, not just a save file.
+
+    `traditions`/`spells`/`powers` default to `()`, mirroring `build_character`'s own WP28 defaults
+    -- a Mundane legacy character (`legacy.magic_enabled is False`, every fixture this project
+    imported before WP28) never touches any of the three.
     """
-    reasons = _blocking_reasons(legacy)
+    reasons = _blocking_reasons(legacy, traditions)
     if reasons:
         raise UnsupportedLegacyCharacterError(reasons)
 
+    # `.base` only, not `+ legacy_attribute.karma` -- `_blocking_reasons` above already rejects any
+    # character with a nonzero `karma` on an allocatable attribute (a real, separately-discovered
+    # WP28 finding: MVP's `create_character` only validates priority-derived points against the
+    # priority budget, with no accommodation for chargen-time Karma spend on top of it -- see this
+    # WP's own worklog), so `karma` is always `0` for every attribute reaching this point; keeping
+    # both terms here would silently reintroduce the bug this WP's blocking check exists to prevent.
     attribute_points = {
-        code: legacy.attributes[code].base + legacy.attributes[code].karma
+        code: legacy.attributes[code].base
         for code in ALLOCATABLE_ATTRIBUTES
         if code in legacy.attributes
     }
@@ -244,6 +307,84 @@ def import_legacy_character(
         for c in legacy.contacts
     )
 
+    # WP28: Talent/tradition/free-skill grant. Only trust the legacy save's own `talent_letter`/
+    # `talent_codename` (and its free-skill grant) when `legacy.magic_enabled` -- a Resonance
+    # character (Technomancer/A.I.) carries a real, non-"Mundane" `talent_codename` at a letter that
+    # doesn't even offer "Mundane" as an option (e.g. Yeti-#ffffff2.chum5's own "Technomancer" at
+    # letter B) plus a Resonance-flavored free-skill grant, despite `magic_enabled` being `False`,
+    # and none of it is something `chummer5.engine.magic` models at all (Resonance is out of scope
+    # per the Project Overview; see `chummer5.io.legacy_import`'s own module docstring on
+    # `resonance_enabled` not being blocking). Forcing both fields to their Mundane defaults for any
+    # non-magic-enabled character is the same "ignore Resonance content, don't half-model it" rule
+    # WP6-WP10 already established for Yeti, just applied to this WP's new Talent fields instead of
+    # silently working by never reading them. `_blocking_reasons` above already guarantees a
+    # Magician's tradition resolves against `traditions` (there's no sensible "import without a
+    # tradition" fallback), so that lookup cannot fail here.
+    if legacy.magic_enabled:
+        talent_letter = priority_letter(legacy.priorities.talent)
+        talent_codename = legacy.priorities.talent_codename
+    else:
+        talent_letter = DEFAULT_TALENT_LETTER
+        talent_codename = DEFAULT_TALENT_CODENAME
+    tradition_id = None
+    if talent_codename == "Magician":
+        tradition_id = next(t.id for t in traditions if t.name == legacy.tradition_name)
+
+    # Every name here comes from `priorities.xml`'s own Talent free-skill grant, cross-referencing
+    # `chummer5.data.skills.load_skills()` -- a catalog that's already 100% SR5-sourced (WP3), so an
+    # unresolvable name would mean a real data-integrity bug, not an expected edge case (mirrors
+    # `chummer5.engine.qualities.resolve_metatype_qualities`'s identical "raise, don't drop"
+    # reasoning for the same kind of fixed, catalog-guaranteed cross-reference). Skipped entirely
+    # for a non-magic-enabled character -- see the paragraph above.
+    skills_by_name = {s.name: s for s in skills}
+    granted_skill_ids: list[str] = []
+    if legacy.magic_enabled:
+        for bonus_skill_name in legacy.priorities.talent_bonus_skills:
+            bonus_skill = skills_by_name.get(bonus_skill_name)
+            if bonus_skill is None:
+                raise ValueError(
+                    f"Talent free-skill grant name {bonus_skill_name!r} does not resolve against "
+                    "the SR5 skill catalog"
+                )
+            granted_skill_ids.append(bonus_skill.id)
+
+    # WP28: spells -- excluded-and-reported like a dropped quality/skill, never fatal (a spell has
+    # no chargen-time computed effect; see chummer5.engine.magic's module docstring).
+    spells_by_name = {s.name: s for s in spells}
+    spell_ids: list[str] = []
+    dropped_spells: list[str] = []
+    for legacy_spell in legacy.spells:
+        spell = spells_by_name.get(legacy_spell.name)
+        if spell is None:
+            dropped_spells.append(legacy_spell.name)
+        else:
+            spell_ids.append(spell.id)
+
+    # WP28: powers -- same excluded-and-reported treatment, restricted to `mvp_power_catalog`
+    # (FLAT_BONUS only; a non-SR5-sourced or NOT_YET_SUPPORTED power is dropped, not half-applied).
+    # A `select_attribute`-shaped power (only Improved Physical Attribute among the offered set)
+    # needs its purchased target too -- carried in the legacy save's own `<extra>` field; if that
+    # doesn't resolve to one of the power's real eligible attributes, the whole pick is dropped
+    # rather than guessed at.
+    offered_powers_by_name = {p.name: p for p in mvp_power_catalog(powers)}
+    power_picks: list[tuple[str, int, str | None]] = []
+    dropped_powers: list[str] = []
+    for legacy_power in legacy.powers:
+        power = offered_powers_by_name.get(legacy_power.name)
+        if power is None:
+            dropped_powers.append(legacy_power.name)
+            continue
+        select_attribute_bonus = next(
+            (fb for fb in power.flat_bonuses if fb.target_kind == "select_attribute"), None
+        )
+        selected_attribute: str | None = None
+        if select_attribute_bonus is not None:
+            if legacy_power.extra not in select_attribute_bonus.attribute_options:
+                dropped_powers.append(legacy_power.name)
+                continue
+            selected_attribute = legacy_power.extra
+        power_picks.append((power.id, legacy_power.rating, selected_attribute))
+
     save = create_character_save(
         metatype_name=legacy.metatype,
         heritage_letter=priority_letter(legacy.priorities.heritage),
@@ -267,6 +408,12 @@ def import_legacy_character(
         # represent (missing, or not one of the 6 tiers).
         lifestyle_tier_name=legacy.lifestyles[0].base_lifestyle,
         lifestyle_months=legacy.lifestyles[0].months,
+        talent_letter=talent_letter,
+        talent_codename=talent_codename,
+        tradition_id=tradition_id,
+        granted_skill_ids=granted_skill_ids,
+        spell_ids=spell_ids,
+        power_picks=power_picks,
     )
 
     built = build_character(
@@ -276,6 +423,9 @@ def import_legacy_character(
         skills=skills,
         qualities=qualities,
         lifestyles=lifestyles,
+        traditions=traditions,
+        spells=spells,
+        powers=powers,
     )
 
     return ImportResult(
@@ -283,6 +433,8 @@ def import_legacy_character(
         built=built,
         dropped_qualities=tuple(dropped_qualities),
         dropped_skills=tuple(dropped_skills),
+        dropped_spells=tuple(dropped_spells),
+        dropped_powers=tuple(dropped_powers),
     )
 
 
@@ -294,6 +446,9 @@ def import_chum5(
     skills: tuple[Skill, ...],
     qualities: tuple[Quality, ...],
     lifestyles: tuple[LifestyleTier, ...],
+    traditions: tuple[Tradition, ...] = (),
+    spells: tuple[Spell, ...] = (),
+    powers: tuple[Power, ...] = (),
 ) -> ImportResult:
     """Parse a `.chum5` file (WP4's `load_chum5`) and import it (see `import_legacy_character`)."""
     return import_legacy_character(
@@ -303,4 +458,7 @@ def import_chum5(
         skills=skills,
         qualities=qualities,
         lifestyles=lifestyles,
+        traditions=traditions,
+        spells=spells,
+        powers=powers,
     )

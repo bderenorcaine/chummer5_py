@@ -10,6 +10,12 @@ mundane fixture is `SumtoTen`-built and is rejected on that basis alone, tested 
 (`magenabled == True`) fixture from the wider 34-file corpus, picked specifically because it's
 Priority-built and otherwise clean (Standard gameplay option, no cyberware, no metavariant) -- so it
 exercises exactly one blocking reason rather than several at once. See `spec/worklogs/WP12.md`.
+
+**WP28 update**: Miko still fails to import (see `test_rejects_miko_for_her_own_unresolvable_
+tradition` below) -- but no longer for a blanket "Magic is enabled" reason, since real Magician/
+Adept import support now exists. Her own real gap (a non-SR5 tradition) just happens to be a
+different blocking reason. `Wesson.chum5` (an Adept, needing no tradition) is this phase's real
+magic-import success case -- see `tests/integration/test_magic_fixtures.py`.
 """
 
 from __future__ import annotations
@@ -23,9 +29,12 @@ from tests.fixtures.mundane_chum5 import (
 
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
+from chummer5.data.powers import load_powers
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
+from chummer5.data.spells import load_spells
+from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES
 from chummer5.io.legacy_chum5 import load_chum5
 from chummer5.io.legacy_import import UnsupportedLegacyCharacterError, import_chum5
@@ -35,6 +44,9 @@ PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
+TRADITIONS = load_traditions()
+SPELLS = load_spells()
+POWERS = load_powers()
 
 
 def test_imports_yeti_end_to_end() -> None:
@@ -110,13 +122,22 @@ def test_rejects_sumtoten_mundane_fixture() -> None:
         )
 
 
-def test_rejects_magic_enabled_priority_character() -> None:
+def test_rejects_miko_for_her_own_unresolvable_tradition() -> None:
     """`Miko.chum5` (outside the mundane 11, from the wider legacy corpus) is Priority-built,
-    Standard, cyberware-free, and non-metavariant -- clean on every axis except Magic, so this
-    isolates the "Magic is enabled" rejection reason specifically, against a real save file rather
-    than only a synthetic one (see `tests/unit/test_legacy_import.py` for the synthetic coverage of
-    every other blocking reason and their combinations).
+    Standard, cyberware-free, and non-metavariant -- clean on every axis WP12 already checked.
+    Before WP28, she hit a blanket "Magic is enabled" rejection; after WP28 she is **still
+    rejected**, but for a real, more specific reason this WP's own research found: her tradition,
+    Shinto, is `SG`-sourced, not one of the 2 SR5-core traditions (Hermetic/Shamanic) this project
+    offers -- and there is no sensible "import without a tradition" fallback for a Magician (see
+    `chummer5.io.legacy_import`'s module docstring). This corrects the Implementation Plan's own
+    WP28 acceptance text, which expected Miko to import end to end -- see `spec/worklogs/WP28.md`
+    for the full research. `Wesson.chum5` (an Adept, needing no tradition at all) is this phase's
+    real success case instead -- see `test_imports_wesson_adept_end_to_end` in
+    `tests/integration/test_magic_fixtures.py`.
     """
+    legacy = load_chum5(LEGACY_TESTFILES_DIR / "Miko.chum5")
+    assert legacy.tradition_name == "Shinto"
+
     with pytest.raises(UnsupportedLegacyCharacterError) as exc_info:
         import_chum5(
             LEGACY_TESTFILES_DIR / "Miko.chum5",
@@ -125,5 +146,10 @@ def test_rejects_magic_enabled_priority_character() -> None:
             skills=SKILLS,
             qualities=QUALITIES,
             lifestyles=LIFESTYLES,
+            traditions=TRADITIONS,
+            spells=SPELLS,
+            powers=POWERS,
         )
-    assert exc_info.value.reasons == ("Magic is enabled; MVP does not support magic chargen",)
+    assert exc_info.value.reasons == (
+        "tradition 'Shinto' is not one of the SR5-core traditions MVP offers (Hermetic, Shamanic)",
+    )

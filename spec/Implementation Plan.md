@@ -799,7 +799,7 @@ than this phase silently guessing at generality it doesn't need yet.
   `NOT_YET_SUPPORTED` rather than skipping them quietly, mirroring WP8/WP22's established acceptance
   pattern.
 
-- [ ] **WP28 — Drain Resistance + magic-aware save/load + legacy import unblocking.**
+- [x] **WP28 — Drain Resistance + magic-aware save/load + legacy import unblocking.**
   Goal: finish the derived-stat surface magic chargen needs, and let a real magic character
   round-trip through native save/load and legacy `.chum5` import.
 

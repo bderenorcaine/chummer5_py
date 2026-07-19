@@ -7,10 +7,14 @@ hand-computed expected values built on real `create_character` output.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
+from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.derived import (
+    drain_resistance,
     initiative_dice,
     initiative_value,
     mental_limit,
@@ -23,6 +27,9 @@ from chummer5.engine.improvements import Improvement, ImprovementSource, Improve
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
+TRADITIONS = load_traditions()
+HERMETIC = next(t for t in TRADITIONS if t.name == "Hermetic")
+SHAMANIC = next(t for t in TRADITIONS if t.name == "Shamanic")
 
 
 def _human_choice(heritage_letter: str = "D") -> object:
@@ -145,3 +152,34 @@ def test_condition_monitors_sum_improvements() -> None:
     _add(character, ImprovementType.STUN_CM, 2)
     assert physical_condition_monitor(character) == 11
     assert stun_condition_monitor(character) == 13
+
+
+def test_drain_resistance_is_none_for_mundane() -> None:
+    character = _character()
+    assert drain_resistance(character) is None
+
+
+def test_drain_resistance_hermetic_uses_logic_plus_willpower() -> None:
+    # Hermetic: Logic + Willpower (core rulebook p.278). LOG=1(min)+5=6, WIL=1(min)+4=5 -> 11.
+    character = replace(_character(LOG=5, WIL=4), magic_type="Magician", tradition=HERMETIC)
+    assert drain_resistance(character) == 11
+
+
+def test_drain_resistance_shamanic_uses_charisma_plus_willpower() -> None:
+    # Shamanic: Charisma + Willpower (core rulebook p.279). CHA=1(min)+3=4, WIL=1(min)+2=3 -> 7.
+    character = replace(_character(CHA=3, WIL=2), magic_type="Magician", tradition=SHAMANIC)
+    assert drain_resistance(character) == 7
+
+
+def test_drain_resistance_adept_uses_fixed_body_plus_willpower() -> None:
+    # Adept Drain (core rulebook p.308): fixed Body + Willpower, no tradition involved.
+    # BOD=1(min)+3=4, WIL=1(min)+2=3 -> 7.
+    character = replace(_character(BOD=3, WIL=2), magic_type="Adept")
+    assert character.tradition is None
+    assert drain_resistance(character) == 7
+
+
+def test_drain_resistance_sums_improvements() -> None:
+    character = replace(_character(BOD=3, WIL=2), magic_type="Adept")  # base 7, per above
+    _add(character, ImprovementType.DRAIN_RESISTANCE, 2)
+    assert drain_resistance(character) == 9
