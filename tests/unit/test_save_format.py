@@ -13,9 +13,12 @@ import pytest
 
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
+from chummer5.data.powers import load_powers
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
+from chummer5.data.spells import load_spells
+from chummer5.data.traditions import load_traditions
 from chummer5.engine.resources import Contact
 from chummer5.io.save_format import (
     FORMAT_VERSION,
@@ -31,6 +34,9 @@ PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
+TRADITIONS = load_traditions()
+SPELLS = load_spells()
+POWERS = load_powers()
 
 
 def _sample_save() -> CharacterSave:
@@ -146,3 +152,101 @@ def test_build_character_derives_metatype_qualities_not_from_the_save_file() -> 
     )
     assert [q.name for q in character.metatype_qualities] == ["Low-Light Vision"]
     assert character.improvements.improvements == ()  # NO_EFFECT -- no Improvement to apply
+
+
+def test_json_round_trip_preserves_magic_attribute_points() -> None:
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="A",
+        attributes_letter="B",
+        attribute_points={"EDG": 1},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="D",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        talent_letter="D",
+        talent_codename="Adept",
+        magic_attribute_points=3,
+    )
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["magic_attribute_points"] == 3
+
+
+def test_build_character_applies_magic_attribute_points_to_the_finished_mag_rating() -> None:
+    """Post-WP29 correction: Human at Heritage A has a 9-point special-attribute-points budget
+    (hand-checked against `priorities.xml`); Talent letter D's Adept option grants Magic 2 with a
+    metatype maximum of 6, leaving 4 points of headroom -- spending 3 of them (plus 1 on EDG, well
+    within the shared 9-point budget) should raise the finished MAG rating from 2 to 5, and Power
+    Points (Adept, 1:1 with the *finished* Magic rating) should track that, not the raw 2.
+    """
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="A",
+        attributes_letter="B",
+        attribute_points={"EDG": 1},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="D",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        talent_letter="D",
+        talent_codename="Adept",
+        magic_attribute_points=3,
+    )
+    character = build_character(
+        from_json(to_json(save)),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert character.magic_rating == 2
+    assert character.magic_attribute_points == 3
+    assert character.attribute_value("MAG") == 5
+    assert character.power_points == 5
+
+
+def test_build_character_rejects_magic_attribute_points_exceeding_the_shared_budget() -> None:
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="E",  # Human's Heritage-E special-attribute-points budget is only 1
+        attributes_letter="B",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="D",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        talent_letter="D",
+        talent_codename="Adept",
+        magic_attribute_points=2,
+    )
+    with pytest.raises(ValueError, match="special-attribute-points budget"):
+        build_character(
+            save,
+            metatypes=METATYPES,
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
+            traditions=TRADITIONS,
+            spells=SPELLS,
+            powers=POWERS,
+        )

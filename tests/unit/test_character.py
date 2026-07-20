@@ -221,7 +221,7 @@ def test_mundane_character_mag_is_zero_not_metatype_minimum() -> None:
     assert character.power_points == 0
 
 
-def test_magic_character_mag_is_the_stored_rating_not_a_formula() -> None:
+def test_magic_character_mag_defaults_to_the_talent_granted_rating_with_zero_points_spent() -> None:
     human = _human_choice("D")
     character = create_character(
         metatype_choice=human,
@@ -237,6 +237,67 @@ def test_magic_character_mag_is_the_stored_rating_not_a_formula() -> None:
     adept = replace(character, magic_type="Adept", magic_rating=4)
     assert adept.attribute_value("MAG") == 4
     assert adept.power_points == 4
+
+
+def test_magic_character_mag_adds_magic_attribute_points_on_top_of_magic_rating() -> None:
+    # Post-WP29 correction: MAG uses the exact same "minimum + points + improvements" shape every
+    # other attribute does -- the "minimum" is just Talent-sourced (magic_rating) instead of
+    # metatype-sourced. See spec/rulebooks/learnings.md's "Post-WP29 correction" entry.
+    human = _human_choice("D")
+    character = create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    adept = replace(character, magic_type="Adept", magic_rating=4, magic_attribute_points=2)
+    assert adept.attribute_value("MAG") == 6
+    assert adept.power_points == 6  # Power Points track the *finished* Magic rating, not the raw 4
+
+
+def test_magic_character_mag_caps_at_the_metatype_maximum_even_with_points_and_improvements() -> (
+    None
+):
+    human = _human_choice("D")
+    character = create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    adept = replace(character, magic_type="Adept", magic_rating=5, magic_attribute_points=3)
+    adept.improvements.add(
+        Improvement(
+            improvement_type=ImprovementType.ATTRIBUTE,
+            target="MAG",
+            value=2,
+            source_type=ImprovementSource.QUALITY,
+            source_id="quality-exceptional-attribute",
+        )
+    )
+    # 5 + 3 + 2 = 10, capped at Human's MAG maximum of 6.
+    assert adept.attribute_value("MAG") == 6
+    assert adept.power_points == 6
+
+
+def test_magic_attribute_points_do_not_affect_a_mundane_characters_mag() -> None:
+    # A stray magic_attribute_points value (e.g. from a stale save) must never leak into MAG for a
+    # Mundane character -- magic_type is None still means "not allocatable at all", not
+    # "0 + points".
+    human = _human_choice("D")
+    character = create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    stale = replace(character, magic_attribute_points=3)
+    assert stale.magic_type is None
+    assert stale.attribute_value("MAG") == 0
+    assert stale.power_points == 0
 
 
 def test_character_attribute_points_is_read_only_mapping() -> None:

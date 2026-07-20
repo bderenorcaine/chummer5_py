@@ -164,6 +164,7 @@ from chummer5.engine.magic import (
     PowerSelection,
     apply_magic_skill_grant_improvements,
     apply_power_improvements,
+    create_magic_attribute_points,
     create_magic_selection,
     create_power_selection,
     create_spell_selection,
@@ -451,6 +452,7 @@ def _parse_power_picks(
 def _attribute_allocation_context(
     character: Character | None,
     attribute_points: Mapping[str, int],
+    magic_points: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -465,23 +467,41 @@ def _attribute_allocation_context(
     raising, and the caller decides separately (via `create_character`) whether to actually commit
     the submission to the session.
 
+    **Post-WP29 correction**: `magic_points` -- Special Attribute Points spent raising MAG beyond
+    `character.magic_rating` -- is a *separate* parameter from `attribute_points`, not one more key
+    inside it: `create_character` itself only ever validates `ALLOCATABLE_ATTRIBUTES` (still just
+    the primary 8 + EDG; see `chummer5.engine.character.Character`'s own docstring correction for
+    why MAG's allocatability is character-specific, not a fixed global set `create_character` could
+    validate unconditionally). When `character.magic_type is not None`, a `"MAG"` row is appended
+    to `attribute_rows` with the *same* shape every other row has (`code`/`minimum`/`maximum`/
+    `points`/`value`) -- `_attribute_allocation.html` needs no template branching to render it,
+    since `row.minimum`/`row.maximum` already give it the correct `max="{{ row.maximum -
+    row.minimum }}"` headroom on the numeric input. Absent entirely for Mundane/uncommitted-Talent
+    characters, mirroring the legacy `MAGEnabled` flag's "not just zero, not allocatable at all"
+    gating.
+
     **WP19**: when `error` is unset (a clean render, not an echo of a submission this same request
-    just rejected), re-runs `create_character` against `character`'s own current
-    metatype/heritage/attributes letter and `attribute_points`, purely to derive
-    `attribute_budget_warning` from whatever `ValueError` it raises (discarding the exception
-    itself, not its message) -- `submit_priorities` no longer resets a carried-forward spend that
-    no longer fits a just-reconfirmed letter/metatype (see its own comment), so this is what
-    surfaces that fact, freshly, on every render for as long as it stays true. Distinct from
-    `attribute_error` (sourced from a `ValueError` raised by *this specific request's* submission,
-    never stored) so a template can style "you just typed something invalid" differently from
-    "this was fine when you entered it, but a priority change since then broke it."
+    just rejected), re-runs `create_character` (and, when applicable, `create_magic_attribute_
+    points`) against `character`'s own current metatype/heritage/attributes/Talent state and
+    `attribute_points`/`magic_points`, purely to derive `attribute_budget_warning` from whatever
+    `ValueError` either raises (discarding the exception itself, not its message) --
+    `submit_priorities` no longer resets a carried-forward spend that no longer fits a
+    just-reconfirmed letter/metatype (see its own comment), so this is what surfaces that fact,
+    freshly, on every render for as long as it stays true. Distinct from `attribute_error` (sourced
+    from a `ValueError` raised by *this specific request's* submission, never stored) so a template
+    can style "you just typed something invalid" differently from "this was fine when you entered
+    it, but a priority change since then broke it."
     """
     if character is None:
         return {"character": None, "attribute_error": error}
-    display = replace(character, attribute_points=MappingProxyType(dict(attribute_points)))
+    display = replace(
+        character,
+        attribute_points=MappingProxyType(dict(attribute_points)),
+        magic_attribute_points=magic_points,
+    )
     primary_budget = PRIORITIES.attributes[character.attributes_letter].points
     primary_spent = sum(attribute_points.get(code, 0) for code in PRIMARY_ATTRIBUTES)
-    special_spent = sum(attribute_points.get(code, 0) for code in SPECIAL_ATTRIBUTES)
+    special_spent = sum(attribute_points.get(code, 0) for code in SPECIAL_ATTRIBUTES) + magic_points
     rows = [
         {
             "code": code,
@@ -492,6 +512,16 @@ def _attribute_allocation_context(
         }
         for code in ALLOCATABLE_ATTRIBUTES
     ]
+    if character.magic_type is not None:
+        rows.append(
+            {
+                "code": "MAG",
+                "minimum": character.magic_rating,
+                "maximum": display.attribute_range("MAG").maximum,
+                "points": magic_points,
+                "value": display.attribute_value("MAG"),
+            }
+        )
     budget_warning: str | None = None
     if error is None:
         validation_choice = MetatypeChoice(
@@ -505,6 +535,15 @@ def _attribute_allocation_context(
                 PRIORITIES,
                 attribute_points,
             )
+            if character.magic_type is not None:
+                create_magic_attribute_points(
+                    character.magic_type,
+                    magic_points,
+                    character.magic_rating,
+                    character.attribute_range("MAG").maximum,
+                    character.special_attribute_points,
+                    attribute_points.get("EDG", 0),
+                )
         except ValueError as exc:
             budget_warning = (
                 f"No longer fits since priorities were last confirmed: {exc}. "
@@ -732,6 +771,11 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
     reasoning). The player re-picks spells/powers after any Talent change, the same "start that
     stage over" behavior a metatype swap already gives `skill_allocation` et al. pre-WP19 -- Talent
     is foundational in the same way, just narrower in what it resets.
+
+    **Post-WP29 correction**: `magic_attribute_points` resets to `0` for the identical reason --
+    a changed `magic_rating` (different letter/codename) changes how much headroom is even left to
+    spend, so whatever was previously spent can't be blindly carried forward; the player re-spends
+    from the Attributes section after any Talent change, same as spells/powers.
     """
     character.improvements.remove_source(ImprovementSource.TALENT, MAGIC_SKILL_GRANT_SOURCE_ID)
     _remove_adept_power_improvements(character)
@@ -744,6 +788,7 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
         magic_granted_skill_ids=selection.granted_skill_ids,
         spell_selection=None,
         power_selection=None,
+        magic_attribute_points=0,
     )
 
 
@@ -1306,7 +1351,10 @@ def _character_sheet_context(
         # block in `_character_sheet.html`, mirroring how `lifestyle_tier_name`/etc. already gate
         # their own "None until committed" sections.
         "magic_type": character.magic_type,
-        "magic_rating": character.magic_rating,
+        # Post-WP29 correction: the *finished* MAG rating (Talent-granted base + any Special
+        # Attribute Points spent + improvements), not the raw Talent-granted `magic_rating` alone
+        # -- see chummer5.engine.character.Character's own docstring correction.
+        "magic_rating": character.attribute_value("MAG"),
         "tradition_name": character.tradition.name if character.tradition is not None else None,
         "power_points": character.power_points,
         "drain_resistance": drain_resistance(character),
@@ -1411,6 +1459,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         granted_skill_ids=character.magic_granted_skill_ids,
         spell_ids=spell_ids,
         power_picks=power_picks,
+        magic_attribute_points=character.magic_attribute_points,
     )
 
 
@@ -1504,7 +1553,8 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     )
     power_ctx = _power_selection_context(character, power_picks)
     attribute_points = character.attribute_points if character is not None else {}
-    attribute_ctx = _attribute_allocation_context(character, attribute_points)
+    magic_points = character.magic_attribute_points if character is not None else 0
+    attribute_ctx = _attribute_allocation_context(character, attribute_points, magic_points)
     allocation = character.skill_allocation if character is not None else None
     skill_points = allocation.skill_points if allocation is not None else {}
     group_points = allocation.group_points if allocation is not None else {}
@@ -1773,16 +1823,26 @@ def create_app() -> FastAPI:
         else:
             form = await request.form()
             attribute_points = _parse_points(form, ALLOCATABLE_ATTRIBUTES, "attr_")
+            previous = session.character
+            # Post-WP29 correction: MAG's own points (when allocatable at all -- see this section's
+            # own comment below) are parsed and validated separately from `attribute_points`, since
+            # `create_character` only ever validates `ALLOCATABLE_ATTRIBUTES` -- see `chummer5
+            # .engine.character.Character`'s docstring correction for why MAG's allocatability is
+            # character-specific rather than a fixed global set.
+            magic_points = (
+                _parse_points(form, ("MAG",), "attr_").get("MAG", 0)
+                if previous.magic_type is not None
+                else 0
+            )
             # `create_character` only needs `metatype`/`special_attribute_points` off a
             # `MetatypeChoice` (see its own docstring) -- both are already stable fields on the
             # session's committed `Character`, so there's no need to re-look-up the Heritage
             # priority/metatype catalog here the way `submit_priorities` does.
             choice = MetatypeChoice(
-                metatype=session.character.metatype,
-                special_attribute_points=session.character.special_attribute_points,
+                metatype=previous.metatype,
+                special_attribute_points=previous.special_attribute_points,
                 karma=0,
             )
-            previous = session.character
             try:
                 character = create_character(
                     choice,
@@ -1791,9 +1851,18 @@ def create_app() -> FastAPI:
                     PRIORITIES,
                     attribute_points,
                 )
+                if previous.magic_type is not None:
+                    magic_points = create_magic_attribute_points(
+                        previous.magic_type,
+                        magic_points,
+                        previous.magic_rating,
+                        previous.attribute_range("MAG").maximum,
+                        previous.special_attribute_points,
+                        attribute_points.get("EDG", 0),
+                    )
             except ValueError as exc:
                 context = _attribute_allocation_context(
-                    session.character, attribute_points, error=str(exc)
+                    session.character, attribute_points, magic_points, error=str(exc)
                 )
             else:
                 # See the identical comment in submit_priorities -- a fresh Character means fresh
@@ -1810,15 +1879,19 @@ def create_app() -> FastAPI:
                 # WP29: same reasoning -- Talent/tradition/free-skill-grant Improvements, and the
                 # Adept power selection's own Improvements, need re-landing on this fresh index too,
                 # or a Magician/Adept would silently reset to Mundane on the next attribute edit.
+                # `magic_points` is *not* carried from `previous` here -- it's this same request's
+                # own freshly-validated submission (the Attributes form is where MAG points are
+                # spent, echoing whatever was already committed unless just edited).
                 character = _relink_magic_selection(character, session.talent_letter, previous)
                 character = replace(
                     character,
                     skill_allocation=previous.skill_allocation,
                     resources_selection=previous.resources_selection,
                     lifestyle_selection=previous.lifestyle_selection,
+                    magic_attribute_points=magic_points,
                 )
                 session.character = character
-                context = _attribute_allocation_context(character, attribute_points)
+                context = _attribute_allocation_context(character, attribute_points, magic_points)
         response = templates.TemplateResponse(request, "_attribute_allocation.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

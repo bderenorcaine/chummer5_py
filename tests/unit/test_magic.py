@@ -18,6 +18,7 @@ from chummer5.engine.magic import (
     SpellSelection,
     apply_magic_skill_grant_improvements,
     apply_power_improvements,
+    create_magic_attribute_points,
     create_magic_selection,
     create_power_selection,
     create_spell_selection,
@@ -473,3 +474,42 @@ def test_apply_power_improvements_source_id_is_the_powers_own_id() -> None:
     (improvement,) = character.improvements.improvements
     assert improvement.source_type == ImprovementSource.ADEPT_POWER
     assert improvement.source_id == IMPROVED_POTENTIAL_PHYSICAL_ID
+
+
+# -- create_magic_attribute_points (post-WP29 correction) --------------------------------------
+# Core rulebook p.65: Special Attribute Points "may be split... between... Edge and Magic or
+# Resonance." See spec/rulebooks/learnings.md's "Post-WP29 correction" entry for the full research.
+
+
+def test_magic_attribute_points_mundane_rejects_any_nonzero_spend() -> None:
+    with pytest.raises(ValueError, match="not allocatable"):
+        create_magic_attribute_points(None, 1, 0, 6, 3, 0)
+
+
+def test_magic_attribute_points_mundane_allows_zero() -> None:
+    assert create_magic_attribute_points(None, 0, 0, 6, 3, 0) == 0
+
+
+def test_magic_attribute_points_rejects_negative() -> None:
+    with pytest.raises(ValueError, match="must not be negative"):
+        create_magic_attribute_points("Adept", -1, 4, 6, 3, 0)
+
+
+def test_magic_attribute_points_rejects_exceeding_the_metatype_magic_maximum() -> None:
+    with pytest.raises(ValueError, match="exceed the metatype's Magic maximum"):
+        create_magic_attribute_points("Adept", 3, 4, 6, 5, 0)
+
+
+def test_magic_attribute_points_rejects_exceeding_the_shared_special_attribute_budget() -> None:
+    # magic_rating=2, magic_maximum=6 leaves plenty of headroom on MAG alone, but 2 points on top
+    # of 2 already spent on EDG exceeds a budget of 3.
+    with pytest.raises(ValueError, match="Edge \\+ Magic combined"):
+        create_magic_attribute_points("Adept", 2, 2, 6, 3, 2)
+
+
+def test_magic_attribute_points_valid_spend_returns_the_points_unchanged() -> None:
+    assert create_magic_attribute_points("Magician", 2, 4, 6, 3, 1) == 2
+
+
+def test_magic_attribute_points_zero_spend_is_always_fine_for_a_magic_active_character() -> None:
+    assert create_magic_attribute_points("Adept", 0, 6, 6, 0, 0) == 0

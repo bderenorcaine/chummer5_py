@@ -56,6 +56,12 @@ exist yet. `DEFAULT_TALENT_LETTER` is its own module-local constant here, not im
 not depend on `web`. A future WP29 would simply stop relying on the default once the web layer has
 real Talent selections to pass.
 
+**Post-WP29 correction** adds `magic_attribute_points` -- Special Attribute Points spent raising
+MAG beyond `talent_codename`'s starting rating, a real, rulebook-confirmed mechanic WP25 originally
+(and wrongly) modeled as impossible; see `chummer5.engine.character.Character`'s own docstring
+correction and `spec/rulebooks/learnings.md`. Defaults to `0`, the same "predates this field"
+shape every other magic field above defaults to Mundane.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -86,6 +92,7 @@ from chummer5.engine.lifestyle import create_lifestyle_selection
 from chummer5.engine.magic import (
     apply_magic_skill_grant_improvements,
     apply_power_improvements,
+    create_magic_attribute_points,
     create_magic_selection,
     create_power_selection,
     create_spell_selection,
@@ -150,6 +157,11 @@ class CharacterSave:
     granted_skill_ids: tuple[str, ...] = ()
     spell_ids: tuple[str, ...] = ()
     power_picks: tuple[PowerPickTriple, ...] = ()
+    # Post-WP29 correction: Special Attribute Points spent raising Magic beyond magic_rating (see
+    # chummer5.engine.character.Character's own docstring correction and chummer5.engine.magic
+    # .create_magic_attribute_points). Defaults to 0 for the same "predates this field" reason
+    # every other WP28 magic field defaults to Mundane.
+    magic_attribute_points: int = 0
 
 
 def create_character_save(
@@ -173,6 +185,7 @@ def create_character_save(
     granted_skill_ids: Iterable[str] = (),
     spell_ids: Iterable[str] = (),
     power_picks: Iterable[PowerPickTriple] = (),
+    magic_attribute_points: int = 0,
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -202,6 +215,7 @@ def create_character_save(
         granted_skill_ids=tuple(granted_skill_ids),
         spell_ids=tuple(spell_ids),
         power_picks=tuple(power_picks),
+        magic_attribute_points=magic_attribute_points,
     )
 
 
@@ -238,6 +252,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
             {"power_id": power_id, "rating": rating, "selected_attribute": selected_attribute}
             for power_id, rating, selected_attribute in save.power_picks
         ],
+        "magic_attribute_points": save.magic_attribute_points,
     }
 
 
@@ -282,6 +297,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
             (p["power_id"], p["rating"], p["selected_attribute"])
             for p in data.get("power_picks", ())
         ),
+        magic_attribute_points=data.get("magic_attribute_points", 0),
     )
 
 
@@ -393,11 +409,26 @@ def build_character(
     )
     apply_magic_skill_grant_improvements(character, magic_selection, skills)
 
+    # Post-WP29 correction: Special Attribute Points spent raising MAG beyond magic_selection
+    # .magic_rating, drawn from the same pool `create_character` above already validated EDG
+    # against -- see chummer5.engine.magic.create_magic_attribute_points's own docstring.
+    magic_attribute_points = create_magic_attribute_points(
+        magic_selection.magic_type,
+        save.magic_attribute_points,
+        magic_selection.magic_rating,
+        choice.metatype.attributes["MAG"].maximum,
+        choice.special_attribute_points,
+        save.attribute_points.get("EDG", 0),
+    )
+    total_magic_rating = magic_selection.magic_rating + magic_attribute_points
+
     # Spell/power budgets are each the matched Talent option's own field -- 0 for whichever of the
     # two doesn't apply to `magic_selection.magic_type`, which is exactly what lets
     # `create_spell_selection`/`create_power_selection` reject a mismatched save's picks (e.g. an
     # Adept save somehow carrying `spell_ids`) via their own existing budget check rather than a
-    # special case here.
+    # special case here. Power Points use `total_magic_rating` (the *finished* Magic rating,
+    # including any Special Attribute Points spent), not the raw Talent-granted `magic_rating`
+    # alone, per the rulebook's own "Power Points equal to their Magic attribute" (p.278).
     spell_budget = 0
     power_point_budget = 0
     if magic_selection.magic_type == "Magician":
@@ -408,7 +439,7 @@ def build_character(
         )
         spell_budget = magician_option.spells or 0
     elif magic_selection.magic_type == "Adept":
-        power_point_budget = magic_selection.magic_rating
+        power_point_budget = total_magic_rating
 
     spell_selection = create_spell_selection(save.spell_ids, spells, budget=spell_budget)
     power_selection = create_power_selection(
@@ -430,4 +461,5 @@ def build_character(
         magic_granted_skill_ids=magic_selection.granted_skill_ids,
         spell_selection=spell_selection,
         power_selection=power_selection,
+        magic_attribute_points=magic_attribute_points,
     )

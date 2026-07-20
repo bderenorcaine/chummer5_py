@@ -274,6 +274,95 @@ def test_rejects_karma_bought_attribute_points() -> None:
         )
 
 
+def test_rejects_karma_bought_mag_points() -> None:
+    """Post-WP29 correction: MAG shares the same "no chargen-time Karma spend modeled" constraint
+    as every other allocatable attribute once it's actually allocatable at all (`magic_enabled`).
+    """
+    with pytest.raises(UnsupportedLegacyCharacterError, match="Karma-bought attribute points"):
+        _import(
+            _legacy_character(
+                magic_enabled=True,
+                priorities=_priorities(talent="D,1", talent_codename="Adept"),
+                attributes=MappingProxyType(
+                    {
+                        "MAG": LegacyAttribute(
+                            name="MAG",
+                            metatype_min=1,
+                            metatype_max=6,
+                            metatype_aug_max=6,
+                            base=1,
+                            karma=1,
+                            total_value=4,
+                        )
+                    }
+                ),
+            )
+        )
+
+
+def test_does_not_reject_karma_on_mag_when_magic_is_not_enabled() -> None:
+    """The MAG-specific karma check only fires when `legacy.magic_enabled` -- a Mundane character's
+    raw `<attribute name="MAG">` (Resonance/Technomancer content sometimes carries a nonzero one,
+    per WP28's own Yeti finding) must not spuriously block an otherwise-clean Mundane import.
+    """
+    _import(
+        _legacy_character(
+            attributes=MappingProxyType(
+                {
+                    "MAG": LegacyAttribute(
+                        name="MAG",
+                        metatype_min=1,
+                        metatype_max=6,
+                        metatype_aug_max=6,
+                        base=0,
+                        karma=1,
+                        total_value=1,
+                    )
+                }
+            ),
+        )
+    )  # no exception
+
+
+def test_magic_attribute_points_resolves_from_legacys_mag_base() -> None:
+    """Post-WP29 correction: `legacy.attributes["MAG"].base` -- the same field `attribute_points`
+    already reads for EDG -- is the Special Attribute Points spent raising MAG beyond the
+    Talent-granted starting rating. Letter D's Adept option grants Magic 2 (headroom to 6); Human's
+    default Heritage-D special-attribute-points budget (3, hand-checked against `priorities.xml`)
+    comfortably covers the 2 points spent here with none left over for EDG.
+    """
+    result = import_legacy_character(
+        _legacy_character(
+            magic_enabled=True,
+            priorities=_priorities(talent="D,1", talent_codename="Adept"),
+            attributes=MappingProxyType(
+                {
+                    "MAG": LegacyAttribute(
+                        name="MAG",
+                        metatype_min=1,
+                        metatype_max=6,
+                        metatype_aug_max=6,
+                        base=2,
+                        karma=0,
+                        total_value=4,
+                    )
+                }
+            ),
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert result.built.magic_attribute_points == 2
+    assert result.built.attribute_value("MAG") == 4
+    assert result.built.power_points == 4
+
+
 def test_rejects_metavariant() -> None:
     with pytest.raises(UnsupportedLegacyCharacterError, match="metavariant"):
         _import(_legacy_character(metavariant="Oni"))

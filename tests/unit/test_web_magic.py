@@ -15,6 +15,7 @@ rather than trying to reproduce either fixture's exact numbers.
 
 from __future__ import annotations
 
+import json
 import re
 
 from fastapi.testclient import TestClient
@@ -395,3 +396,166 @@ def test_confirming_an_unoffered_codename_is_rejected() -> None:
     )
 
     assert "is not an offered Talent option at letter" in response.text
+
+
+# -- Post-WP29 correction: Special Attribute Points spent raising MAG --------------------------
+# Core rulebook p.65: Special Attribute Points "may be split... between... Edge and Magic or
+# Resonance." See spec/rulebooks/learnings.md's "Post-WP29 correction" entry for the full research.
+
+
+def test_attribute_form_shows_no_mag_row_for_mundane() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="E")
+
+    response = client.get("/")
+
+    assert 'name="attr_MAG"' not in response.text
+
+
+def test_attribute_form_shows_a_mag_row_once_talent_is_confirmed() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="C")  # letter C Adept: magic=4, metatype max 6
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "C", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
+    )
+
+    response = client.get("/")
+
+    assert 'name="attr_MAG"' in response.text
+
+
+def test_spending_special_attribute_points_on_mag_raises_the_total() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="C")  # Adept: magic=4, headroom to 6
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "C", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
+    )
+
+    response = client.post("/ui/attributes", data={"attr_MAG": "2"})
+
+    assert response.status_code == 200
+    assert "<td>MAG</td><td><input" in _compact(response.text)
+
+    sheet = client.get("/character/sheet")
+    assert "Magic rating: 6" in sheet.text
+    assert "Power Points: 6" in sheet.text
+
+
+def test_mag_points_cannot_exceed_the_metatypes_own_magic_maximum() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="C")  # Adept: magic=4, max 6 -> only 2 points of headroom
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "C", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
+    )
+
+    response = client.post("/ui/attributes", data={"attr_MAG": "3"})
+
+    assert "exceed the metatype&#39;s Magic maximum" in response.text
+
+
+def test_edg_and_mag_share_one_special_attribute_points_budget() -> None:
+    """Confirms the cross-check specifically -- both EDG=1 and MAG=1 individually fit their own
+    per-attribute range/maximum easily, but their *combined* cost (2) exceeds Human's Heritage-E
+    special-attribute-points budget (1, hand-checked against `priorities.xml`).
+    """
+    client = TestClient(create_app())
+    client.get("/")
+    heritage = PRIORITIES.heritage["E"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "E",
+            "talent_letter": "D",  # letter D Adept: magic=2, headroom to 6
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "A",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+    assert "Confirmed: Human" in response.text
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "D", "talent_codename": "Adept", "granted_skill_id": []},
+    )
+
+    response = client.post("/ui/attributes", data={"attr_EDG": "1", "attr_MAG": "1"})
+
+    assert "special-attribute-points budget of 1" in response.text
+
+
+def test_talent_resubmission_resets_magic_attribute_points() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="C")
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "C", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
+    )
+    client.post("/ui/attributes", data={"attr_MAG": "2"})
+    sheet_before = client.get("/character/sheet")
+    assert "Magic rating: 6" in sheet_before.text
+
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "C", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
+    )
+
+    sheet_after = client.get("/character/sheet")
+    assert "Magic rating: 4" in sheet_after.text  # back to the raw Talent-granted rating
+    response = client.get("/")
+    # The MAG row's own points input reset to 0 -- match regardless of attribute
+    # order/whitespace inside the <input> tag itself (unlike inter-tag whitespace, `_compact`
+    # doesn't normalize that).
+    match = re.search(r'name="attr_MAG"[^>]*value="(\d+)"', response.text)
+    assert match is not None
+    assert match.group(1) == "0"
+
+
+def test_attribute_resubmission_preserves_spent_magic_attribute_points() -> None:
+    """Mirrors `test_attribute_resubmission_preserves_the_carried_forward_magic_selection` above,
+    but for the newer `magic_attribute_points` field specifically -- an unrelated primary-attribute
+    edit must not silently drop MAG points already spent.
+    """
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="C")
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "C", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
+    )
+    client.post("/ui/attributes", data={"attr_MAG": "2"})
+
+    response = client.post("/ui/attributes", data={"attr_MAG": "2", "attr_BOD": "1"})
+
+    assert response.status_code == 200
+    sheet = client.get("/character/sheet")
+    assert "Magic rating: 6" in sheet.text
+
+
+def test_save_load_round_trip_preserves_magic_attribute_points() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="C")
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "C", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
+    )
+    client.post("/ui/attributes", data={"attr_MAG": "2"})
+
+    save_response = client.get("/character/save")
+    save_data = json.loads(save_response.content)
+    assert save_data["magic_attribute_points"] == 2
+
+    fresh_client = TestClient(create_app())
+    fresh_client.get("/")
+    load_response = fresh_client.post(
+        "/character/load",
+        files={"save_file": ("character.json", save_response.content, "application/json")},
+    )
+    assert "Character loaded." in load_response.text
+    sheet = fresh_client.get("/character/sheet")
+    assert "Magic rating: 6" in sheet.text
+    assert "Power Points: 6" in sheet.text

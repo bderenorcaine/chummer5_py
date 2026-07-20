@@ -170,9 +170,16 @@ def _blocking_reasons(
         )
     if legacy.metavariant is not None:
         reasons.append(f"metavariant {legacy.metavariant!r} is out of MVP scope")
+    # Post-WP29 correction: MAG shares the same "priority-derived points only, no chargen-time
+    # Karma spend modeled" constraint as every other allocatable attribute once it's actually
+    # allocatable at all (`legacy.magic_enabled`) -- see chummer5.engine.character.Character's own
+    # docstring correction for why MAG is a real point-buy now, sharing EDG's budget.
+    karma_checked_attributes = (
+        (*ALLOCATABLE_ATTRIBUTES, "MAG") if legacy.magic_enabled else ALLOCATABLE_ATTRIBUTES
+    )
     karma_bought_attributes = sorted(
         code
-        for code in ALLOCATABLE_ATTRIBUTES
+        for code in karma_checked_attributes
         if code in legacy.attributes and legacy.attributes[code].karma > 0
     )
     if karma_bought_attributes:
@@ -330,6 +337,16 @@ def import_legacy_character(
     if talent_codename == "Magician":
         tradition_id = next(t.id for t in traditions if t.name == legacy.tradition_name)
 
+    # Post-WP29 correction: Special Attribute Points spent raising MAG beyond the Talent-granted
+    # starting rating -- `legacy.attributes["MAG"].base` is exactly that number, the same field
+    # `attribute_points` above already reads for EDG. `_blocking_reasons` guarantees `.karma` is 0
+    # here (see its own updated check), so `.base` alone is the full priority-derived spend.
+    magic_attribute_points = (
+        legacy.attributes["MAG"].base
+        if legacy.magic_enabled and "MAG" in legacy.attributes
+        else 0
+    )
+
     # Every name here comes from `priorities.xml`'s own Talent free-skill grant, cross-referencing
     # `chummer5.data.skills.load_skills()` -- a catalog that's already 100% SR5-sourced (WP3), so an
     # unresolvable name would mean a real data-integrity bug, not an expected edge case (mirrors
@@ -414,6 +431,7 @@ def import_legacy_character(
         granted_skill_ids=granted_skill_ids,
         spell_ids=spell_ids,
         power_picks=power_picks,
+        magic_attribute_points=magic_attribute_points,
     )
 
     built = build_character(

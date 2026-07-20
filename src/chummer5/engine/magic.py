@@ -204,6 +204,62 @@ def create_magic_selection(
     )
 
 
+def create_magic_attribute_points(
+    magic_type: str | None,
+    points: int,
+    magic_rating: int,
+    magic_maximum: int,
+    special_attribute_points_budget: int,
+    other_special_attribute_points_spent: int,
+) -> int:
+    """Validate `points` spent raising Magic (or Resonance -- not modeled, RES stays out of scope
+    entirely per the Project Overview) beyond the Talent-granted starting rating.
+
+    **Correction to this module's own earlier finding.** WP25's docstring claimed "the Magic rating
+    is not a point-buy" -- true that it isn't funded from the *Attributes*-priority budget the
+    primary 8 attributes use, but wrong that it can't be raised at all. Core rulebook p.65 ("Choose
+    Metatype" -> "Special Attributes"): "[Special attribute points] may be spent entirely on Edge
+    if the player chooses not to play a magic user or a technomancer, or they may split these
+    points as they see fit between their Edge and Magic or Resonance attribute ratings if the
+    player so chooses" -- confirmed both in the rulebook's own worked examples (p.69-70, a
+    Magic/Resonance row with its own "Points Spent" column right alongside Edge's) and in the
+    legacy `SelectMetatypePriority.cs`'s "Set starting magic" block, which sets MAG's *minimum* to
+    the Talent option's `magic` field via the exact same `AssignLimits` mechanism every other
+    attribute uses, not a fixed final value. See `spec/rulebooks/learnings.md`'s "Post-WP29
+    correction" entry for the full citations.
+
+    `points` is spent from the **same** Heritage-derived special-attribute-points pool
+    `create_character` already validates EDG against -- `other_special_attribute_points_spent` is
+    the caller's responsibility to resolve (typically `character.attribute_points.get("EDG", 0)`),
+    mirroring how `create_resources_selection`/`create_lifestyle_selection` each take the other
+    selection's own cost to validate one shared budget jointly (see `chummer5.engine.lifestyle`'s
+    module docstring for that precedent). A Mundane character (`magic_type is None`) can never
+    spend any points here at all -- MAG isn't merely zero for Mundane, it's not an allocatable
+    attribute in the first place (mirrors the legacy `MAGEnabled` flag, granted only by the
+    Magician/Adept quality's own `<enableattribute>` bonus).
+    """
+    if magic_type is None:
+        if points != 0:
+            raise ValueError(
+                "Magic is not allocatable without a confirmed magic-active Talent selection"
+            )
+        return 0
+    if points < 0:
+        raise ValueError(f"points spent must not be negative, got {points}")
+    if magic_rating + points > magic_maximum:
+        raise ValueError(
+            f"Magic {magic_rating + points} would exceed the metatype's Magic maximum of "
+            f"{magic_maximum}"
+        )
+    total_special_spent = other_special_attribute_points_spent + points
+    if total_special_spent > special_attribute_points_budget:
+        raise ValueError(
+            f"special attribute spend {total_special_spent} (Edge + Magic combined) exceeds the "
+            f"special-attribute-points budget of {special_attribute_points_budget}"
+        )
+    return points
+
+
 # One shared source_id for every skill a single character's Talent grant touches, so a later Talent
 # change can retract the whole grant in one `ImprovementIndex.remove_source` call (mirrors
 # `chummer5.engine.qualities`'s per-quality `source_id`, just at the grant's own granularity since

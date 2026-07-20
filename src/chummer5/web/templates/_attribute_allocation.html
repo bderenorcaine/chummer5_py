@@ -11,7 +11,11 @@
 
   <p>
     Primary attribute points remaining: {{ primary_remaining }} / {{ primary_budget }}.
+    {% if character.magic_type %}
+    Special (Edge/Magic) points remaining: {{ special_remaining }} / {{ special_budget }}.
+    {% else %}
     Special (Edge) points remaining: {{ special_remaining }} / {{ special_budget }}.
+    {% endif %}
   </p>
 
   <form

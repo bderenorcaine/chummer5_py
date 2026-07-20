@@ -617,18 +617,27 @@ for the *rating*/spell-count/power-list math this phase implements, but not for 
 mechanics (the drain-attribute pair), which stay hand-verified against Hermetic/Shamanic's own
 SR5-sourced entries instead.
 
-**A non-obvious mechanical finding, confirmed against both real fixtures, that must not be miscopied
-from EDG's precedent: the Magic rating is not a point-buy.** Every other attribute this engine models
-is `metatype minimum + points spent + Σ improvements`, funded from a priority-derived budget the
-player spends against (the Attributes letter for primary attributes, the Heritage letter for EDG).
-Magic works differently: the chosen Talent option's `magic` field
-(`chummer5.data.priorities.TalentOption.magic`) *is* the finished MAG rating outright, with no
-metatype-minimum term added and nothing to spend. Confirmed directly: Miko's Talent (letter A,
-codename `Magician`) grants "6 Magic/10 Spells" per `priorities.xml`, and her own
-`<attribute name="MAG"><totalvalue>` is exactly 6 with exactly 10 `<spells>` entries; Wesson's Talent
-(letter C, codename `Adept`) grants 4 Magic, and his MAG totalvalue is exactly 4. Adding `"MAG"` to
-`SPECIAL_ATTRIBUTES`/`ALLOCATABLE_ATTRIBUTES` the way EDG lives there would silently misimplement the
-rule; MAG needs its own resolution path.
+**A mechanical finding, confirmed against both real fixtures, about how Magic's *starting* rating
+works — corrected 2026-07-20 after initially being mis-stated as "not a point-buy" at all; see
+`spec/worklogs/WP29.md`'s "Correction" section and `spec/rulebooks/learnings.md`'s "Post-WP29
+correction" entry for the full research.** Every other attribute this engine models is `metatype
+minimum + points spent + Σ improvements`, funded from a priority-derived budget the player spends
+against (the Attributes letter for primary attributes, the Heritage letter for EDG). Magic's
+*minimum* works differently: the chosen Talent option's `magic` field
+(`chummer5.data.priorities.TalentOption.magic`) is the character's *starting* MAG rating (no
+metatype-minimum term contributes), not a metatype-derived floor the way every other attribute's
+minimum is. But — confirmed via the core rulebook (p.65: Special Attribute Points "may be split...
+between... Edge and Magic or Resonance") and the legacy engine (`MAG.AssignLimits(talentOption
+.magic, magMax, magMax)` sets that value as MAG's *minimum*, then reuses the exact same `Base`-adding
+formula EDG uses) — that starting rating **can** be raised further by spending Special Attribute
+Points from the same Heritage-derived pool EDG draws from, up to the metatype's own Magic maximum
+(6 for every SR5-core metatype). Neither Miko nor Wesson happened to exercise this (both landed on a
+Talent letter/codename combo already at the metatype maximum, leaving no headroom), which is why the
+original research missed it. `"MAG"` still isn't added to `SPECIAL_ATTRIBUTES`/`ALLOCATABLE_
+ATTRIBUTES` the way EDG lives there — its allocatability is character-specific (only legal once a
+magic-active Talent is confirmed), so it's validated by a separate function,
+`chummer5.engine.magic.create_magic_attribute_points`, cross-checked against EDG's own spend rather
+than folded into `create_character`'s unconditional validation.
 
 **The Talent free-skill grant is in scope for this phase (explicit product decision, 2026-07-19) — and
 the legacy C# turns out to specify it precisely enough that no general rules-language interpreter is
