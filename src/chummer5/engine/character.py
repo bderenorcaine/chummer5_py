@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     # this module, including dataclass field types, is a lazily-evaluated string, so
     # `dataclasses.dataclass` never needs these names to actually resolve at import time.
     from chummer5.data.traditions import Tradition
+    from chummer5.engine.cyberware import CyberwareSelection
     from chummer5.engine.lifestyle import LifestyleSelection
     from chummer5.engine.magic import PowerSelection, SpellSelection
     from chummer5.engine.qualities import QualitySelection
@@ -206,6 +207,11 @@ class Character:
     to `apply_quality_improvements`) -- `power_selection` itself still just holds the validated
     roster + Power Point spend, the same "selection is a record, Improvements are a side effect of
     applying it" split every prior selection type already has.
+
+    **WP32** adds `cyberware_selection: CyberwareSelection | None` -- purchased cyberware, the same
+    "`None` until committed" wrapping-field shape as `power_selection` (nothing reads it piecemeal;
+    every effect -- Essence cost, and any `FLAT_BONUS` -- reaches `improvements` via
+    `chummer5.engine.cyberware.apply_cyberware_improvements`, not via a field read directly).
     """
 
     metatype: Metatype
@@ -226,6 +232,7 @@ class Character:
     magic_granted_skill_ids: tuple[str, ...] = ()  # the Talent free-skill grant's picks (WP25)
     spell_selection: SpellSelection | None = None  # Magician's chosen spells (WP26)
     power_selection: PowerSelection | None = None  # Adept's purchased Powers (WP27)
+    cyberware_selection: CyberwareSelection | None = None  # purchased cyberware (WP32)
     # Special Attribute Points spent raising MAG beyond magic_rating (post-WP29 correction; see
     # class docstring's own paragraph and chummer5.engine.magic.create_magic_attribute_points).
     magic_attribute_points: int = 0

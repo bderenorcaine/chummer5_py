@@ -970,7 +970,7 @@ exist yet. Scoped as this phase's final WP (WP35), sequenced after both phases' 
   confirmed present with a `FixedValues(2,3,5)` essence formula in real fixture data) is correctly
   excluded rather than mis-parsed.
 
-- [ ] **WP32 — Cyberware selection & Improvement application.**
+- [x] **WP32 — Cyberware selection & Improvement application.**
   Goal: compose WP30's Essence mechanism with WP31's catalog and WP6's `Character` into a buildable
   cyberware purchase.
   Deliverables:
