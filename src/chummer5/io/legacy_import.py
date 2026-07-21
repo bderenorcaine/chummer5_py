@@ -96,6 +96,17 @@ result:
   fixture-backed, the same honesty caveat WP44's own Implementation Plan entry anticipated for the
   Sum-to-Ten rule itself, just for a different, more specific reason.
 
+**Deliberately not imported at all: `<spirits>` (bound spirits, WP46).** `chummer5.io.legacy_chum5
+.LegacyCharacter` has no parsing for a `.chum5`'s `<spirits>` container, so any real bound spirits a
+legacy character has are silently absent from the import today — flagged here rather than fixed,
+mirroring this project's Availability-cap precedent ("flagged, not scheduled") rather than the
+excluded-and-reported treatment above, because there is currently no live fixture this gap actually
+affects: only a Magician can have bound spirits (see `chummer5.engine.spirits`'s module docstring),
+and of this project's two magic-capable Priority-built fixtures, Miko is rejected outright before
+reaching this point (her tradition isn't one of the 2 offered) and Wesson is an Adept (never has
+any). A future WP adding real `<spirits>` parsing should upgrade this to the excluded-and-reported
+tier instead, the same way WP28 already did for spells/powers.
+
 **Which `<lifestyle>` entry counts as "primary" (WP20).** The legacy save format has no explicit
 "is this the primary Lifestyle" flag (confirmed: no such field exists anywhere in `Lifestyle.cs`,
 only a general `LifestyleType.Standard` -- see `spec/rulebooks/learnings.md`'s WP20 entry). This

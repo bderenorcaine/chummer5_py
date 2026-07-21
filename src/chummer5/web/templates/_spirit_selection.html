@@ -1,0 +1,57 @@
+<div id="spirit-selection">
+  {% if character and character.magic_type == "Magician" %}
+  <h2>Bound Spirits</h2>
+
+  {% if spirit_error %}
+  <p class="error">{{ spirit_error }}</p>
+  {% endif %}
+
+  {% if spirit_budget_warning %}
+  <p class="warning">{{ spirit_budget_warning }}</p>
+  {% endif %}
+
+  <p>Up to {{ max_bound_spirits }} bound spirits (one per Charisma point), each at Force {{ spirit_force }} (your current Magic rating).</p>
+  <p>Karma spent: {{ spirit_karma_spent }} / {{ spirit_karma_budget }} ({{ spirit_karma_remaining }} remaining).</p>
+
+  <form
+    hx-post="/ui/spirits"
+    hx-target="#spirit-selection"
+    hx-swap="outerHTML"
+    hx-trigger="change, input delay:400ms"
+  >
+    <table>
+      <thead>
+        <tr>
+          <th>Spirit type</th>
+          <th>Services (Karma)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in spirit_rows %}
+        <tr>
+          <td>
+            <select name="spirit_type_{{ row.index }}">
+              <option value=""></option>
+              {% for type_name in offered_spirit_types %}
+              <option value="{{ type_name }}" {% if type_name == row.spirit_type %}selected{% endif %}>
+                {{ type_name }}
+              </option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <input
+              type="number"
+              name="spirit_services_{{ row.index }}"
+              value="{{ row.services }}"
+              min="0"
+            />
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Update bound spirits</button>
+  </form>
+  {% endif %}
+</div>

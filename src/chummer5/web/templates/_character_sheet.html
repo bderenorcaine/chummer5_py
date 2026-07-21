@@ -81,6 +81,16 @@
     {% endfor %}
   </ul>
   {% endif %}
+
+  {% if bound_spirit_rows %}
+  <h4>Bound Spirits</h4>
+  <ul>
+    {% for row in bound_spirit_rows %}
+    <li>{{ row.spirit_type }} (Force {{ row.force }}, {{ row.services }} service{{ "s" if row.services != 1 else "" }} owed)</li>
+    {% endfor %}
+  </ul>
+  <p>Bound Spirits karma cost: {{ bound_spirit_karma_cost }}.</p>
+  {% endif %}
   {% endif %}
 
   <h3>Qualities</h3>

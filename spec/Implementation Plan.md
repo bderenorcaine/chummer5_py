@@ -1418,7 +1418,7 @@ by hand against the rulebook/legacy C# rather than against real fixture data —
 WP's acceptance criteria rather than overclaiming coverage, the same honesty standard WP25 applied to
 its own two-fixture limitations.
 
-- [ ] **WP46 — Bound Spirits.**
+- [x] **WP46 — Bound Spirits.**
   Goal: let a Magician spend leftover Karma binding spirits, modeled as **roster entries with a budget
   check only** — deliberately **not** modeling a spirit's own stat block, skills, or powers (optional or
   otherwise). Confirmed via the rulebook's own Additional Purchases table (Step Seven, p. 98): "1 Karma

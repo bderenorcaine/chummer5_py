@@ -258,6 +258,11 @@ from chummer5.engine.skills import (
     skill_point_budget,
     skill_rating,
 )
+from chummer5.engine.spirits import (
+    create_bound_spirit_selection,
+    offered_spirit_types,
+    provisional_karma_budget,
+)
 from chummer5.io.legacy_import import (
     UnsupportedLegacyCharacterError,
     import_chum5,
@@ -316,6 +321,10 @@ DEFAULT_LIFESTYLE_MONTHS = MIN_LIFESTYLE_MONTHS
 # is a plain, generously-sized table (mirrors the fixed-row attribute/skill tables) rather than
 # dynamic HTML. A row with a blank name is treated as "no contact here" by `_parse_contacts`.
 MAX_CONTACT_ROWS = 8
+
+# WP46: same fixed-row precedent as MAX_CONTACT_ROWS, sized generously above any SR5-core
+# metatype's plausible Charisma (the real cap `create_bound_spirit_selection` enforces).
+MAX_BOUND_SPIRIT_ROWS = 10
 
 # MVP's regular Skills-priority point-buy UI stays mundane-only even after WP29 -- a Mundane
 # character's MAG/RES are always 0 and can never be raised in chargen (RES/Resonance stays out of
@@ -476,6 +485,27 @@ def _parse_contacts(form: FormData, max_rows: int) -> tuple[Contact, ...]:
         free = form.get(f"contact_free_{i}") is not None
         contacts.append(Contact(name=name, connection=connection, loyalty=loyalty, free=free))
     return tuple(contacts)
+
+
+def _parse_bound_spirits(form: FormData, max_rows: int) -> tuple[tuple[str, int], ...]:
+    """Read up to `max_rows` bound-spirit rows off a submitted form into `(spirit_type, services)`
+    pairs -- mirrors `_parse_contacts`'s identical fixed-row shape. Any row whose spirit-type field
+    is blank is skipped entirely; a malformed services value is treated as 0 rather than dropping
+    the row, the same "let the engine validate what it's already responsible for" choice `_parse_
+    contacts` makes for Connection/Loyalty (`create_bound_spirit_selection`'s own "services must be
+    at least 1" check is what rejects a 0 here).
+    """
+    picks = []
+    for i in range(max_rows):
+        spirit_type = str(form.get(f"spirit_type_{i}") or "").strip()
+        if not spirit_type:
+            continue
+        try:
+            services = int(str(form.get(f"spirit_services_{i}", "0")))
+        except ValueError:
+            services = 0
+        picks.append((spirit_type, services))
+    return tuple(picks)
 
 
 def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str, ...]:
@@ -906,14 +936,16 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
     """Swap whatever `TALENT`-sourced free-skill-grant Improvement `character.improvements`
     currently holds for `selection`'s, and re-attach the 4 flat magic fields.
 
-    A (re)confirmed Talent selection also resets `spell_selection`/`power_selection` to `None` and
-    drops any `ADEPT_POWER`-sourced Improvements -- a changed archetype (Mundane -> Magician,
-    Magician -> Adept, or even a changed tradition/letter) invalidates whatever spell/power budget
-    those selections were validated against, and there is no sensible partial-carry-forward the way
-    there is for e.g. attribute points against a resized budget (see this WP's worklog for the full
-    reasoning). The player re-picks spells/powers after any Talent change, the same "start that
-    stage over" behavior a metatype swap already gives `skill_allocation` et al. pre-WP19 -- Talent
-    is foundational in the same way, just narrower in what it resets.
+    A (re)confirmed Talent selection also resets `spell_selection`/`power_selection`/`bound_spirit_
+    selection` to `None` and drops any `ADEPT_POWER`-sourced Improvements -- a changed archetype
+    (Mundane -> Magician, Magician -> Adept, or even a changed tradition/letter) invalidates
+    whatever spell/power/spirit budget those selections were validated against (a changed tradition
+    in particular changes which spirit types are even offered -- see `chummer5.engine.spirits
+    .offered_spirit_types`), and there is no sensible partial-carry-forward the way there is for
+    e.g. attribute points against a resized budget (see this WP's worklog for the full reasoning).
+    The player re-picks spells/powers/spirits after any Talent change, the same "start that stage
+    over" behavior a metatype swap already gives `skill_allocation` et al. pre-WP19 -- Talent is
+    foundational in the same way, just narrower in what it resets.
 
     **Post-WP29 correction**: `magic_attribute_points` resets to `0` for the identical reason --
     a changed `magic_rating` (different letter/codename) changes how much headroom is even left to
@@ -931,6 +963,7 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
         magic_granted_skill_ids=selection.granted_skill_ids,
         spell_selection=None,
         power_selection=None,
+        bound_spirit_selection=None,
         magic_attribute_points=0,
     )
 
@@ -1624,6 +1657,76 @@ def _power_selection_context(
     }
 
 
+def _spirit_selection_context(
+    character: Character | None,
+    picks: Iterable[tuple[str, int]],
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_spirit_selection.html` (WP46): `create_bound_spirit_selection` reaching the
+    browser, gated to Magician only (mirrors `_spell_selection_context`'s identical gating note --
+    Adepts/Mundane never cast or conjure, see `chummer5.engine.spirits`'s module docstring).
+    `picks` is whatever should be shown filled in, same echo-the-submission shape as `_spell_
+    selection_context`'s `spell_ids`.
+
+    `karma_budget` is this WP's own provisional stand-in (see `chummer5.engine.spirits
+    .provisional_karma_budget`'s docstring) -- `STARTING_KARMA` minus whatever the character's
+    already-committed quality/contact selections have spent, recomputed fresh on every render (not
+    read off a stored total) so it always reflects the character's *current* karma spend.
+
+    **WP19-style staleness re-validation**: when `error` is unset and a Bound Spirit selection is
+    already committed, re-runs `create_bound_spirit_selection` against the *current* character/
+    budget purely to derive `spirit_budget_warning` -- an attribute edit (CHA) or a Talent change
+    (MAG, tradition) can each shrink what was previously a valid selection, the same way a
+    priorities reconfirmation can for every other carried-forward selection (see `_talent_
+    selection_context`'s identical pattern).
+    """
+    if character is None:
+        return {"character": None, "spirit_error": error}
+    if character.magic_type != "Magician":
+        return {"character": character, "spirit_error": error}
+    offered = offered_spirit_types(character.tradition) if character.tradition is not None else ()
+    karma_budget = provisional_karma_budget(
+        character.quality_selection.karma_cost if character.quality_selection is not None else 0,
+        character.contact_selection.karma_cost if character.contact_selection is not None else 0,
+    )
+    entries = list(picks)
+    rows = [
+        {
+            "index": i,
+            "spirit_type": entries[i][0] if i < len(entries) else "",
+            "services": entries[i][1] if i < len(entries) else 0,
+        }
+        for i in range(MAX_BOUND_SPIRIT_ROWS)
+    ]
+    karma_spent = sum(services for _, services in entries)
+    budget_warning: str | None = None
+    if error is None and character.bound_spirit_selection is not None:
+        committed_picks = [
+            (spirit.spirit_type, spirit.services)
+            for spirit in character.bound_spirit_selection.spirits
+        ]
+        try:
+            create_bound_spirit_selection(committed_picks, character, karma_budget)
+        except ValueError as exc:
+            budget_warning = (
+                f"No longer fits since priorities/attributes were last confirmed: {exc}. "
+                "Reconfirm Bound Spirits below to continue."
+            )
+    return {
+        "character": character,
+        "spirit_rows": rows,
+        "offered_spirit_types": offered,
+        "max_bound_spirits": character.attribute_value("CHA"),
+        "spirit_force": character.attribute_value("MAG"),
+        "spirit_karma_budget": karma_budget,
+        "spirit_karma_spent": karma_spent,
+        "spirit_karma_remaining": karma_budget - karma_spent,
+        "spirit_error": error,
+        "spirit_budget_warning": budget_warning,
+    }
+
+
 def _character_sheet_context(
     session: ChargenSession, *, error: str | None = None, info: str | None = None
 ) -> dict[str, Any]:
@@ -1804,6 +1907,26 @@ def _character_sheet_context(
             if character.power_selection is not None
             else []
         ),
+        # WP46: `force` is shown live (character.attribute_value("MAG")), not the stored per-spirit
+        # snapshot -- see chummer5.engine.spirits' module docstring for why the stored value can go
+        # stale after a later attribute edit, and why the sheet deliberately doesn't trust it.
+        "bound_spirit_rows": (
+            [
+                {
+                    "spirit_type": spirit.spirit_type,
+                    "force": character.attribute_value("MAG"),
+                    "services": spirit.services,
+                }
+                for spirit in character.bound_spirit_selection.spirits
+            ]
+            if character.bound_spirit_selection is not None
+            else []
+        ),
+        "bound_spirit_karma_cost": (
+            character.bound_spirit_selection.karma_cost
+            if character.bound_spirit_selection is not None
+            else 0
+        ),
         # WP34: current Essence (replaces the fixed "6" no character before this WP could ever
         # move away from) and a purchased-cyberware recap, the same "None until committed" shape
         # every other selection-backed sheet section already has.
@@ -1854,6 +1977,10 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     **WP43**: `karma_converted` reads straight off `character.resources_selection.karma_converted`
     (0 for an as-yet-uncommitted Resources section), the same "selection lives on the committed
     object, not the session" shape `gear_names` immediately above already has.
+
+    **WP46**: `bound_spirit_picks` reads straight off `character.bound_spirit_selection.spirits` as
+    `(spirit_type, services)` pairs, `()` for an as-yet-uncommitted selection -- `force` is never
+    included (see `chummer5.engine.spirits`'s module docstring for why).
 
     **WP44**: `build_method` reads straight off `session.build_method` -- unlike every field above,
     it isn't re-derived from `character` at all (nothing on `Character` holds it; see
@@ -1906,6 +2033,14 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.resources_selection is not None
         else 0
     )
+    bound_spirit_picks = (
+        tuple(
+            (spirit.spirit_type, spirit.services)
+            for spirit in character.bound_spirit_selection.spirits
+        )
+        if character.bound_spirit_selection is not None
+        else ()
+    )
     return create_character_save(
         metatype_name=character.metatype.name,
         heritage_letter=session.heritage_letter,
@@ -1938,6 +2073,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         cyberware_item_ids=cyberware_item_ids,
         bioware_item_ids=bioware_item_ids,
         karma_converted=karma_converted,
+        bound_spirit_picks=bound_spirit_picks,
         build_method=session.build_method,
     )
 
@@ -2038,6 +2174,15 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         else ()
     )
     power_ctx = _power_selection_context(character, power_picks)
+    spirit_picks = (
+        tuple(
+            (spirit.spirit_type, spirit.services)
+            for spirit in character.bound_spirit_selection.spirits
+        )
+        if character is not None and character.bound_spirit_selection is not None
+        else ()
+    )
+    spirit_ctx = _spirit_selection_context(character, spirit_picks)
     attribute_points = character.attribute_points if character is not None else {}
     magic_points = character.magic_attribute_points if character is not None else 0
     attribute_ctx = _attribute_allocation_context(character, attribute_points, magic_points)
@@ -2139,6 +2284,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         or resources_ctx.get("resources_budget_warning")
         or lifestyle_ctx.get("lifestyle_budget_warning")
         or cyberware_ctx.get("cyberware_budget_warning")
+        or spirit_ctx.get("spirit_budget_warning")
     )
     priority_ctx = {**priority_ctx, "priority_stale_selections": stale}
     return {
@@ -2148,6 +2294,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         **skill_ctx,
         **spell_ctx,
         **power_ctx,
+        **spirit_ctx,
         **quality_ctx,
         **contact_ctx,
         **lifestyle_ctx,
@@ -2453,6 +2600,13 @@ def create_app() -> FastAPI:
                     resources_selection=previous.resources_selection,
                     lifestyle_selection=previous.lifestyle_selection,
                     magic_attribute_points=magic_points,
+                    # WP46: carried forward by plain reference, same as lifestyle_selection above --
+                    # a bound spirit has no Improvement to re-land (see chummer5.engine.spirits'
+                    # module docstring), so there's no relink helper needed, just a plain carry.
+                    # `_spirit_selection_context`'s own WP19-style re-validation is what surfaces a
+                    # "no longer fits" warning if this attribute edit shrank CHA/MAG below what was
+                    # already committed.
+                    bound_spirit_selection=previous.bound_spirit_selection,
                 )
                 session.character = character
                 context = _attribute_allocation_context(character, attribute_points, magic_points)
@@ -2585,6 +2739,35 @@ def create_app() -> FastAPI:
                 session.character = _replace_committed_powers(session.character, selection)
                 context = _power_selection_context(session.character, picks)
         response = templates.TemplateResponse(request, "_power_selection.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/spirits", response_class=HTMLResponse)
+    async def submit_spirits(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None or session.character.magic_type != "Magician":
+            context = _spirit_selection_context(session.character, ())
+        else:
+            form = await request.form()
+            picks = _parse_bound_spirits(form, MAX_BOUND_SPIRIT_ROWS)
+            character = session.character
+            karma_budget = provisional_karma_budget(
+                character.quality_selection.karma_cost
+                if character.quality_selection is not None
+                else 0,
+                character.contact_selection.karma_cost
+                if character.contact_selection is not None
+                else 0,
+            )
+            try:
+                selection = create_bound_spirit_selection(picks, character, karma_budget)
+            except ValueError as exc:
+                context = _spirit_selection_context(character, picks, error=str(exc))
+            else:
+                session.character = replace(character, bound_spirit_selection=selection)
+                context = _spirit_selection_context(session.character, picks)
+        response = templates.TemplateResponse(request, "_spirit_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
         return response

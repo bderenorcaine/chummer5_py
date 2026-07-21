@@ -647,3 +647,104 @@ def test_build_character_does_not_validate_build_method_against_the_letters() ->
         lifestyles=LIFESTYLES,
     )
     assert character.attributes_letter == "D"
+
+
+# -- WP46: bound_spirit_picks --------------------------------------------------------------------
+
+HERMETIC_ID = next(t.id for t in TRADITIONS if t.name == "Hermetic")
+
+
+def _magician_save(bound_spirit_picks: tuple[tuple[str, int], ...] = ()) -> CharacterSave:
+    # Talent letter C's Magician option (Magic 3, no free-skill grant -- see test_magic.py's own
+    # "letter C grants no free skill" precedent) keeps this fixture minimal.
+    return create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="E",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        talent_letter="C",
+        talent_codename="Magician",
+        tradition_id=HERMETIC_ID,
+        bound_spirit_picks=bound_spirit_picks,
+    )
+
+
+def test_json_round_trip_preserves_bound_spirit_picks() -> None:
+    save = _magician_save((("Spirit of Fire", 3), ("Spirit of Air", 2)))
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["bound_spirit_picks"] == [
+        {"spirit_type": "Spirit of Fire", "services": 3},
+        {"spirit_type": "Spirit of Air", "services": 2},
+    ]
+
+
+def test_from_json_defaults_bound_spirit_picks_for_a_pre_wp46_save() -> None:
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    assert "bound_spirit_picks" not in data or data["bound_spirit_picks"] == []
+    assert from_json(to_json(save)).bound_spirit_picks == ()
+
+
+def test_build_character_applies_bound_spirit_selection() -> None:
+    save = _magician_save((("Spirit of Fire", 3),))
+    character = build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert character.bound_spirit_selection is not None
+    assert character.bound_spirit_selection.karma_cost == 3
+    (spirit,) = character.bound_spirit_selection.spirits
+    assert spirit.spirit_type == "Spirit of Fire"
+    assert spirit.services == 3
+    # Force is never persisted -- always the live Magic rating at load time (see module docstring).
+    assert spirit.force == character.attribute_value("MAG") == 3
+
+
+def test_build_character_rejects_bound_spirits_exceeding_the_provisional_karma_budget() -> None:
+    # STARTING_KARMA is 25 -- 26 services on one spirit alone already exceeds it, with nothing else
+    # spent from qualities/contacts in this fixture.
+    save = _magician_save((("Spirit of Fire", 26),))
+    with pytest.raises(ValueError, match="exceeding the available budget"):
+        build_character(
+            save,
+            metatypes=METATYPES,
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
+            traditions=TRADITIONS,
+            spells=SPELLS,
+            powers=POWERS,
+        )
+
+
+def test_build_character_rejects_a_spirit_type_not_offered_by_the_traditon() -> None:
+    save = _magician_save((("Spirit of Beasts", 1),))  # Hermetic never offers Beasts
+    with pytest.raises(ValueError, match="not an offered spirit type"):
+        build_character(
+            save,
+            metatypes=METATYPES,
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
+            traditions=TRADITIONS,
+            spells=SPELLS,
+            powers=POWERS,
+        )

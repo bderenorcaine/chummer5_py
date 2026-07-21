@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from chummer5.engine.qualities import QualitySelection
     from chummer5.engine.resources import ContactSelection, ResourcesSelection
     from chummer5.engine.skills import SkillAllocation
+    from chummer5.engine.spirits import BoundSpiritSelection
 
 # MVP content-scope filter (see Project Overview's "Core rulebook only" note and WP2's worklog):
 # every data-driven choice offered to the player is restricted to entries sourced from the SR5
@@ -230,6 +231,15 @@ class Character:
     and selection types separate (see `chummer5.engine.bioware`'s own module docstring for why),
     even though both draw from the same nuyen budget and reduce the same Essence pool.
 
+    **WP46** adds `bound_spirit_selection: BoundSpiritSelection | None` -- a Magician's bound
+    spirits, the same "`None` until committed" wrapping-field shape as `spell_selection` (a bound
+    spirit is a pure roster entry with a Karma cost, no computed Improvement -- see
+    `chummer5.engine.spirits`'s module docstring; nothing reads it piecemeal either). Deliberately
+    a wrapping selection field, not the Implementation Plan's own initial sketch of a bare
+    `bound_spirits: tuple[BoundSpirit, ...]` -- the wrapper also carries `karma_cost`/`karma_budget`
+    so a render can show "N of budget Karma spent" without recomputing it, the same reason
+    `SpellSelection` wraps `spells` with its own `budget` field instead of being a bare tuple.
+
     **WP35** adds no new field -- it changes `attribute_value("MAG")`'s own formula to subtract
     `magic_essence_loss` (Σ `ESSENCE` improvements, ceiling-rounded per the rulebook's "per point or
     fraction thereof" wording), the cross-phase interaction between Phase I's Magic rating and
@@ -262,6 +272,7 @@ class Character:
     # Special Attribute Points spent raising MAG beyond magic_rating (post-WP29 correction; see
     # class docstring's own paragraph and chummer5.engine.magic.create_magic_attribute_points).
     magic_attribute_points: int = 0
+    bound_spirit_selection: BoundSpiritSelection | None = None  # Magician's bound spirits (WP46)
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]

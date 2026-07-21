@@ -89,6 +89,14 @@ validates it against `chummer5.engine.bioware.create_bioware_selection`, resolve
 nuyen budget left over once gear/Lifestyle/cyberware are resolved, and cyberware's own
 `essence_spent` as bioware's `other_essence_spent`, so the shared Essence floor accounts for both.
 
+**WP46** adds `bound_spirit_picks` -- a Magician's bound spirits, as `(spirit_type, services)`
+pairs (the same "selection, not derived value" shape every prior field has -- `force` is never
+stored, since it's always exactly the *live* Magic rating at load time, recomputed by `build_
+character` the same way it would be for a freshly-committed selection; see `chummer5.engine
+.spirits`'s module docstring for why storing a snapshot `force` would just be redundant,
+staleness-prone data). Defaults to `()` ("predates this field"), so every save written before this
+WP round-trips unchanged.
+
 **WP44** adds `build_method` -- which of the two supported priority-letter validity rules
 (`chummer5.engine.build_method.PRIORITY_BUILD_METHOD`/`SUM_TO_TEN_BUILD_METHOD`) produced
 `heritage_letter`/`talent_letter`/`attributes_letter`/`skills_letter`/`resources_letter`. Unlike
@@ -155,6 +163,7 @@ from chummer5.engine.resources import (
     create_resources_selection,
 )
 from chummer5.engine.skills import create_skill_allocation
+from chummer5.engine.spirits import create_bound_spirit_selection, provisional_karma_budget
 
 # Bumped only if a future WP changes this format's shape in a way older saves can't be read as.
 # MVP has exactly one version; there is no migration path yet because there is nothing to migrate
@@ -170,6 +179,10 @@ DEFAULT_TALENT_CODENAME = "Mundane"
 # see that function's own docstring. Named here so `CharacterSave.power_picks`'s element type has a
 # readable name instead of an inline tuple annotation repeated at every use site.
 PowerPickTriple = tuple[str, int, str | None]
+
+# One `(spirit_type_name, services)` pair, as `create_bound_spirit_selection` already takes -- see
+# that function's own docstring. Named for the same readability reason as PowerPickTriple.
+BoundSpiritPickPair = tuple[str, int]
 
 
 @dataclass(frozen=True)
@@ -218,6 +231,10 @@ class CharacterSave:
     # "predates this field"/"player didn't convert any", the same shape every prior optional field
     # defaults to.
     karma_converted: int = 0
+    # WP46: a Magician's bound spirits, as (spirit_type, services) pairs -- see module docstring for
+    # why `force` is never persisted. Defaults to () -- "predates this field", the identical shape
+    # every other optional selection field defaults to.
+    bound_spirit_picks: tuple[BoundSpiritPickPair, ...] = ()
     # WP44: which priority-letter validity rule produced the 5 letters above -- see module
     # docstring for why this is carried through unvalidated rather than re-checked here.
     build_method: str = PRIORITY_BUILD_METHOD
@@ -248,6 +265,7 @@ def create_character_save(
     cyberware_item_ids: Iterable[str] = (),
     bioware_item_ids: Iterable[str] = (),
     karma_converted: int = 0,
+    bound_spirit_picks: Iterable[BoundSpiritPickPair] = (),
     build_method: str = PRIORITY_BUILD_METHOD,
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
@@ -282,6 +300,7 @@ def create_character_save(
         cyberware_item_ids=tuple(cyberware_item_ids),
         bioware_item_ids=tuple(bioware_item_ids),
         karma_converted=karma_converted,
+        bound_spirit_picks=tuple(bound_spirit_picks),
         build_method=build_method,
     )
 
@@ -323,6 +342,10 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "cyberware_item_ids": list(save.cyberware_item_ids),
         "bioware_item_ids": list(save.bioware_item_ids),
         "karma_converted": save.karma_converted,
+        "bound_spirit_picks": [
+            {"spirit_type": spirit_type, "services": services}
+            for spirit_type, services in save.bound_spirit_picks
+        ],
         "build_method": save.build_method,
     }
 
@@ -372,6 +395,9 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         cyberware_item_ids=data.get("cyberware_item_ids", ()),
         bioware_item_ids=data.get("bioware_item_ids", ()),
         karma_converted=data.get("karma_converted", 0),
+        bound_spirit_picks=(
+            (p["spirit_type"], p["services"]) for p in data.get("bound_spirit_picks", ())
+        ),
         build_method=data.get("build_method", PRIORITY_BUILD_METHOD),
     )
 
@@ -571,7 +597,7 @@ def build_character(
     )
     apply_power_improvements(character, power_selection)
 
-    return replace(
+    character = replace(
         character,
         skill_allocation=skill_allocation,
         quality_selection=quality_selection,
@@ -589,3 +615,15 @@ def build_character(
         cyberware_selection=cyberware_selection,
         bioware_selection=bioware_selection,
     )
+
+    # WP46: resolved last, against the now-fully-populated `character` -- create_bound_spirit_
+    # selection reads character.attribute_value("CHA")/("MAG"), both of which depend on the
+    # magic_type/tradition/magic_rating/magic_attribute_points fields the replace() above just set
+    # (force is always the *live* Magic rating, never a persisted value -- see module docstring).
+    karma_budget = provisional_karma_budget(
+        quality_selection.karma_cost, contact_selection.karma_cost
+    )
+    bound_spirit_selection = create_bound_spirit_selection(
+        save.bound_spirit_picks, character, karma_budget
+    )
+    return replace(character, bound_spirit_selection=bound_spirit_selection)
