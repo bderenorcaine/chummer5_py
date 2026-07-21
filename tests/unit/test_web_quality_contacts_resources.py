@@ -336,6 +336,48 @@ def test_overspending_the_nuyen_budget_is_rejected() -> None:
     assert "exceeds" in response.text
 
 
+def test_converting_karma_to_nuyen_tops_up_the_displayed_budget() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post("/ui/resources", data={"karma_converted": "5"})
+
+    assert response.status_code == 200
+    budget = PRIORITIES.resources["D"].nuyen
+    assert f"{budget + 10000} / {budget + 10000}" in response.text
+    assert "+10000 from" in response.text
+    assert "Karma conversion" in response.text
+
+
+def test_karma_conversion_enables_a_purchase_the_base_budget_alone_could_not() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    predator = next(item for item in STARTER_GEAR_CATALOG if item.name == "Ares Predator V")
+    budget = PRIORITIES.resources["D"].nuyen
+    # Enough Predators to exceed the base Resources D budget by less than 10 Karma's worth.
+    quantity = (budget // predator.cost) + 1
+
+    over_budget = client.post("/ui/resources", data={f"gear_{predator.name}": str(quantity)})
+    assert "exceeds" in over_budget.text
+
+    with_karma = client.post(
+        "/ui/resources",
+        data={f"gear_{predator.name}": str(quantity), "karma_converted": "10"},
+    )
+    assert "exceeds" not in with_karma.text
+    assert with_karma.status_code == 200
+
+
+def test_converting_more_than_ten_karma_is_rejected() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post("/ui/resources", data={"karma_converted": "11"})
+
+    assert response.status_code == 200
+    assert "between 0 and 10" in response.text
+
+
 def test_reconfirming_priorities_with_a_new_resources_letter_keeps_gear() -> None:
     """WP19: reconfirmation carries a committed gear purchase forward instead of resetting it (the
     pre-WP19 behavior recorded in `spec/worklogs/WP18.md`'s own manual check) -- the nuyen numbers

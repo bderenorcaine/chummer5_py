@@ -35,6 +35,23 @@ _KNOWN_RAW_FIELDS = {
     "Yeti-#ffffff2.chum5": ("Human", 1, 25, 1145.0, 6000, 6),
 }
 
+# name -> <nuyenbp> (Karma actually converted to nuyen at Step Six, core rulebook p. 94). Hand-
+# checked directly against each file's <nuyenbp> element (WP43) -- 6 of the 11 curated mundane
+# fixtures actually used this mechanic, the best real coverage of any Phase L candidate.
+_KNOWN_KARMA_CONVERTED_TO_NUYEN = {
+    "BLUE.chum5": 9,
+    "Barrett.chum5": 10,
+    "Bastion.chum5": 10,
+    "Blindfire.chum5": 2,
+    "Fuzzy-chargen.chum5": 0,
+    "Gentle Earthquake.chum5": 10,
+    "Monomax (approved) 3.chum5": 0,
+    "Rez0luti0n2.0.chum5": 10,
+    "SCSi.chum5": 0,
+    "Serpent.chum5": 0,
+    "Yeti-#ffffff2.chum5": 0,
+}
+
 # name -> <contactpoints> (the save format's cached CHA*3 free-contact-point budget). Hand-checked
 # directly against each file's <contactpoints> element (WP9).
 _KNOWN_CONTACT_POINTS_BUDGET = {
@@ -71,6 +88,16 @@ def test_round_trips_known_raw_fields(name: str) -> None:
     assert character.nuyen_remaining == pytest.approx(nuyen_remaining)
     assert character.starting_nuyen == starting_nuyen
     assert len(character.qualities) == quality_count
+
+
+def test_known_karma_converted_to_nuyen_registry_covers_every_curated_fixture() -> None:
+    assert set(_KNOWN_KARMA_CONVERTED_TO_NUYEN) == set(MUNDANE_FIXTURES)
+
+
+@pytest.mark.parametrize("name", MUNDANE_FIXTURES)
+def test_karma_converted_to_nuyen_matches_raw_tag(name: str) -> None:
+    character = load_chum5(mundane_fixture_path(name))
+    assert character.karma_converted_to_nuyen == _KNOWN_KARMA_CONVERTED_TO_NUYEN[name]
 
 
 @pytest.mark.parametrize("name", MUNDANE_FIXTURES)

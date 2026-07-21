@@ -58,6 +58,28 @@ one — `create_resources_selection`'s `lifestyle_cost` parameter folds its alre
 cost into the one joint over-budget check, instead of `chummer5.engine.lifestyle` duplicating a
 second budget validator of its own. See that module's docstring for why lifestyle cost validation
 lives here and not there.
+
+**Karma-to-Nuyen conversion (WP43).** Core rulebook p. 94 (Step Six): "Nuyen from this step cannot
+convert to Karma, but a player can convert Karma into nuyen if needed: up to 10 Karma at 2,000 nuyen
+per Karma point (up to 20,000 nuyen extra)." Confirmed against the legacy engine directly
+(`Character.cs`'s `CalculateStartingNuyenFromKarma`,
+`CharacterSettings.ChargenKarmaToNuyenExpression` -- default `"{Karma} * 2000 + {PriorityNuyen}"`,
+i.e. the converted amount is *added* to the
+Resources-priority nuyen budget, not drawn from some separate pool) and against the `.chum5` corpus
+(`<nuyenbp>`, the per-character amount actually converted -- nonzero on 6 of the 11 curated mundane
+fixtures; `<nuyenmaxbp>`, the *setting's* cap, always `10` for every `Standard`-gameplay-option
+settings block in `settings.xml`, matching the rulebook's "experienced runner" default this project
+implements -- see `spec/rulebooks/learnings.md`'s WP43 entry for the full citations). Modeled as a
+`create_resources_selection` parameter (`karma_converted`) rather than a separate selection type,
+the same "fold into the one joint budget check" shape `lifestyle_cost`/`cyberware_cost` already
+have -- except karma conversion *enlarges* the budget rather than spending from it.
+
+**Not yet enforced: karma spent here can't (yet) be double-spent against qualities/contacts'
+own karma costs.** No unified "leftover Karma" ledger exists in this engine yet (Phase O, not yet
+built) -- `create_quality_selection`/`create_contact_selection` each compute their own karma_cost
+independently, with nothing today that sums them into one running total this conversion would need
+to draw down. `karma_to_nuyen` only enforces the flat 0-10 range; wiring a real double-spend check
+is Phase O's job once its ledger exists, per the Implementation Plan's own WP43 entry.
 """
 
 from __future__ import annotations
@@ -84,6 +106,30 @@ KARMA_PER_EXCESS_CONTACT_POINT = 1
 # Core rulebook, "Making Connections": "Any Contacts a player buys must have a minimum rating of 1
 # in Connection and a minimum rating of 1 in Loyalty."
 MIN_CONTACT_RATING = 1
+
+# Core rulebook p. 94 / CharacterSettings.ChargenKarmaToNuyenExpression's default "{Karma} * 2000 +
+# {PriorityNuyen}" -- nuyen gained per Karma point converted at Step Six.
+KARMA_TO_NUYEN_RATE = 2000
+
+# Core rulebook p. 94: "up to 10 Karma"; cross-checked against every Standard-gameplay-option
+# settings block in legacy/Chummer/data/settings.xml (`<nuyenmaxbp>10</nuyenmaxbp>` uniformly) and
+# Miko.chum5's own <nuyenmaxbp>10</nuyenmaxbp>. Hardcoded rather than modeled as a settings knob,
+# the same QUALITY_KARMA_LIMIT precedent chummer5.engine.qualities already established.
+MAX_KARMA_TO_NUYEN = 10
+
+
+def karma_to_nuyen(karma_spent: int) -> int:
+    """`karma_spent * KARMA_TO_NUYEN_RATE`, validated against the 0-10 Karma cap.
+
+    Raises `ValueError` outside `[0, MAX_KARMA_TO_NUYEN]` -- this is a hard rulebook cap (p. 94),
+    not a soft nudge the way "must spend the full budget" isn't enforced elsewhere in this engine.
+    """
+    if not 0 <= karma_spent <= MAX_KARMA_TO_NUYEN:
+        raise ValueError(
+            f"karma converted to nuyen must be between 0 and {MAX_KARMA_TO_NUYEN}, "
+            f"got {karma_spent}"
+        )
+    return karma_spent * KARMA_TO_NUYEN_RATE
 
 
 @dataclass(frozen=True)
@@ -241,6 +287,12 @@ class ResourcesSelection:
     **WP34**: `cyberware_cost` (default 0) is the character's separately-selected
     `chummer5.engine.cyberware.CyberwareSelection.nuyen_spent`, folded into `nuyen_remaining` the
     same way `lifestyle_cost` already is -- see `create_resources_selection`'s docstring.
+
+    **WP43**: `karma_converted` (default 0) is however much Karma the player converted to nuyen at
+    2,000 nuyen/point (core rulebook p. 94) -- unlike `lifestyle_cost`/`cyberware_cost`, this
+    *enlarges* the available budget rather than spending from it. `nuyen_budget` itself stays the
+    pure priority-derived number (unchanged meaning, still `== legacy.starting_nuyen` for every
+    fixture); `nuyen_remaining` is the one field that reflects the karma-derived top-up.
     """
 
     resources_letter: str
@@ -250,10 +302,20 @@ class ResourcesSelection:
     nuyen_remaining: int
     lifestyle_cost: int = 0
     cyberware_cost: int = 0
+    karma_converted: int = 0
 
 
 def starting_nuyen(letter: str, priorities: PriorityTable) -> int:
     return priorities.resources[letter].nuyen
+
+
+def available_nuyen(letter: str, priorities: PriorityTable, karma_converted: int = 0) -> int:
+    """`starting_nuyen` plus whatever `karma_converted` Karma points convert to (WP43) -- the real
+    total budget gear/lifestyle/cyberware purchases draw against. A thin composition, factored out
+    since every one of `chummer5.web.app`'s several independent budget-display sites needs exactly
+    this sum, not just the priority-derived half of it.
+    """
+    return starting_nuyen(letter, priorities) + karma_to_nuyen(karma_converted)
 
 
 def create_resources_selection(
@@ -264,19 +326,21 @@ def create_resources_selection(
     *,
     lifestyle_cost: int = 0,
     cyberware_cost: int = 0,
+    karma_converted: int = 0,
 ) -> ResourcesSelection:
     """Build a `ResourcesSelection`, validating the combined gear + lifestyle + cyberware spend
-    against the nuyen budget.
+    against the nuyen budget (priority-derived, plus whatever Karma-to-Nuyen conversion adds).
 
     Validates: every name in `gear_names` is a `catalog` item's name (repeats allowed -- buying two
     Certified Credsticks is a normal purchase, unlike a quality or skill that can't be picked
-    twice); `gear` cost plus `lifestyle_cost` plus `cyberware_cost` together don't exceed `letter`'s
-    nuyen budget (WP20: a character's primary Lifestyle draws from this same pool, confirmed
-    against every one of the 11 curated mundane fixtures -- see `spec/rulebooks/learnings.md`'s
-    WP20 entry; WP34: cyberware draws from it too, see `chummer5.engine.cyberware`'s own module
-    docstring). Does not require the full budget to be spent, mirroring WP6/WP7/WP8's identical
-    choice. `lifestyle_cost`/`cyberware_cost` each default to 0 so every pre-WP20/pre-WP34 call
-    site (gear-only, or gear+lifestyle-only) is unaffected.
+    twice); `karma_converted` is 0-10 (see `karma_to_nuyen`); `gear` cost plus `lifestyle_cost` plus
+    `cyberware_cost` together don't exceed `letter`'s nuyen budget plus the converted amount (WP20:
+    a character's primary Lifestyle draws from this same pool, confirmed against every one of the
+    11 curated mundane fixtures -- see `spec/rulebooks/learnings.md`'s WP20 entry; WP34: cyberware
+    draws from it too, see `chummer5.engine.cyberware`'s own module docstring; WP43: Karma-to-Nuyen
+    tops up the same pool, see this module's own docstring). Does not require the full budget to be
+    spent, mirroring WP6/WP7/WP8's identical choice. `lifestyle_cost`/`cyberware_cost`/
+    `karma_converted` each default to 0 so every pre-WP20/pre-WP34/pre-WP43 call site is unaffected.
     """
     by_name = {item.name: item for item in catalog}
     names = list(gear_names)
@@ -287,9 +351,10 @@ def create_resources_selection(
 
     selected = tuple(by_name[name] for name in names)
     budget = starting_nuyen(letter, priorities)
+    available = budget + karma_to_nuyen(karma_converted)
     spent = sum(item.cost for item in selected)
     total_spent = spent + lifestyle_cost + cyberware_cost
-    if total_spent > budget:
+    if total_spent > available:
         parts = [f"gear ({spent})"]
         if lifestyle_cost:
             parts.append(f"lifestyle ({lifestyle_cost})")
@@ -297,11 +362,12 @@ def create_resources_selection(
             parts.append(f"cyberware ({cyberware_cost})")
         if len(parts) == 1:
             raise ValueError(
-                f"gear spend {spent} exceeds Resources priority {letter}'s nuyen budget of {budget}"
+                f"gear spend {spent} exceeds Resources priority {letter}'s nuyen budget of "
+                f"{available}"
             )
         raise ValueError(
             f"{' + '.join(parts)} spend {total_spent} exceeds Resources priority {letter}'s "
-            f"nuyen budget of {budget}"
+            f"nuyen budget of {available}"
         )
 
     return ResourcesSelection(
@@ -309,7 +375,8 @@ def create_resources_selection(
         nuyen_budget=budget,
         gear=selected,
         nuyen_spent=spent,
-        nuyen_remaining=budget - total_spent,
+        nuyen_remaining=available - total_spent,
         lifestyle_cost=lifestyle_cost,
         cyberware_cost=cyberware_cost,
+        karma_converted=karma_converted,
     )

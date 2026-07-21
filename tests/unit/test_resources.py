@@ -10,13 +10,17 @@ from chummer5.engine.character import Character, create_character, metatype_choi
 from chummer5.engine.resources import (
     FREE_CONTACT_POINTS_PER_CHARISMA,
     KARMA_PER_EXCESS_CONTACT_POINT,
+    KARMA_TO_NUYEN_RATE,
+    MAX_KARMA_TO_NUYEN,
     STARTER_GEAR_CATALOG,
     Contact,
     ContactSelection,
     ResourcesSelection,
     StarterGearItem,
+    available_nuyen,
     create_contact_selection,
     create_resources_selection,
+    karma_to_nuyen,
     starting_nuyen,
 )
 
@@ -280,4 +284,84 @@ def test_create_resources_selection_gear_only_overspend_message_omits_lifestyle_
             letter="E",
             priorities=PRIORITIES,
             gear_names=[item.name for item in STARTER_GEAR_CATALOG for _ in range(20)],
+        )
+
+
+# --- Karma-to-Nuyen conversion (WP43) ------------------------------------------------------------
+
+
+def test_karma_to_nuyen_rate() -> None:
+    # Core rulebook p. 94: "up to 10 Karma at 2,000 nuyen per Karma point".
+    assert karma_to_nuyen(1) == 2000
+    assert karma_to_nuyen(10) == 20000
+    assert karma_to_nuyen(0) == 0
+
+
+def test_karma_to_nuyen_rate_constant() -> None:
+    assert KARMA_TO_NUYEN_RATE == 2000
+    assert MAX_KARMA_TO_NUYEN == 10
+
+
+def test_karma_to_nuyen_rejects_negative() -> None:
+    with pytest.raises(ValueError, match="between 0 and 10"):
+        karma_to_nuyen(-1)
+
+
+def test_karma_to_nuyen_rejects_above_cap() -> None:
+    with pytest.raises(ValueError, match="between 0 and 10"):
+        karma_to_nuyen(11)
+
+
+def test_available_nuyen_adds_karma_conversion_to_priority_budget() -> None:
+    assert available_nuyen("E", PRIORITIES, karma_converted=0) == 6000
+    assert available_nuyen("E", PRIORITIES, karma_converted=10) == 6000 + 20000
+
+
+def test_create_resources_selection_karma_converted_defaults_to_zero() -> None:
+    """Backward-compatibility check: every pre-WP43 call (no `karma_converted` argument) must
+    behave identically to before WP43 touched this function.
+    """
+    selection = create_resources_selection(
+        letter="E", priorities=PRIORITIES, gear_names=["Meta Link"]
+    )
+    assert selection.karma_converted == 0
+    assert selection.nuyen_budget == 6000
+    assert selection.nuyen_remaining == 5900
+
+
+def test_create_resources_selection_karma_conversion_tops_up_the_budget_not_the_spend() -> None:
+    selection = create_resources_selection(
+        letter="E", priorities=PRIORITIES, gear_names=["Meta Link"], karma_converted=5
+    )
+    assert selection.karma_converted == 5
+    # nuyen_budget stays the pure priority-derived number (unchanged meaning, still what legacy
+    # import cross-checks against <startingnuyen>) -- only nuyen_remaining reflects the top-up.
+    assert selection.nuyen_budget == 6000
+    assert selection.nuyen_spent == 100
+    assert selection.nuyen_remaining == 6000 + 10000 - 100
+
+
+def test_create_resources_selection_karma_conversion_enables_an_otherwise_overbudget_buy() -> None:
+    # 20000 nuyen alone exceeds Priority E's 6000 budget; 5 Karma converted (10000) still isn't
+    # enough, but the full 10 (20000) is.
+    with pytest.raises(ValueError, match="exceeds Resources priority"):
+        create_resources_selection(
+            letter="E",
+            priorities=PRIORITIES,
+            gear_names=["Meta Link"] * 200,  # 200 * 100 = 20000
+            karma_converted=5,
+        )
+    selection = create_resources_selection(
+        letter="E",
+        priorities=PRIORITIES,
+        gear_names=["Meta Link"] * 200,
+        karma_converted=10,
+    )
+    assert selection.nuyen_remaining == 6000 + 20000 - 20000
+
+
+def test_create_resources_selection_rejects_karma_conversion_above_the_cap() -> None:
+    with pytest.raises(ValueError, match="between 0 and 10"):
+        create_resources_selection(
+            letter="E", priorities=PRIORITIES, gear_names=[], karma_converted=11
         )

@@ -97,6 +97,7 @@ def _legacy_character(**overrides: object) -> LegacyCharacter:
         build_karma=25,
         nuyen_remaining=0.0,
         starting_nuyen=6000,
+        karma_converted_to_nuyen=0,
     )
     defaults.update(overrides)
     return LegacyCharacter(**defaults)  # type: ignore[arg-type]
@@ -119,6 +120,30 @@ def _import(legacy: LegacyCharacter) -> None:
 
 def test_valid_mundane_priority_character_imports_without_error() -> None:
     _import(_legacy_character())  # no exception
+
+
+def test_karma_converted_to_nuyen_threads_through_to_the_built_resources_selection() -> None:
+    """WP43: `<nuyenbp>` (`LegacyCharacter.karma_converted_to_nuyen`) is not blocking -- no
+    `_blocking_reasons` check exists for it (a Standard-gameplay-option character, already required
+    by `_blocking_reasons`, can never legally exceed the same 10-Karma cap `karma_to_nuyen` enforces
+    -- see module docstring) -- it simply carries through into the built character's own committed
+    Resources selection, the same "thread it through" treatment every other raw field gets.
+    """
+    result = import_legacy_character(
+        _legacy_character(karma_converted_to_nuyen=6),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+        cyberware=CYBERWARE,
+    )
+    assert result.save.karma_converted == 6
+    assert result.built.resources_selection is not None
+    assert result.built.resources_selection.karma_converted == 6
 
 
 def test_imports_the_first_lifestyle_entry_as_primary() -> None:

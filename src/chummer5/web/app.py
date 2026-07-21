@@ -212,13 +212,16 @@ from chummer5.engine.qualities import (
 from chummer5.engine.resources import (
     FREE_CONTACT_POINTS_PER_CHARISMA,
     KARMA_PER_EXCESS_CONTACT_POINT,
+    MAX_KARMA_TO_NUYEN,
     STARTER_GEAR_CATALOG,
     Contact,
     ContactSelection,
     ResourcesSelection,
     StarterGearItem,
+    available_nuyen,
     create_contact_selection,
     create_resources_selection,
+    karma_to_nuyen,
     starting_nuyen,
 )
 from chummer5.engine.skills import (
@@ -469,6 +472,29 @@ def _parse_lifestyle_months(form: FormData) -> int:
         return int(str(raw)) if raw is not None else 0
     except ValueError:
         return 0
+
+
+def _display_karma_to_nuyen(karma_converted: int) -> int:
+    """`karma_to_nuyen`, clamped to the valid 0-10 range first, so a context builder can compute a
+    display number for an *out-of-range* submitted value (echoed back alongside a rejection
+    message) without that computation itself raising -- `create_resources_selection`'s own call to
+    the un-clamped `karma_to_nuyen` is what actually rejects it; this is purely for rendering.
+    """
+    return karma_to_nuyen(max(0, min(karma_converted, MAX_KARMA_TO_NUYEN)))
+
+
+def _parse_karma_converted(form: FormData) -> int:
+    """Read `karma_converted` off a submitted form (WP43), clamping an unparseable or negative
+    value to 0 -- the same "let the engine validate what it's already responsible for" choice
+    `_parse_gear`/`_parse_lifestyle_months` make. `karma_to_nuyen`'s own 0-10 range check is what
+    rejects anything above the cap, not this parser.
+    """
+    raw = form.get("karma_converted")
+    try:
+        value = int(str(raw)) if raw is not None else 0
+    except ValueError:
+        value = 0
+    return max(value, 0)
 
 
 def _parse_power_picks(
@@ -968,7 +994,11 @@ def _contacts_context(
 
 
 def _resources_selection_for_display(
-    letter: str, gear_names: Iterable[str], lifestyle_cost: int, cyberware_cost: int
+    letter: str,
+    gear_names: Iterable[str],
+    lifestyle_cost: int,
+    cyberware_cost: int,
+    karma_converted: int = 0,
 ) -> ResourcesSelection:
     """Recompute a `ResourcesSelection`'s nuyen totals against `letter`'s *current* budget, without
     `create_resources_selection`'s "spend must not exceed budget" check.
@@ -990,6 +1020,10 @@ def _resources_selection_for_display(
     **WP34**: `cyberware_cost` (the character's currently-selected `cyberware_selection.nuyen_
     spent`, or 0 if none yet) folds in the same way, extending the shared budget from two sections
     to three.
+
+    **WP43**: `karma_converted` (the character's currently-committed `resources_selection
+    .karma_converted`, or 0 if none yet) tops up the available budget the same way -- see
+    `chummer5.engine.resources`'s own module docstring.
     """
     by_name = {item.name: item for item in STARTER_GEAR_CATALOG}
     selected = tuple(by_name[name] for name in gear_names if name in by_name)
@@ -1000,9 +1034,16 @@ def _resources_selection_for_display(
         nuyen_budget=budget,
         gear=selected,
         nuyen_spent=spent,
-        nuyen_remaining=budget - spent - lifestyle_cost - cyberware_cost,
+        nuyen_remaining=(
+            budget
+            + _display_karma_to_nuyen(karma_converted)
+            - spent
+            - lifestyle_cost
+            - cyberware_cost
+        ),
         lifestyle_cost=lifestyle_cost,
         cyberware_cost=cyberware_cost,
+        karma_converted=karma_converted,
     )
 
 
@@ -1012,6 +1053,7 @@ def _resources_context(
     gear_names: tuple[str, ...],
     lifestyle_cost: int,
     cyberware_cost: int,
+    karma_converted: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -1042,6 +1084,10 @@ def _resources_context(
     **WP34**: `cyberware_cost` (the character's currently-selected `cyberware_selection.nuyen_
     spent`, or 0 if none yet) folds in the same way, extending the shared-budget check from gear+
     Lifestyle to gear+Lifestyle+cyberware.
+
+    **WP43**: `karma_converted` (this same submission's Karma-to-Nuyen amount, or the character's
+    currently-committed one when redisplaying a clean render) tops up the budget the re-validation
+    call and the displayed remaining-nuyen number both use.
     """
     if character is None:
         return {"character": None, "resources_error": error}
@@ -1080,6 +1126,7 @@ def _resources_context(
                 gear_names,
                 lifestyle_cost=lifestyle_cost,
                 cyberware_cost=cyberware_cost,
+                karma_converted=karma_converted,
             )
         except ValueError as exc:
             budget_warning = (
@@ -1091,7 +1138,16 @@ def _resources_context(
         "gear_groups": gear_groups,
         "nuyen_budget": budget,
         "nuyen_spent": spent,
-        "nuyen_remaining": budget - spent - lifestyle_cost - cyberware_cost,
+        "nuyen_remaining": (
+            budget
+            + _display_karma_to_nuyen(karma_converted)
+            - spent
+            - lifestyle_cost
+            - cyberware_cost
+        ),
+        "karma_converted": karma_converted,
+        "max_karma_to_nuyen": MAX_KARMA_TO_NUYEN,
+        "karma_to_nuyen_amount": _display_karma_to_nuyen(karma_converted),
         "resources_error": error,
         "resources_budget_warning": budget_warning,
     }
@@ -1104,6 +1160,7 @@ def _lifestyle_context(
     months: int,
     gear_cost: int,
     cyberware_cost: int,
+    karma_converted: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -1115,7 +1172,10 @@ def _lifestyle_context(
     why this cross-section number is threaded through rather than each section reaching into the
     other's catalog/state directly). **WP34** adds `cyberware_cost` the same way (the character's
     currently-selected `cyberware_selection.nuyen_spent`, or 0 if none yet), extending the shared
-    budget from two sections to three.
+    budget from two sections to three. **WP43** adds `karma_converted` the same way (the
+    character's currently-committed `resources_selection.karma_converted`, or 0 if none yet),
+    topping up the budget rather than spending from it -- see `chummer5.engine.resources`'s module
+    docstring.
 
     Same `error`-gated re-validation pattern as `_resources_context`/`_skill_allocation_context`:
     when `error` is unset (i.e. this isn't redisplaying a submission this same request just
@@ -1133,7 +1193,9 @@ def _lifestyle_context(
             "max_lifestyle_months": MAX_LIFESTYLE_MONTHS,
             "lifestyle_error": error,
         }
-    budget = starting_nuyen(resources_letter, PRIORITIES)
+    budget = starting_nuyen(resources_letter, PRIORITIES) + _display_karma_to_nuyen(
+        karma_converted
+    )
     budget_warning: str | None = None
     if error is None:
         try:
@@ -1179,6 +1241,7 @@ def _cyberware_context(
     item_ids: tuple[str, ...],
     gear_cost: int,
     lifestyle_cost: int,
+    karma_converted: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -1192,7 +1255,8 @@ def _cyberware_context(
     builder responsible for two unrelated catalogs. Shares the same Resources-priority nuyen budget
     as gear/Lifestyle though -- `gear_cost`/`lifestyle_cost` are those two sections' currently-
     committed spend, threaded through the same cross-section wiring `_resources_context`/
-    `_lifestyle_context` already use for each other (see their docstrings).
+    `_lifestyle_context` already use for each other (see their docstrings). **WP43** adds
+    `karma_converted` the same way, topping up the budget rather than spending from it.
 
     Same `error`-gated re-validation pattern as `_resources_context`/`_lifestyle_context`: when
     `error` is unset, re-derives whether the currently-selected items still fit the combined budget
@@ -1221,7 +1285,9 @@ def _cyberware_context(
             _CYBERWARE_BY_CATEGORY, key=lambda item: item.category
         )
     ]
-    budget = starting_nuyen(resources_letter, PRIORITIES)
+    budget = starting_nuyen(resources_letter, PRIORITIES) + _display_karma_to_nuyen(
+        karma_converted
+    )
     nuyen_available = budget - gear_cost - lifestyle_cost
     spent = sum(int(row["subtotal"]) for group in cyberware_groups for row in group["rows"])
     essence_spent = sum((by_id[item_id].essence_cost for item_id in item_ids), Decimal(0))
@@ -1468,11 +1534,17 @@ def _character_sheet_context(
     )
     lifestyle_selection = character.lifestyle_selection
     cyberware_selection = character.cyberware_selection
+    committed_karma_converted = (
+        character.resources_selection.karma_converted
+        if character.resources_selection is not None
+        else 0
+    )
     resources_selection = _resources_selection_for_display(
         session.resources_letter,
         committed_gear_names,
         lifestyle_selection.total_cost if lifestyle_selection is not None else 0,
         cyberware_selection.nuyen_spent if cyberware_selection is not None else 0,
+        committed_karma_converted,
     )
     gear_counts: dict[str, int] = {}
     for item in resources_selection.gear:
@@ -1524,6 +1596,8 @@ def _character_sheet_context(
         ),
         "nuyen_budget": resources_selection.nuyen_budget,
         "nuyen_remaining": resources_selection.nuyen_remaining,
+        "karma_converted": resources_selection.karma_converted,
+        "karma_to_nuyen_amount": karma_to_nuyen(resources_selection.karma_converted),
         "quality_karma_cost": (
             character.quality_selection.karma_cost if character.quality_selection is not None else 0
         ),
@@ -1607,6 +1681,10 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     `CyberwareSelection.items` may repeat the same id (duplicate purchases are legal, see
     `chummer5.engine.cyberware`'s own docstring), so this is a flat, repeats-allowed id list, not a
     `{id: quantity}` mapping, mirroring `gear_names` immediately above.
+
+    **WP43**: `karma_converted` reads straight off `character.resources_selection.karma_converted`
+    (0 for an as-yet-uncommitted Resources section), the same "selection lives on the committed
+    object, not the session" shape `gear_names` immediately above already has.
     """
     character = session.character
     assert character is not None
@@ -1643,6 +1721,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.cyberware_selection is not None
         else ()
     )
+    karma_converted = (
+        character.resources_selection.karma_converted
+        if character.resources_selection is not None
+        else 0
+    )
     return create_character_save(
         metatype_name=character.metatype.name,
         heritage_letter=session.heritage_letter,
@@ -1673,6 +1756,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         power_picks=power_picks,
         magic_attribute_points=character.magic_attribute_points,
         cyberware_item_ids=cyberware_item_ids,
+        karma_converted=karma_converted,
     )
 
 
@@ -1816,8 +1900,18 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.cyberware_selection is not None
         else 0
     )
+    karma_converted = (
+        character.resources_selection.karma_converted
+        if character is not None and character.resources_selection is not None
+        else 0
+    )
     resources_ctx = _resources_context(
-        character, session.resources_letter, gear_names, lifestyle_cost, cyberware_cost
+        character,
+        session.resources_letter,
+        gear_names,
+        lifestyle_cost,
+        cyberware_cost,
+        karma_converted,
     )
     lifestyle_ctx = _lifestyle_context(
         character,
@@ -1826,9 +1920,15 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         lifestyle_months,
         gear_cost,
         cyberware_cost,
+        karma_converted,
     )
     cyberware_ctx = _cyberware_context(
-        character, session.resources_letter, cyberware_item_ids, gear_cost, lifestyle_cost
+        character,
+        session.resources_letter,
+        cyberware_item_ids,
+        gear_cost,
+        lifestyle_cost,
+        karma_converted,
     )
     stale = bool(
         talent_ctx.get("talent_budget_warning")
@@ -2312,10 +2412,11 @@ def create_app() -> FastAPI:
     async def submit_resources(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
         if session.character is None:
-            context = _resources_context(None, session.resources_letter, (), 0, 0)
+            context = _resources_context(None, session.resources_letter, (), 0, 0, 0)
         else:
             form = await request.form()
             gear_names = _parse_gear(form, STARTER_GEAR_CATALOG)
+            karma_converted = _parse_karma_converted(form)
             lifestyle_selection = session.character.lifestyle_selection
             lifestyle_cost = (
                 lifestyle_selection.total_cost if lifestyle_selection is not None else 0
@@ -2331,6 +2432,7 @@ def create_app() -> FastAPI:
                     gear_names,
                     lifestyle_cost=lifestyle_cost,
                     cyberware_cost=cyberware_cost,
+                    karma_converted=karma_converted,
                 )
             except ValueError as exc:
                 context = _resources_context(
@@ -2339,6 +2441,7 @@ def create_app() -> FastAPI:
                     gear_names,
                     lifestyle_cost,
                     cyberware_cost,
+                    karma_converted,
                     error=str(exc),
                 )
             else:
@@ -2349,6 +2452,7 @@ def create_app() -> FastAPI:
                     gear_names,
                     lifestyle_cost,
                     cyberware_cost,
+                    karma_converted,
                 )
         response = templates.TemplateResponse(request, "_resources.html", context)
         if new_cookie is not None:
@@ -2366,6 +2470,7 @@ def create_app() -> FastAPI:
                 DEFAULT_LIFESTYLE_MONTHS,
                 0,
                 0,
+                0,
             )
         else:
             form = await request.form()
@@ -2378,6 +2483,9 @@ def create_app() -> FastAPI:
                 else ()
             )
             gear_cost = resources_selection.nuyen_spent if resources_selection is not None else 0
+            karma_converted = (
+                resources_selection.karma_converted if resources_selection is not None else 0
+            )
             cyberware_selection = session.character.cyberware_selection
             cyberware_cost = (
                 cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
@@ -2390,6 +2498,7 @@ def create_app() -> FastAPI:
                     gear_names,
                     lifestyle_cost=lifestyle_selection.total_cost,
                     cyberware_cost=cyberware_cost,
+                    karma_converted=karma_converted,
                 )
             except ValueError as exc:
                 context = _lifestyle_context(
@@ -2399,6 +2508,7 @@ def create_app() -> FastAPI:
                     months,
                     gear_cost,
                     cyberware_cost,
+                    karma_converted,
                     error=str(exc),
                 )
             else:
@@ -2414,6 +2524,7 @@ def create_app() -> FastAPI:
                     months,
                     gear_cost,
                     cyberware_cost,
+                    karma_converted,
                 )
         response = templates.TemplateResponse(request, "_lifestyle.html", context)
         if new_cookie is not None:
@@ -2424,7 +2535,7 @@ def create_app() -> FastAPI:
     async def submit_cyberware(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
         if session.character is None:
-            context = _cyberware_context(None, session.resources_letter, (), 0, 0)
+            context = _cyberware_context(None, session.resources_letter, (), 0, 0, 0)
         else:
             form = await request.form()
             item_ids = _parse_cyberware(form, CYBERWARE)
@@ -2435,13 +2546,16 @@ def create_app() -> FastAPI:
                 else ()
             )
             gear_cost = resources_selection.nuyen_spent if resources_selection is not None else 0
+            karma_converted = (
+                resources_selection.karma_converted if resources_selection is not None else 0
+            )
             lifestyle_selection = session.character.lifestyle_selection
             lifestyle_cost = (
                 lifestyle_selection.total_cost if lifestyle_selection is not None else 0
             )
-            nuyen_available = starting_nuyen(session.resources_letter, PRIORITIES) - (
-                gear_cost + lifestyle_cost
-            )
+            nuyen_available = available_nuyen(
+                session.resources_letter, PRIORITIES, karma_converted
+            ) - (gear_cost + lifestyle_cost)
             try:
                 selection = create_cyberware_selection(item_ids, CYBERWARE, nuyen_available)
                 new_resources_selection = create_resources_selection(
@@ -2450,6 +2564,7 @@ def create_app() -> FastAPI:
                     gear_names,
                     lifestyle_cost=lifestyle_cost,
                     cyberware_cost=selection.nuyen_spent,
+                    karma_converted=karma_converted,
                 )
             except ValueError as exc:
                 context = _cyberware_context(
@@ -2458,6 +2573,7 @@ def create_app() -> FastAPI:
                     item_ids,
                     gear_cost,
                     lifestyle_cost,
+                    karma_converted,
                     error=str(exc),
                 )
             else:
@@ -2466,7 +2582,12 @@ def create_app() -> FastAPI:
                     session.character, resources_selection=new_resources_selection
                 )
                 context = _cyberware_context(
-                    session.character, session.resources_letter, item_ids, gear_cost, lifestyle_cost
+                    session.character,
+                    session.resources_letter,
+                    item_ids,
+                    gear_cost,
+                    lifestyle_cost,
+                    karma_converted,
                 )
         response = templates.TemplateResponse(request, "_cyberware.html", context)
         if new_cookie is not None:

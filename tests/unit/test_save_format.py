@@ -346,3 +346,99 @@ def test_build_character_rejects_cyberware_exceeding_the_shared_nuyen_budget() -
             lifestyles=LIFESTYLES,
             cyberware=CYBERWARE,
         )
+
+
+def test_json_round_trip_preserves_karma_converted() -> None:
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        karma_converted=7,
+    )
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["karma_converted"] == 7
+
+
+def test_from_json_defaults_karma_converted_for_a_pre_wp43_save() -> None:
+    """A save written before WP43 has no `karma_converted` key at all -- still the same
+    `FORMAT_VERSION` (a purely additive shape change, the same precedent every prior WP28/WP33
+    field addition already established), so it must load with the field defaulting to 0.
+    """
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    del data["karma_converted"]
+    assert from_json(json.dumps(data)).karma_converted == 0
+
+
+def test_build_character_applies_karma_converted_to_the_nuyen_budget() -> None:
+    """WP43: `build_character` folds `karma_converted` into `create_resources_selection`'s budget,
+    letting a gear purchase that would exceed the base Resources budget succeed once Karma tops it
+    up -- and the resulting `resources_selection.karma_converted` carries the committed amount.
+    """
+    budget = PRIORITIES.resources["E"].nuyen
+    over_budget_item_count = (budget // 100) + 1  # Meta Link costs 100
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="E",
+        gear_names=("Meta Link",) * over_budget_item_count,
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        karma_converted=10,
+    )
+    character = build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert character.resources_selection is not None
+    assert character.resources_selection.karma_converted == 10
+    assert character.resources_selection.nuyen_budget == budget
+
+
+def test_build_character_rejects_karma_converted_above_the_cap() -> None:
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="E",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        karma_converted=11,
+    )
+    with pytest.raises(ValueError, match="between 0 and 10"):
+        build_character(
+            save,
+            metatypes=METATYPES,
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
+        )

@@ -9,7 +9,11 @@
   <p class="warning">{{ resources_budget_warning }}</p>
   {% endif %}
 
-  <p>Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget }} (spent {{ nuyen_spent }}).</p>
+  <p>
+    Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget + karma_to_nuyen_amount }}
+    (spent {{ nuyen_spent }}{% if karma_to_nuyen_amount %}, +{{ karma_to_nuyen_amount }} from
+    Karma conversion{% endif %}).
+  </p>
 
   <form
     hx-post="/ui/resources"
@@ -17,6 +21,17 @@
     hx-swap="outerHTML"
     hx-trigger="change, input delay:400ms"
   >
+    <label>
+      Convert Karma to nuyen (2,000¥ each, up to {{ max_karma_to_nuyen }})
+      <input
+        type="number"
+        name="karma_converted"
+        value="{{ karma_converted }}"
+        min="0"
+        max="{{ max_karma_to_nuyen }}"
+      />
+    </label>
+
     {% for group in gear_groups %}
     <details {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
       <summary>{{ group.category }}</summary>

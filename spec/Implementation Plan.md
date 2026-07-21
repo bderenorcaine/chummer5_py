@@ -1287,7 +1287,7 @@ that already exist (`resources.py`'s nuyen budget, `qualities.py`'s Karma tracki
 validity rule than WP14's bijection check; Bioware reuses WP30's Essence mechanism and WP32's
 nuyen-budget/Improvement-application shape verbatim, pointed at a second, much smaller XML file.
 
-- [ ] **WP43 — Karma-to-Nuyen conversion.**
+- [x] **WP43 — Karma-to-Nuyen conversion.**
   Goal: let a player convert up to 10 Karma into nuyen during Step Six/Seven, per the rulebook (p. 94):
   "They may convert up to 10 Karma at a rate of 2,000 nuyen per Karma point for gear" — confirmed
   against the legacy engine too: `Miko.chum5`'s own `CharacterSettings` block carries

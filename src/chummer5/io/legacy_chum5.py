@@ -209,6 +209,12 @@ class LegacyCharacter:
     build_karma: int
     nuyen_remaining: float
     starting_nuyen: int
+    # <nuyenbp> (WP43): Karma actually converted to nuyen at Step Six (core rulebook p. 94, up to
+    # 10 at 2,000 nuyen/point) -- distinct from <nuyenmaxbp>, the *setting's* cap (always 10 for
+    # every Standard-gameplay-option settings.xml block; see spec/rulebooks/learnings.md's WP43
+    # entry), which this parser doesn't need since chummer5.engine.resources hardcodes the same
+    # cap directly (the QUALITY_KARMA_LIMIT precedent).
+    karma_converted_to_nuyen: int
 
 
 def _parse_bool(text: str | None) -> bool:
@@ -450,4 +456,5 @@ def load_chum5(path: Path) -> LegacyCharacter:
         build_karma=int(root.findtext("buildkarma", "0")),
         nuyen_remaining=float(root.findtext("nuyen", "0")),
         starting_nuyen=int(root.findtext("startingnuyen", "0")),
+        karma_converted_to_nuyen=int(root.findtext("nuyenbp", "0")),
     )

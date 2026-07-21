@@ -151,7 +151,7 @@
   {% endif %}
   <p>Essence: {{ essence }} / 6.</p>
 
-  <p>Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget }}.</p>
+  <p>Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget + karma_to_nuyen_amount }}{% if karma_to_nuyen_amount %} ({{ nuyen_budget }} priority + {{ karma_to_nuyen_amount }} from converting {{ karma_converted }} Karma){% endif %}.</p>
 
   <h3>Derived stats</h3>
   <table>

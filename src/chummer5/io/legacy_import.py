@@ -477,6 +477,13 @@ def import_legacy_character(
         power_picks=power_picks,
         magic_attribute_points=magic_attribute_points,
         cyberware_item_ids=cyberware_item_ids,
+        # WP43: <nuyenbp> -- Karma actually converted to nuyen at Step Six. `_blocking_reasons`
+        # doesn't need its own check for this: STANDARD_GAME_OPTION already restricts import to
+        # Standard-gameplay-option characters, and every Standard settings.xml block caps this at
+        # exactly the same 10 chummer5.engine.resources.MAX_KARMA_TO_NUYEN hardcodes (see
+        # spec/rulebooks/learnings.md's WP43 entry) -- an honest legacy save can't carry a value
+        # build_character's own karma_to_nuyen() call would reject.
+        karma_converted=legacy.karma_converted_to_nuyen,
     )
 
     built = build_character(

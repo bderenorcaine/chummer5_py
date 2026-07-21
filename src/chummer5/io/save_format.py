@@ -74,6 +74,13 @@ one. **WP34** (the cyberware UI) additionally folds `cyberware_selection.nuyen_s
 cyberware is resolved -- see this function's own inline comment for why that re-call always
 succeeds.
 
+**WP43** adds `karma_converted` -- however much Karma the player converted to nuyen at Step Six
+(core rulebook p. 94), the same "selection, not derived value" shape every prior field has.
+Defaults to `0` ("predates this field"/"player didn't convert any"), so every pre-WP43 save
+round-trips unchanged. `build_character` folds it into both `create_resources_selection` calls
+(gear+Lifestyle, then gear+Lifestyle+cyberware) -- see `chummer5.engine.resources`'s own module
+docstring for why it tops up the shared budget rather than spending from it.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -179,6 +186,10 @@ class CharacterSave:
     # WP33: purchased cyberware ids (chummer5.data.cyberware.Cyberware.id). Defaults to () --
     # "predates this field", the same shape every WP28 magic field defaults to.
     cyberware_item_ids: tuple[str, ...] = ()
+    # WP43: Karma converted to nuyen at Step Six (core rulebook p. 94, up to 10). Defaults to 0 --
+    # "predates this field"/"player didn't convert any", the same shape every prior optional field
+    # defaults to.
+    karma_converted: int = 0
 
 
 def create_character_save(
@@ -204,6 +215,7 @@ def create_character_save(
     power_picks: Iterable[PowerPickTriple] = (),
     magic_attribute_points: int = 0,
     cyberware_item_ids: Iterable[str] = (),
+    karma_converted: int = 0,
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -235,6 +247,7 @@ def create_character_save(
         power_picks=tuple(power_picks),
         magic_attribute_points=magic_attribute_points,
         cyberware_item_ids=tuple(cyberware_item_ids),
+        karma_converted=karma_converted,
     )
 
 
@@ -273,6 +286,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         ],
         "magic_attribute_points": save.magic_attribute_points,
         "cyberware_item_ids": list(save.cyberware_item_ids),
+        "karma_converted": save.karma_converted,
     }
 
 
@@ -319,6 +333,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         ),
         magic_attribute_points=data.get("magic_attribute_points", 0),
         cyberware_item_ids=data.get("cyberware_item_ids", ()),
+        karma_converted=data.get("karma_converted", 0),
     )
 
 
@@ -418,6 +433,7 @@ def build_character(
         priorities,
         gear_names=save.gear_names,
         lifestyle_cost=lifestyle_selection.total_cost,
+        karma_converted=save.karma_converted,
     )
 
     # WP33: cyberware draws from the same shared Step Six nuyen pool gear/Lifestyle already spent
@@ -441,6 +457,7 @@ def build_character(
         gear_names=save.gear_names,
         lifestyle_cost=lifestyle_selection.total_cost,
         cyberware_cost=cyberware_selection.nuyen_spent,
+        karma_converted=save.karma_converted,
     )
 
     # WP28: Magic-type/tradition/free-skill-grant. `apply_magic_skill_grant_improvements` mutates
