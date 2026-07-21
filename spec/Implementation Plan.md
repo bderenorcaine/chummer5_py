@@ -939,7 +939,7 @@ exist yet. Scoped as this phase's final WP (WP35), sequenced after both phases' 
   (`ceil((5*2+5+6)/3) == 7`, essence fixed at 6, zero improvements) passes unchanged, proving zero
   behavioral drift for every cyberware-free character built so far.
 
-- [ ] **WP31 — Cyberware data loader.**
+- [x] **WP31 — Cyberware data loader.**
   Goal: load the SR5-core, flat-cost, flat-essence, Standard-grade cyberware catalog as typed Python
   structures.
   Deliverables:
