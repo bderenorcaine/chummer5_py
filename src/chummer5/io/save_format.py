@@ -62,6 +62,15 @@ MAG beyond `talent_codename`'s starting rating, a real, rulebook-confirmed mecha
 correction and `spec/rulebooks/learnings.md`. Defaults to `0`, the same "predates this field"
 shape every other magic field above defaults to Mundane.
 
+**WP33** adds `cyberware_item_ids` -- purchased `chummer5.data.cyberware.Cyberware` ids, the same
+"selection, not derived value" shape every prior field already has. Defaults to `()` ("predates
+this field", the same shape every WP28 magic field defaults to), so every save written before this
+WP (which never had cyberware to lose) round-trips unchanged. `build_character` validates it
+against WP32's `create_cyberware_selection`, using `resources_selection.nuyen_remaining` (gear +
+Lifestyle already subtracted) as the shared nuyen budget cyberware draws from -- see
+`chummer5.engine.cyberware`'s own docstring for why this is one shared Step Six pool, not a separate
+one.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -78,6 +87,7 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
+from chummer5.data.cyberware import Cyberware
 from chummer5.data.lifestyle import LifestyleTier
 from chummer5.data.metatypes import Metatype
 from chummer5.data.powers import Power
@@ -87,6 +97,7 @@ from chummer5.data.skills import Skill
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
 from chummer5.engine.character import Character, create_character, metatype_choices
+from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
 from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.lifestyle import create_lifestyle_selection
 from chummer5.engine.magic import (
@@ -162,6 +173,9 @@ class CharacterSave:
     # .create_magic_attribute_points). Defaults to 0 for the same "predates this field" reason
     # every other WP28 magic field defaults to Mundane.
     magic_attribute_points: int = 0
+    # WP33: purchased cyberware ids (chummer5.data.cyberware.Cyberware.id). Defaults to () --
+    # "predates this field", the same shape every WP28 magic field defaults to.
+    cyberware_item_ids: tuple[str, ...] = ()
 
 
 def create_character_save(
@@ -186,6 +200,7 @@ def create_character_save(
     spell_ids: Iterable[str] = (),
     power_picks: Iterable[PowerPickTriple] = (),
     magic_attribute_points: int = 0,
+    cyberware_item_ids: Iterable[str] = (),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -216,6 +231,7 @@ def create_character_save(
         spell_ids=tuple(spell_ids),
         power_picks=tuple(power_picks),
         magic_attribute_points=magic_attribute_points,
+        cyberware_item_ids=tuple(cyberware_item_ids),
     )
 
 
@@ -253,6 +269,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
             for power_id, rating, selected_attribute in save.power_picks
         ],
         "magic_attribute_points": save.magic_attribute_points,
+        "cyberware_item_ids": list(save.cyberware_item_ids),
     }
 
 
@@ -298,6 +315,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
             for p in data.get("power_picks", ())
         ),
         magic_attribute_points=data.get("magic_attribute_points", 0),
+        cyberware_item_ids=data.get("cyberware_item_ids", ()),
     )
 
 
@@ -321,6 +339,7 @@ def build_character(
     traditions: tuple[Tradition, ...] = (),
     spells: tuple[Spell, ...] = (),
     powers: tuple[Power, ...] = (),
+    cyberware: tuple[Cyberware, ...] = (),
 ) -> Character:
     """Reconstruct a fully-populated `Character` from a `CharacterSave`, re-running the same
     `create_*` validation each selection already has (see module docstring).
@@ -343,6 +362,9 @@ def build_character(
     a Mundane save (`save.talent_codename == "Mundane"`, every pre-WP28 save's shape) never
     resolves a tradition or spell/power picks against these catalogs at all, so a caller building
     only Mundane characters (every existing call site, until WP29) has nothing new to pass.
+
+    **WP33**: `cyberware` defaults to `()` for the same reason -- a save with no
+    `cyberware_item_ids` (every pre-WP33 save) never resolves against it.
     """
     heritage = priorities.heritage[save.heritage_letter]
     choice = next(
@@ -394,6 +416,14 @@ def build_character(
         gear_names=save.gear_names,
         lifestyle_cost=lifestyle_selection.total_cost,
     )
+
+    # WP33: cyberware draws from the same shared Step Six nuyen pool gear/Lifestyle already spent
+    # out of `resources_selection.nuyen_budget` -- `nuyen_remaining` is exactly what's left (see
+    # chummer5.engine.cyberware's own docstring for the confirmed-shared-budget citation).
+    cyberware_selection = create_cyberware_selection(
+        save.cyberware_item_ids, cyberware, resources_selection.nuyen_remaining
+    )
+    apply_cyberware_improvements(character, cyberware_selection)
 
     # WP28: Magic-type/tradition/free-skill-grant. `apply_magic_skill_grant_improvements` mutates
     # `character.improvements` in place, the same "call it, don't just build the selection" shape
@@ -462,4 +492,5 @@ def build_character(
         spell_selection=spell_selection,
         power_selection=power_selection,
         magic_attribute_points=magic_attribute_points,
+        cyberware_selection=cyberware_selection,
     )

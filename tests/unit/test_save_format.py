@@ -8,9 +8,11 @@ formula. The engine-reconstruction half (`build_character`) is covered against a
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 
 import pytest
 
+from chummer5.data.cyberware import load_cyberware
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import load_powers
@@ -19,6 +21,7 @@ from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.engine.derived import essence
 from chummer5.engine.resources import Contact
 from chummer5.io.save_format import (
     FORMAT_VERSION,
@@ -37,6 +40,7 @@ LIFESTYLES = load_lifestyles()
 TRADITIONS = load_traditions()
 SPELLS = load_spells()
 POWERS = load_powers()
+CYBERWARE = load_cyberware()
 
 
 def _sample_save() -> CharacterSave:
@@ -249,4 +253,96 @@ def test_build_character_rejects_magic_attribute_points_exceeding_the_shared_bud
             traditions=TRADITIONS,
             spells=SPELLS,
             powers=POWERS,
+        )
+
+
+def test_json_round_trip_preserves_cyberware_item_ids() -> None:
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        cyberware_item_ids=("cyber-datajack", "cyber-datajack"),
+    )
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["cyberware_item_ids"] == ["cyber-datajack", "cyber-datajack"]
+
+
+def test_build_character_applies_cyberware_selection() -> None:
+    """WP33: `build_character` validates `cyberware_item_ids` against WP32's
+    `create_cyberware_selection`, using the Resources-priority letter's nuyen remaining *after*
+    gear/Lifestyle as the shared budget cyberware draws from (see `chummer5.engine.cyberware`'s own
+    docstring) -- and applies the resulting Essence Improvement to the built `Character`.
+    """
+    datajack = next(c for c in CYBERWARE if c.name == "Datajack")
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        cyberware_item_ids=(datajack.id,),
+    )
+    character = build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        cyberware=CYBERWARE,
+    )
+    assert character.cyberware_selection is not None
+    assert datajack.id in {c.id for c in character.cyberware_selection.items}
+    assert essence(character) == Decimal(6) - datajack.essence_cost
+
+
+def test_build_character_rejects_cyberware_exceeding_the_shared_nuyen_budget() -> None:
+    """Cyberware shares its nuyen budget with gear/Lifestyle -- a Resources letter whose remaining
+    budget (after Lifestyle) can't cover an expensive item's cost must reject the build, mirroring
+    `chummer5.engine.cyberware.create_cyberware_selection`'s own over-budget check.
+    """
+    synthetic_full_arm = next(c for c in CYBERWARE if c.name == "Synthetic Full Arm")
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="E",  # smallest nuyen budget
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        cyberware_item_ids=(synthetic_full_arm.id,),
+    )
+    with pytest.raises(ValueError, match="nuyen budget"):
+        build_character(
+            save,
+            metatypes=METATYPES,
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
+            cyberware=CYBERWARE,
         )

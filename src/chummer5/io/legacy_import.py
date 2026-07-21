@@ -32,28 +32,41 @@ result:
   own finding, so there's no budget to validate against), a non-`Standard` `<gameplayoption>` (WP2's
   `load_priorities()` only loads the Standard resources table, so a Prime Runner/Street Level
   character's nuyen budget would silently resolve to the *Standard* table's number for the same
-  letter — wrong, not just incomplete), cyberware/bioware presence (WP10's own finding: MVP's
-  `BASE_ESSENCE = 6` constant is only valid for an augmentation-free character — importing one with
-  cyberware and still assuming Essence 6 would silently corrupt Social Limit), a metavariant (out of
-  MVP scope per WP6's metatype filter -- the base metatype's attribute ranges the rest of the import
-  would use don't apply to it), and (WP20) a primary Lifestyle that's either missing entirely or not
-  one of the 6 core-rulebook starting tiers `chummer5.data.lifestyle` offers -- silently defaulting
-  to a tier the character never actually chose (e.g. free "Street") would misrepresent a real nuyen
-  spend, not just omit one, so this is blocking rather than excluded-and-reported like a dropped
-  quality/skill. **WP28** replaces the old blanket "Magic is enabled" rejection with two narrower,
-  itemized checks fired only when `legacy.magic_enabled`: a Talent codename outside this project's
-  offered set (`chummer5.engine.magic.OFFERED_TALENT_CODENAMES` — Mystic Adept/Technomancer/A.I./
-  Aspected Magician/etc. are all still unrepresentable, exactly as unbuildable as before, just with
-  a precise reason now); and, Magician-specific, a tradition name that isn't one of the 2 SR5-core
-  traditions this phase offers (Hermetic/Shamanic) — unlike a dropped quality, there is no sensible
-  "import without a tradition" fallback for a Magician (`chummer5.engine.magic
-  .create_magic_selection` itself requires one), so an unresolvable tradition blocks the whole
-  import rather than being silently dropped. **Confirmed against this phase's own two real
-  fixtures**: Miko (Elf Magician) hits exactly this second check — her tradition, Shinto, is
-  `SG`-sourced, not one of the 2 offered — so she is *still* rejected after this WP, just with an
-  honest, specific reason instead of a blanket one (see `spec/worklogs/WP28.md` for why this
-  corrects the Implementation Plan's own more optimistic acceptance text). Wesson (Human Adept)
-  needs no tradition at all and imports cleanly.
+  letter — wrong, not just incomplete), a metavariant (out of MVP scope per WP6's metatype filter --
+  the base metatype's attribute ranges the rest of the import would use don't apply to it), and
+  (WP20) a primary Lifestyle that's either missing entirely or not one of the 6 core-rulebook
+  starting tiers `chummer5.data.lifestyle` offers -- silently defaulting to a tier the character
+  never actually chose (e.g. free "Street") would misrepresent a real nuyen spend, not just omit
+  one, so this is blocking rather than excluded-and-reported like a dropped quality/skill. **WP28**
+  replaces the old blanket "Magic is enabled" rejection with two narrower, itemized checks fired
+  only when `legacy.magic_enabled`: a Talent codename outside this project's offered set
+  (`chummer5.engine.magic.OFFERED_TALENT_CODENAMES` — Mystic Adept/Technomancer/A.I./Aspected
+  Magician/etc. are all still unrepresentable, exactly as unbuildable as before, just with a precise
+  reason now); and, Magician-specific, a tradition name that isn't one of the 2 SR5-core traditions
+  this phase offers (Hermetic/Shamanic) — unlike a dropped quality, there is no sensible "import
+  without a tradition" fallback for a Magician (`chummer5.engine.magic.create_magic_selection`
+  itself requires one), so an unresolvable tradition blocks the whole import rather than being
+  silently dropped. **Confirmed against this phase's own two real fixtures**: Miko (Elf Magician)
+  hits exactly this second check — her tradition, Shinto, is `SG`-sourced, not one of the 2 offered
+  — so she is *still* rejected after this WP, just with an honest, specific reason instead of a
+  blanket one (see `spec/worklogs/WP28.md` for why this corrects the Implementation Plan's own more
+  optimistic acceptance text). Wesson (Human Adept) needs no tradition at all and imports cleanly.
+  **WP33** replaces the old blanket "character has cyberware/bioware" rejection with a real,
+  itemized check per real `<cyberwares><cyberware>` entry
+  (`chummer5.io.legacy_chum5.LegacyCyberware` -- top-level entries only, see that class's own
+  docstring): a Bioware entry
+  (`improvement_source == "Bioware"`) is always rejected by name, since no Bioware catalog exists at
+  all yet; a Cyberware entry is rejected by name+grade unless it resolves against WP31's
+  flat-cost/flat-Essence, Standard-grade-only catalog (`chummer5.data.cyberware.load_cyberware`) --
+  a non-Standard grade is rejected even when the item's *name* matches a catalog entry, because a
+  real fixture check (`spec/worklogs/WP32.md`) found the legacy save format stores a Standard-grade
+  item's raw `<ess>`/`<cost>` fields unchanged regardless of the grade actually purchased (the grade
+  multiplier is applied at read time, not baked into the stored fields) -- silently treating a
+  non-Standard purchase as Standard grade would misrepresent the real Essence/nuyen cost the
+  character actually paid, not just approximate it. Per the Phase J intro, most real cyberware
+  content across the corpus's cyberware-bearing fixtures hits this rejection (rating-scaled formulas
+  and non-Standard grades are the common case, not the exception) -- see
+  `spec/worklogs/WP33.md`/`tests/integration/test_cyberware_import_fixtures.py`.
   `UnsupportedLegacyCharacterError.reasons` collects *every* blocking issue found in one pass, not
   just the first, so a caller gets one itemized report rather than a fix-one-rerun-find-the-next
   loop.
@@ -95,6 +108,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from chummer5.data.cyberware import Cyberware
 from chummer5.data.lifestyle import STARTING_TIER_NAMES, LifestyleTier
 from chummer5.data.metatypes import Metatype
 from chummer5.data.powers import Power
@@ -123,6 +137,17 @@ STANDARD_GAME_OPTION = "Standard"
 
 PRIORITY_BUILD_METHOD = "Priority"
 
+# chummer5.data.cyberware.load_cyberware() only offers Standard-grade values (see that module's
+# docstring and the Phase J intro) -- a real purchase at any other grade is rejected even when its
+# name matches a catalog entry (see this module's own docstring for why the stored raw fields can't
+# be trusted to reflect the real grade-adjusted cost/Essence).
+STANDARD_CYBERWARE_GRADE = "Standard"
+
+# <improvementsource> value that marks a <cyberwares><cyberware> entry as Bioware rather than
+# Cyberware (see chummer5.io.legacy_chum5.LegacyCyberware's own docstring). No Bioware catalog
+# exists yet, so every Bioware entry is unconditionally blocking.
+BIOWARE_IMPROVEMENT_SOURCE = "Bioware"
+
 
 class UnsupportedLegacyCharacterError(ValueError):
     """A `.chum5` file uses content MVP's engine cannot represent at all.
@@ -137,7 +162,9 @@ class UnsupportedLegacyCharacterError(ValueError):
 
 
 def _blocking_reasons(
-    legacy: LegacyCharacter, traditions: tuple[Tradition, ...]
+    legacy: LegacyCharacter,
+    traditions: tuple[Tradition, ...],
+    cyberware: tuple[Cyberware, ...],
 ) -> tuple[str, ...]:
     reasons = []
     if legacy.build_method != PRIORITY_BUILD_METHOD:
@@ -164,10 +191,22 @@ def _blocking_reasons(
                     f"tradition {legacy.tradition_name!r} is not one of the SR5-core traditions "
                     "MVP offers (Hermetic, Shamanic)"
                 )
-    if legacy.has_cyberware:
-        reasons.append(
-            "character has cyberware/bioware; MVP does not model Essence-reducing augmentation"
-        )
+    # WP33: real, itemized cyberware/bioware checks, replacing the old blanket "character has
+    # cyberware/bioware" rejection -- see module docstring.
+    cyberware_by_name = {item.name: item for item in cyberware}
+    for legacy_item in legacy.cyberware:
+        if legacy_item.improvement_source == BIOWARE_IMPROVEMENT_SOURCE:
+            reasons.append(
+                f"{legacy_item.name!r} is Bioware; MVP does not model Bioware (Phase J covers "
+                "Cyberware only)"
+            )
+            continue
+        catalog_item = cyberware_by_name.get(legacy_item.name)
+        if catalog_item is None or legacy_item.grade != STANDARD_CYBERWARE_GRADE:
+            reasons.append(
+                f"cannot import {legacy_item.name!r} ({legacy_item.grade or 'unknown'} grade): "
+                "rating-scaled, non-Standard-grade, or non-SR5 cyberware is out of scope"
+            )
     if legacy.metavariant is not None:
         reasons.append(f"metavariant {legacy.metavariant!r} is out of MVP scope")
     # Post-WP29 correction: MAG shares the same "priority-derived points only, no chargen-time
@@ -229,6 +268,7 @@ def import_legacy_character(
     traditions: tuple[Tradition, ...] = (),
     spells: tuple[Spell, ...] = (),
     powers: tuple[Power, ...] = (),
+    cyberware: tuple[Cyberware, ...] = (),
 ) -> ImportResult:
     """Convert an already-parsed `LegacyCharacter` into a validated, built native character.
 
@@ -237,13 +277,19 @@ def import_legacy_character(
     doesn't otherwise model, then builds the result through WP11's `build_character()` so a caller
     gets back a ready-to-use character, not just a save file.
 
-    `traditions`/`spells`/`powers` default to `()`, mirroring `build_character`'s own WP28 defaults
-    -- a Mundane legacy character (`legacy.magic_enabled is False`, every fixture this project
-    imported before WP28) never touches any of the three.
+    `traditions`/`spells`/`powers`/`cyberware` default to `()`, mirroring `build_character`'s own
+    WP28/WP33 defaults -- a Mundane, augmentation-free legacy character (every fixture this project
+    imported before WP28/WP33) never touches any of the four.
     """
-    reasons = _blocking_reasons(legacy, traditions)
+    reasons = _blocking_reasons(legacy, traditions, cyberware)
     if reasons:
         raise UnsupportedLegacyCharacterError(reasons)
+
+    # WP33: every remaining `legacy.cyberware` entry is now guaranteed (by `_blocking_reasons`
+    # above) to be a Cyberware entry that resolves by name against `cyberware` at Standard grade --
+    # nothing here can fail.
+    cyberware_by_name = {item.name: item for item in cyberware}
+    cyberware_item_ids = [cyberware_by_name[item.name].id for item in legacy.cyberware]
 
     # `.base` only, not `+ legacy_attribute.karma` -- `_blocking_reasons` above already rejects any
     # character with a nonzero `karma` on an allocatable attribute (a real, separately-discovered
@@ -342,9 +388,7 @@ def import_legacy_character(
     # `attribute_points` above already reads for EDG. `_blocking_reasons` guarantees `.karma` is 0
     # here (see its own updated check), so `.base` alone is the full priority-derived spend.
     magic_attribute_points = (
-        legacy.attributes["MAG"].base
-        if legacy.magic_enabled and "MAG" in legacy.attributes
-        else 0
+        legacy.attributes["MAG"].base if legacy.magic_enabled and "MAG" in legacy.attributes else 0
     )
 
     # Every name here comes from `priorities.xml`'s own Talent free-skill grant, cross-referencing
@@ -432,6 +476,7 @@ def import_legacy_character(
         spell_ids=spell_ids,
         power_picks=power_picks,
         magic_attribute_points=magic_attribute_points,
+        cyberware_item_ids=cyberware_item_ids,
     )
 
     built = build_character(
@@ -444,6 +489,7 @@ def import_legacy_character(
         traditions=traditions,
         spells=spells,
         powers=powers,
+        cyberware=cyberware,
     )
 
     return ImportResult(
@@ -467,6 +513,7 @@ def import_chum5(
     traditions: tuple[Tradition, ...] = (),
     spells: tuple[Spell, ...] = (),
     powers: tuple[Power, ...] = (),
+    cyberware: tuple[Cyberware, ...] = (),
 ) -> ImportResult:
     """Parse a `.chum5` file (WP4's `load_chum5`) and import it (see `import_legacy_character`)."""
     return import_legacy_character(
@@ -479,4 +526,5 @@ def import_chum5(
         traditions=traditions,
         spells=spells,
         powers=powers,
+        cyberware=cyberware,
     )

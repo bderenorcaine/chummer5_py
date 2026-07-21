@@ -995,7 +995,7 @@ exist yet. Scoped as this phase's final WP (WP35), sequenced after both phases' 
   raises `physical_condition_monitor` by 1 via the existing `PHYSICAL_CM` type — the clearest
   "reuses an existing mechanism" win this phase has, worth its own explicit assertion.
 
-- [ ] **WP33 — Cyberware-aware save/load + legacy import unblocking.**
+- [x] **WP33 — Cyberware-aware save/load + legacy import unblocking.**
   Goal: let a cyberware-bearing character round-trip through native save/load and legacy `.chum5`
   import.
   Deliverables:

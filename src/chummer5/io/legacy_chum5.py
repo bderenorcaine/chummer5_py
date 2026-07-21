@@ -93,6 +93,33 @@ class LegacyPower:
 
 
 @dataclass(frozen=True)
+class LegacyCyberware:
+    """One raw *top-level* `<cyberwares><cyberware>` entry (WP33). Nested `<children>` (cyberlimb
+    enhancements/accessories bought onto a limb) are deliberately not parsed here -- WP31/32 already
+    treat that as a different category of purchase entirely, out of Phase J's scope (see
+    `tests/integration/test_cyberware_fixtures.py`'s identical "top-level only" precedent), so
+    parsing them here would only grow a field this project has no use for.
+
+    `<improvementsource>` ("Cyberware" or "Bioware") is the only reliable way to split the two
+    content types this one wrapper element holds -- `<category>` alone doesn't (e.g. "Basic"/
+    "Cultured"/"Genemods" categories are Bioware-only in practice, but "Headware"/"Bodyware" span
+    both). `cost`/`essence` are kept as raw text, not `int`/`Decimal`: a real purchase's `<cost>`/
+    `<ess>` is routinely a rating formula (`"Rating * 0.3"`, `"FixedValues(2,3,5)"`), not a bare
+    literal -- this parser's contract is "what the save says", not "what it resolves to" (see module
+    docstring). `chummer5.io.legacy_import` decides importability by matching `name`+`grade` against
+    WP31's catalog rather than parsing these fields numerically at all.
+    """
+
+    name: str
+    category: str
+    grade: str
+    source: str
+    improvement_source: str  # "Cyberware" or "Bioware"
+    cost: str  # raw <cost> text -- often a rating formula, see class docstring
+    essence: str  # raw <ess> text, same caveat
+
+
+@dataclass(frozen=True)
 class LegacyContact:
     name: str
     connection: int
@@ -167,10 +194,11 @@ class LegacyCharacter:
     # <lifestyles><lifestyle>...</lifestyle></lifestyles>, every entry in document order (WP20;
     # see LegacyLifestyle's own docstring for why "which one is primary" isn't decided here).
     lifestyles: tuple[LegacyLifestyle, ...]
-    has_cyberware: bool  # <cyberwares> has any children (WP12) -- Cyberware *and* Bioware entries
-    # both live under this one wrapper element (`<improvementsource>` distinguishes them, not the
-    # element name), so a single presence flag covers both without needing to parse individual
-    # entries MVP has no use for otherwise. See spec/worklogs/WP12.md.
+    # <cyberwares><cyberware>... -- every *top-level* entry (WP12 parsed only a presence boolean;
+    # WP33 widens this to real per-item data, see LegacyCyberware's own docstring for why nested
+    # <children> stay unparsed). Cyberware *and* Bioware entries both live under this one wrapper
+    # element (`<improvementsource>` distinguishes them, not the element name).
+    cyberware: tuple[LegacyCyberware, ...]
     # WP28: <tradition><name> -- always present in the save format (even for a mundane character,
     # where it's a meaningless placeholder never consumed downstream) since the legacy engine
     # always instantiates one; "" if somehow absent entirely.
@@ -269,6 +297,26 @@ def _parse_qualities(elem: ET.Element | None) -> tuple[LegacyQuality, ...]:
     return tuple(_parse_quality(q) for q in elem.findall("quality"))
 
 
+def _parse_cyberware_item(elem: ET.Element) -> LegacyCyberware:
+    return LegacyCyberware(
+        name=elem.findtext("name", ""),
+        category=elem.findtext("category", ""),
+        grade=elem.findtext("grade", ""),
+        source=elem.findtext("source", ""),
+        improvement_source=elem.findtext("improvementsource", ""),
+        cost=elem.findtext("cost", ""),
+        essence=elem.findtext("ess", ""),
+    )
+
+
+def _parse_cyberwares(elem: ET.Element | None) -> tuple[LegacyCyberware, ...]:
+    # Top-level <cyberware> children only -- see LegacyCyberware's own docstring for why nested
+    # <children> (cyberlimb enhancements/accessories) are deliberately not parsed here.
+    if elem is None:
+        return ()
+    return tuple(_parse_cyberware_item(c) for c in elem.findall("cyberware"))
+
+
 def _parse_contact(elem: ET.Element) -> LegacyContact:
     return LegacyContact(
         name=elem.findtext("name", ""),
@@ -333,10 +381,6 @@ def _parse_powers(elem: ET.Element | None) -> tuple[LegacyPower, ...]:
     return tuple(_parse_power(p) for p in elem.findall("power"))
 
 
-def _has_children(elem: ET.Element | None) -> bool:
-    return elem is not None and len(elem) > 0
-
-
 def _parse_priorities(root: ET.Element) -> PrioritySelections:
     # <priorityskills> appears twice at the same level with different shapes: a scalar
     # "<letter>,<n>" value (the Skills category, like its four siblings) and a list wrapper
@@ -374,8 +418,11 @@ def load_chum5(path: Path) -> LegacyCharacter:
     WP28 adds `tradition_name`/`spells`/`powers` -- Phase I's magic-relevant raw fields beyond the
     `magic_enabled` boolean already parsed since WP4 (`MAG`'s own resolved rating needs no new field
     at all: `attributes["MAG"].total_value` already resolves generically, the same way every other
-    attribute does). Vehicles/gear/matrix/etc. remain untouched — this parser only extracts what
-    WP6-WP28's engine and import path need to validate against.
+    attribute does). WP33 widens WP12's boolean `has_cyberware` flag into real per-item data
+    (`cyberware`, see `LegacyCyberware`) -- every top-level `<cyberwares><cyberware>` entry, needed
+    both to decide per-item importability and to cross-check Essence math against WP30's mechanism.
+    Vehicles/gear/matrix/etc. remain untouched — this parser only extracts what WP6-WP33's engine
+    and import path need to validate against.
     """
     root = ET.parse(path).getroot()
     newskills_elem = root.find("newskills")
@@ -395,7 +442,7 @@ def load_chum5(path: Path) -> LegacyCharacter:
         contacts=_parse_contacts(root.find("contacts")),
         contact_points_budget=int(root.findtext("contactpoints", "0")),
         lifestyles=_parse_lifestyles(root.find("lifestyles")),
-        has_cyberware=_has_children(root.find("cyberwares")),
+        cyberware=_parse_cyberwares(root.find("cyberwares")),
         tradition_name=root.findtext("tradition/name", ""),
         spells=_parse_spells(root.find("spells")),
         powers=_parse_powers(root.find("powers")),

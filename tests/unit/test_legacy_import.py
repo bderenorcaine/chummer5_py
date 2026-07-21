@@ -11,6 +11,7 @@ from types import MappingProxyType
 
 import pytest
 
+from chummer5.data.cyberware import load_cyberware
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import load_powers
@@ -22,6 +23,7 @@ from chummer5.data.traditions import load_traditions
 from chummer5.io.legacy_chum5 import (
     LegacyAttribute,
     LegacyCharacter,
+    LegacyCyberware,
     LegacyLifestyle,
     LegacyPower,
     LegacyQuality,
@@ -42,6 +44,7 @@ LIFESTYLES = load_lifestyles()
 TRADITIONS = load_traditions()
 SPELLS = load_spells()
 POWERS = load_powers()
+CYBERWARE = load_cyberware()
 
 
 def _priorities(
@@ -80,7 +83,7 @@ def _legacy_character(**overrides: object) -> LegacyCharacter:
         qualities=(),
         contacts=(),
         contact_points_budget=0,
-        has_cyberware=False,
+        cyberware=(),
         # A valid default primary Lifestyle (WP20) -- most tests here aren't about lifestyle at
         # all, so this keeps `_blocking_reasons`'s new lifestyle check from firing incidentally;
         # tests that specifically exercise that check override this field.
@@ -110,6 +113,7 @@ def _import(legacy: LegacyCharacter) -> None:
         traditions=TRADITIONS,
         spells=SPELLS,
         powers=POWERS,
+        cyberware=CYBERWARE,
     )
 
 
@@ -241,9 +245,107 @@ def test_accepts_adept_with_no_tradition_needed() -> None:
     assert result.built.tradition is None
 
 
-def test_rejects_cyberware() -> None:
-    with pytest.raises(UnsupportedLegacyCharacterError, match="cyberware/bioware"):
-        _import(_legacy_character(has_cyberware=True))
+def test_rejects_unsupported_cyberware_item() -> None:
+    """WP33 replaces the old blanket "character has cyberware/bioware" rejection with a real,
+    itemized check per real purchase -- a rating-scaled item (Wired Reflexes' real Essence cost is
+    `FixedValues(2,3,5)`, not a bare literal, so it isn't in WP31's flat catalog at all) is rejected
+    by name, not with a generic message.
+    """
+    with pytest.raises(UnsupportedLegacyCharacterError, match=r"'Wired Reflexes'.*rating-scaled"):
+        _import(
+            _legacy_character(
+                cyberware=(
+                    LegacyCyberware(
+                        name="Wired Reflexes",
+                        category="Bodyware",
+                        grade="Standard",
+                        source="SR5",
+                        improvement_source="Cyberware",
+                        cost="FixedValues(39000,149000,217000)",
+                        essence="FixedValues(2,3,5)",
+                    ),
+                )
+            )
+        )
+
+
+def test_rejects_non_standard_grade_cyberware() -> None:
+    """A real WP31 catalog item (Datajack) bought at a non-Standard grade is still rejected --
+    confirmed via real fixture data (`spec/worklogs/WP32.md`) that the legacy save format stores a
+    Standard-grade item's raw `<ess>`/`<cost>` fields unchanged regardless of the grade actually
+    purchased, so silently accepting a non-Standard grade here would misrepresent the character's
+    real Essence/nuyen cost, not just approximate it.
+    """
+    with pytest.raises(UnsupportedLegacyCharacterError, match=r"'Datajack'.*non-Standard-grade"):
+        _import(
+            _legacy_character(
+                cyberware=(
+                    LegacyCyberware(
+                        name="Datajack",
+                        category="Headware",
+                        grade="Alphaware",
+                        source="SR5",
+                        improvement_source="Cyberware",
+                        cost="1000",
+                        essence="0.1",
+                    ),
+                )
+            )
+        )
+
+
+def test_rejects_bioware() -> None:
+    """No Bioware catalog exists yet -- a `<improvementsource>Bioware</improvementsource>` entry is
+    always rejected by name, regardless of its own shape.
+    """
+    with pytest.raises(UnsupportedLegacyCharacterError, match="'Platelet Factories' is Bioware"):
+        _import(
+            _legacy_character(
+                cyberware=(
+                    LegacyCyberware(
+                        name="Platelet Factories",
+                        category="Basic",
+                        grade="Standard",
+                        source="SR5",
+                        improvement_source="Bioware",
+                        cost="17000",
+                        essence="0.2",
+                    ),
+                )
+            )
+        )
+
+
+def test_accepts_standard_grade_flat_cyberware_item() -> None:
+    """The positive case the three rejection tests above exist to contrast with -- a real catalog
+    item bought at Standard grade (mirroring Bastion.chum5's/Blindfire.chum5's own real Datajack
+    purchases) imports cleanly and reaches the built character's `cyberware_selection`.
+    """
+    datajack = next(c for c in CYBERWARE if c.name == "Datajack")
+    result = import_legacy_character(
+        _legacy_character(
+            cyberware=(
+                LegacyCyberware(
+                    name="Datajack",
+                    category="Headware",
+                    grade="Standard",
+                    source="SR5",
+                    improvement_source="Cyberware",
+                    cost="1000",
+                    essence="0.1",
+                ),
+            )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        cyberware=CYBERWARE,
+    )
+    assert result.save.cyberware_item_ids == (datajack.id,)
+    assert result.built.cyberware_selection is not None
+    assert datajack.id in {c.id for c in result.built.cyberware_selection.items}
 
 
 def test_rejects_karma_bought_attribute_points() -> None:
@@ -405,14 +507,24 @@ def test_itemizes_every_blocking_reason_in_one_pass() -> None:
         build_method="SumtoTen",
         magic_enabled=True,
         priorities=_priorities(talent="A,1", talent_codename="Mystic Adept"),
-        has_cyberware=True,
+        cyberware=(
+            LegacyCyberware(
+                name="Wired Reflexes",
+                category="Bodyware",
+                grade="Standard",
+                source="SR5",
+                improvement_source="Cyberware",
+                cost="FixedValues(39000,149000,217000)",
+                essence="FixedValues(2,3,5)",
+            ),
+        ),
     )
     with pytest.raises(UnsupportedLegacyCharacterError) as exc_info:
         _import(legacy)
     assert len(exc_info.value.reasons) == 3
     assert any("Priority-built" in r for r in exc_info.value.reasons)
     assert any("Talent option 'Mystic Adept' is not supported" in r for r in exc_info.value.reasons)
-    assert any("cyberware/bioware" in r for r in exc_info.value.reasons)
+    assert any("Wired Reflexes" in r for r in exc_info.value.reasons)
 
 
 def test_unsupported_quality_is_dropped_and_reported_not_fatal() -> None:
