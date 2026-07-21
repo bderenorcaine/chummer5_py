@@ -27,9 +27,10 @@ result:
   `NOT_YET_SUPPORTED`) is dropped the same way an unsupported quality is, not half-applied).
 - **Blocking, itemized, fatal.** Content that would make an *already-imported* value silently wrong,
   not just incomplete, is rejected outright via `UnsupportedLegacyCharacterError` before any
-  selection is built at all: a non-Priority build method (MVP's engine only understands
-  priority-letter budgets — a SumToTen character's `<priority*>` fields are mostly empty per WP4's
-  own finding, so there's no budget to validate against), a non-`Standard` `<gameplayoption>` (WP2's
+  selection is built at all: a build method outside `chummer5.engine.build_method
+  .SUPPORTED_BUILD_METHODS` (Karma/LifeModule stay unsupported per the Project Overview's explicit
+  2026-07-21 ruling — MVP's engine only understands priority-letter budgets, which neither of those
+  two build methods use at all), a non-`Standard` `<gameplayoption>` (WP2's
   `load_priorities()` only loads the Standard resources table, so a Prime Runner/Street Level
   character's nuyen budget would silently resolve to the *Standard* table's number for the same
   letter — wrong, not just incomplete), a metavariant (out of MVP scope per WP6's metatype filter --
@@ -69,7 +70,22 @@ result:
   `spec/worklogs/WP33.md`/`tests/integration/test_cyberware_import_fixtures.py`.
   `UnsupportedLegacyCharacterError.reasons` collects *every* blocking issue found in one pass, not
   just the first, so a caller gets one itemized report rather than a fix-one-rerun-find-the-next
-  loop.
+  loop. **WP44** widens the build-method check above from "Priority only" to "Priority or
+  Sum-to-Ten" (`chummer5.engine.build_method.SUPPORTED_BUILD_METHODS`) and adds one more itemized
+  check alongside it: any of the 5 `<priority*>` categories whose raw field doesn't resolve to a
+  real A-E letter (`chummer5.io.legacy_chum5.priority_letter` returning `""` or something outside
+  A-E) blocks the import outright, rather than reaching `create_skill_allocation`/`create_character`
+  and crashing with a `KeyError` on a blank dict lookup. This is a real, if latent, gap the
+  build-method widening newly makes reachable: confirmed directly against the corpus, every one of
+  the 11 curated mundane fixtures whose Talent codename is "Mundane" *and* build method is
+  `SumtoTen` (`BLUE`, `Barrett`, `Blindfire`, `Fuzzy-chargen`, `Gentle Earthquake`, `Monomax
+  (approved) 3`) has a blank `<priorityskills>` scalar -- a genuine legacy save-format quirk (see
+  `spec/rulebooks/learnings.md`'s WP44 entry), not a parser bug -- that only a Priority-only import
+  gate had been hiding. None of those 6 fixtures actually reaches this new check in isolation today
+  (each already hits an unrelated, pre-existing blocker -- cyberware, bioware, or a karma-bought
+  attribute), so this check's own acceptance is necessarily synthetic/hand-verified rather than
+  fixture-backed, the same honesty caveat WP44's own Implementation Plan entry anticipated for the
+  Sum-to-Ten rule itself, just for a different, more specific reason.
 
 **Which `<lifestyle>` entry counts as "primary" (WP20).** The legacy save format has no explicit
 "is this the primary Lifestyle" flag (confirmed: no such field exists anywhere in `Lifestyle.cs`,
@@ -117,6 +133,7 @@ from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
+from chummer5.engine.build_method import SUPPORTED_BUILD_METHODS
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character, sr5_metatypes
 from chummer5.engine.magic import OFFERED_TALENT_CODENAMES, mvp_power_catalog
 from chummer5.engine.qualities import mvp_quality_catalog
@@ -135,7 +152,12 @@ from chummer5.io.save_format import (
 # resolve its nuyen budget against the wrong table for the same letter if this weren't checked.
 STANDARD_GAME_OPTION = "Standard"
 
-PRIORITY_BUILD_METHOD = "Priority"
+# WP44: every one of the 5 priority categories' raw <priority*> field must resolve to one of these
+# -- a blank/unresolvable letter (a real, confirmed legacy save-format gap for Mundane-Talent
+# Sum-to-Ten characters -- see this module's own docstring and spec/rulebooks/learnings.md's WP44
+# entry) would otherwise crash create_skill_allocation/create_character with a KeyError instead of
+# failing cleanly.
+VALID_PRIORITY_LETTERS = frozenset("ABCDE")
 
 # chummer5.data.cyberware.load_cyberware() only offers Standard-grade values (see that module's
 # docstring and the Phase J intro) -- a real purchase at any other grade is rejected even when its
@@ -167,11 +189,33 @@ def _blocking_reasons(
     cyberware: tuple[Cyberware, ...],
 ) -> tuple[str, ...]:
     reasons = []
-    if legacy.build_method != PRIORITY_BUILD_METHOD:
+    if legacy.build_method not in SUPPORTED_BUILD_METHODS:
         reasons.append(
-            f"build method {legacy.build_method!r} is not Priority-built; MVP import only "
-            "supports Priority-built characters"
+            f"build method {legacy.build_method!r} is not supported; MVP import only supports "
+            f"{' or '.join(SUPPORTED_BUILD_METHODS)}-built characters"
         )
+    else:
+        # WP44: only reachable for a build method that's otherwise real -- a blank/unresolvable
+        # letter on any of the 5 categories is a genuine legacy save-format gap (Mundane-Talent
+        # Sum-to-Ten characters; see module docstring), not something a Karma/LifeModule save would
+        # even reach this far to exhibit.
+        missing_priority_categories = [
+            label
+            for label, raw in (
+                ("Heritage", legacy.priorities.heritage),
+                ("Talent", legacy.priorities.talent),
+                ("Attributes", legacy.priorities.attributes),
+                ("Skills", legacy.priorities.skills),
+                ("Resources", legacy.priorities.resources),
+            )
+            if priority_letter(raw) not in VALID_PRIORITY_LETTERS
+        ]
+        if missing_priority_categories:
+            reasons.append(
+                "no priority letter recorded for "
+                f"{', '.join(missing_priority_categories)} (a known Sum-to-Ten/Mundane-Talent "
+                "legacy save-format gap; see spec/rulebooks/learnings.md's WP44 entry)"
+            )
     if legacy.game_option != STANDARD_GAME_OPTION:
         reasons.append(
             f"gameplay option {legacy.game_option!r} is not Standard; MVP's priority tables are "
@@ -484,6 +528,10 @@ def import_legacy_character(
         # spec/rulebooks/learnings.md's WP43 entry) -- an honest legacy save can't carry a value
         # build_character's own karma_to_nuyen() call would reject.
         karma_converted=legacy.karma_converted_to_nuyen,
+        # WP44: carried through as-is (already confirmed one of SUPPORTED_BUILD_METHODS by
+        # _blocking_reasons above) -- see chummer5.io.save_format's own docstring for why nothing
+        # downstream re-validates it.
+        build_method=legacy.build_method,
     )
 
     built = build_character(

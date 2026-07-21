@@ -16,6 +16,7 @@ from tests.fixtures.mundane_chum5 import (
 )
 
 from chummer5.data.priorities import load_priorities
+from chummer5.engine.build_method import validate_sum_to_ten_total
 from chummer5.io.legacy_chum5 import load_chum5, priority_letter
 
 # name -> (metatype, karma_remaining, build_karma, nuyen_remaining, starting_nuyen, quality_count)
@@ -164,6 +165,36 @@ def test_yeti_priority_selections() -> None:
     assert priority_letter(priorities.resources) == "E"
     assert priorities.talent_codename == "Technomancer"
     assert priorities.talent_bonus_skills == ("Compiling", "Hacking", "Cybercombat")
+
+
+# WP44: hand-verified against a direct read of each fixture's raw <priority*> fields -- the only 5
+# of the 11 curated mundane fixtures with a real letter recorded for all 5 categories (the other 6
+# have a blank Skills field -- a genuine Mundane-Talent-SumtoTen save-format gap, see
+# spec/rulebooks/learnings.md's WP44 entry, not exercised here). Confirms
+# `validate_sum_to_ten_total` against real fixture data, including two cases with repeated letters,
+# not just hand-picked ones -- real, independent corroboration of both "the rule is exact equality"
+# and "repeats are legal", beyond the legacy C#/language-string research alone.
+_FIXTURES_WITH_ALL_FIVE_PRIORITY_LETTERS = (
+    "Bastion.chum5",
+    "Rez0luti0n2.0.chum5",
+    "SCSi.chum5",
+    "Serpent.chum5",
+    "Yeti-#ffffff2.chum5",
+)
+
+
+@pytest.mark.parametrize("name", _FIXTURES_WITH_ALL_FIVE_PRIORITY_LETTERS)
+def test_every_complete_priority_letter_assignment_sums_to_exactly_ten(name: str) -> None:
+    character = load_chum5(mundane_fixture_path(name))
+    priorities = character.priorities
+    letters = (
+        priority_letter(priorities.heritage),
+        priority_letter(priorities.talent),
+        priority_letter(priorities.attributes),
+        priority_letter(priorities.skills),
+        priority_letter(priorities.resources),
+    )
+    assert validate_sum_to_ten_total(letters) == 10
 
 
 def test_yeti_attributes() -> None:

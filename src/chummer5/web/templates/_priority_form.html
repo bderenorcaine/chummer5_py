@@ -23,6 +23,24 @@
     hx-target="#chargen-body"
     hx-swap="outerHTML"
   >
+    <fieldset>
+      <legend>Build method</legend>
+      {% for method in build_methods %}
+      <label>
+        <input
+          type="radio"
+          name="build_method"
+          value="{{ method }}"
+          {% if method == selected.build_method %}checked{% endif %}
+        >
+        {% if method == priority_build_method %}Priority (each of the 5 must use a different letter){% else %}Sum-to-Ten (letters may repeat; point values must total exactly {{ sum_to_ten_target }}){% endif %}
+      </label>
+      {% endfor %}
+      {% if selected.build_method == sum_to_ten_build_method %}
+      <p>Current total: {{ sum_to_ten_total }} / {{ sum_to_ten_target }}</p>
+      {% endif %}
+    </fieldset>
+
     <label>
       Heritage
       <select
@@ -97,6 +115,7 @@
   <div id="character-summary">
     <h2>Confirmed: {{ character.metatype.name }}</h2>
     <ul>
+      <li>Build method: {{ selected.build_method }}</li>
       <li>Heritage {{ selected.heritage_letter }} — {{ heritage_priorities[selected.heritage_letter].name }}</li>
       <li>Talent {{ selected.talent_letter }} — {{ talent_priorities[selected.talent_letter].name }}</li>
       <li>Attributes {{ selected.attributes_letter }} — {{ attributes_priorities[selected.attributes_letter].name }}</li>

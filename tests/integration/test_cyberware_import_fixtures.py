@@ -4,14 +4,16 @@ against real per-item data in the Phase J intro's 8 real cyberware-bearing fixtu
 `SCSi`).
 
 None of these 8 is `buildmethod == Priority` (all `SumtoTen` -- see the Phase J intro and
-`tests/integration/test_cyberware_fixtures.py`'s identical precedent), so none can reach a full
-successful import regardless of cyberware content -- every one is rejected on build-method grounds
-alone, mirroring `tests/integration/test_legacy_import_fixtures.py`'s own `Barrett.chum5` case. This
-file instead confirms the itemized reasons `import_chum5` raises for real cyberware/bioware content
-are the specific, per-item ones WP33 introduces (rating-scaled/non-Standard-grade/non-SR5 cyberware;
-Bioware entirely), not the old blanket "character has cyberware/bioware" message -- and that a real
-Standard-grade flat item (Bastion's/Blindfire's own Datajack, Bastion's own Smartlink) is correctly
-*not* itemized as rejected.
+`tests/integration/test_cyberware_fixtures.py`'s identical precedent). **WP44** widened
+`import_chum5`'s build-method gate to accept `SumtoTen` too (see
+`chummer5.io.legacy_import`'s own docstring), so build method alone no longer rejects these 8 --
+each is still rejected, but on its own real cyberware/bioware content (confirmed directly: every
+one of these 8 also carries at least one rating-scaled/non-Standard-grade/Bioware item WP31/33's
+catalog can't represent). This file confirms the itemized reasons `import_chum5` raises for that
+real cyberware/bioware content are the specific, per-item ones WP33 introduces (rating-scaled/
+non-Standard-grade/non-SR5 cyberware; Bioware entirely), not the old blanket "character has
+cyberware/bioware" message -- and that a real Standard-grade flat item (Bastion's/Blindfire's own
+Datajack, Bastion's own Smartlink) is correctly *not* itemized as rejected.
 """
 
 from __future__ import annotations
@@ -64,15 +66,17 @@ def _reasons(fixture_name: str) -> tuple[str, ...]:
 def test_every_cyberware_bearing_fixture_is_rejected_with_itemized_reasons(
     fixture_name: str,
 ) -> None:
-    """Every one of the 8 is SumtoTen-built, so it's rejected on build-method grounds regardless --
-    but the itemized cyberware/bioware reasons must still appear distinctly (per real item),
-    confirming WP33's classification logic actually runs and reports correctly even though nothing
-    here can reach a full successful import (see module docstring).
+    """Every one of the 8 is SumtoTen-built (accepted since WP44) but still carries real,
+    unsupported cyberware/Bioware content per the Phase J intro -- the itemized cyberware/bioware
+    reasons must appear distinctly, confirming WP33's classification logic actually runs and
+    reports correctly even though nothing here can reach a full successful import (see module
+    docstring). Build method itself is deliberately *not* asserted as a reason here anymore -- WP44
+    widened the gate, so it may or may not appear depending on whether some *other* WP44 check
+    (e.g. a missing priority letter) also fires for this fixture.
     """
     reasons = _reasons(fixture_name)
-    assert any("not Priority-built" in r for r in reasons)
     # Every one of these 8 fixtures carries real, unsupported cyberware or Bioware content per the
-    # Phase J intro -- at least one itemized reason beyond the build-method one must appear.
+    # Phase J intro -- at least one itemized reason for it must appear regardless of build method.
     assert any("is Bioware" in r or "out of scope" in r for r in reasons)
 
 

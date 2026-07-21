@@ -81,6 +81,20 @@ round-trips unchanged. `build_character` folds it into both `create_resources_se
 (gear+Lifestyle, then gear+Lifestyle+cyberware) -- see `chummer5.engine.resources`'s own module
 docstring for why it tops up the shared budget rather than spending from it.
 
+**WP44** adds `build_method` -- which of the two supported priority-letter validity rules
+(`chummer5.engine.build_method.PRIORITY_BUILD_METHOD`/`SUM_TO_TEN_BUILD_METHOD`) produced
+`heritage_letter`/`talent_letter`/`attributes_letter`/`skills_letter`/`resources_letter`. Unlike
+every other field in this dataclass, it is deliberately **not** re-validated by `build_character`:
+neither `create_character` nor any other `create_*` function here has ever validated the letter
+*assignment*'s shape (bijection vs. Sum-to-Ten's repeats-allowed/sum-to-10 rule) -- only
+`chummer5.web.app.submit_priorities` does, at the point of interactive submission (see its own
+docstring) -- so there is no validation step downstream for this field to feed. It is carried
+through purely so a reloaded character's *next* priorities reconfirmation applies the right rule
+(`chummer5.web.app._apply_built_character_to_session` restores `ChargenSession.build_method` from
+it) rather than silently defaulting back to Priority's bijection, which a Sum-to-Ten character's
+own letters might not even satisfy if they repeat. Defaults to `PRIORITY_BUILD_METHOD` ("predates
+this field"), so every pre-WP44 save round-trips unchanged.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -106,6 +120,7 @@ from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
+from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
 from chummer5.engine.improvements import ImprovementSource
@@ -190,6 +205,9 @@ class CharacterSave:
     # "predates this field"/"player didn't convert any", the same shape every prior optional field
     # defaults to.
     karma_converted: int = 0
+    # WP44: which priority-letter validity rule produced the 5 letters above -- see module
+    # docstring for why this is carried through unvalidated rather than re-checked here.
+    build_method: str = PRIORITY_BUILD_METHOD
 
 
 def create_character_save(
@@ -216,6 +234,7 @@ def create_character_save(
     magic_attribute_points: int = 0,
     cyberware_item_ids: Iterable[str] = (),
     karma_converted: int = 0,
+    build_method: str = PRIORITY_BUILD_METHOD,
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -248,6 +267,7 @@ def create_character_save(
         magic_attribute_points=magic_attribute_points,
         cyberware_item_ids=tuple(cyberware_item_ids),
         karma_converted=karma_converted,
+        build_method=build_method,
     )
 
 
@@ -287,6 +307,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "magic_attribute_points": save.magic_attribute_points,
         "cyberware_item_ids": list(save.cyberware_item_ids),
         "karma_converted": save.karma_converted,
+        "build_method": save.build_method,
     }
 
 
@@ -334,6 +355,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         magic_attribute_points=data.get("magic_attribute_points", 0),
         cyberware_item_ids=data.get("cyberware_item_ids", ()),
         karma_converted=data.get("karma_converted", 0),
+        build_method=data.get("build_method", PRIORITY_BUILD_METHOD),
     )
 
 

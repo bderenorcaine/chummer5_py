@@ -17,6 +17,7 @@ from __future__ import annotations
 import secrets
 from dataclasses import dataclass
 
+from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
 from chummer5.engine.character import Character
 
 SESSION_COOKIE_NAME = "chummer5_session"
@@ -90,6 +91,17 @@ class ChargenSession:
     confirmed (WP14); WP15 replaces it with a new `Character` carrying real attribute-point spend
     on every valid attribute-allocation submission.
 
+    **WP44**: `build_method` joins this group as pure session-side state too, for the same reason
+    `skills_letter`/`resources_letter`/`talent_letter` do -- `Character`/`create_character` never
+    validated the 5-letter assignment's *shape* (bijection vs. Sum-to-Ten's repeats-allowed/sum-to-
+    10 rule) to begin with; that check only ever lived in `chummer5.web.app.submit_priorities`
+    itself (see its own docstring). Which rule to apply on the *next* reconfirmation is therefore
+    exactly the kind of pre-`Character` UI state this class already exists to hold -- `Character`
+    gains no `build_method` field of its own, mirroring `talent_letter`'s WP24 precedent (see that
+    paragraph below). Defaults to `PRIORITY_BUILD_METHOD` so every pre-WP44 caller (every existing
+    test, every session created before a player ever touches the new selector) keeps today's
+    bijection behavior unchanged.
+
     **WP19**: reconfirming priorities/metatype (`chummer5.web.app.submit_priorities`) no longer
     resets anything. Through WP18, a changed Attributes/Skills/Resources letter or metatype
     invalidated the old point spend's budget, so `attribute_points`, `skill_allocation`, and
@@ -112,6 +124,7 @@ class ChargenSession:
     skills_letter: str = DEFAULT_SKILLS_LETTER
     resources_letter: str = DEFAULT_RESOURCES_LETTER
     talent_letter: str = DEFAULT_TALENT_LETTER
+    build_method: str = PRIORITY_BUILD_METHOD
     metatype_id: str | None = None
     character: Character | None = None
 

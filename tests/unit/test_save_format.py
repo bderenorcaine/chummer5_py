@@ -21,6 +21,7 @@ from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.engine.build_method import PRIORITY_BUILD_METHOD, SUM_TO_TEN_BUILD_METHOD
 from chummer5.engine.derived import essence
 from chummer5.engine.resources import Contact
 from chummer5.io.save_format import (
@@ -442,3 +443,75 @@ def test_build_character_rejects_karma_converted_above_the_cap() -> None:
             qualities=QUALITIES,
             lifestyles=LIFESTYLES,
         )
+
+
+def test_default_build_method_is_priority() -> None:
+    assert _sample_save().build_method == PRIORITY_BUILD_METHOD
+
+
+def test_json_round_trip_preserves_build_method() -> None:
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        build_method=SUM_TO_TEN_BUILD_METHOD,
+    )
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["build_method"] == SUM_TO_TEN_BUILD_METHOD
+
+
+def test_from_json_defaults_build_method_for_a_pre_wp44_save() -> None:
+    """A save written before WP44 has no `build_method` key at all -- still the same
+    `FORMAT_VERSION` (a purely additive shape change, the same precedent every prior WP28/WP33/WP43
+    field addition already established), so it must load defaulting to Priority -- every save this
+    project's own web layer produced before WP44 was Priority-built.
+    """
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    del data["build_method"]
+    assert from_json(json.dumps(data)).build_method == PRIORITY_BUILD_METHOD
+
+
+def test_build_character_does_not_validate_build_method_against_the_letters() -> None:
+    """WP44: `build_method` is carried through as plain descriptive state, not re-validated --
+    neither `create_character` nor any other `create_*` function here has ever checked the letter
+    *assignment*'s shape (only `chummer5.web.app.submit_priorities` does, at submission time; see
+    `chummer5.io.save_format`'s own module docstring). A save claiming `SumtoTen` with letters that
+    wouldn't actually satisfy Sum-to-Ten's sum-to-10 rule (or even Priority's bijection) still
+    builds successfully -- proving there is genuinely nothing downstream for this field to feed.
+    """
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="D",  # repeats Heritage -- illegal under Priority's own bijection
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        build_method=SUM_TO_TEN_BUILD_METHOD,
+    )
+    character = build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert character.attributes_letter == "D"

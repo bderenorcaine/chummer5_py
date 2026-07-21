@@ -3,10 +3,9 @@ from the Implementation Plan's WP12 entry, verbatim -- "successfully imports Yet
 imports of saves with out-of-scope content (magic, cyberware, etc.) fail with a specific, itemized
 error rather than silently dropping data."
 
-`Yeti-#ffffff2.chum5` is the only fixture in the curated 11-fixture mundane corpus that can even
-reach the import path (it's the corpus's sole `buildmethod == Priority` fixture -- every other
-mundane fixture is `SumtoTen`-built and is rejected on that basis alone, tested below via
-`Barrett.chum5`). The "magic content fails" side is demonstrated with `Miko.chum5`, a *non*-mundane
+`Yeti-#ffffff2.chum5` is the only fixture in the curated 11-fixture mundane corpus that's
+`buildmethod == Priority` -- every other mundane fixture is `SumtoTen`-built, tested below via
+`Barrett.chum5`. The "magic content fails" side is demonstrated with `Miko.chum5`, a *non*-mundane
 (`magenabled == True`) fixture from the wider 34-file corpus, picked specifically because it's
 Priority-built and otherwise clean (Standard gameplay option, no cyberware, no metavariant) -- so it
 exercises exactly one blocking reason rather than several at once. See `spec/worklogs/WP12.md`.
@@ -16,6 +15,12 @@ tradition` below) -- but no longer for a blanket "Magic is enabled" reason, sinc
 Adept import support now exists. Her own real gap (a non-SR5 tradition) just happens to be a
 different blocking reason. `Wesson.chum5` (an Adept, needing no tradition) is this phase's real
 magic-import success case -- see `tests/integration/test_magic_fixtures.py`.
+
+**WP44 update**: `SumtoTen` is no longer rejected on build-method grounds alone (see
+`chummer5.io.legacy_import`'s own docstring) -- `Barrett.chum5` (below) is still rejected, but now
+for two *other* real reasons this widening newly makes reachable: a missing Skills priority letter
+(a genuine Mundane-Talent-`SumtoTen` save-format gap, see `spec/rulebooks/learnings.md`'s WP44
+entry) and her own real cyberware/Bioware content (WP33's itemized checks).
 """
 
 from __future__ import annotations
@@ -106,12 +111,12 @@ def test_imports_yeti_end_to_end() -> None:
 
 
 def test_rejects_sumtoten_mundane_fixture() -> None:
-    """Every mundane fixture except Yeti is SumToTen-built -- out of MVP's priority-chargen scope
-    (see the Implementation Plan's corpus note), so the import path must reject it, not silently
-    guess at a priority-letter budget the file never really encodes (WP4 found the `<priority*>`
-    fields are mostly empty for SumToTen saves).
+    """Barrett is `SumtoTen`-built, which WP44 accepts on its own -- but she's still rejected, for
+    two real reasons WP44's widening newly makes reachable: her Skills priority letter is blank (a
+    genuine Mundane-Talent-`SumtoTen` save-format gap -- see `spec/rulebooks/learnings.md`'s WP44
+    entry) and she carries real cyberware/Bioware content WP31/33's catalog can't represent.
     """
-    with pytest.raises(UnsupportedLegacyCharacterError, match="not Priority-built"):
+    with pytest.raises(UnsupportedLegacyCharacterError) as exc_info:
         import_chum5(
             mundane_fixture_path("Barrett.chum5"),
             metatypes=METATYPES,
@@ -120,6 +125,9 @@ def test_rejects_sumtoten_mundane_fixture() -> None:
             qualities=QUALITIES,
             lifestyles=LIFESTYLES,
         )
+    reasons = exc_info.value.reasons
+    assert any("no priority letter recorded for Skills" in r for r in reasons)
+    assert any("is Bioware" in r or "out of scope" in r for r in reasons)
 
 
 def test_rejects_miko_for_her_own_unresolvable_tradition() -> None:

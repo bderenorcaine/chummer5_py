@@ -1315,7 +1315,7 @@ nuyen-budget/Improvement-application shape verbatim, pointed at a second, much s
   confirming converted nuyen is available for gear/lifestyle/cyberware/bioware purchases in the same
   transaction; manual walkthrough converting Karma and watching the gear budget update live.
 
-- [ ] **WP44 — Sum-to-Ten build method.**
+- [x] **WP44 — Sum-to-Ten build method.**
   Goal: let a player choose Sum-to-Ten instead of Priority for letter assignment — same Priority Table,
   same per-letter meaning, a different validity rule. Confirmed directly in the legacy C#
   (`SelectMetatypePriority.cs`'s `SumToTen`/`GetSumToTenValue`, `CharacterSettings.cs`'s `_intSumtoTen`

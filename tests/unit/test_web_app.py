@@ -204,6 +204,152 @@ def test_submitting_talent_at_a_non_e_letter_still_resolves_to_mundane() -> None
     )
 
 
+def test_submitting_sum_to_ten_with_repeated_letters_summing_to_10_is_accepted() -> None:
+    """WP44: Sum-to-Ten allows repeats across the 5 categories, as long as their point values
+    (A=4/B=3/C=2/D=1/E=0) total exactly 10 -- Bastion.chum5's own real letters (Heritage E,
+    Talent C, Attributes A, Skills E, Resources A -- repeats both E and A) confirm this is a real,
+    fixture-backed combination, not just a hand-picked one.
+    """
+    client = TestClient(create_app())
+    client.get("/")
+
+    heritage = PRIORITIES.heritage["E"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "E",
+            "attributes_letter": "A",
+            "skills_letter": "E",
+            "resources_letter": "A",
+            "talent_letter": "C",
+            "build_method": "SumtoTen",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Confirmed: Human" in response.text
+    assert "different priority letter" not in response.text
+
+
+def test_submitting_sum_to_ten_under_target_is_rejected() -> None:
+    client = TestClient(create_app())
+    client.get("/")
+
+    heritage = PRIORITIES.heritage["E"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "E",
+            "attributes_letter": "E",
+            "skills_letter": "E",
+            "resources_letter": "E",
+            "talent_letter": "E",
+            "build_method": "SumtoTen",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "must total exactly 10" in response.text
+    assert "Confirmed:" not in response.text
+
+
+def test_submitting_sum_to_ten_over_target_is_rejected() -> None:
+    """Confirms the rule is exact equality, not a ceiling -- exceeding 10 is just as invalid as
+    falling short (see `chummer5.engine.build_method`'s own docstring for the legacy citation this
+    corrects against the Implementation Plan's original "must not exceed" phrasing).
+    """
+    client = TestClient(create_app())
+    client.get("/")
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "A",
+            "skills_letter": "A",
+            "resources_letter": "A",
+            "talent_letter": "A",
+            "build_method": "SumtoTen",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "must total exactly 10" in response.text
+    assert "Confirmed:" not in response.text
+
+
+def test_submitting_unsupported_build_method_is_rejected() -> None:
+    client = TestClient(create_app())
+    client.get("/")
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "talent_letter": "E",
+            "build_method": "Karma",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Unsupported build method" in response.text
+    assert "Confirmed:" not in response.text
+
+
+def test_priority_form_defaults_to_priority_build_method_when_field_omitted() -> None:
+    """Pre-WP44 form submissions (and every other test in this file) never send `build_method` at
+    all -- the route's own `Form(PRIORITY_BUILD_METHOD)` default must keep applying Priority's
+    bijection rule rather than erroring on a missing field.
+    """
+    client = TestClient(create_app())
+    client.get("/")
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "A",  # repeats Heritage -- illegal under Priority
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "talent_letter": "E",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "different priority letter" in response.text
+
+
 def test_sessions_are_isolated_per_cookie() -> None:
     # Two independent cookie jars against the *same* app (and thus the same app.state.sessions
     # store), mirroring two different browsers/tabs -- the server assigns each its own opaque

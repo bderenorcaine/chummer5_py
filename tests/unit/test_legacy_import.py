@@ -171,9 +171,45 @@ def test_imports_the_first_lifestyle_entry_as_primary() -> None:
     assert result.built.lifestyle_selection.total_cost == 5000
 
 
-def test_rejects_sumtoten_build_method() -> None:
-    with pytest.raises(UnsupportedLegacyCharacterError, match="not Priority-built"):
-        _import(_legacy_character(build_method="SumtoTen"))
+def test_sumtoten_build_method_with_all_priority_letters_present_imports_successfully() -> None:
+    """WP44: `SumtoTen` is no longer rejected on build-method grounds alone -- a character with a
+    real letter recorded for every one of the 5 categories imports exactly like a Priority-built
+    one would (this project never validated the letter *assignment*'s shape -- bijection vs.
+    Sum-to-Ten's own rule -- on import to begin with; see `chummer5.io.legacy_import`'s own
+    docstring).
+    """
+    _import(_legacy_character(build_method="SumtoTen"))  # no exception
+
+
+def test_rejects_karma_build_method() -> None:
+    """`Karma`/`LifeModule` stay unsupported -- the Project Overview's 2026-07-21 ruling explicitly
+    keeps the whole-character Karma-pool build method out of scope, unlike Sum-to-Ten.
+    """
+    with pytest.raises(
+        UnsupportedLegacyCharacterError, match="build method 'Karma' is not supported"
+    ):
+        _import(_legacy_character(build_method="Karma"))
+
+
+def test_rejects_missing_priority_letter() -> None:
+    """WP44: a blank/unresolvable `<priority*>` field (the real Mundane-Talent-`SumtoTen`
+    save-format gap confirmed against 6 real curated fixtures -- see
+    `spec/rulebooks/learnings.md`'s WP44 entry) is rejected outright rather than reaching
+    `create_skill_allocation` and crashing with a `KeyError`.
+    """
+    blank_skills_priorities = PrioritySelections(
+        heritage="D,1",
+        attributes="A,1",
+        talent="E,0",
+        skills="",  # the real BLUE/Barrett/Blindfire/... shape -- see learnings.md's WP44 entry
+        resources="B,1",
+        talent_codename="Mundane",
+        talent_bonus_skills=(),
+    )
+    with pytest.raises(
+        UnsupportedLegacyCharacterError, match="no priority letter recorded for Skills"
+    ):
+        _import(_legacy_character(build_method="SumtoTen", priorities=blank_skills_priorities))
 
 
 def test_rejects_non_standard_gameplay_option() -> None:
@@ -528,8 +564,10 @@ def test_does_not_reject_resonance_enabled() -> None:
 
 
 def test_itemizes_every_blocking_reason_in_one_pass() -> None:
+    # `Karma` (not `SumtoTen`, which WP44 accepts) keeps this a genuine 3-reason case: build
+    # method, Talent codename, and cyberware each independently blocking.
     legacy = _legacy_character(
-        build_method="SumtoTen",
+        build_method="Karma",
         magic_enabled=True,
         priorities=_priorities(talent="A,1", talent_codename="Mystic Adept"),
         cyberware=(
@@ -547,7 +585,7 @@ def test_itemizes_every_blocking_reason_in_one_pass() -> None:
     with pytest.raises(UnsupportedLegacyCharacterError) as exc_info:
         _import(legacy)
     assert len(exc_info.value.reasons) == 3
-    assert any("Priority-built" in r for r in exc_info.value.reasons)
+    assert any("build method 'Karma' is not supported" in r for r in exc_info.value.reasons)
     assert any("Talent option 'Mystic Adept' is not supported" in r for r in exc_info.value.reasons)
     assert any("Wired Reflexes" in r for r in exc_info.value.reasons)
 

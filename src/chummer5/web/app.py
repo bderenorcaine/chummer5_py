@@ -122,6 +122,18 @@ this WP -- nothing on `Character` reads it yet, the same reason `skills_letter`/
 never got one either; WP25 adds it once real archetype selection needs to look the letter up
 against `priorities.talent`.
 
+WP44 adds a second build method, Sum-to-Ten, alongside WP14's Priority (bijection) rule -- a radio
+selector in `_priority_form.html` picks which validity rule `submit_priorities` applies to the same
+5 letter dropdowns (no new controls needed: Sum-to-Ten already allows any of the 5 dropdowns' A-E
+range per category, it just doesn't require them to be *distinct*). `ChargenSession.build_method`
+holds the pending choice the same "pre-`Character` UI state" way `talent_letter` does (see that
+class's own docstring) -- `Character` needs no field for it, since neither `create_character` nor
+`build_character` ever validated the letter *assignment*'s shape to begin with (only
+`submit_priorities` did, and still does). `_priority_form_context` always computes a live
+`sum_to_ten_total` (never raises on an off-target combination, only on a malformed letter -- see
+`chummer5.engine.build_method.sum_to_ten_total`'s own docstring), displayed only when Sum-to-Ten is
+the selected method.
+
 Run locally: `uv run uvicorn chummer5.web.app:app --reload` (or `python -m uvicorn ...` — same
 `uv run python -m X` workaround as `pytest`/`ruff`/`mypy`, see Project Overview.md's Development
 environment note), then open http://127.0.0.1:8000/.
@@ -154,6 +166,14 @@ from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.engine.build_method import (
+    PRIORITY_BUILD_METHOD,
+    SUM_TO_TEN_BUILD_METHOD,
+    SUM_TO_TEN_TARGET,
+    SUPPORTED_BUILD_METHODS,
+    sum_to_ten_total,
+    validate_sum_to_ten_total,
+)
 from chummer5.engine.character import (
     ALLOCATABLE_ATTRIBUTES,
     PRIMARY_ATTRIBUTES,
@@ -324,6 +344,7 @@ def _priority_form_context(
     skills_letter: str,
     resources_letter: str,
     talent_letter: str,
+    build_method: str,
     metatype_id: str | None,
     character: object,
     error: str | None,
@@ -333,6 +354,15 @@ def _priority_form_context(
     before being rendered, which folds in one more key this function doesn't set itself:
     `priority_stale_selections` (WP19) -- see that function's docstring for why it's computed
     there instead of here.
+
+    **WP44**: `build_method` selects which validity rule `submit_priorities` applies to the same 5
+    letters (Priority's bijection, or Sum-to-Ten's repeats-allowed/sum-to-10 rule) -- it doesn't
+    change which letters are offered per category (both rules draw from the same A-E range every
+    category already offers). `sum_to_ten_total` is computed unconditionally (cheap, and never
+    raises for a merely-off-target combination -- see `chummer5.engine.build_method
+    .sum_to_ten_total`'s own docstring) so the template can show a live "X/10" readout the moment
+    Sum-to-Ten is selected, without a dedicated fragment endpoint; it's simply not displayed when
+    `build_method == PRIORITY_BUILD_METHOD`.
 
     **WP24**: `talent_letter` is a real 5th field a player assigns a letter to, alongside the
     other four -- `letters`/the duplicate-letter check both widen from a 4-way to a 5-way
@@ -351,6 +381,16 @@ def _priority_form_context(
     """
     heritage = PRIORITIES.heritage.get(heritage_letter)
     metatype_options = metatype_choices(heritage, METATYPES) if heritage is not None else ()
+    try:
+        current_sum_to_ten_total = sum_to_ten_total(
+            (heritage_letter, talent_letter, attributes_letter, skills_letter, resources_letter)
+        )
+    except ValueError:
+        # Can't happen from the template's own A-E dropdowns, but a hand-crafted POST could send
+        # anything -- fall back to a display-only 0 rather than letting this context builder itself
+        # raise (the real validating call, `validate_sum_to_ten_total` in `submit_priorities`,
+        # already turns that same bad input into the visible `error` this context also carries).
+        current_sum_to_ten_total = 0
     return {
         "letters": PRIORITY_LETTERS,
         "heritage_priorities": PRIORITIES.heritage,
@@ -359,12 +399,18 @@ def _priority_form_context(
         "resources_priorities": PRIORITIES.resources,
         "talent_priorities": PRIORITIES.talent,
         "metatype_options": metatype_options,
+        "build_methods": SUPPORTED_BUILD_METHODS,
+        "priority_build_method": PRIORITY_BUILD_METHOD,
+        "sum_to_ten_build_method": SUM_TO_TEN_BUILD_METHOD,
+        "sum_to_ten_total": current_sum_to_ten_total,
+        "sum_to_ten_target": SUM_TO_TEN_TARGET,
         "selected": {
             "heritage_letter": heritage_letter,
             "attributes_letter": attributes_letter,
             "skills_letter": skills_letter,
             "resources_letter": resources_letter,
             "talent_letter": talent_letter,
+            "build_method": build_method,
             "metatype_id": metatype_id,
         },
         "character": character,
@@ -1685,6 +1731,12 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     **WP43**: `karma_converted` reads straight off `character.resources_selection.karma_converted`
     (0 for an as-yet-uncommitted Resources section), the same "selection lives on the committed
     object, not the session" shape `gear_names` immediately above already has.
+
+    **WP44**: `build_method` reads straight off `session.build_method` -- unlike every field above,
+    it isn't re-derived from `character` at all (nothing on `Character` holds it; see
+    `ChargenSession`'s own WP44 docstring paragraph for why), but it still needs to round-trip
+    through a save so a reloaded Sum-to-Ten character's next priorities reconfirmation applies the
+    right validity rule instead of silently falling back to Priority's bijection.
     """
     character = session.character
     assert character is not None
@@ -1757,6 +1809,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         magic_attribute_points=character.magic_attribute_points,
         cyberware_item_ids=cyberware_item_ids,
         karma_converted=karma_converted,
+        build_method=session.build_method,
     )
 
 
@@ -1785,12 +1838,19 @@ def _apply_built_character_to_session(
     defaults to `DEFAULT_TALENT_LETTER` via `CharacterSave`'s own field default (`_dict_to_save`'s
     `.get(..., default)` read), so this assignment is correct for every save format version this
     project has ever written, not just post-WP29 ones.
+
+    **WP44**: `session.build_method` is set from `save.build_method` the same way -- a save/import
+    predating this WP defaults to `PRIORITY_BUILD_METHOD` via `CharacterSave`'s own field default,
+    so a loaded Sum-to-Ten character's next priorities reconfirmation applies the right validity
+    rule instead of silently reverting to Priority's bijection (which the carried-forward letters
+    might not even satisfy, if they repeat).
     """
     session.heritage_letter = save.heritage_letter
     session.attributes_letter = save.attributes_letter
     session.skills_letter = save.skills_letter
     session.resources_letter = save.resources_letter
     session.talent_letter = save.talent_letter
+    session.build_method = save.build_method
     session.metatype_id = built.metatype.id
     session.character = built
 
@@ -1989,6 +2049,7 @@ def create_app() -> FastAPI:
             skills_letter=session.skills_letter,
             resources_letter=session.resources_letter,
             talent_letter=session.talent_letter,
+            build_method=session.build_method,
             metatype_id=session.metatype_id,
             character=session.character,
             error=None,
@@ -2045,6 +2106,9 @@ def create_app() -> FastAPI:
         skills_letter: str = Form(...),
         resources_letter: str = Form(...),
         talent_letter: str = Form(...),
+        # Defaulted, not `Form(...)`, so every pre-WP44 caller (existing tests included) that never
+        # submits this new field keeps today's Priority-bijection behavior unchanged.
+        build_method: str = Form(PRIORITY_BUILD_METHOD),
         metatype_id: str = Form(...),
     ) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
@@ -2058,12 +2122,28 @@ def create_app() -> FastAPI:
         error: str | None = None
         character = session.character
 
-        if sorted(submitted_letters) != sorted(PRIORITY_LETTERS):
-            error = (
-                "Heritage, Talent, Attributes, Skills, and Resources must each use a different "
-                f"priority letter ({', '.join(PRIORITY_LETTERS)}), one each."
-            )
+        # WP44: which validity rule applies to the same 5 letters depends on `build_method` --
+        # Priority's bijection (WP14/WP24) or Sum-to-Ten's repeats-allowed/sum-to-10 rule (see
+        # `chummer5.engine.build_method`'s own docstring for why the target is exact equality, not
+        # a ceiling). Neither rule is enforced anywhere below this point (`create_character` never
+        # validated letter *assignment* shape to begin with -- only this function does), so an
+        # unrecognized `build_method` is its own itemized error rather than silently falling back
+        # to either real rule.
+        if build_method == PRIORITY_BUILD_METHOD:
+            if sorted(submitted_letters) != sorted(PRIORITY_LETTERS):
+                error = (
+                    "Heritage, Talent, Attributes, Skills, and Resources must each use a different "
+                    f"priority letter ({', '.join(PRIORITY_LETTERS)}), one each."
+                )
+        elif build_method == SUM_TO_TEN_BUILD_METHOD:
+            try:
+                validate_sum_to_ten_total(submitted_letters)
+            except ValueError as exc:
+                error = str(exc)
         else:
+            error = f"Unsupported build method: {build_method!r}."
+
+        if error is None:
             heritage = PRIORITIES.heritage[heritage_letter]
             choice = next(
                 (c for c in metatype_choices(heritage, METATYPES) if c.metatype.id == metatype_id),
@@ -2122,6 +2202,7 @@ def create_app() -> FastAPI:
                 session.skills_letter = skills_letter
                 session.resources_letter = resources_letter
                 session.talent_letter = talent_letter
+                session.build_method = build_method
                 session.metatype_id = metatype_id
                 session.character = character
 
@@ -2138,6 +2219,7 @@ def create_app() -> FastAPI:
             skills_letter=skills_letter,
             resources_letter=resources_letter,
             talent_letter=talent_letter,
+            build_method=build_method,
             metatype_id=metatype_id,
             character=character,
             error=error,
