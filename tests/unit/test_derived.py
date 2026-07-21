@@ -8,13 +8,16 @@ hand-computed expected values built on real `create_character` output.
 from __future__ import annotations
 
 from dataclasses import replace
+from decimal import Decimal
 
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.derived import (
+    BASE_ESSENCE,
     drain_resistance,
+    essence,
     initiative_dice,
     initiative_value,
     mental_limit,
@@ -55,6 +58,21 @@ def _add(character: Character, improvement_type: ImprovementType, value: int) ->
             value=value,
             source_type=ImprovementSource.QUALITY,
             source_id="synthetic",
+        )
+    )
+
+
+def _add_essence_loss(character: Character, loss: Decimal) -> None:
+    """`loss` is a positive Essence-cost amount; stored as a negative `essence_value` (an
+    `ESSENCE` improvement's own sign convention -- see `chummer5.engine.improvements`)."""
+    character.improvements.add(
+        Improvement(
+            improvement_type=ImprovementType.ESSENCE,
+            target="",
+            value=0,
+            essence_value=-loss,
+            source_type=ImprovementSource.CYBERWARE,
+            source_id="synthetic-cyberware",
         )
     )
 
@@ -126,6 +144,38 @@ def test_social_limit_uses_fixed_essence_not_ess_attribute_value() -> None:
     # ceil((5*2+5+0)/3) = 5, not 7.
     character = _character(CHA=4, WIL=4)
     assert social_limit(character) == 7
+
+
+def test_essence_defaults_to_base_essence_with_no_improvements() -> None:
+    # WP30: proven with synthetic data, no real producer exists yet (WP31/WP32 will add one).
+    character = _character()
+    assert essence(character) == Decimal(BASE_ESSENCE)
+
+
+def test_essence_reduced_by_essence_improvements() -> None:
+    character = _character()
+    _add_essence_loss(character, Decimal("0.3"))
+    _add_essence_loss(character, Decimal("1.125"))
+    assert essence(character) == Decimal(BASE_ESSENCE) - Decimal("1.425")
+
+
+def test_social_limit_rounds_fractional_essence_up_before_dividing() -> None:
+    # CHA=1(min)+4=5, WIL=1(min)+4=5, per the hand-computed test above (base Essence 6 -> limit 7).
+    # Losing 0.5 Essence -> 5.5, rounds *up* to 6 (rulebook p.100's explicit instruction) -> the
+    # limit is unchanged at 7, not silently different because of the fractional loss.
+    character = _character(CHA=4, WIL=4)
+    _add_essence_loss(character, Decimal("0.5"))
+    assert essence(character) == Decimal("5.5")
+    assert social_limit(character) == 7
+
+
+def test_social_limit_reflects_a_real_essence_loss() -> None:
+    # Losing 3.0 Essence -> Essence 3 (already whole, nothing to round) -> ceil((5*2+5+3)/3) =
+    # ceil(18/3) = 6, a real drop from the base-Essence test's 7.
+    character = _character(CHA=4, WIL=4)
+    _add_essence_loss(character, Decimal("3.0"))
+    assert essence(character) == Decimal("3.0")
+    assert social_limit(character) == 6
 
 
 def test_physical_condition_monitor_hand_computed() -> None:

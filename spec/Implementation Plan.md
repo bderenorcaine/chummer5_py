@@ -911,7 +911,7 @@ is simultaneously Priority-built, magic-enabled, and cyberware-bearing), and bui
 in whichever phase lands first would guess at an interaction between two features that don't fully
 exist yet. Scoped as this phase's final WP (WP35), sequenced after both phases' own engine work.
 
-- [ ] **WP30 — Essence as a real, Improvement-driven `Character` value.**
+- [x] **WP30 — Essence as a real, Improvement-driven `Character` value.**
   Goal: replace the `BASE_ESSENCE` constant with a real, reducible value, proven with synthetic data
   before any cyberware catalog exists to produce it for real — mirrors WP5's own sequencing relative
   to WP6+.

@@ -1,3 +1,7 @@
+from decimal import Decimal
+
+import pytest
+
 from chummer5.engine.improvements import (
     Improvement,
     ImprovementIndex,
@@ -114,3 +118,57 @@ def test_index_is_rebuilt_after_mutation_not_stale() -> None:
     assert index.resolve(ImprovementType.ATTRIBUTE, "BOD") == 10
     index.remove_source(ImprovementSource.QUALITY, "quality-1")
     assert index.resolve(ImprovementType.ATTRIBUTE, "BOD") == 0
+
+
+def _essence_delta(
+    *, value: Decimal, source_id: str, unique_name: str | None = None
+) -> Improvement:
+    return Improvement(
+        improvement_type=ImprovementType.ESSENCE,
+        target="",
+        value=0,
+        essence_value=value,
+        source_type=ImprovementSource.CYBERWARE,
+        source_id=source_id,
+        unique_name=unique_name,
+    )
+
+
+def test_resolve_essence_returns_zero_for_untargeted_key() -> None:
+    index = ImprovementIndex()
+    assert index.resolve_essence("") == Decimal(0)
+
+
+def test_resolve_essence_sums_fractional_values() -> None:
+    # WP31's real cyberware catalog has essence costs to 3 decimal places (e.g. 1.125) -- Decimal
+    # sums these exactly, unlike float.
+    index = ImprovementIndex()
+    index.add(_essence_delta(value=Decimal("0.3"), source_id="cyberware-1"))
+    index.add(_essence_delta(value=Decimal("1.125"), source_id="cyberware-2"))
+    assert index.resolve_essence("") == Decimal("1.425")
+
+
+def test_resolve_essence_ignores_unique_name_dedup() -> None:
+    # Unlike resolve()'s "highest bonus wins" stacking rule, Essence costs always stack additively
+    # -- there is no "highest cost wins" rule for Essence, so unique_name is not consulted here even
+    # when two essence-costing improvements happen to share one.
+    index = ImprovementIndex()
+    index.add(_essence_delta(value=Decimal("0.5"), source_id="cyberware-1", unique_name="shared"))
+    index.add(_essence_delta(value=Decimal("0.25"), source_id="cyberware-2", unique_name="shared"))
+    assert index.resolve_essence("") == Decimal("0.75")
+
+
+def test_resolve_essence_only_sums_essence_typed_improvements() -> None:
+    index = ImprovementIndex()
+    index.add(_bonus(value=99, source_id="quality-1"))  # ATTRIBUTE-typed, must not leak in
+    index.add(_essence_delta(value=Decimal("0.5"), source_id="cyberware-1"))
+    assert index.resolve_essence("") == Decimal("0.5")
+
+
+def test_resolve_rejects_essence_type() -> None:
+    # ESSENCE improvements carry their magnitude in essence_value, not value -- resolve() would
+    # silently sum zeros if it accepted ESSENCE, so it rejects the type outright instead.
+    index = ImprovementIndex()
+    index.add(_essence_delta(value=Decimal("0.5"), source_id="cyberware-1"))
+    with pytest.raises(ValueError, match="resolve_essence"):
+        index.resolve(ImprovementType.ESSENCE, "")

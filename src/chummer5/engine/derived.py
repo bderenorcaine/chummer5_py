@@ -16,13 +16,20 @@ never negative), that's equivalent to plain ceiling division, which is what `_ce
 -- there is no live case in MVP scope where the "away from zero" distinction from ordinary ceiling
 division (which only differs for negative operands) actually matters.
 
-**Essence is a fixed constant (`BASE_ESSENCE = 6`), not `character.attribute_value("ESS")`.**
-Two independent findings led here, both recorded in `spec/worklogs/WP10.md`:
+**Essence (`essence()`) is `BASE_ESSENCE = 6` plus Σ `ESSENCE` improvements, not
+`character.attribute_value("ESS")`.** Two independent findings, both recorded in
+`spec/worklogs/WP10.md`, plus a WP30 correction:
 - `Character.Essence()` (the real, authoritative Essence used by `LimitSocial`) starts at the
   metatype's Essence maximum and is only ever *reduced* by cyberware/bioware essence cost --
-  confirmed all 5 SR5 core metatypes have `essmax = 6` in `metatypes.xml`, and MVP models no
-  cyberware/bioware (the only Essence-reducing content), so Essence is unconditionally 6 for every
-  MVP-buildable character.
+  confirmed all 5 SR5 core metatypes have `essmax = 6` in `metatypes.xml`. Through WP29, MVP models
+  no cyberware/bioware (the only Essence-reducing content), so Essence was unconditionally 6 for
+  every buildable character; **WP30 turns `BASE_ESSENCE` from a hardcoded final answer into that
+  same fixed *starting* point**, reduced by whatever `ImprovementType.ESSENCE` improvements a
+  future WP31/WP32 cyberware purchase attaches (see `chummer5.engine.improvements`' own docstring
+  for why Essence needs a dedicated `resolve_essence()`/`essence_value` path rather than the
+  ordinary `int`-valued `resolve()`). Zero improvements today (no producer exists yet), so
+  `essence()` still returns exactly 6 for every character built so far -- this WP is proven-in-
+  isolation plumbing, not a behavior change, mirroring WP5's own relationship to WP6+.
 - The `<attribute name="ESS">` element some `.chum5` saves carry is **not** that value and must
   not be read as if it were: `Yeti-#ffffff2.chum5`'s own `ESS` attribute has
   `<totalvalue>1</totalvalue>` despite Yeti having zero cyberware (confirmed) and therefore a real
@@ -34,12 +41,27 @@ Two independent findings led here, both recorded in `spec/worklogs/WP10.md`:
   compute metatype-minimum(0) + 0 points + 0 improvements = 0, which is wrong in a way that would
   have been easy to miss without checking a real fixture's numbers by hand.
 
+**`social_limit` rounds Essence up to a whole number before its own division, per an explicit
+rulebook instruction (p.100/`spec/rulebooks/learnings.md`'s WP10 entry): "For Social limits, round
+up Essence to the nearest whole number prior to calculating the cost."** Confirmed directly in the
+legacy C# too, while implementing WP30's fractional Essence support:
+`DecimalExtensions.StandardRound` (`Character.cs`'s `LimitSocial` calls `Essence().StandardRound()`)
+is `decimal.ToInt32(decToRound >= 0 ? decimal.Ceiling(decToRound) : decimal.Floor(decToRound))` --
+despite the name, that's plain ceiling for every non-negative Essence value (which Essence always
+is pre-WP32's essence-floor guard), *not* round-to-nearest. `essence()` itself intentionally
+returns the exact, unrounded `Decimal` -- only `social_limit` rounds, and only because this one
+formula is documented to need it; a future WP35 (Essence-driven Magic-rating loss) needs to see
+*any* nonzero fractional loss, which a pre-rounded `essence()` would have silently thrown away.
+
 **`WoundModifier` (a damage-penalty term `Character.InitiativeValue` adds on top of REA+INT) is
 always 0 here** -- MVP chargen never tracks damage (no career mode, no condition monitor boxes
 filled in), so there is nothing for it to read.
 """
 
 from __future__ import annotations
+
+import math
+from decimal import Decimal
 
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import ImprovementType
@@ -59,10 +81,11 @@ MAX_INITIATIVE_DICE = 5
 BASE_PHYSICAL_CM = 8
 BASE_STUN_CM = 8
 
-# Character.Essence(), fixed at the SR5 core metatypes' shared Essence maximum (6, confirmed for
-# all of Human/Elf/Dwarf/Ork/Troll in metatypes.xml) since MVP has no cyberware/bioware -- the only
-# things that ever reduce it. See module docstring for the full reasoning and the Yeti ESS-attribute
-# red herring this was checked against.
+# Character.Essence()'s fixed starting point (WP30): the SR5 core metatypes' shared Essence maximum
+# (6, confirmed for all of Human/Elf/Dwarf/Ork/Troll in metatypes.xml). `essence()` below reduces
+# this by Σ ESSENCE improvements -- through WP29 nothing produced any, so this was also the final
+# answer; WP31/WP32 (cyberware) are the first real producer. See module docstring for the full
+# reasoning and the Yeti ESS-attribute red herring this was checked against.
 BASE_ESSENCE = 6
 
 
@@ -113,10 +136,25 @@ def mental_limit(character: Character) -> int:
     return total + character.improvements.resolve(ImprovementType.MENTAL_LIMIT, _GLOBAL_TARGET)
 
 
+def essence(character: Character) -> Decimal:
+    """`Character.Essence()`: `BASE_ESSENCE` (6) reduced by Σ `ESSENCE` improvements (WP30) --
+    cyberware/bioware essence cost, once WP31/WP32 give this a real producer. Returns the exact,
+    unrounded value -- see module docstring for why only `social_limit` rounds, not this function.
+    """
+    return Decimal(BASE_ESSENCE) + character.improvements.resolve_essence(_GLOBAL_TARGET)
+
+
 def social_limit(character: Character) -> int:
-    """`Character.LimitSocial`: ceil((CHA*2 + WIL + Essence) / 3) + Σ improvements."""
+    """`Character.LimitSocial`: ceil((CHA*2 + WIL + ceil(Essence)) / 3) + Σ improvements.
+
+    Essence is rounded up to a whole number before this formula's own division -- see module
+    docstring's dedicated paragraph for the rulebook citation and the legacy `StandardRound` finding
+    this was checked against.
+    """
     total = _ceil_div(
-        character.attribute_value("CHA") * 2 + character.attribute_value("WIL") + BASE_ESSENCE,
+        character.attribute_value("CHA") * 2
+        + character.attribute_value("WIL")
+        + math.ceil(essence(character)),
         3,
     )
     return total + character.improvements.resolve(ImprovementType.SOCIAL_LIMIT, _GLOBAL_TARGET)

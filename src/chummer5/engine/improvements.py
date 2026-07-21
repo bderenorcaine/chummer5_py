@@ -26,6 +26,7 @@ this was checked against.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum, auto
 
 
@@ -54,6 +55,16 @@ class ImprovementType(Enum):
     the same "no current producer, but the derived stat itself needs somewhere to resolve Σ
     improvements against" reason as every other member here; nothing in this project's scope
     produces one yet (checked directly -- no SR5-core quality/power's `<bonus>` targets Drain).
+
+    **WP30 adds a 9th, `ESSENCE`**, for `chummer5.engine.derived.essence` -- also a single
+    character-wide total resolved against `_GLOBAL_TARGET`, but genuinely different in kind from
+    the 8 above: every one of those resolves through the ordinary `int`-valued `resolve()` method,
+    while `ESSENCE` improvements carry their value in the dedicated `Improvement.essence_value`
+    field instead (see that field's own docstring for why) and must be summed via the dedicated
+    `ImprovementIndex.resolve_essence()` -- `resolve()` itself rejects `ESSENCE` outright rather
+    than silently returning 0 for every such improvement (their real `value` field is unused/`0`
+    by convention). Threaded through before any real producer exists yet, same as every other
+    member here at its own introduction -- WP31/WP32 (cyberware) are the first real producer.
     """
 
     ATTRIBUTE = auto()
@@ -66,6 +77,7 @@ class ImprovementType(Enum):
     PHYSICAL_CM = auto()
     STUN_CM = auto()
     DRAIN_RESISTANCE = auto()
+    ESSENCE = auto()
 
 
 class ImprovementSource(Enum):
@@ -80,7 +92,10 @@ class ImprovementSource(Enum):
     note), so it gets its own name rather than overloading `PRIORITY`. WP27 adds a 5th:
     `ADEPT_POWER`, for `chummer5.engine.magic.apply_power_improvements` — each selected power is
     its own source instance (keyed by the power's own id, mirroring `QUALITY`'s per-quality
-    `source_id`), distinct from `TALENT`'s single shared grant.
+    `source_id`), distinct from `TALENT`'s single shared grant. WP30 adds a 6th: `CYBERWARE`, for
+    the Essence-cost `Improvement` each purchased cyberware item will grant once WP31/WP32 build
+    the actual catalog/selection -- threaded through now (no real producer yet) the same way every
+    prior source name here was added ahead of its first real user.
     """
 
     METATYPE = auto()
@@ -88,6 +103,7 @@ class ImprovementSource(Enum):
     PRIORITY = auto()
     TALENT = auto()
     ADEPT_POWER = auto()
+    CYBERWARE = auto()
 
 
 @dataclass(frozen=True)
@@ -105,6 +121,22 @@ class Improvement:
     legacy field) but is not consumed by `resolve()` — nothing in MVP's scope computes a value from
     rating at resolve time; whatever constructs an `Improvement` is responsible for having already
     folded any rating-dependent math into `value`.
+
+    **`essence_value` (WP30) is a second, parallel value field, meaningful only when
+    `improvement_type is ImprovementType.ESSENCE`; `value` stays `0` (unused) on those instances by
+    convention.** This is a real design decision, not an oversight -- recorded in
+    `spec/worklogs/WP30.md` with the two alternatives it was weighed against: (a) widening `value`
+    itself to `Decimal`/`float` engine-wide, which would ripple `resolve()`'s `int` return type (and
+    every one of its arithmetic-heavy callers in `chummer5.engine.derived`/`character`) into a
+    fractional type for the 8 existing `ImprovementType` members that are correctly integer-only
+    forever (an attribute point, a Limit bonus, a condition-monitor box are never fractional in
+    SR5); (c) tracking Essence in an implicit fixed-point unit (e.g. hundredths) inside the existing
+    `int value` field, rejected because real `cyberware.xml` Essence costs go to 3 decimal places
+    (`1.125`, confirmed directly -- see this WP's worklog), one more digit of precision than a
+    hundredths encoding would preserve losslessly. `Decimal` avoids the binary-float representation
+    error a `float` field would introduce for exactly the repeating-fraction values (`0.3`, `0.1`,
+    ...) this catalog actually contains, and keeps every other `ImprovementType`'s `resolve()` path
+    completely untouched. `None` for every non-`ESSENCE` improvement.
     """
 
     improvement_type: ImprovementType
@@ -114,6 +146,7 @@ class Improvement:
     source_id: str
     rating: int = 1
     unique_name: str | None = None
+    essence_value: Decimal | None = None
 
 
 class ImprovementIndex:
@@ -158,7 +191,17 @@ class ImprovementIndex:
         Improvements with `unique_name = None` all stack additively. Improvements sharing a
         non-`None` `unique_name` collapse to their single highest `value` first — SR5's "highest
         bonus wins" — then that one value is added to the total once per distinct `unique_name`.
+
+        Rejects `ImprovementType.ESSENCE` outright (WP30) rather than silently summing zeros: an
+        `ESSENCE` improvement's real magnitude lives in `essence_value`, not `value` (see that
+        field's docstring), so calling this method on it would look like it worked while always
+        returning 0 -- use `resolve_essence()` instead.
         """
+        if improvement_type is ImprovementType.ESSENCE:
+            raise ValueError(
+                "ESSENCE improvements carry their value in essence_value, not value -- "
+                "use resolve_essence() instead"
+            )
         best_by_unique_name: dict[str, int] = {}
         total = 0
         for imp in self._index.get((improvement_type, target), ()):
@@ -169,3 +212,20 @@ class ImprovementIndex:
                 if current is None or imp.value > current:
                     best_by_unique_name[imp.unique_name] = imp.value
         return total + sum(best_by_unique_name.values())
+
+    def resolve_essence(self, target: str) -> Decimal:
+        """Sum every `ESSENCE`-typed Improvement's `essence_value` targeting `target`.
+
+        No `unique_name` dedup here, unlike `resolve()` -- SR5 has no "highest cost wins" rule for
+        Essence the way "highest bonus wins" exists for stacking bonuses (that rule exists to stop
+        a player double-dipping on *bonuses*; an Essence cost is a plain sum of whatever cyberware/
+        bioware was actually bought, confirmed against the legacy engine's own `Character.Essence()`
+        -- see `spec/worklogs/WP30.md`). `unique_name` is therefore not consulted at all here.
+        """
+        total = Decimal(0)
+        for imp in self._index.get((ImprovementType.ESSENCE, target), ()):
+            assert imp.essence_value is not None, (
+                "ESSENCE improvement missing essence_value -- see Improvement's own docstring"
+            )
+            total += imp.essence_value
+        return total
