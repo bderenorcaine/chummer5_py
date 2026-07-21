@@ -124,6 +124,30 @@ def test_allows_essence_spend_that_leaves_a_fraction_remaining() -> None:
     assert selection.essence_spent < BASE_ESSENCE
 
 
+def test_other_essence_spent_defaults_to_zero() -> None:
+    # WP45: pre-WP45 call sites never pass other_essence_spent -- confirms the default keeps this
+    # WP32-era 5-arm case (Essence 5, under the floor alone) accepted unchanged.
+    selection = create_cyberware_selection(["arm"] * 5, CATALOG, nuyen_budget=1_000_000)
+    assert selection.essence_spent == Decimal("5")
+
+
+def test_other_essence_spent_folds_into_the_floor_check() -> None:
+    # WP45: a combination only invalid once another selection's (e.g. bioware's) Essence spend is
+    # counted alongside this one's -- 5 arms (Essence 5) alone fits, but with 1 more Essence already
+    # spent elsewhere the combined total (6) hits the strictly-positive floor.
+    with pytest.raises(ValueError, match="would leave no Essence remaining"):
+        create_cyberware_selection(
+            ["arm"] * 5, CATALOG, nuyen_budget=1_000_000, other_essence_spent=Decimal("1")
+        )
+
+
+def test_other_essence_spent_still_allows_a_fraction_remaining() -> None:
+    selection = create_cyberware_selection(
+        ["arm"] * 4, CATALOG, nuyen_budget=1_000_000, other_essence_spent=Decimal("1")
+    )
+    assert selection.essence_spent == Decimal("4")
+
+
 # --- apply_cyberware_improvements -----------------------------------------------------------------
 
 

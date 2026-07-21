@@ -81,6 +81,14 @@ round-trips unchanged. `build_character` folds it into both `create_resources_se
 (gear+Lifestyle, then gear+Lifestyle+cyberware) -- see `chummer5.engine.resources`'s own module
 docstring for why it tops up the shared budget rather than spending from it.
 
+**WP45** adds `bioware_item_ids` -- purchased `chummer5.data.bioware.Bioware` ids, the identical
+"selection, not derived value" shape `cyberware_item_ids` already has. Defaults to `()` ("predates
+this field"), so every save written before this WP round-trips unchanged. `build_character`
+validates it against `chummer5.engine.bioware.create_bioware_selection`, resolved *after*
+`cyberware_item_ids` (a fixed evaluation order -- see that module's own docstring for why): the
+nuyen budget left over once gear/Lifestyle/cyberware are resolved, and cyberware's own
+`essence_spent` as bioware's `other_essence_spent`, so the shared Essence floor accounts for both.
+
 **WP44** adds `build_method` -- which of the two supported priority-letter validity rules
 (`chummer5.engine.build_method.PRIORITY_BUILD_METHOD`/`SUM_TO_TEN_BUILD_METHOD`) produced
 `heritage_letter`/`talent_letter`/`attributes_letter`/`skills_letter`/`resources_letter`. Unlike
@@ -111,6 +119,7 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
+from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware import Cyberware
 from chummer5.data.lifestyle import LifestyleTier
 from chummer5.data.metatypes import Metatype
@@ -120,6 +129,7 @@ from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
+from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_selection
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
@@ -201,6 +211,9 @@ class CharacterSave:
     # WP33: purchased cyberware ids (chummer5.data.cyberware.Cyberware.id). Defaults to () --
     # "predates this field", the same shape every WP28 magic field defaults to.
     cyberware_item_ids: tuple[str, ...] = ()
+    # WP45: purchased bioware ids (chummer5.data.bioware.Bioware.id). Defaults to () -- "predates
+    # this field", the identical shape cyberware_item_ids already has.
+    bioware_item_ids: tuple[str, ...] = ()
     # WP43: Karma converted to nuyen at Step Six (core rulebook p. 94, up to 10). Defaults to 0 --
     # "predates this field"/"player didn't convert any", the same shape every prior optional field
     # defaults to.
@@ -233,6 +246,7 @@ def create_character_save(
     power_picks: Iterable[PowerPickTriple] = (),
     magic_attribute_points: int = 0,
     cyberware_item_ids: Iterable[str] = (),
+    bioware_item_ids: Iterable[str] = (),
     karma_converted: int = 0,
     build_method: str = PRIORITY_BUILD_METHOD,
 ) -> CharacterSave:
@@ -266,6 +280,7 @@ def create_character_save(
         power_picks=tuple(power_picks),
         magic_attribute_points=magic_attribute_points,
         cyberware_item_ids=tuple(cyberware_item_ids),
+        bioware_item_ids=tuple(bioware_item_ids),
         karma_converted=karma_converted,
         build_method=build_method,
     )
@@ -306,6 +321,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         ],
         "magic_attribute_points": save.magic_attribute_points,
         "cyberware_item_ids": list(save.cyberware_item_ids),
+        "bioware_item_ids": list(save.bioware_item_ids),
         "karma_converted": save.karma_converted,
         "build_method": save.build_method,
     }
@@ -354,6 +370,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         ),
         magic_attribute_points=data.get("magic_attribute_points", 0),
         cyberware_item_ids=data.get("cyberware_item_ids", ()),
+        bioware_item_ids=data.get("bioware_item_ids", ()),
         karma_converted=data.get("karma_converted", 0),
         build_method=data.get("build_method", PRIORITY_BUILD_METHOD),
     )
@@ -380,6 +397,7 @@ def build_character(
     spells: tuple[Spell, ...] = (),
     powers: tuple[Power, ...] = (),
     cyberware: tuple[Cyberware, ...] = (),
+    bioware: tuple[Bioware, ...] = (),
 ) -> Character:
     """Reconstruct a fully-populated `Character` from a `CharacterSave`, re-running the same
     `create_*` validation each selection already has (see module docstring).
@@ -405,6 +423,11 @@ def build_character(
 
     **WP33**: `cyberware` defaults to `()` for the same reason -- a save with no
     `cyberware_item_ids` (every pre-WP33 save) never resolves against it.
+
+    **WP45**: `bioware` defaults to `()` for the same reason -- a save with no `bioware_item_ids`
+    (every pre-WP45 save) never resolves against it. Resolved *after* cyberware (a fixed evaluation
+    order -- see `chummer5.engine.bioware`'s own module docstring), so its Essence-floor/nuyen
+    checks correctly account for cyberware's already-resolved spend.
     """
     heritage = priorities.heritage[save.heritage_letter]
     choice = next(
@@ -466,19 +489,33 @@ def build_character(
     )
     apply_cyberware_improvements(character, cyberware_selection)
 
-    # WP34: fold the now-resolved cyberware cost back into `resources_selection` itself, so the
-    # `Character` this function returns carries a `nuyen_remaining` that reflects the true 3-way
-    # gear+Lifestyle+cyberware spend (what `chummer5.web.app._character_sheet_context` and every
-    # other reader of `character.resources_selection` display) rather than the gear+Lifestyle-only
-    # figure computed above, before cyberware was known. Guaranteed to re-validate cleanly:
-    # `create_cyberware_selection` above already confirmed `cyberware_selection.nuyen_spent <=
-    # resources_selection.nuyen_remaining`, so the combined total still fits the same budget.
+    # WP45: bioware is resolved second (a fixed evaluation order -- see chummer5.engine.bioware's
+    # own docstring), against whatever nuyen cyberware left over and cyberware's own essence_spent
+    # as other_essence_spent, so the shared Essence floor accounts for both.
+    bioware_selection = create_bioware_selection(
+        save.bioware_item_ids,
+        bioware,
+        resources_selection.nuyen_remaining - cyberware_selection.nuyen_spent,
+        other_essence_spent=cyberware_selection.essence_spent,
+    )
+    apply_bioware_improvements(character, bioware_selection)
+
+    # WP34/WP45: fold the now-resolved cyberware+bioware cost back into `resources_selection`
+    # itself, so the `Character` this function returns carries a `nuyen_remaining` that reflects the
+    # true 4-way gear+Lifestyle+cyberware+bioware spend (what `chummer5.web.app
+    # ._character_sheet_context` and every other reader of `character.resources_selection` display)
+    # rather than the gear+Lifestyle-only figure computed above, before cyberware/bioware were
+    # known. Guaranteed to re-validate cleanly: `create_cyberware_selection`/
+    # `create_bioware_selection` above already confirmed their combined nuyen_spent doesn't exceed
+    # the earlier resources_selection's own nuyen_remaining, so the combined total still fits the
+    # same budget.
     resources_selection = create_resources_selection(
         save.resources_letter,
         priorities,
         gear_names=save.gear_names,
         lifestyle_cost=lifestyle_selection.total_cost,
         cyberware_cost=cyberware_selection.nuyen_spent,
+        bioware_cost=bioware_selection.nuyen_spent,
         karma_converted=save.karma_converted,
     )
 
@@ -550,4 +587,5 @@ def build_character(
         power_selection=power_selection,
         magic_attribute_points=magic_attribute_points,
         cyberware_selection=cyberware_selection,
+        bioware_selection=bioware_selection,
     )

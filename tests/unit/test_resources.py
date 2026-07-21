@@ -275,15 +275,71 @@ def test_create_resources_selection_rejects_combined_gear_lifestyle_and_cyberwar
 def test_create_resources_selection_gear_only_overspend_message_omits_lifestyle_and_cyberware() -> (
     None
 ):
-    """The single-term message (unextended by WP20/WP34) still reads exactly as it did pre-WP20 --
-    a real regression risk since both `lifestyle_cost`/`cyberware_cost` are now folded into one
-    shared `parts` list.
+    """The single-term message (unextended by WP20/WP34/WP45) still reads exactly as it did
+    pre-WP20 -- a real regression risk since `lifestyle_cost`/`cyberware_cost`/`bioware_cost` are
+    all now folded into one shared `parts` list.
     """
     with pytest.raises(ValueError, match="gear spend .* exceeds Resources priority"):
         create_resources_selection(
             letter="E",
             priorities=PRIORITIES,
             gear_names=[item.name for item in STARTER_GEAR_CATALOG for _ in range(20)],
+        )
+
+
+# --- Bioware (WP45): shared-budget wiring, extending the three-way check to four ----------------
+
+
+def test_create_resources_selection_bioware_cost_defaults_to_zero() -> None:
+    """Backward-compatibility check: every pre-WP45 call (no `bioware_cost` argument) must behave
+    identically to before WP45 touched this function.
+    """
+    selection = create_resources_selection(
+        letter="E", priorities=PRIORITIES, gear_names=["Meta Link"]
+    )
+    assert selection.bioware_cost == 0
+    assert selection.nuyen_remaining == 5900
+
+
+def test_create_resources_selection_folds_bioware_cost_into_remaining() -> None:
+    selection = create_resources_selection(
+        letter="E",
+        priorities=PRIORITIES,
+        gear_names=["Meta Link"],
+        lifestyle_cost=2000,
+        cyberware_cost=1000,
+        bioware_cost=500,
+    )
+    assert selection.bioware_cost == 500
+    assert selection.nuyen_spent == 100  # gear-only, unchanged meaning
+    assert selection.nuyen_remaining == 6000 - 100 - 2000 - 1000 - 500
+
+
+def test_create_resources_selection_rejects_combined_four_way_overspend() -> None:
+    with pytest.raises(
+        ValueError,
+        match=r"gear \(100\) \+ lifestyle \(2000\) \+ cyberware \(1000\) \+ bioware \(3000\)",
+    ):
+        create_resources_selection(
+            letter="E",
+            priorities=PRIORITIES,
+            gear_names=["Meta Link"],
+            lifestyle_cost=2000,
+            cyberware_cost=1000,
+            bioware_cost=3000,
+        )
+
+
+def test_create_resources_selection_bioware_only_overspend_message_omits_others() -> None:
+    """`bioware_cost` alone (no lifestyle/cyberware spend) still produces a two-term message, not
+    a four-term one with empty middle terms.
+    """
+    with pytest.raises(ValueError, match=r"gear \(100\) \+ bioware \(6000\)"):
+        create_resources_selection(
+            letter="E",
+            priorities=PRIORITIES,
+            gear_names=["Meta Link"],
+            bioware_cost=6000,
         )
 
 

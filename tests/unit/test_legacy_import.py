@@ -11,6 +11,7 @@ from types import MappingProxyType
 
 import pytest
 
+from chummer5.data.bioware import load_bioware
 from chummer5.data.cyberware import load_cyberware
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
@@ -45,6 +46,7 @@ TRADITIONS = load_traditions()
 SPELLS = load_spells()
 POWERS = load_powers()
 CYBERWARE = load_cyberware()
+BIOWARE = load_bioware()
 
 
 def _priorities(
@@ -115,6 +117,7 @@ def _import(legacy: LegacyCharacter) -> None:
         spells=SPELLS,
         powers=POWERS,
         cyberware=CYBERWARE,
+        bioware=BIOWARE,
     )
 
 
@@ -355,18 +358,48 @@ def test_rejects_non_standard_grade_cyberware() -> None:
         )
 
 
-def test_rejects_bioware() -> None:
-    """No Bioware catalog exists yet -- a `<improvementsource>Bioware</improvementsource>` entry is
-    always rejected by name, regardless of its own shape.
+def test_rejects_unsupported_bioware_item() -> None:
+    """WP45 resolves a Bioware entry the identical way a Cyberware entry already was, against
+    `chummer5.data.bioware.load_bioware`'s own flat catalog -- a rating-scaled item (Mnemonic
+    Enhancer's real cost is `Rating * 9000`, not a bare literal) is rejected by name, not with a
+    generic "is Bioware" message.
     """
-    with pytest.raises(UnsupportedLegacyCharacterError, match="'Platelet Factories' is Bioware"):
+    with pytest.raises(
+        UnsupportedLegacyCharacterError, match=r"'Mnemonic Enhancer'.*rating-scaled"
+    ):
+        _import(
+            _legacy_character(
+                cyberware=(
+                    LegacyCyberware(
+                        name="Mnemonic Enhancer",
+                        category="Cultured",
+                        grade="Standard",
+                        source="SR5",
+                        improvement_source="Bioware",
+                        cost="Rating * 9000",
+                        essence="Rating * 0.1",
+                    ),
+                )
+            )
+        )
+
+
+def test_rejects_non_standard_grade_bioware() -> None:
+    """A real WP45 catalog item (Platelet Factories) bought at a non-Standard grade is still
+    rejected -- confirmed via real fixture data (`Bastion.chum5`, see `spec/worklogs/WP45.md`) that
+    the legacy save format stores a Standard-grade item's raw `<ess>`/`<cost>` fields unchanged
+    regardless of the grade actually purchased, mirroring cyberware's own WP32-era finding.
+    """
+    with pytest.raises(
+        UnsupportedLegacyCharacterError, match=r"'Platelet Factories'.*non-Standard-grade"
+    ):
         _import(
             _legacy_character(
                 cyberware=(
                     LegacyCyberware(
                         name="Platelet Factories",
                         category="Basic",
-                        grade="Standard",
+                        grade="Used",
                         source="SR5",
                         improvement_source="Bioware",
                         cost="17000",
@@ -378,7 +411,7 @@ def test_rejects_bioware() -> None:
 
 
 def test_accepts_standard_grade_flat_cyberware_item() -> None:
-    """The positive case the three rejection tests above exist to contrast with -- a real catalog
+    """The positive case the rejection tests above exist to contrast with -- a real catalog
     item bought at Standard grade (mirroring Bastion.chum5's/Blindfire.chum5's own real Datajack
     purchases) imports cleanly and reaches the built character's `cyberware_selection`.
     """
@@ -407,6 +440,38 @@ def test_accepts_standard_grade_flat_cyberware_item() -> None:
     assert result.save.cyberware_item_ids == (datajack.id,)
     assert result.built.cyberware_selection is not None
     assert datajack.id in {c.id for c in result.built.cyberware_selection.items}
+
+
+def test_accepts_standard_grade_flat_bioware_item() -> None:
+    """The bioware mirror of the cyberware test above -- a real WP45 catalog item (Reflex Recorder,
+    mirroring `Barrett.chum5`'s own real purchase) bought at Standard grade imports cleanly and
+    reaches the built character's `bioware_selection`.
+    """
+    reflex_recorder = next(b for b in BIOWARE if b.name == "Reflex Recorder")
+    result = import_legacy_character(
+        _legacy_character(
+            cyberware=(
+                LegacyCyberware(
+                    name="Reflex Recorder",
+                    category="Cultured",
+                    grade="Standard",
+                    source="SR5",
+                    improvement_source="Bioware",
+                    cost="14000",
+                    essence="0.1",
+                ),
+            )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        bioware=BIOWARE,
+    )
+    assert result.save.bioware_item_ids == (reflex_recorder.id,)
+    assert result.built.bioware_selection is not None
+    assert reflex_recorder.id in {b.id for b in result.built.bioware_selection.items}
 
 
 def test_rejects_karma_bought_attribute_points() -> None:

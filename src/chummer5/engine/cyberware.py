@@ -40,11 +40,21 @@ character-creation validity gate goes further and pins down the exact boundary:
 is above 0" block that rejects the build (`Message_InvalidEssenceExcess`, "{0} over the Essence
 limit") whenever resulting Essence would be `<= 0` -- strictly positive, not merely non-negative.
 `create_cyberware_selection` enforces the same floor at selection time (rather than only at a
-later, separate "is this character still valid" pass this project hasn't built): since nothing
-else in this project's scope (mundane MVP, Phase I magic) produces an `ESSENCE` improvement,
-comparing the selection's own total Essence cost against `chummer5.engine.derived.BASE_ESSENCE`
-(6) directly is equivalent to checking the character's resulting `essence()` -- there is no other
-Essence-reducing source yet for this check to miss.
+later, separate "is this character still valid" pass this project hasn't built).
+
+**WP45 widens the floor check with `other_essence_spent`.** Through WP44, cyberware was the only
+Essence-reducing source this project modeled, so comparing this selection's own Essence cost
+against `chummer5.engine.derived.BASE_ESSENCE` directly was equivalent to checking the character's
+resulting `essence()` -- flagged in this module's own WP32-era docstring as something "a future WP
+that adds a second Essence-reducing source (bioware, if ever built) would need to widen ... to take
+the character's pre-purchase Essence as an input instead." WP45 is that widening: `other_essence_
+spent` defaults to `Decimal(0)` (every pre-WP45 call site, unaffected), and a caller building both
+selections passes the *other* one's already-resolved `essence_spent` in, mirroring `chummer5.engine
+.magic.create_magic_attribute_points`'s `other_special_attribute_points_spent` parameter for the
+same "two selections, one shared budget, resolved by the caller" shape. `chummer5.engine.bioware
+.create_bioware_selection` is the mirror image, taking cyberware's `essence_spent` the same way --
+see that module's own docstring for the fixed evaluation order (cyberware first, unaware of
+bioware; bioware second, aware of cyberware) this project settled on.
 """
 
 from __future__ import annotations
@@ -88,15 +98,18 @@ def create_cyberware_selection(
     item_ids: Iterable[str],
     catalog: Iterable[Cyberware],
     nuyen_budget: int,
+    *,
+    other_essence_spent: Decimal = Decimal(0),
 ) -> CyberwareSelection:
     """Build a `CyberwareSelection`, validating nuyen spend and the Essence floor together.
 
     Validates: every id resolves against `catalog`; total nuyen cost doesn't exceed `nuyen_budget`
-    (the caller's own responsibility to resolve -- see module docstring); total Essence cost leaves
-    strictly-positive Essence remaining (`< BASE_ESSENCE`), per the rulebook/legacy-validity floor
-    cited in the module docstring. Duplicate ids are allowed -- see module docstring. Does not
-    require the full nuyen budget to be spent, mirroring every other `create_*` function in this
-    engine.
+    (the caller's own responsibility to resolve -- see module docstring); total Essence cost, plus
+    `other_essence_spent` (WP45 -- another selection's already-resolved Essence cost sharing the
+    same pool, e.g. bioware; `Decimal(0)` for every pre-WP45 caller), leaves strictly-positive
+    Essence remaining, per the rulebook/legacy-validity floor cited in the module docstring.
+    Duplicate ids are allowed -- see module docstring. Does not require the full nuyen budget to be
+    spent, mirroring every other `create_*` function in this engine.
     """
     by_id = {item.id: item for item in catalog}
     ids = list(item_ids)
@@ -114,10 +127,11 @@ def create_cyberware_selection(
         )
 
     essence_spent = sum((item.essence_cost for item in selected), Decimal(0))
-    if essence_spent >= BASE_ESSENCE:
+    if essence_spent + other_essence_spent >= BASE_ESSENCE:
         raise ValueError(
             f"cyberware Essence cost {essence_spent} would leave no Essence remaining "
-            f"(total Essence cost must stay below {BASE_ESSENCE})"
+            f"(total Essence cost, including {other_essence_spent} already spent elsewhere, must "
+            f"stay below {BASE_ESSENCE})"
         )
 
     return CyberwareSelection(

@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import pytest
 
+from chummer5.data.bioware import load_bioware
 from chummer5.data.cyberware import load_cyberware
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
@@ -42,6 +43,7 @@ TRADITIONS = load_traditions()
 SPELLS = load_spells()
 POWERS = load_powers()
 CYBERWARE = load_cyberware()
+BIOWARE = load_bioware()
 
 
 def _sample_save() -> CharacterSave:
@@ -346,6 +348,136 @@ def test_build_character_rejects_cyberware_exceeding_the_shared_nuyen_budget() -
             qualities=QUALITIES,
             lifestyles=LIFESTYLES,
             cyberware=CYBERWARE,
+        )
+
+
+def test_json_round_trip_preserves_bioware_item_ids() -> None:
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        bioware_item_ids=("bio-cats-eyes", "bio-cats-eyes"),
+    )
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["bioware_item_ids"] == ["bio-cats-eyes", "bio-cats-eyes"]
+
+
+def test_build_character_applies_bioware_selection() -> None:
+    """WP45 mirrors WP33's own cyberware test: `build_character` validates `bioware_item_ids`
+    against `create_bioware_selection`, using whatever nuyen cyberware left over as the shared
+    budget bioware draws from, and applies the resulting Essence Improvement.
+    """
+    cats_eyes = next(b for b in BIOWARE if b.name == "Cat's Eyes")
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        bioware_item_ids=(cats_eyes.id,),
+    )
+    character = build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        bioware=BIOWARE,
+    )
+    assert character.bioware_selection is not None
+    assert cats_eyes.id in {b.id for b in character.bioware_selection.items}
+    assert essence(character) == Decimal(6) - cats_eyes.essence_cost
+
+
+def test_build_character_shares_the_essence_pool_between_cyberware_and_bioware() -> None:
+    """The cross-module composition this WP's whole design hinges on: cyberware is resolved first
+    (unaware of bioware), bioware second (aware of cyberware's own essence_spent) -- their combined
+    Essence cost must reduce the same one pool, not two independently-tracked ones.
+    """
+    datajack = next(c for c in CYBERWARE if c.name == "Datajack")
+    cats_eyes = next(b for b in BIOWARE if b.name == "Cat's Eyes")
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        cyberware_item_ids=(datajack.id,),
+        bioware_item_ids=(cats_eyes.id,),
+    )
+    character = build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        cyberware=CYBERWARE,
+        bioware=BIOWARE,
+    )
+    assert essence(character) == Decimal(6) - datajack.essence_cost - cats_eyes.essence_cost
+    assert character.resources_selection is not None
+    assert character.resources_selection.bioware_cost == cats_eyes.cost
+    assert character.resources_selection.cyberware_cost == datajack.cost
+
+
+def test_build_character_rejects_bioware_exceeding_the_shared_nuyen_budget() -> None:
+    """Bioware shares its nuyen budget with gear/Lifestyle/cyberware -- mirrors WP33's own
+    cyberware over-budget test.
+    """
+    enhanced_articulation = next(b for b in BIOWARE if b.name == "Enhanced Articulation")
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="E",  # smallest nuyen budget
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        bioware_item_ids=(enhanced_articulation.id,),
+    )
+    with pytest.raises(ValueError, match="nuyen budget"):
+        build_character(
+            save,
+            metatypes=METATYPES,
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
+            bioware=BIOWARE,
         )
 
 

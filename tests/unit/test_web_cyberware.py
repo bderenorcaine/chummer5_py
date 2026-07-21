@@ -8,6 +8,9 @@ section despite sharing a budget").
 Same "manual walkthrough; values match engine output for the same inputs" acceptance bar as
 WP14-WP16/WP20's own test modules, plus the WP19-style still-valid/now-invalid reconfirmation
 checks those modules already established for carried-forward selections.
+
+WP45 folds bioware into this same section/route -- see `tests/unit/test_web_bioware.py` for the
+bioware-specific tests (shared-budget/shared-Essence-floor interaction with cyberware included).
 """
 
 from fastapi.testclient import TestClient
@@ -55,7 +58,10 @@ def test_index_before_confirmation_shows_a_placeholder() -> None:
 
     response = client.get("/")
 
-    assert "Confirm a metatype and priorities above before installing cyberware." in response.text
+    assert (
+        "Confirm a metatype and priorities above before installing cyberware or bioware."
+        in response.text
+    )
 
 
 def test_index_after_confirmation_lists_every_catalog_item() -> None:

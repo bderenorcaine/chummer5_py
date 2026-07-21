@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     # this module, including dataclass field types, is a lazily-evaluated string, so
     # `dataclasses.dataclass` never needs these names to actually resolve at import time.
     from chummer5.data.traditions import Tradition
+    from chummer5.engine.bioware import BiowareSelection
     from chummer5.engine.cyberware import CyberwareSelection
     from chummer5.engine.lifestyle import LifestyleSelection
     from chummer5.engine.magic import PowerSelection, SpellSelection
@@ -221,6 +222,14 @@ class Character:
     every effect -- Essence cost, and any `FLAT_BONUS` -- reaches `improvements` via
     `chummer5.engine.cyberware.apply_cyberware_improvements`, not via a field read directly).
 
+    **WP45** adds `bioware_selection: BiowareSelection | None` -- purchased bioware, the identical
+    "`None` until committed" wrapping-field shape as `cyberware_selection` (same reasons: nothing
+    reads it piecemeal, every effect reaches `improvements` via `chummer5.engine.bioware
+    .apply_bioware_improvements`). Bioware and cyberware are still two separate fields, not one
+    merged "augmentation" list -- `chummer5.data`/`chummer5.engine` already keep the two catalogs
+    and selection types separate (see `chummer5.engine.bioware`'s own module docstring for why),
+    even though both draw from the same nuyen budget and reduce the same Essence pool.
+
     **WP35** adds no new field -- it changes `attribute_value("MAG")`'s own formula to subtract
     `magic_essence_loss` (Σ `ESSENCE` improvements, ceiling-rounded per the rulebook's "per point or
     fraction thereof" wording), the cross-phase interaction between Phase I's Magic rating and
@@ -249,6 +258,7 @@ class Character:
     spell_selection: SpellSelection | None = None  # Magician's chosen spells (WP26)
     power_selection: PowerSelection | None = None  # Adept's purchased Powers (WP27)
     cyberware_selection: CyberwareSelection | None = None  # purchased cyberware (WP32)
+    bioware_selection: BiowareSelection | None = None  # purchased bioware (WP45)
     # Special Attribute Points spent raising MAG beyond magic_rating (post-WP29 correction; see
     # class docstring's own paragraph and chummer5.engine.magic.create_magic_attribute_points).
     magic_attribute_points: int = 0

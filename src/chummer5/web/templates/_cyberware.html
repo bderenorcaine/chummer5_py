@@ -1,6 +1,6 @@
 <div id="cyberware">
   {% if character %}
-  <h2>Cyberware</h2>
+  <h2>Cyberware &amp; Bioware</h2>
 
   {% if cyberware_error %}
   <p class="error">{{ cyberware_error }}</p>
@@ -10,8 +10,9 @@
   {% endif %}
 
   <p>
-    Standard grade only. Shares the same nuyen budget as gear and Lifestyle:
-    nuyen remaining for cyberware {{ nuyen_remaining }} / {{ nuyen_available }} (spent
+    Standard grade only. Shares the same nuyen budget as gear and Lifestyle, and one shared
+    Essence pool between cyberware and bioware:
+    nuyen remaining for cyberware/bioware {{ nuyen_remaining }} / {{ nuyen_available }} (spent
     {{ nuyen_spent }}). Essence remaining: {{ essence_remaining }} / 6 (spent {{ essence_spent }}).
   </p>
 
@@ -21,6 +22,7 @@
     hx-swap="outerHTML"
     hx-trigger="change, input delay:400ms"
   >
+    <h3>Cyberware</h3>
     {% for group in cyberware_groups %}
     <details {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
       <summary>{{ group.category }}</summary>
@@ -55,9 +57,46 @@
       </table>
     </details>
     {% endfor %}
-    <button type="submit">Update cyberware</button>
+
+    <h3>Bioware</h3>
+    {% for group in bioware_groups %}
+    <details {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
+      <summary>{{ group.category }}</summary>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Cost</th>
+            <th>Essence</th>
+            <th>Quantity</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in group.rows %}
+          <tr>
+            <td>{{ row.item.name }}</td>
+            <td>{{ row.item.cost }}</td>
+            <td>{{ row.item.essence_cost }}</td>
+            <td>
+              <input
+                type="number"
+                name="bioware_{{ row.item.id }}"
+                value="{{ row.quantity }}"
+                min="0"
+              />
+            </td>
+            <td>{{ row.subtotal }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endfor %}
+
+    <button type="submit">Update cyberware &amp; bioware</button>
   </form>
   {% else %}
-  <p>Confirm a metatype and priorities above before installing cyberware.</p>
+  <p>Confirm a metatype and priorities above before installing cyberware or bioware.</p>
   {% endif %}
 </div>

@@ -95,7 +95,11 @@ class ImprovementSource(Enum):
     `source_id`), distinct from `TALENT`'s single shared grant. WP30 adds a 6th: `CYBERWARE`, for
     the Essence-cost `Improvement` each purchased cyberware item will grant once WP31/WP32 build
     the actual catalog/selection -- threaded through now (no real producer yet) the same way every
-    prior source name here was added ahead of its first real user.
+    prior source name here was added ahead of its first real user. WP45 adds a 7th: `BIOWARE`, for
+    `chummer5.engine.bioware.apply_bioware_improvements` — a separate source from `CYBERWARE`
+    despite both ever only granting an `ESSENCE`/`FLAT_BONUS`-shaped Improvement, so
+    `ImprovementIndex.remove_source` can retract one without touching the other (e.g. a
+    bioware-only re-purchase shouldn't also strip already-committed cyberware).
     """
 
     METATYPE = auto()
@@ -104,6 +108,7 @@ class ImprovementSource(Enum):
     TALENT = auto()
     ADEPT_POWER = auto()
     CYBERWARE = auto()
+    BIOWARE = auto()
 
 
 @dataclass(frozen=True)

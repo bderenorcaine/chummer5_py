@@ -157,6 +157,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.datastructures import FormData, UploadFile
 
+from chummer5.data.bioware import Bioware, load_bioware
 from chummer5.data.cyberware import Cyberware, load_cyberware
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
@@ -166,6 +167,11 @@ from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.engine.bioware import (
+    BiowareSelection,
+    apply_bioware_improvements,
+    create_bioware_selection,
+)
 from chummer5.engine.build_method import (
     PRIORITY_BUILD_METHOD,
     SUM_TO_TEN_BUILD_METHOD,
@@ -284,6 +290,8 @@ QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
 # WP34 (Phase J's UI): the flat-cost, flat-Essence, Standard-grade cyberware catalog (WP31).
 CYBERWARE = load_cyberware()
+# WP45: the flat-cost, flat-Essence, low-Availability, Standard-grade bioware catalog.
+BIOWARE = load_bioware()
 # WP29 (Phase I's UI): Talent/tradition/spell/power catalogs, loaded once like every other
 # `chummer5.data` catalog above.
 TRADITIONS = load_traditions()
@@ -499,6 +507,22 @@ def _parse_cyberware(form: FormData, catalog: Iterable[Cyberware]) -> tuple[str,
     ids: list[str] = []
     for item in catalog:
         raw = form.get(f"cyberware_{item.id}")
+        try:
+            quantity = int(str(raw)) if raw is not None else 0
+        except ValueError:
+            quantity = 0
+        ids.extend([item.id] * max(quantity, 0))
+    return tuple(ids)
+
+
+def _parse_bioware(form: FormData, catalog: Iterable[Bioware]) -> tuple[str, ...]:
+    """Expand each bioware item's submitted quantity into that many repeats of its id -- mirrors
+    `_parse_cyberware`'s identical shape, keyed by `bioware_{id}` form fields instead of
+    `cyberware_{id}` ones.
+    """
+    ids: list[str] = []
+    for item in catalog:
+        raw = form.get(f"bioware_{item.id}")
         try:
             quantity = int(str(raw)) if raw is not None else 0
         except ValueError:
@@ -953,6 +977,33 @@ def _replace_committed_cyberware(character: Character, selection: CyberwareSelec
     return replace(character, cyberware_selection=selection)
 
 
+def _relink_bioware_selection(
+    character: Character, bioware_selection: BiowareSelection | None
+) -> Character:
+    """Re-apply a carried-forward bioware selection's Essence/bonus Improvements onto a freshly
+    built `Character`, and re-attach the selection itself -- mirrors `_relink_cyberware_selection`'s
+    identical shape. Load-bearing only for `submit_attributes`, the one route still rebuilding via
+    `create_character()` fresh.
+    """
+    if bioware_selection is None:
+        return character
+    apply_bioware_improvements(character, bioware_selection)
+    return replace(character, bioware_selection=bioware_selection)
+
+
+def _replace_committed_bioware(character: Character, selection: BiowareSelection) -> Character:
+    """Swap whatever `BIOWARE`-sourced Improvements `character.improvements` currently holds for
+    `selection`'s, and re-attach `selection` as `character.bioware_selection` -- mirrors
+    `_replace_committed_cyberware`'s identical shape, including removing by each *distinct*
+    previously-purchased item id rather than once per purchased unit.
+    """
+    if character.bioware_selection is not None:
+        for item_id in {item.id for item in character.bioware_selection.items}:
+            character.improvements.remove_source(ImprovementSource.BIOWARE, item_id)
+    apply_bioware_improvements(character, selection)
+    return replace(character, bioware_selection=selection)
+
+
 def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
     """Swap whatever QUALITY-sourced Improvements `character.improvements` currently holds for
     `selection`'s, and re-attach `selection` as `character.quality_selection`.
@@ -1044,6 +1095,7 @@ def _resources_selection_for_display(
     gear_names: Iterable[str],
     lifestyle_cost: int,
     cyberware_cost: int,
+    bioware_cost: int,
     karma_converted: int = 0,
 ) -> ResourcesSelection:
     """Recompute a `ResourcesSelection`'s nuyen totals against `letter`'s *current* budget, without
@@ -1067,6 +1119,9 @@ def _resources_selection_for_display(
     spent`, or 0 if none yet) folds in the same way, extending the shared budget from two sections
     to three.
 
+    **WP45**: `bioware_cost` (the character's currently-selected `bioware_selection.nuyen_spent`,
+    or 0 if none yet) folds in the same way, extending the shared budget to four sections.
+
     **WP43**: `karma_converted` (the character's currently-committed `resources_selection
     .karma_converted`, or 0 if none yet) tops up the available budget the same way -- see
     `chummer5.engine.resources`'s own module docstring.
@@ -1086,9 +1141,11 @@ def _resources_selection_for_display(
             - spent
             - lifestyle_cost
             - cyberware_cost
+            - bioware_cost
         ),
         lifestyle_cost=lifestyle_cost,
         cyberware_cost=cyberware_cost,
+        bioware_cost=bioware_cost,
         karma_converted=karma_converted,
     )
 
@@ -1099,6 +1156,7 @@ def _resources_context(
     gear_names: tuple[str, ...],
     lifestyle_cost: int,
     cyberware_cost: int,
+    bioware_cost: int,
     karma_converted: int = 0,
     *,
     error: str | None = None,
@@ -1130,6 +1188,9 @@ def _resources_context(
     **WP34**: `cyberware_cost` (the character's currently-selected `cyberware_selection.nuyen_
     spent`, or 0 if none yet) folds in the same way, extending the shared-budget check from gear+
     Lifestyle to gear+Lifestyle+cyberware.
+
+    **WP45**: `bioware_cost` folds in the same way, extending the shared-budget check to
+    gear+Lifestyle+cyberware+bioware.
 
     **WP43**: `karma_converted` (this same submission's Karma-to-Nuyen amount, or the character's
     currently-committed one when redisplaying a clean render) tops up the budget the re-validation
@@ -1172,6 +1233,7 @@ def _resources_context(
                 gear_names,
                 lifestyle_cost=lifestyle_cost,
                 cyberware_cost=cyberware_cost,
+                bioware_cost=bioware_cost,
                 karma_converted=karma_converted,
             )
         except ValueError as exc:
@@ -1190,6 +1252,7 @@ def _resources_context(
             - spent
             - lifestyle_cost
             - cyberware_cost
+            - bioware_cost
         ),
         "karma_converted": karma_converted,
         "max_karma_to_nuyen": MAX_KARMA_TO_NUYEN,
@@ -1206,6 +1269,7 @@ def _lifestyle_context(
     months: int,
     gear_cost: int,
     cyberware_cost: int,
+    bioware_cost: int,
     karma_converted: int = 0,
     *,
     error: str | None = None,
@@ -1218,7 +1282,8 @@ def _lifestyle_context(
     why this cross-section number is threaded through rather than each section reaching into the
     other's catalog/state directly). **WP34** adds `cyberware_cost` the same way (the character's
     currently-selected `cyberware_selection.nuyen_spent`, or 0 if none yet), extending the shared
-    budget from two sections to three. **WP43** adds `karma_converted` the same way (the
+    budget from two sections to three. **WP45** adds `bioware_cost` the same way, extending the
+    shared budget to four sections. **WP43** adds `karma_converted` the same way (the
     character's currently-committed `resources_selection.karma_converted`, or 0 if none yet),
     topping up the budget rather than spending from it -- see `chummer5.engine.resources`'s module
     docstring.
@@ -1239,9 +1304,7 @@ def _lifestyle_context(
             "max_lifestyle_months": MAX_LIFESTYLE_MONTHS,
             "lifestyle_error": error,
         }
-    budget = starting_nuyen(resources_letter, PRIORITIES) + _display_karma_to_nuyen(
-        karma_converted
-    )
+    budget = starting_nuyen(resources_letter, PRIORITIES) + _display_karma_to_nuyen(karma_converted)
     budget_warning: str | None = None
     if error is None:
         try:
@@ -1249,11 +1312,13 @@ def _lifestyle_context(
         except ValueError as exc:
             budget_warning = str(exc)
         else:
-            total_spent = gear_cost + selection.total_cost + cyberware_cost
+            total_spent = gear_cost + selection.total_cost + cyberware_cost + bioware_cost
             if total_spent > budget:
                 parts = [f"gear ({gear_cost})", f"lifestyle ({selection.total_cost})"]
                 if cyberware_cost:
                     parts.append(f"cyberware ({cyberware_cost})")
+                if bioware_cost:
+                    parts.append(f"bioware ({bioware_cost})")
                 budget_warning = (
                     f"No longer fits since priorities were last confirmed: {' + '.join(parts)} "
                     f"spend {total_spent} exceeds Resources priority {resources_letter}'s nuyen "
@@ -1279,43 +1344,23 @@ def _lifestyle_context(
 # `CYBERWARE` directly would produce spurious duplicate groups. Computed once at import time, not
 # per-request.
 _CYBERWARE_BY_CATEGORY = tuple(sorted(CYBERWARE, key=lambda item: (item.category, item.name)))
+# Same reasoning, applied to WP45's much smaller bioware catalog (2 categories, Basic/Cultured).
+_BIOWARE_BY_CATEGORY = tuple(sorted(BIOWARE, key=lambda item: (item.category, item.name)))
 
 
-def _cyberware_context(
-    character: Character | None,
-    resources_letter: str,
+def _catalog_groups(
     item_ids: tuple[str, ...],
-    gear_cost: int,
-    lifestyle_cost: int,
-    karma_converted: int = 0,
-    *,
-    error: str | None = None,
-) -> dict[str, Any]:
-    """Context for `_cyberware.html` (WP34): Phase J's cyberware purchase.
-
-    **A new peer section, not folded into `_resources.html`'s gear picker** -- mirrors WP20's own
-    explicit "Lifestyle gets its own section despite sharing a budget" choice (see that WP's
-    worklog for the full reasoning). SR5 frames "buy gear" and "install cyberware" as distinct
-    chargen decisions with different validation rules (an Essence floor here, not just a nuyen cap),
-    and cramming a second ~60-row catalog into `_resources_context` would make that one context
-    builder responsible for two unrelated catalogs. Shares the same Resources-priority nuyen budget
-    as gear/Lifestyle though -- `gear_cost`/`lifestyle_cost` are those two sections' currently-
-    committed spend, threaded through the same cross-section wiring `_resources_context`/
-    `_lifestyle_context` already use for each other (see their docstrings). **WP43** adds
-    `karma_converted` the same way, topping up the budget rather than spending from it.
-
-    Same `error`-gated re-validation pattern as `_resources_context`/`_lifestyle_context`: when
-    `error` is unset, re-derives whether the currently-selected items still fit the combined budget
-    (and the Essence floor `create_cyberware_selection` enforces), surfacing a distinct
-    `cyberware_budget_warning` rather than silently going over/under on the next render.
+    catalog_by_category: tuple[Any, ...],
+    by_id: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Build category-grouped `<details>` rows for a quantity-per-item picker -- shared by the
+    cyberware and bioware halves of `_cyberware_context` (WP45), mirroring `_resources_context`'s
+    WP21 shape.
     """
-    if character is None:
-        return {"character": None, "cyberware_error": error}
-    by_id = {item.id: item for item in CYBERWARE}
     counts: dict[str, int] = {}
     for item_id in item_ids:
         counts[item_id] = counts.get(item_id, 0) + 1
-    cyberware_groups: list[dict[str, Any]] = [
+    return [
         {
             "category": category,
             "rows": [
@@ -1328,27 +1373,92 @@ def _cyberware_context(
             ],
         }
         for category, items in itertools.groupby(
-            _CYBERWARE_BY_CATEGORY, key=lambda item: item.category
+            catalog_by_category, key=lambda item: item.category
         )
     ]
-    budget = starting_nuyen(resources_letter, PRIORITIES) + _display_karma_to_nuyen(
-        karma_converted
-    )
+
+
+def _cyberware_context(
+    character: Character | None,
+    resources_letter: str,
+    item_ids: tuple[str, ...],
+    bioware_item_ids: tuple[str, ...],
+    gear_cost: int,
+    lifestyle_cost: int,
+    karma_converted: int = 0,
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_cyberware.html` (WP34, widened by WP45): Phase J's cyberware purchase, plus
+    Phase L's bioware purchase folded into the same section.
+
+    **A new peer section, not folded into `_resources.html`'s gear picker** -- mirrors WP20's own
+    explicit "Lifestyle gets its own section despite sharing a budget" choice (see that WP's
+    worklog for the full reasoning). SR5 frames "buy gear" and "install cyberware/bioware" as
+    distinct chargen decisions with different validation rules (an Essence floor here, not just a
+    nuyen cap), and cramming these catalogs into `_resources_context` would make that one context
+    builder responsible for unrelated catalogs. Shares the same Resources-priority nuyen budget as
+    gear/Lifestyle though -- `gear_cost`/`lifestyle_cost` are those two sections' currently-
+    committed spend, threaded through the same cross-section wiring `_resources_context`/
+    `_lifestyle_context` already use for each other (see their docstrings). **WP43** adds
+    `karma_converted` the same way, topping up the budget rather than spending from it.
+
+    **WP45: bioware folds into this same section rather than getting its own** -- unlike Lifestyle
+    (its own distinct rulebook chargen step), the rulebook's own Step Six groups "Cyberware and
+    Bioware" as one combined subsection (see `chummer5.engine.cyberware`'s module docstring for the
+    citation), both catalogs are tiny/near-identical in shape (nuyen + Essence, no other validation
+    rule), and they share one Essence pool that has to be checked jointly regardless -- cramming a
+    second, near-duplicate section into the UI would only fragment one shared decision. Evaluation
+    order is fixed and documented in `chummer5.engine.bioware`'s module docstring: cyberware is
+    resolved first (unaware of bioware), bioware second (aware of cyberware's own nuyen/Essence
+    spend) -- so a combination only invalid once both are counted together is always caught, on the
+    bioware call.
+
+    Same `error`-gated re-validation pattern as `_resources_context`/`_lifestyle_context`: when
+    `error` is unset, re-derives whether the currently-selected items still fit the combined budget
+    (and the shared Essence floor `create_cyberware_selection`/`create_bioware_selection` enforce),
+    surfacing a distinct `cyberware_budget_warning` rather than silently going over/under on the
+    next render.
+    """
+    if character is None:
+        return {"character": None, "cyberware_error": error}
+    cyberware_by_id = {item.id: item for item in CYBERWARE}
+    bioware_by_id = {item.id: item for item in BIOWARE}
+    cyberware_groups = _catalog_groups(item_ids, _CYBERWARE_BY_CATEGORY, cyberware_by_id)
+    bioware_groups = _catalog_groups(bioware_item_ids, _BIOWARE_BY_CATEGORY, bioware_by_id)
+    budget = starting_nuyen(resources_letter, PRIORITIES) + _display_karma_to_nuyen(karma_converted)
     nuyen_available = budget - gear_cost - lifestyle_cost
-    spent = sum(int(row["subtotal"]) for group in cyberware_groups for row in group["rows"])
-    essence_spent = sum((by_id[item_id].essence_cost for item_id in item_ids), Decimal(0))
+    cyberware_spent = sum(
+        int(row["subtotal"]) for group in cyberware_groups for row in group["rows"]
+    )
+    bioware_spent = sum(int(row["subtotal"]) for group in bioware_groups for row in group["rows"])
+    spent = cyberware_spent + bioware_spent
+    cyberware_essence_spent = sum(
+        (cyberware_by_id[item_id].essence_cost for item_id in item_ids), Decimal(0)
+    )
+    bioware_essence_spent = sum(
+        (bioware_by_id[item_id].essence_cost for item_id in bioware_item_ids), Decimal(0)
+    )
+    essence_spent = cyberware_essence_spent + bioware_essence_spent
     budget_warning: str | None = None
     if error is None:
         try:
-            create_cyberware_selection(item_ids, CYBERWARE, nuyen_available)
+            cyberware_selection = create_cyberware_selection(item_ids, CYBERWARE, nuyen_available)
+            create_bioware_selection(
+                bioware_item_ids,
+                BIOWARE,
+                nuyen_available - cyberware_selection.nuyen_spent,
+                other_essence_spent=cyberware_selection.essence_spent,
+            )
         except ValueError as exc:
             budget_warning = (
                 f"No longer fits since priorities were last confirmed: {exc}. "
-                "Adjust cyberware below to continue."
+                "Adjust cyberware/bioware below to continue."
             )
     return {
         "character": character,
         "cyberware_groups": cyberware_groups,
+        "bioware_groups": bioware_groups,
         "nuyen_available": nuyen_available,
         "nuyen_spent": spent,
         "nuyen_remaining": nuyen_available - spent,
@@ -1580,6 +1690,7 @@ def _character_sheet_context(
     )
     lifestyle_selection = character.lifestyle_selection
     cyberware_selection = character.cyberware_selection
+    bioware_selection = character.bioware_selection
     committed_karma_converted = (
         character.resources_selection.karma_converted
         if character.resources_selection is not None
@@ -1590,6 +1701,7 @@ def _character_sheet_context(
         committed_gear_names,
         lifestyle_selection.total_cost if lifestyle_selection is not None else 0,
         cyberware_selection.nuyen_spent if cyberware_selection is not None else 0,
+        bioware_selection.nuyen_spent if bioware_selection is not None else 0,
         committed_karma_converted,
     )
     gear_counts: dict[str, int] = {}
@@ -1600,6 +1712,10 @@ def _character_sheet_context(
     cyberware_counts: dict[str, int] = {}
     for cyberware_item in cyberware_selection.items if cyberware_selection is not None else ():
         cyberware_counts[cyberware_item.name] = cyberware_counts.get(cyberware_item.name, 0) + 1
+    # WP45: same tallying for bioware.
+    bioware_counts: dict[str, int] = {}
+    for bioware_item in bioware_selection.items if bioware_selection is not None else ():
+        bioware_counts[bioware_item.name] = bioware_counts.get(bioware_item.name, 0) + 1
 
     return {
         "character": character,
@@ -1696,6 +1812,11 @@ def _character_sheet_context(
             {"name": name, "quantity": quantity}
             for name, quantity in sorted(cyberware_counts.items())
         ],
+        # WP45: same recap for bioware, alongside cyberware's.
+        "bioware_rows": [
+            {"name": name, "quantity": quantity}
+            for name, quantity in sorted(bioware_counts.items())
+        ],
         "sheet_error": error,
         "sheet_info": info,
     }
@@ -1727,6 +1848,8 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     `CyberwareSelection.items` may repeat the same id (duplicate purchases are legal, see
     `chummer5.engine.cyberware`'s own docstring), so this is a flat, repeats-allowed id list, not a
     `{id: quantity}` mapping, mirroring `gear_names` immediately above.
+
+    **WP45**: `bioware_item_ids` threads through identically.
 
     **WP43**: `karma_converted` reads straight off `character.resources_selection.karma_converted`
     (0 for an as-yet-uncommitted Resources section), the same "selection lives on the committed
@@ -1773,6 +1896,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.cyberware_selection is not None
         else ()
     )
+    bioware_item_ids = (
+        tuple(item.id for item in character.bioware_selection.items)
+        if character.bioware_selection is not None
+        else ()
+    )
     karma_converted = (
         character.resources_selection.karma_converted
         if character.resources_selection is not None
@@ -1808,6 +1936,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         power_picks=power_picks,
         magic_attribute_points=character.magic_attribute_points,
         cyberware_item_ids=cyberware_item_ids,
+        bioware_item_ids=bioware_item_ids,
         karma_converted=karma_converted,
         build_method=session.build_method,
     )
@@ -1960,6 +2089,16 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.cyberware_selection is not None
         else 0
     )
+    bioware_item_ids = (
+        tuple(item.id for item in character.bioware_selection.items)
+        if character is not None and character.bioware_selection is not None
+        else ()
+    )
+    bioware_cost = (
+        character.bioware_selection.nuyen_spent
+        if character is not None and character.bioware_selection is not None
+        else 0
+    )
     karma_converted = (
         character.resources_selection.karma_converted
         if character is not None and character.resources_selection is not None
@@ -1971,6 +2110,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         gear_names,
         lifestyle_cost,
         cyberware_cost,
+        bioware_cost,
         karma_converted,
     )
     lifestyle_ctx = _lifestyle_context(
@@ -1980,12 +2120,14 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         lifestyle_months,
         gear_cost,
         cyberware_cost,
+        bioware_cost,
         karma_converted,
     )
     cyberware_ctx = _cyberware_context(
         character,
         session.resources_letter,
         cyberware_item_ids,
+        bioware_item_ids,
         gear_cost,
         lifestyle_cost,
         karma_converted,
@@ -2303,6 +2445,8 @@ def create_app() -> FastAPI:
                 # `cyberware_selection` at `None` and `improvements` empty (see `_relink_cyberware_
                 # selection`'s own docstring).
                 character = _relink_cyberware_selection(character, previous.cyberware_selection)
+                # WP45: bioware's Essence/bonus Improvements need the identical re-landing.
+                character = _relink_bioware_selection(character, previous.bioware_selection)
                 character = replace(
                     character,
                     skill_allocation=previous.skill_allocation,
@@ -2494,7 +2638,7 @@ def create_app() -> FastAPI:
     async def submit_resources(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
         if session.character is None:
-            context = _resources_context(None, session.resources_letter, (), 0, 0, 0)
+            context = _resources_context(None, session.resources_letter, (), 0, 0, 0, 0)
         else:
             form = await request.form()
             gear_names = _parse_gear(form, STARTER_GEAR_CATALOG)
@@ -2507,6 +2651,8 @@ def create_app() -> FastAPI:
             cyberware_cost = (
                 cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
             )
+            bioware_selection = session.character.bioware_selection
+            bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
             try:
                 selection = create_resources_selection(
                     session.resources_letter,
@@ -2514,6 +2660,7 @@ def create_app() -> FastAPI:
                     gear_names,
                     lifestyle_cost=lifestyle_cost,
                     cyberware_cost=cyberware_cost,
+                    bioware_cost=bioware_cost,
                     karma_converted=karma_converted,
                 )
             except ValueError as exc:
@@ -2523,6 +2670,7 @@ def create_app() -> FastAPI:
                     gear_names,
                     lifestyle_cost,
                     cyberware_cost,
+                    bioware_cost,
                     karma_converted,
                     error=str(exc),
                 )
@@ -2534,6 +2682,7 @@ def create_app() -> FastAPI:
                     gear_names,
                     lifestyle_cost,
                     cyberware_cost,
+                    bioware_cost,
                     karma_converted,
                 )
         response = templates.TemplateResponse(request, "_resources.html", context)
@@ -2550,6 +2699,7 @@ def create_app() -> FastAPI:
                 session.resources_letter,
                 DEFAULT_LIFESTYLE_TIER_NAME,
                 DEFAULT_LIFESTYLE_MONTHS,
+                0,
                 0,
                 0,
                 0,
@@ -2572,6 +2722,8 @@ def create_app() -> FastAPI:
             cyberware_cost = (
                 cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
             )
+            bioware_selection = session.character.bioware_selection
+            bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
             try:
                 lifestyle_selection = create_lifestyle_selection(tier_name, months, LIFESTYLES)
                 new_resources_selection = create_resources_selection(
@@ -2580,6 +2732,7 @@ def create_app() -> FastAPI:
                     gear_names,
                     lifestyle_cost=lifestyle_selection.total_cost,
                     cyberware_cost=cyberware_cost,
+                    bioware_cost=bioware_cost,
                     karma_converted=karma_converted,
                 )
             except ValueError as exc:
@@ -2590,6 +2743,7 @@ def create_app() -> FastAPI:
                     months,
                     gear_cost,
                     cyberware_cost,
+                    bioware_cost,
                     karma_converted,
                     error=str(exc),
                 )
@@ -2606,6 +2760,7 @@ def create_app() -> FastAPI:
                     months,
                     gear_cost,
                     cyberware_cost,
+                    bioware_cost,
                     karma_converted,
                 )
         response = templates.TemplateResponse(request, "_lifestyle.html", context)
@@ -2617,10 +2772,11 @@ def create_app() -> FastAPI:
     async def submit_cyberware(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
         if session.character is None:
-            context = _cyberware_context(None, session.resources_letter, (), 0, 0, 0)
+            context = _cyberware_context(None, session.resources_letter, (), (), 0, 0, 0)
         else:
             form = await request.form()
             item_ids = _parse_cyberware(form, CYBERWARE)
+            bioware_item_ids = _parse_bioware(form, BIOWARE)
             resources_selection = session.character.resources_selection
             gear_names = (
                 tuple(item.name for item in resources_selection.gear)
@@ -2639,13 +2795,24 @@ def create_app() -> FastAPI:
                 session.resources_letter, PRIORITIES, karma_converted
             ) - (gear_cost + lifestyle_cost)
             try:
+                # Fixed evaluation order (chummer5.engine.bioware's own docstring): cyberware
+                # first, unaware of bioware; bioware second, aware of cyberware's own nuyen/Essence
+                # spend -- so a combination only invalid once both are counted together is always
+                # caught, on the bioware call.
                 selection = create_cyberware_selection(item_ids, CYBERWARE, nuyen_available)
+                bioware_selection = create_bioware_selection(
+                    bioware_item_ids,
+                    BIOWARE,
+                    nuyen_available - selection.nuyen_spent,
+                    other_essence_spent=selection.essence_spent,
+                )
                 new_resources_selection = create_resources_selection(
                     session.resources_letter,
                     PRIORITIES,
                     gear_names,
                     lifestyle_cost=lifestyle_cost,
                     cyberware_cost=selection.nuyen_spent,
+                    bioware_cost=bioware_selection.nuyen_spent,
                     karma_converted=karma_converted,
                 )
             except ValueError as exc:
@@ -2653,6 +2820,7 @@ def create_app() -> FastAPI:
                     session.character,
                     session.resources_letter,
                     item_ids,
+                    bioware_item_ids,
                     gear_cost,
                     lifestyle_cost,
                     karma_converted,
@@ -2660,6 +2828,7 @@ def create_app() -> FastAPI:
                 )
             else:
                 session.character = _replace_committed_cyberware(session.character, selection)
+                session.character = _replace_committed_bioware(session.character, bioware_selection)
                 session.character = replace(
                     session.character, resources_selection=new_resources_selection
                 )
@@ -2667,6 +2836,7 @@ def create_app() -> FastAPI:
                     session.character,
                     session.resources_letter,
                     item_ids,
+                    bioware_item_ids,
                     gear_cost,
                     lifestyle_cost,
                     karma_converted,
@@ -2727,6 +2897,7 @@ def create_app() -> FastAPI:
                     spells=SPELLS,
                     powers=POWERS,
                     cyberware=CYBERWARE,
+                    bioware=BIOWARE,
                 )
             # A user-supplied file's shape is never trusted beyond this point -- malformed JSON
             # (ValueError, via json.JSONDecodeError/UnicodeDecodeError), a missing field
@@ -2774,6 +2945,7 @@ def create_app() -> FastAPI:
                         spells=SPELLS,
                         powers=POWERS,
                         cyberware=CYBERWARE,
+                        bioware=BIOWARE,
                     )
                 except UnsupportedLegacyCharacterError as exc:
                     error = "Cannot import: " + "; ".join(exc.reasons)

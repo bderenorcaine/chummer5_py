@@ -1356,7 +1356,7 @@ nuyen-budget/Improvement-application shape verbatim, pointed at a second, much s
   build a character via Sum-to-Ten with two categories sharing the same letter, confirm it's accepted
   when Priority's bijection would have rejected it.
 
-- [ ] **WP45 — Bioware (data loader, selection, save/load, and legacy import).**
+- [x] **WP45 — Bioware (data loader, selection, save/load, and legacy import).**
   Goal: add the SR5-core, flat-cost/flat-essence, Standard-grade bioware catalog, reusing Phase J's
   Essence/nuyen-budget machinery directly. Scoped as **one WP**, not split into loader/selection/
   save-load like cyberware's WP31/32/33 — the catalog is confirmed tiny (only 8 of 213 `bioware.xml`

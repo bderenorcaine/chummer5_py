@@ -67,7 +67,16 @@ result:
   character actually paid, not just approximate it. Per the Phase J intro, most real cyberware
   content across the corpus's cyberware-bearing fixtures hits this rejection (rating-scaled formulas
   and non-Standard grades are the common case, not the exception) -- see
-  `spec/worklogs/WP33.md`/`tests/integration/test_cyberware_import_fixtures.py`.
+  `spec/worklogs/WP33.md`/`tests/integration/test_cyberware_import_fixtures.py`. **WP45** now
+  resolves a Bioware entry the identical way a Cyberware entry already was, against
+  `chummer5.data.bioware.load_bioware`'s own flat-cost/flat-Essence/low-Availability/Standard-grade
+  catalog, rather than the blanket by-name rejection above -- 6 of the 11 curated mundane fixtures
+  turn out to carry real Bioware (`Barrett`, `Bastion`, `Blindfire`, `Fuzzy-chargen`,
+  `Gentle Earthquake`, `SCSi` -- a correction to this WP's own Implementation Plan entry, which
+  claimed "no fixture ... carries real bioware"; see `spec/worklogs/WP45.md`), giving this itemized
+  check real positive-case coverage (`Barrett`'s Reflex Recorder/Sleep Regulator/Platelet Factories,
+  all Standard grade) alongside negative cases (rating-scaled Bioware, and Bioware bought at a
+  non-Standard grade, e.g. `Bastion`'s Platelet Factories at `Used` grade).
   `UnsupportedLegacyCharacterError.reasons` collects *every* blocking issue found in one pass, not
   just the first, so a caller gets one itemized report rather than a fix-one-rerun-find-the-next
   loop. **WP44** widens the build-method check above from "Priority only" to "Priority or
@@ -124,6 +133,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware import Cyberware
 from chummer5.data.lifestyle import STARTING_TIER_NAMES, LifestyleTier
 from chummer5.data.metatypes import Metatype
@@ -166,9 +176,13 @@ VALID_PRIORITY_LETTERS = frozenset("ABCDE")
 STANDARD_CYBERWARE_GRADE = "Standard"
 
 # <improvementsource> value that marks a <cyberwares><cyberware> entry as Bioware rather than
-# Cyberware (see chummer5.io.legacy_chum5.LegacyCyberware's own docstring). No Bioware catalog
-# exists yet, so every Bioware entry is unconditionally blocking.
+# Cyberware (see chummer5.io.legacy_chum5.LegacyCyberware's own docstring).
 BIOWARE_IMPROVEMENT_SOURCE = "Bioware"
+
+# chummer5.data.bioware.load_bioware() only offers Standard-grade values, mirroring cyberware's own
+# scope restriction (see this module's own docstring for why a non-Standard purchase can't be
+# trusted to reflect the real grade-adjusted cost/Essence).
+STANDARD_BIOWARE_GRADE = "Standard"
 
 
 class UnsupportedLegacyCharacterError(ValueError):
@@ -187,6 +201,7 @@ def _blocking_reasons(
     legacy: LegacyCharacter,
     traditions: tuple[Tradition, ...],
     cyberware: tuple[Cyberware, ...],
+    bioware: tuple[Bioware, ...],
 ) -> tuple[str, ...]:
     reasons = []
     if legacy.build_method not in SUPPORTED_BUILD_METHODS:
@@ -235,15 +250,19 @@ def _blocking_reasons(
                     f"tradition {legacy.tradition_name!r} is not one of the SR5-core traditions "
                     "MVP offers (Hermetic, Shamanic)"
                 )
-    # WP33: real, itemized cyberware/bioware checks, replacing the old blanket "character has
-    # cyberware/bioware" rejection -- see module docstring.
+    # WP33/WP45: real, itemized cyberware and bioware checks, replacing the old blanket "character
+    # has cyberware/bioware" rejection -- see module docstring.
     cyberware_by_name = {item.name: item for item in cyberware}
+    bioware_by_name = {item.name: item for item in bioware}
     for legacy_item in legacy.cyberware:
         if legacy_item.improvement_source == BIOWARE_IMPROVEMENT_SOURCE:
-            reasons.append(
-                f"{legacy_item.name!r} is Bioware; MVP does not model Bioware (Phase J covers "
-                "Cyberware only)"
-            )
+            bioware_catalog_item = bioware_by_name.get(legacy_item.name)
+            if bioware_catalog_item is None or legacy_item.grade != STANDARD_BIOWARE_GRADE:
+                reasons.append(
+                    f"cannot import {legacy_item.name!r} ({legacy_item.grade or 'unknown'} grade): "
+                    "rating-scaled, non-Standard-grade, high-Availability, or non-SR5 bioware is "
+                    "out of scope"
+                )
             continue
         catalog_item = cyberware_by_name.get(legacy_item.name)
         if catalog_item is None or legacy_item.grade != STANDARD_CYBERWARE_GRADE:
@@ -313,6 +332,7 @@ def import_legacy_character(
     spells: tuple[Spell, ...] = (),
     powers: tuple[Power, ...] = (),
     cyberware: tuple[Cyberware, ...] = (),
+    bioware: tuple[Bioware, ...] = (),
 ) -> ImportResult:
     """Convert an already-parsed `LegacyCharacter` into a validated, built native character.
 
@@ -321,19 +341,30 @@ def import_legacy_character(
     doesn't otherwise model, then builds the result through WP11's `build_character()` so a caller
     gets back a ready-to-use character, not just a save file.
 
-    `traditions`/`spells`/`powers`/`cyberware` default to `()`, mirroring `build_character`'s own
-    WP28/WP33 defaults -- a Mundane, augmentation-free legacy character (every fixture this project
-    imported before WP28/WP33) never touches any of the four.
+    `traditions`/`spells`/`powers`/`cyberware`/`bioware` default to `()`, mirroring
+    `build_character`'s own WP28/WP33/WP45 defaults -- a Mundane, augmentation-free legacy character
+    (every fixture this project imported before WP28/WP33/WP45) never touches any of the five.
     """
-    reasons = _blocking_reasons(legacy, traditions, cyberware)
+    reasons = _blocking_reasons(legacy, traditions, cyberware, bioware)
     if reasons:
         raise UnsupportedLegacyCharacterError(reasons)
 
-    # WP33: every remaining `legacy.cyberware` entry is now guaranteed (by `_blocking_reasons`
-    # above) to be a Cyberware entry that resolves by name against `cyberware` at Standard grade --
-    # nothing here can fail.
+    # WP33/WP45: every remaining `legacy.cyberware` entry is now guaranteed (by `_blocking_reasons`
+    # above) to be a Cyberware entry that resolves by name against `cyberware` at Standard grade, or
+    # a Bioware entry that resolves by name against `bioware` at Standard grade -- nothing here can
+    # fail.
     cyberware_by_name = {item.name: item for item in cyberware}
-    cyberware_item_ids = [cyberware_by_name[item.name].id for item in legacy.cyberware]
+    bioware_by_name = {item.name: item for item in bioware}
+    cyberware_item_ids = [
+        cyberware_by_name[item.name].id
+        for item in legacy.cyberware
+        if item.improvement_source != BIOWARE_IMPROVEMENT_SOURCE
+    ]
+    bioware_item_ids = [
+        bioware_by_name[item.name].id
+        for item in legacy.cyberware
+        if item.improvement_source == BIOWARE_IMPROVEMENT_SOURCE
+    ]
 
     # `.base` only, not `+ legacy_attribute.karma` -- `_blocking_reasons` above already rejects any
     # character with a nonzero `karma` on an allocatable attribute (a real, separately-discovered
@@ -521,6 +552,7 @@ def import_legacy_character(
         power_picks=power_picks,
         magic_attribute_points=magic_attribute_points,
         cyberware_item_ids=cyberware_item_ids,
+        bioware_item_ids=bioware_item_ids,
         # WP43: <nuyenbp> -- Karma actually converted to nuyen at Step Six. `_blocking_reasons`
         # doesn't need its own check for this: STANDARD_GAME_OPTION already restricts import to
         # Standard-gameplay-option characters, and every Standard settings.xml block caps this at
@@ -545,6 +577,7 @@ def import_legacy_character(
         spells=spells,
         powers=powers,
         cyberware=cyberware,
+        bioware=bioware,
     )
 
     return ImportResult(
@@ -569,6 +602,7 @@ def import_chum5(
     spells: tuple[Spell, ...] = (),
     powers: tuple[Power, ...] = (),
     cyberware: tuple[Cyberware, ...] = (),
+    bioware: tuple[Bioware, ...] = (),
 ) -> ImportResult:
     """Parse a `.chum5` file (WP4's `load_chum5`) and import it (see `import_legacy_character`)."""
     return import_legacy_character(
@@ -582,4 +616,5 @@ def import_chum5(
         spells=spells,
         powers=powers,
         cyberware=cyberware,
+        bioware=bioware,
     )
