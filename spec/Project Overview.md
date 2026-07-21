@@ -102,12 +102,34 @@ Implementation Plan's WP20.
   out of scope indefinitely, not just for MVP; **Mystic Adepts are excluded from Phase I too, by
   explicit product decision (2026-07-19)** rather than deferred smallest-scope pragmatism like every
   other cut on this page — not currently planned at all, not just "later."
-- Cyberware, bioware, vehicles, drones, full gear catalog beyond a basic purchase flow. (Cyberware/
-  bioware specifically need real Essence tracking as a prerequisite, not just new catalog content —
-  see Open Questions below.) Cyberware itself is scoped as Implementation Plan's Phase J (Standard
-  grade, flat-cost/flat-essence items only); bioware, vehicles, drones, and non-Standard cyberware
-  grades remain deferred past that phase too.
-- Career mode (post-chargen karma spending, character aging over time).
+- Cyberware, vehicles, drones, full gear catalog beyond a basic purchase flow. Cyberware itself is
+  scoped as Implementation Plan's Phase J (Standard grade, flat-cost/flat-essence items only);
+  non-Standard cyberware grades remain deferred past that phase. **Bioware is no longer on this list**
+  as of the 2026-07-21 ruling below — it's scoped as Phase L (reuses Phase J's Essence mechanism
+  directly, 8 flat SR5 entries, no new mechanism needed). **Vehicles/drones (rigger support) are
+  targeted by a future phase**, deliberately scoped smaller than a full implementation per the same
+  ruling: unmodified purchases only, no modification-slot system, no RCC/cyberdeck buildout beyond
+  buying the stock item — see Implementation Plan's Phase P intro.
+- Career mode (post-chargen karma spending, character aging over time) — **with one exception**: the
+  2026-07-21 ruling scopes *character-creation-time* Karma spend on attributes/skills/spells (Step
+  Seven's "leftover Karma," reusing the same cost formulas the Character Advancement section defines)
+  as Implementation Plan's Phase O. This is chargen only — actual post-chargen play/advancement
+  (career mode proper) remains out of scope.
+- The Karma-based build method (`CharacterBuildMethod.Karma` in the legacy engine — buying the entire
+  character from a large Karma pool instead of Priority or Sum-to-Ten) — **ruled out explicitly,
+  2026-07-21**, not deferred. Sum-to-Ten (Priority's sibling build method — same Priority Table, same
+  per-column meaning, just a different letter-assignment rule) **is** in scope, per that same ruling —
+  see Implementation Plan's Phase L.
+- SR5's Availability-cap mechanic (Restricted/Forbidden-availability purchases gated behind a
+  Priority-derived Availability budget) — **ruled out explicitly, 2026-07-21**. The simplification
+  agreed on: any new catalog (gear, cyberware, bioware, foci, eventual vehicle gear) should simply
+  **exclude items with Availability > 12** from what it offers, rather than tracking an Availability
+  budget as its own resource. Note this doesn't retroactively fix WP21's gear catalog or WP31's
+  cyberware catalog, neither of which filters by Availability at all today (WP21's own doc flags this
+  as a deliberate, undone cut) — no WP currently scheduled to backfill that, flagged here so it isn't
+  forgotten.
+- Technomancers/Resonance — reaffirmed out of scope, 2026-07-21 (already excluded per above; recorded
+  again here since it came up explicitly in the same ruling as the items above).
 - Plugins.
 - Localization content (structure only, per above).
 - Multi-user / hosted deployment, anything resembling ChummerHub.
@@ -431,3 +453,59 @@ modeling real Karma-for-attribute-points spend at chargen (which would need a tr
 starting-Karma budget this engine has no concept of at all) remains out of scope, unraised as its
 own candidate WP for now since nothing currently blocks on it. See Implementation Plan's WP28 and
 `spec/worklogs/WP28.md` for the full research.
+
+### 2026-07-21 — Five post-MVP phases scoped (Phases L-O + a Phase P research intro), three explicit
+"won't build" rulings, and a note on the chapter extraction that fed this scoping session
+
+A user request to survey what's still needed for full rulebook chargen support led first to extracting
+the "Creating a Shadowrunner" chapter (rulebook pp. 62-104) verbatim into
+`spec/rulebooks/character_creation_chapter.md` (Steps One-Nine, every quality, every table, with a
+cross-reference index of every later-chapter page citation — deliberately excluding the
+"Character Advancement"/career-mode section and the "Character Archetypes" pre-gen NPC appendix), then a
+gap survey against it, then this scoping session. Five new phases came out of that survey:
+
+- **Phase L — easy wins**: Karma-to-Nuyen conversion, the Sum-to-Ten build method, and Bioware.
+- **Phase M — magic expansion**: Bound Spirits (roster + Karma budget only, no spirit stat-block/power
+  modeling — deliberately deferred, see Phase M's own intro), Foci (bonding + a gear-catalog entry), and
+  Mentor Spirits (a WP22/WP27-sized classification pass over ~20+ archetypes, each granting 3 distinct
+  bonuses).
+- **Phase N — expanded skill support**: Knowledge/Language skills (currently entirely absent — confirmed
+  via `chummer5.data.skills`'s own docstring) and wiring up skill specializations for real (the +2
+  dice-pool formula already exists in `chummer5.engine.skills`, but there was no purchase mechanism, no
+  point cost, and no UI at all before this phase — confirmed via `grep` finding zero hits in `web/`).
+- **Phase O — Karma-buying (chargen-time only, not career mode)**: a unified "leftover Karma" ledger on
+  `Character` (today, qualities (WP8) and contacts (WP9) each spend Karma via independent one-shot
+  checks that don't share a running total with anything else), then Karma-funded attribute increases,
+  skill/skill-group increases (including the "buying a Karma-funded specialization breaks an existing
+  skill group" case the rulebook restricts to this step specifically, not Step Five), and extra
+  spells/complex forms beyond a Talent option's free grant. **Correction to earlier scoping**: this
+  project previously treated the "Character Advancement" section (rulebook pp. 103-107) as pure
+  career-mode content and excluded it wholesale from the chapter extraction above — it turns out Step
+  Seven's own text explicitly says to reuse those exact Karma-cost formulas (new Rating x 5 for
+  attributes, x 2 for skills, x 5 for skill groups, x 1 for Knowledge/Language) for **chargen-time**
+  leftover-Karma spend, not just for post-creation advancement. Phase O needs those specific formulas
+  even though the section they're printed in was correctly excluded as a whole.
+- **Phase P — rigger support (research-intro only, no WPs assigned yet)**: vehicles, drones, RCCs, and
+  control rigs. Confirmed during scoping that this is not sized like the other four phases — vehicles/
+  drones are their own rulebook chapter with their own stat block and **multiple separate
+  modification-slot pools per vehicle** (not the single Capacity number cyberware has), and an RCC drags
+  in the Matrix device-rating stat block (Attack/Sleaze/Data Processing/Firewall) this project has never
+  modeled for anything. **Ruling: modifications (vehicle mods, drone mods, RCC/cyberdeck upgrades) are
+  excluded for now** — the phase is scoped down to buying stock/unmodified vehicles, drones, RCCs, and
+  cyberdecks only. Still needs its own research pass (mirroring Phase K's own pre-scoping research
+  entry in `spec/rulebooks/learnings.md`) before a WP breakdown is written.
+
+**Three explicit "not now" rulings that came out of the same session, recorded here so they aren't
+re-litigated by a future WP:**
+1. **The Availability-cap mechanic stays unbuilt.** Simplification agreed instead: any catalog (gear,
+   cyberware, bioware, foci, eventual vehicle gear) should simply exclude Availability > 12 items from
+   what it offers. This does not retroactively fix WP21's gear catalog or WP31's cyberware catalog,
+   neither of which filters by Availability today — flagged, not scheduled.
+2. **The Karma-based build method** (`CharacterBuildMethod.Karma` in the legacy engine — buying an
+   entire character from a large Karma pool instead of Priority or Sum-to-Ten) **stays out of scope.**
+   Worth distinguishing by name from Phase O above ("Karma-buying") — Phase O is chargen-time leftover-
+   Karma spend *within* Priority/Sum-to-Ten chargen, not this alternate whole-character build method.
+3. **Technomancers/Resonance** reaffirmed out of scope (no change — already excluded per the MVP scope
+   section above; recorded again since it came up in the same ruling as the other two).
+
+See Implementation Plan's Phases L-P for the resulting work packages (WP43 onward).

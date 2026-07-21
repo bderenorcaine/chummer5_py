@@ -1276,3 +1276,508 @@ conversation's own request not to build placeholder UI that gets thrown away app
   Acceptance: manual walkthrough — install a Cybereyes system, buy a Vision Enhancement plugin into
   it, confirm Capacity remaining updates live and the Mental limit bonus is visibly conditional on
   the character sheet.
+
+### Phase L — Post-MVP: Easy wins (Karma-to-Nuyen, Sum-to-Ten, Bioware)
+
+Scoped 2026-07-21 from a full survey of `spec/rulebooks/character_creation_chapter.md` (the freshly
+extracted Steps One-Nine) against this project's current engine. All three items reuse an existing
+mechanism end-to-end rather than needing a new one: Karma-to-Nuyen is a formula on top of two budgets
+that already exist (`resources.py`'s nuyen budget, `qualities.py`'s Karma tracking); Sum-to-Ten reuses
+`priorities.xml`/`chummer5.data.priorities` completely unchanged, just with a different letter-assignment
+validity rule than WP14's bijection check; Bioware reuses WP30's Essence mechanism and WP32's
+nuyen-budget/Improvement-application shape verbatim, pointed at a second, much smaller XML file.
+
+- [ ] **WP43 — Karma-to-Nuyen conversion.**
+  Goal: let a player convert up to 10 Karma into nuyen during Step Six/Seven, per the rulebook (p. 94):
+  "They may convert up to 10 Karma at a rate of 2,000 nuyen per Karma point for gear" — confirmed
+  against the legacy engine too: `Miko.chum5`'s own `CharacterSettings` block carries
+  `<nuyenbp>10</nuyenbp>`/`<nuyenmaxbp>10</nuyenmaxbp>`, matching the rulebook's cap exactly (10 Karma
+  max). Confirm during implementation which `.chum5` field records the amount a specific character
+  actually converted (`nuyenbp`/`nuyenmaxbp` above are the *setting*, not necessarily a per-character
+  spend record) rather than assuming a name.
+  Deliverables:
+  - `chummer5.engine.resources`: a `karma_to_nuyen(karma_spent: int) -> int` helper (`karma_spent * 2000`,
+    validated `0 <= karma_spent <= 10`), and thread the resulting nuyen into whatever budget
+    `create_resources_selection` resolves gear/lifestyle/cyberware/bioware purchases against — confirm
+    (don't assume) this is exactly "add to the existing nuyen_budget parameter" rather than a separate
+    pool, mirroring how WP20/WP32 each had to confirm their own budget was genuinely shared before wiring
+    it in.
+  - Whatever unified Karma-tracking mechanism exists by the time this lands (this WP has no technical
+    dependency on Phase O's ledger, but if Phase O ships first, wire the spend through it rather than a
+    bespoke field) needs to record the Karma spent here so it can't be double-spent on qualities/contacts.
+  - `chummer5.web.app`: a small form control on the Resources screen (`_resources.html`) for "convert N
+    Karma to nuyen," with the resulting nuyen folding into the existing gear/lifestyle/cyberware total
+    live (HTMX partial re-render, WP15's precedent).
+  - `chummer5.io.save_format`/`legacy_import`: thread the converted amount through `CharacterSave`/
+    `build_character` (mechanical, WP20 precedent).
+  Depends on: nothing new (touches `engine/resources.py`, `web/app.py`, `io/save_format.py` only).
+  Acceptance: unit test for the `karma_to_nuyen` formula and its 10-Karma ceiling; integration test
+  confirming converted nuyen is available for gear/lifestyle/cyberware/bioware purchases in the same
+  transaction; manual walkthrough converting Karma and watching the gear budget update live.
+
+- [ ] **WP44 — Sum-to-Ten build method.**
+  Goal: let a player choose Sum-to-Ten instead of Priority for letter assignment — same Priority Table,
+  same per-letter meaning, a different validity rule. Confirmed directly in the legacy C#
+  (`SelectMetatypePriority.cs`'s `SumToTen`/`GetSumToTenValue`, `CharacterSettings.cs`'s `_intSumtoTen`
+  field): each letter has a fixed point value (**A=4, B=3, C=2, D=1, E=0** by default), **letters may
+  repeat** across the 5 categories (unlike Priority's bijection), and the sum of the 5 chosen letters'
+  point values must not exceed a target that **defaults to 10** (hence the name) — confirmed this is
+  configurable in the legacy engine (`CharacterSettings._intSumtoTen`) but this project can hardcode 10
+  the same way `QUALITY_KARMA_LIMIT` is hardcoded rather than exposing a settings system that doesn't
+  otherwise exist.
+  **This build method is not in the SR5 core rulebook PDF at all** (confirmed: zero hits for "sum to
+  ten" across the whole document) — it's a legacy-Chummer/errata-sourced alternate rule, not a rulebook
+  citation. Record this provenance in `spec/rulebooks/learnings.md` explicitly (mirroring WP20's own
+  "the number came from the legacy C#, not rulebook prose" precedent) so a future agent doesn't go
+  hunting for rulebook text that isn't there.
+  Deliverables:
+  - `chummer5.web.session`: a `build_method` field on the session (`Priority` default, `SumToTen`
+    alternative) — decide and document whether `Character` itself needs to carry this too (WP18-style
+    "does this belong on the aggregate" call) given save/load and legacy import both need to know which
+    validity rule produced a given letter assignment.
+  - `chummer5.web.app`/`chummer5.engine.character` (or a new small module): a `create_sum_to_ten_selection`
+    (or equivalent) validating 5 letters (repeats allowed) sum to ≤ 10 under the point table above,
+    parallel to the existing bijection check `submit_priorities` already runs for Priority.
+    Decide & document: does choosing Sum-to-Ten change the UI to a set of 5 independent letter
+    dropdowns (repeats allowed) with a live running-total display (mirroring the legacy `lblSumtoTen`
+    "X/10" label), replacing WP14's "pick 4 distinct letters from {A,B,C,D}" control for that session?
+  - `chummer5.io.legacy_import`: `LegacyCharacter`'s `buildmethod` field (already parsed, per
+    `CharacterBuildMethod.SumtoTen` in the legacy enum) currently causes non-Priority saves to be
+    rejected somewhere in `_blocking_reasons` — confirm this during implementation and widen it to accept
+    Sum-to-Ten specifically (still rejecting `Karma`/`LifeModule`, per this project's own explicit ruling
+    that the Karma build method stays out of scope — see Project Overview's 2026-07-21 entry).
+  Depends on: nothing new (touches `web/session.py`, `web/app.py`, `io/legacy_import.py`).
+  Acceptance: unit tests for the sum-to-10 validator (including a repeats-allowed case that would be
+  illegal under Priority's bijection, and an over-10 rejection); since none of the 12 curated fixtures
+  use Sum-to-Ten as their `buildmethod` (per this project's own corpus note — the 33 non-mundane/
+  non-Yeti fixtures that *do* use it are all outside MVP's mundane/magic-scoped content), acceptance
+  is necessarily hand-verified against the legacy C#'s own point table rather than a real fixture, same
+  honesty standard as WP8's quality karma cap; note this explicitly in the worklog. Manual walkthrough:
+  build a character via Sum-to-Ten with two categories sharing the same letter, confirm it's accepted
+  when Priority's bijection would have rejected it.
+
+- [ ] **WP45 — Bioware (data loader, selection, save/load, and legacy import).**
+  Goal: add the SR5-core, flat-cost/flat-essence, Standard-grade bioware catalog, reusing Phase J's
+  Essence/nuyen-budget machinery directly. Scoped as **one WP**, not split into loader/selection/
+  save-load like cyberware's WP31/32/33 — the catalog is confirmed tiny (only 8 of 213 `bioware.xml`
+  entries are `source == "SR5"` **and** flat-cost/flat-essence, per Project Overview's 2026-07-19
+  cyberware-scoping entry), so the reviewability rationale that justified splitting cyberware into three
+  WPs doesn't apply here; document this "one WP is enough" call explicitly rather than defaulting to it.
+  Deliverables:
+  - `chummer5.data.bioware` (new): loader for `legacy/Chummer/data/bioware.xml`, filtered to
+    `source == "SR5"` AND flat `<cost>` AND flat `<ess>`, mirroring `chummer5.data.cyberware`'s filter
+    and `BonusSupport` classification scheme exactly (reuse the enum, don't redefine an equivalent one —
+    confirm during implementation whether the existing type already generalizes cleanly). Additionally
+    filter out any item with Availability > 12, per this project's 2026-07-21 ruling on the Availability
+    mechanic (Project Overview) — bioware is new-enough content that it should apply the agreed
+    simplification from day one, unlike WP21/WP31's pre-existing catalogs which don't filter by
+    Availability at all.
+  - `chummer5.engine.bioware` (new) or fold into `chummer5.engine.cyberware` (decide & document which):
+    `create_bioware_selection`, drawing from the **same shared nuyen budget** cyberware/gear/lifestyle
+    already use, and contributing to the **same shared Essence pool** cyberware already reduces
+    (`ImprovementType.ESSENCE`, `ImprovementSource.BIOWARE` — a new source, same type). Confirm bioware
+    and cyberware Essence costs are genuinely additive against one shared pool rather than tracked
+    separately (the rulebook doesn't suggest otherwise, but confirm against `Character.cs` directly, the
+    same discipline WP32 applied to its own shared-pool question).
+  - `Character` gains `bioware_selection: BiowareSelection | None`.
+  - `chummer5.io.save_format`/`legacy_import`: thread `bioware_selection` through the normal
+    mechanical path (WP18/WP20 precedent); widen whatever blanket bioware-rejection exists in
+    `_blocking_reasons` today (confirm exact current behavior — Project Overview's 2026-07-18 entry
+    predates this WP and may already be stale on this point) to itemized per-item rejection for
+    non-flat/non-Standard-grade items, mirroring WP33.
+  - `chummer5.web`: fold the bioware picker into the existing cyberware/Resources section
+    (`_cyberware.html`/`_resources.html`) — decide & document, mirroring WP34's own "does this share a
+    screen with cyberware" call.
+  Depends on: WP30, WP31, WP32 (reuses their Essence/nuyen-budget/Improvement-application machinery
+  directly).
+  Acceptance: unit tests confirming the loader's count (8 flat SR5 items, or the actual number found —
+  re-verify rather than trust this session's figure) and Availability filter; integration test
+  confirming a bioware purchase reduces Essence exactly like an equivalent-cost cyberware purchase does,
+  and that cyberware + bioware Essence costs stack correctly against the one shared pool. No fixture in
+  the 12-item mundane corpus carries real bioware (only cyberware) — acceptance for the Essence-stacking
+  case is therefore synthetic/hand-verified, not fixture-backed; say so in the worklog rather than
+  overclaiming coverage, the same honesty standard Phase J's own WP33 applied to its cyberware-import
+  acceptance criteria.
+
+### Phase M — Post-MVP: Magic expansion (Bound Spirits, Foci, Mentor Spirits)
+
+Scoped 2026-07-21 alongside Phase L, from the same chapter-extraction survey. All three items are
+Step Seven/"Additional Purchases & Restrictions" content (`spec/rulebooks/character_creation_chapter.md`)
+gated behind Phase I's Magician/Adept support already existing. **Deliberately three separate WPs, not
+one** — a user question during scoping confirmed Bound Spirits, Foci, and Mentor Spirits are wildly
+different sizes (a roster-entry-plus-budget-check versus a real gear catalog versus a ~20-archetype
+classification pass), and bundling them would either starve the small ones of review attention or let
+the big one (Mentor Spirits) block the small ones from shipping.
+
+**None of this phase's three features appear in either of Phase I's two real fixtures** (`Miko.chum5`,
+`Wesson.chum5`) — confirmed directly: neither file has a `<spirits>` (bound-spirit) container, a
+`<focus>` element, or an actually-selected Mentor Spirit quality (both files' `<qualities>` blocks were
+searched for "Mentor Spirit" and found none, despite the *quality's* raw XML shape appearing elsewhere
+in the file as inert catalog reference data). Every WP in this phase must therefore verify its mechanics
+by hand against the rulebook/legacy C# rather than against real fixture data — say so explicitly in each
+WP's acceptance criteria rather than overclaiming coverage, the same honesty standard WP25 applied to
+its own two-fixture limitations.
+
+- [ ] **WP46 — Bound Spirits.**
+  Goal: let a Magician spend leftover Karma binding spirits, modeled as **roster entries with a budget
+  check only** — deliberately **not** modeling a spirit's own stat block, skills, or powers (optional or
+  otherwise). Confirmed via the rulebook's own Additional Purchases table (Step Seven, p. 98): "1 Karma
+  per service (Force of spirit is equal to Character's Magic Attribute rating)... Can only have a number
+  of bound spirits equal to Charisma." A spirit's Force is **always exactly the caster's Magic rating**,
+  not player-chosen — the only two numbers a player picks are which spirit type/category and how many
+  services (which sets the Karma cost 1:1).
+  Deliverables:
+  - `chummer5.engine.magic` (or a new `chummer5.engine.spirits`, decide & document): a `BoundSpirit`
+    dataclass (spirit type/category name, Force — always `character.attribute_value("MAG")`, services)
+    and `create_bound_spirit_selection(picks, character, karma_budget)` validating count ≤ Charisma and
+    total Karma (= Σ services) against whatever leftover-Karma budget is available at the time this
+    lands (no technical dependency on Phase O's unified ledger, but wire into it if that phase ships
+    first rather than adding a second, competing Karma-tracking mechanism).
+  - Confirm the actual list of spirit-type names to offer (Air, Earth, Fire, Water, Man/Guidance/Task/
+    Guardian spirits per tradition, per the Magic chapter — not yet extracted into this project's chapter
+    file since it's outside "Creating a Shadowrunner") via a `pdftotext -layout` pass over the Magic
+    chapter's own Spirits section (rulebook cites p. 303 for this); record the citation in
+    `spec/rulebooks/learnings.md` per this project's established practice. Decide whether the offered
+    list is tradition-dependent (Hermetic vs. Shamanic spirit-type names differ) by checking
+    `traditions.xml` directly rather than assuming a single universal list.
+  - `Character` gains `bound_spirits: tuple[BoundSpirit, ...] = ()`.
+  - **Explicitly out of scope for this WP, documented rather than silently omitted**: a bound spirit's
+    own powers/skills (including optional powers a player could pick per spirit) — deferred indefinitely,
+    per this scoping session's own ruling; only re-open if a future need for spirit stat blocks emerges
+    (e.g., if this engine ever models in-play testing, which it currently doesn't for anything).
+  - `chummer5.web`: a bound-spirits picker on the leftover-Karma/contacts screen (decide whether it folds
+    into the existing contacts UI or gets its own section, mirroring WP20's "shared screen" precedent).
+  - `chummer5.io.save_format`/`legacy_import`: thread `bound_spirits` through the normal mechanical path.
+  Depends on: Phase I (WP25, for Magic rating/`magic_type`).
+  Acceptance: unit tests for the count (≤ Charisma) and Karma (= Σ services) budget checks; **no real
+  fixture exercises this** (confirmed above) — acceptance is hand-verified against the rulebook table
+  directly, documented as such in the worklog.
+
+- [ ] **WP47 — Foci (gear catalog, bonding, and per-category bonuses).**
+  Goal: let a Magic-active character buy a focus (nuyen, from a new gear-catalog entry) and bond it
+  (Karma, from leftover-Karma budget), applying whichever of the 7 focus categories' bonuses the item
+  grants.
+  **Confirmed directly against both the rulebook and `legacy/Chummer/data/gear.xml`, not assumed —
+  smaller lift than initially feared:**
+  - Bonding cost is a **flat `Force x N` per category**, not a general formula (rulebook, "Focus Table,"
+    Magic chapter p. 318): Enchanting Foci x3, Metamagic Foci x3, Power Foci x6, Qi Foci x2, Spell Foci
+    x2, Spirit Foci x2, Weapon Foci x3.
+  - Each focus item's nuyen `<cost>` in `gear.xml` is also a simple linear formula (e.g. Alchemical
+    Focus: `Rating * 5000`) — confirm this holds for all ~15-20 SR5 focus entries before assuming
+    uniformity, but no general rating-formula resolver (WP36's kind) is needed, just a per-item linear
+    multiplier, the same shape WP20/26's own small formula-parsing already handles elsewhere.
+  - **A real trap, caught during scoping rather than during implementation**: the rulebook states **two
+    different bonded-Force caps** depending on context — "the maximum Force of all your bonded foci
+    can't exceed your Magic x 5" (Magic chapter, p. 318, the general/lifetime rule) versus **"Magic
+    Rating x 2"** specifically "at character creation" (Step Seven's own Additional Purchases table,
+    p. 98). This WP must implement the **tighter chargen-time cap (x2)**, not the general x5 rule — a
+    classifier that only reads the Magic-chapter text would silently implement the wrong, looser cap.
+  - Each focus item's `<bonus>` node grants a real per-category effect (e.g. Alchemical Focus:
+    `<specificskill><name>Alchemy</name><bonus>Rating</bonus></specificskill>` plus a
+    `<selecttradition/>` free-text pick) — classify these with the same `BonusSupport`-style scheme
+    WP22/27/31 already established (`FLAT_BONUS`/`NOT_YET_SUPPORTED`), verifying each of the ~7-20
+    entries individually rather than assuming uniformity across categories.
+  Deliverables:
+  - `chummer5.data.gear` (or a new `chummer5.data.foci`, decide & document): load the `Foci` category
+    from `gear.xml`, filtered to `source == "SR5"` and Availability ≤ 12 (per this project's 2026-07-21
+    Availability ruling); parse each item's linear cost multiplier and bonding-cost category.
+  - `chummer5.engine.magic`: `create_foci_selection(picks, character, nuyen_budget, karma_budget)`
+    validating count ≤ Magic rating and Σ Force ≤ Magic rating x 2 (the chargen-specific cap above), plus
+    the nuyen cost (shared Resources budget) and Karma bonding cost (leftover-Karma budget) for each.
+  - `Character` gains `foci_selection: FociSelection | None`; apply each bonded focus's classified bonus
+    as an `Improvement` (new `ImprovementSource.FOCUS`).
+  - `chummer5.web`/`chummer5.io.save_format`/`legacy_import`: normal mechanical threading (WP20/26
+    precedent).
+  Depends on: Phase I (WP25), and Phase O's unified Karma ledger if it lands first (otherwise a
+  standalone Karma-budget check, same as WP46).
+  Acceptance: unit tests for the dual-cap distinction (a build that's legal under the x5 general rule but
+  illegal under the x2 chargen rule must be rejected) and for at least one `FLAT_BONUS` category's
+  applied Improvement; **no real fixture exercises this** (confirmed above) — hand-verified acceptance,
+  documented as such.
+
+- [ ] **WP48 — Mentor Spirits.**
+  Goal: let a Magic-active character take the Mentor Spirit quality and choose a specific archetype,
+  each granting **3 distinct bonuses** (general, magician-only, adept-only) — confirmed via the rulebook
+  (Magic chapter, "Mentor Spirit Archetypes," p. 320-ish, not yet page-confirmed for this project — do
+  that first via `pdftotext -layout` and record the citation in `spec/rulebooks/learnings.md`).
+  **Sized like WP22 (qualities) or WP27 (powers), not like a quick add-on** — confirmed the archetype
+  count is "20+", each needing individual verification of its 3 bonuses' mechanical shape (flat,
+  conditional, or unmodeled), the same classify-every-entry discipline those two WPs established. This
+  is the largest of Phase M's three WPs; sequence it last within the phase so Bound Spirits/Foci aren't
+  blocked behind it.
+  **A real prerequisite this WP must handle, not assume already done**: the Mentor Spirit quality itself
+  (5 Karma, `<bonus><selectmentorspirit/></bonus>` — a free-text-selection shape) was excluded from
+  WP22's offered catalog on the same grounds as Spirit Affinity (magic-gated, unreachable under
+  pre-Phase-I MVP). Now that Phase I exists, this WP must add Mentor Spirit to the offered catalog for
+  Magic-active characters specifically (mirroring how `offerable_quality_catalog` already gates
+  metatype-granted qualities per character, WP23's precedent) before the archetype-selection mechanism
+  built on top of it means anything.
+  Deliverables:
+  - `chummer5.data.mentors` (new): loader for whatever legacy data file carries mentor-spirit archetypes
+    (confirm the exact file — likely `mentors.xml` or a section of `traditions.xml`, don't assume) parsed
+    into `(name, general_bonus, magician_bonus, adept_bonus)` triples, `source == "SR5"` filtered.
+  - Classify each archetype's 3 bonus slots individually with the established `BonusSupport` scheme
+    (`FLAT_BONUS`/`NOT_YET_SUPPORTED`/`NO_EFFECT` as appropriate) — do not assume uniformity across
+    archetypes; some slots will likely land in each bucket, mirroring WP22/27's own findings.
+  - `chummer5.engine.qualities`: extend the Mentor Spirit quality's application to require an archetype
+    selection (mirroring how `create_quality_selection` already handles other quality-specific data,
+    though this is the first quality needing a *catalog-backed* selection rather than a flat bonus or
+    free-text field with no catalog at all — a genuinely new shape, flag this explicitly).
+  - `Character`/save-format/legacy-import: thread the selected archetype through the normal mechanical
+    path once the above is settled.
+  Depends on: Phase I (WP25), WP22/WP23 (extends the existing quality-offering/classification machinery).
+  Acceptance: unit tests for the loader and per-archetype bonus classification (at least one
+  `FLAT_BONUS`, one `NOT_YET_SUPPORTED` case, mirroring WP22/27's acceptance shape); **no real fixture
+  exercises this** (confirmed above) — hand-verified acceptance, documented as such.
+
+### Phase N — Post-MVP: Expanded skill support (Knowledge/Language skills, specializations)
+
+Scoped 2026-07-21. Confirmed both gaps directly rather than assumed: `chummer5.data.skills`'s own
+docstring states "knowledge skills aren't [in scope]" (the original MVP scope decision, never revisited);
+`chummer5.engine.skills` already has a `specialized: bool` parameter and the flat `SPECIALIZATION_BONUS`
+(+2) dice-pool formula, but nothing calls it with a real, player-chosen value — no purchase/budget logic,
+no UI (`grep -rln specializ src/chummer5/web/` returns nothing). So this phase is "finish a half-built
+mechanic" (specializations) plus "build a genuinely new one" (Knowledge/Language skills), not two
+from-scratch features.
+
+**Real fixture coverage exists for both**, better than Phase M's three items: `Miko.chum5` has at least
+one recorded Knowledge/Language skill (`<knoskills>` contains an English/Language entry) and a real
+specialization (`<spec>Staves</spec>`) — both usable as acceptance-test ground truth, confirmed via
+direct inspection of the fixture file rather than assumed present.
+
+- [ ] **WP49 — Knowledge & Language skills.**
+  Goal: let a player spend the free Knowledge/Language point budget — `(Intuition + Logic) x 2` per the
+  rulebook (Step Five, p. 89) — on freeform-named Knowledge skills (with a suggested/example list, not an
+  enforced catalog, per the rulebook's own "Common Knowledge Skills in 2075"/"Knowledge Category
+  Examples" sidebars) and Language skills (one free native language, `chummer5_py`'s existing Bilingual
+  quality already grants a second free one per WP22's catalog — confirm this quality's Improvement
+  actually feeds into this budget once it exists, since it was inert with respect to Knowledge/Language
+  points before this WP).
+  Deliverables:
+  - `chummer5.data.skills` (or a new sibling module): a small **suggested-name list** per Knowledge
+    category (Academic/Interests/Professional/Street, per the rulebook's own table,
+    `spec/rulebooks/character_creation_chapter.md`'s Step Five section) — explicitly not an exhaustive or
+    enforced catalog; the player must be able to type an arbitrary name, matching the rulebook's own "you
+    do not need to understand all the nuances... just have a concept" posture for this specific
+    mechanic (freeform Knowledge skills are a real, intentional rulebook design, not a gap this project
+    is papering over with a stub list).
+  - `chummer5.engine.skills` (or `chummer5.engine.knowledge`, decide & document): a
+    `KnowledgeSkillSelection` (name, category, rating) + `LanguageSkillSelection` (name, rating, native:
+    bool) pair, with `create_knowledge_selection(picks, character)` validating the free-point budget
+    `(INT + LOG) * 2` and that exactly one (or two, with Bilingual) entry is marked native at rating
+    implicitly "N"/uncosted.
+  - `Character` gains `knowledge_selection: KnowledgeSelection | None`.
+  - `chummer5.web`: a free-text-entry form (name + category dropdown + rating) with a running
+    remaining-points display, mirroring WP15's live-budget precedent — this is the first chargen screen
+    needing free-text player input rather than picking from a fixed list, flag any new UI pattern this
+    requires.
+  - `chummer5.io.save_format`/`legacy_import`: thread through normally; `legacy_chum5`'s `<knoskills>`
+    parsing (confirmed present in real fixtures above) is the import source.
+  Depends on: WP6 (attribute resolution, for INT/LOG).
+  Acceptance: unit tests for the free-point budget formula and native-language handling; integration
+  test against `Miko.chum5`'s own recorded Knowledge/Language entries (confirmed present via direct
+  fixture inspection this session) rather than only hand-checked cases.
+
+- [ ] **WP50 — Skill specializations (Step Five: skill-point-funded).**
+  Goal: let a player spend 1 skill point (from the same Skills-priority budget WP7 already tracks) to
+  add one specialization to an individually-purchased skill, wiring up the dice-pool bonus that already
+  exists in the engine. Scoped as **Step Five's mechanic specifically** (skill-point funded, no skill-
+  group interaction) — the separate Step Seven case ("buying a Karma-funded specialization breaks an
+  existing skill group") is Phase O's concern (WP53), not this WP's, since it's funded from leftover
+  Karma rather than the Skills-priority point budget and depends on Phase O's ledger.
+  Deliverables:
+  - `chummer5.engine.skills`: extend `SkillAllocation` (or whatever the current type is named) with a
+    `specializations: dict[skill_id, str]` (or equivalent), validating: 1 skill point per specialization,
+    at most one specialization per skill, and — the group-purchase restriction the rulebook states
+    explicitly (Step Five, p. 88-89) — **a skill that's part of a skill group purchased as a group cannot
+    be specialized in this step at all** (only an individually-purchased skill can be). Confirm
+    `create_skill_allocation`'s existing budget-check shape can extend to this cleanly rather than
+    needing a parallel budget.
+  - Wire the existing `dice_pool(..., specialized=...)` parameter to read from this new selection instead
+    of always defaulting to `False`.
+  - `chummer5.web`: a specialization checkbox/text-field per individually-purchased skill on the skill
+    allocation screen (`_skill_allocation.html`), with the running skill-point-remaining display already
+    built (WP15) now accounting for specialization spend too.
+  - `chummer5.io.save_format`/`legacy_import`: thread through normally; `legacy_chum5`'s `<spec>` parsing
+    (confirmed present in `Miko.chum5` as `<spec>Staves</spec>`) is the import source.
+  Depends on: WP7 (Skills-priority budget/dice-pool formula).
+  Acceptance: unit tests for the 1-point cost, one-per-skill limit, and group-purchased-skill rejection;
+  integration test against `Miko.chum5`'s own `Staves` specialization (confirmed present via direct
+  fixture inspection this session), confirming the resolved dice pool includes the +2 bonus.
+
+### Phase O — Post-MVP: Karma-buying (chargen-time leftover-Karma spend)
+
+Scoped 2026-07-21. **Naming note, to avoid confusion with an explicitly-ruled-out feature**: this phase
+is Step Seven's "leftover Karma" spend *within* Priority/Sum-to-Ten chargen — not the legacy engine's
+separate **Karma-based build method** (`CharacterBuildMethod.Karma`, buying an entire character from a
+large Karma pool instead of Priority), which this project's 2026-07-21 ruling keeps explicitly out of
+scope (see Project Overview). The two are unrelated features that happen to share a word.
+
+**A scope correction this phase's own scoping surfaced**: this project's chapter extraction
+(`spec/rulebooks/character_creation_chapter.md`) deliberately excluded the rulebook's "Character
+Advancement" section (pp. 103-107) as pure post-creation career-mode content. That's still the right call
+for the section as a whole (training *time*, in-play Karma awards, career-mode qualities) — but Step
+Seven's own text explicitly directs the player to "refer to the rules for improving the character in the
+Character Advancement section (p. 103)" for the **Karma-cost formulas themselves** when spending leftover
+Karma on attributes/skills at chargen. This phase needs those specific numbers even though the section
+they're printed in was correctly excluded as a whole:
+
+| Improvement | Karma cost |
+|---|---|
+| Attribute (any rating) | `new Rating x 5`, cumulative per rating step (Karma Advancement Table) |
+| Active Skill | `new Rating x 2`, cumulative per rating step |
+| Active Skill Group | `new Rating x 5`, cumulative per rating step |
+| Knowledge/Language Skill | `new Rating x 1`, cumulative per rating step |
+
+*(Re-verify this table directly via `pdftotext -layout` against the actual "Karma Advancement Table for
+Attributes"/skill-cost prose on rulebook pp. 105-107 before implementing — transcribed here from this
+session's own research pass for convenience, but the WPs below should confirm it themselves per this
+project's "don't trust a secondhand transcription, re-extract" practice.)*
+
+Today, qualities (WP8) and contacts (WP9) each spend Karma via **independent one-shot validation checks**
+that don't share a running total with anything else or with each other beyond both drawing down the same
+conceptual 25-Karma starting pool. **The foundational piece this phase needs first is a unified ledger**
+— WP51 — that the later WPs (and, retroactively, qualities/contacts) draw from together.
+
+- [ ] **WP51 — Unified Karma ledger.**
+  Goal: give `Character` a single running "Karma remaining" value that every Karma-spending selection
+  (qualities, contacts, and this phase's new attribute/skill/spell purchases) reads from and writes to
+  together, replacing today's several independent one-shot checks — the same kind of foundational
+  restructuring WP18 did for chargen selections generally, applied here specifically to Karma.
+  Deliverables:
+  - `chummer5.engine.character` (or a new `chummer5.engine.karma`): decide & document the representation
+    — a computed property (`starting_karma - Σ every known Karma-spending selection's cost`) versus a
+    genuinely stored, incrementally-updated field. Given `Character` is otherwise frozen and every
+    selection is itself a frozen sub-object (WP18's own precedent), a **computed property** summing each
+    present selection's already-known cost is likely the right shape (no new mutable state, consistent
+    with "reconstruct wholesale to validate" for jointly-constrained values) — but confirm this holds
+    once Phase M's Bound Spirits/Foci Karma costs and this phase's own new spend types are added, since
+    the sum now spans more selection types than `Character` previously had to reason about jointly.
+  - Retrofit `qualities.py`'s karma-cost accounting and `resources.py`'s contact-Karma accounting to
+    report their cost through whatever shape this WP settles on, **without changing either's existing
+    validation behavior** — this WP is a pure restructuring (WP18-style), not a behavior change; existing
+    tests for both must pass unchanged.
+  - Confirm the "starting Karma" figure itself: 25 at Step Four, but note it can arithmetically **exceed**
+    25 by the time Step Seven begins if net Negative-Quality Karma exceeds net Positive-Quality Karma
+    spent (confirmed in the rulebook's own worked examples — James ends Step Four with 26 Karma, not 25,
+    having spent 19 on Positive Qualities and gained 20 from Negative ones). The ledger's "starting"
+    value for Step Seven purposes is therefore **the post-Step-Four total**, not a fixed constant.
+  Depends on: WP8, WP9 (retrofits both).
+  Acceptance: `pytest`/`ruff`/`mypy` green; every existing WP8/WP9 test passes unchanged; a new test
+  confirming the ledger's total matches the rulebook's own James/Rob/Kyra worked examples' arithmetic
+  (25 → 26 / 25 / 26 respectively, per `character_creation_chapter.md`'s Step Four worked example) as a
+  real, citable cross-check rather than only a synthetic one.
+
+- [ ] **WP52 — Karma-funded attribute increases.**
+  Goal: let leftover Karma raise a Mental/Physical/Special attribute beyond its priority-derived budget,
+  using the `new Rating x 5` formula. This is also the fix for the specific, previously-flagged gap in
+  Project Overview's 2026-07-19 entry ("Karma-bought attribute points... never modeled... Wesson's own
+  `<attribute name="EDG"><base>1</base><karma>1</karma></attribute>`") — that entry's own recommendation
+  was to leave this unmodeled indefinitely "since nothing currently blocks on it"; this phase is the
+  point at which something now does.
+  Deliverables:
+  - `chummer5.engine.character` (or wherever attribute resolution lives): a Karma-funded increment on top
+    of `attribute_value`'s existing `metatype minimum + points spent + Σ improvements` formula, validated
+    against WP51's ledger and the existing "only one Mental/Physical attribute may sit at natural maximum"
+    rule (confirmed this restriction explicitly still applies to Karma-funded increases too, per the
+    rulebook's own Step Seven text: "These rules still apply to when you are spending Karma").
+  - `chummer5.io.legacy_import`: retire the itemized "nonzero-karma allocatable attribute" blocking
+    reason WP28 added (confirm its exact current shape before removing/narrowing it) now that the
+    underlying mechanic exists — re-attempt importing `Wesson.chum5` end to end as this WP's own
+    acceptance case.
+  - `chummer5.web`: extend the attribute allocation screen with a Karma-spend control once base points
+    are exhausted, live-updating remaining Karma (WP15 precedent) via WP51's ledger.
+  Depends on: WP51.
+  Acceptance: unit tests for the `new Rating x 5` formula and the natural-maximum restriction under
+  Karma spend specifically; integration test importing `Wesson.chum5` end to end (previously blocked,
+  per WP28/Project Overview's own citation) confirming his Karma-bought EDG point resolves correctly —
+  a real, existing fixture this phase directly unblocks, not a synthetic case.
+
+- [ ] **WP53 — Karma-funded skill/skill-group increases (including group-breaking).**
+  Goal: let leftover Karma raise an Active skill (`new Rating x 2`), Active skill group
+  (`new Rating x 5`), or Knowledge/Language skill (`new Rating x 1`) beyond its priority-derived budget,
+  and implement the rulebook's specific Step Seven rule that **buying a Karma-funded specialization for a
+  skill inside a purchased skill group breaks that group from that point forward** — explicitly called
+  out as impossible in Step Five and only legal here (Step Five/Six text, `character_creation_chapter.md`:
+  "This cannot happen in Step Five of character creation—you can only break up a skill group by buying a
+  specialization for it in Step Seven").
+  Deliverables:
+  - `chummer5.engine.skills`: Karma-funded rating increases for individual skills/groups/Knowledge-
+    Language skills, validated against WP51's ledger.
+  - The group-breaking case specifically: buying a Karma-funded specialization (confirm the actual Karma
+    cost for a chargen-time specialization purchase via `pdftotext -layout` over the Character Advancement
+    pages before implementing — this session's own research pass found the *training-time* rule for
+    specializations but did not resolve the Karma-cost figure; do not guess it) for a skill that's
+    currently part of a group purchased via WP7's group-purchase path must: (a) charge the specialization
+    cost from WP51's ledger, (b) "break" the group so each of its member skills becomes independently
+    tracked from that point on (mirroring `SkillAllocation`'s existing group-vs-individual distinction,
+    WP7's own shape), and (c) apply the specialization itself. Depends directly on WP50 (Step Five's
+    specialization mechanism) existing first, since this is that same mechanism's Step-Seven/Karma-funded
+    sibling, not a separate feature.
+  Depends on: WP51, WP50.
+  Acceptance: unit tests for all three Karma-cost formulas and the group-breaking transition (before:
+  group intact at rating N; after specializing one member: that member specialized and independently
+  rated, siblings still at rating N but now individually tracked). No real fixture is confirmed to
+  exercise the group-breaking case specifically — flag as hand-verified if no fixture is found during
+  implementation, per this phase's own honesty standard.
+
+- [ ] **WP54 — Karma-funded extra spells/complex forms.**
+  Goal: let a Magician/Technomancer-equivalent... **note: Technomancer stays out of scope per this
+  project's 2026-07-21 ruling, so this WP is Magician-only** — spend leftover Karma (5 Karma/spell, per
+  the Additional Purchases table) on spells beyond a Talent option's free grant, extending WP26's
+  existing `create_spell_selection` rather than replacing it.
+  Deliverables:
+  - `chummer5.engine.magic`: widen `create_spell_selection` (or add a sibling function) to accept an
+    additional Karma-funded spell count on top of the Talent-granted budget, validated against WP51's
+    ledger and the existing "max known = Magic Rating x 2" cap (Additional Purchases table) which already
+    bounds the *combined* free+Karma-funded total, not just the free grant — confirm `create_spell_
+    selection`'s existing cap check already reads this way or needs widening.
+  - `chummer5.web`: extend the spell-picker screen (WP29) with a Karma-spend control once the free budget
+    is exhausted.
+  Depends on: WP51, WP26.
+  Acceptance: unit test confirming a Karma-funded spell beyond the free budget is accepted up to the
+  Magic-Rating-x-2 combined cap and rejected beyond it; no real fixture is confirmed to exercise
+  Karma-funded extra spells specifically (both Miko/Wesson's own spell counts match their free grants
+  exactly, per WP26's own acceptance notes) — hand-verified, documented as such.
+
+### Phase P — Post-MVP: Rigger support (research-intro only; no WPs assigned yet)
+
+**Deliberately scoped down before any WP breakdown is written** — raised during the same 2026-07-21
+session as Phases L-O, but confirmed to be a materially different size than any of them: vehicles and
+drones are their own rulebook chapter (not part of "Creating a Shadowrunner" at all — only referenced
+via Step Six's Gear Checklist sidebar, "Vehicle(s), p. 461 / Drones..., p. 461") with their own stat
+block (Body/Armor/Speed/Handling/Acceleration/Sensor/Pilot) and **multiple separate per-category
+modification-slot pools** (Cosmetic/Powertrain/Protection/Weapons, each sized differently per vehicle) —
+mechanically similar in *spirit* to cyberware's Capacity system but not the same shape (one Capacity
+number vs. several named slot pools). An RCC (Rigger Command Console) and control rigs also drag in the
+Matrix device-rating stat block (Attack/Sleaze/Data Processing/Firewall) this project has never modeled
+for *anything* — no commlinks, no cyberdecks, no Matrix rules at all exist in `chummer5_py` today, and
+Project Overview has always listed "matrix rules" among the general Improvement engine's excluded scope.
+
+**Ruling, 2026-07-21: modifications are excluded from this phase's eventual scope.** No vehicle mods, no
+drone mods, no RCC/cyberdeck upgrades — characters may buy stock/unmodified vehicles, drones, RCCs, and
+cyberdecks only. This removes the per-category modification-slot system and most of the Matrix-adjacent
+complexity from what this phase actually needs to build (a stock RCC/cyberdeck still needs its own
+Attack/Sleaze/Data Processing/Firewall stat block *displayed*, since those are inherent ratings of the
+item itself, but nothing needs to *change* them via installed programs/mods).
+
+**Before any WP breakdown is written, this phase needs its own research pass** (mirroring Phase K's own
+"Pre-Phase-K research" entry in `spec/rulebooks/learnings.md`, done ahead of scoping):
+- Confirm the exact `vehicles.xml` (or equivalent) shape: which fields are flat vs. rating-scaled, how
+  many SR5-core, flat-cost entries exist across vehicles/drones/RCCs/cyberdecks (mirroring WP21/31's own
+  catalog-size research before committing to a filter rule), and whether Availability filtering (per this
+  project's 2026-07-21 ruling — exclude Availability > 12 items) meaningfully shrinks the offerable list.
+- Confirm whether any curated `.chum5` fixture (mundane or magic corpus) carries a vehicle/drone/RCC
+  purchase at all, to know upfront whether this phase can lean on real fixture data or will need the same
+  "hand-verified, no fixture" honesty standard Phase M's WPs already anticipate.
+- Confirm the rulebook's own page range for the Vehicles/Rigger chapter (not yet extracted into any
+  chapter file in this project) and extract the purchase-relevant subset the same way
+  `character_creation_chapter.md` did for character creation, before writing WPs against it secondhand.
+- Decide whether a stock RCC/cyberdeck's Matrix stat block needs any new `Character`-level concept at
+  all, or whether (given no Matrix rules exist to consume those numbers) it's sufficient to record and
+  display them without deriving anything further from them — the same "don't build machinery nothing
+  downstream needs yet" discipline WP27 applied to Adept Powers whose effects fall outside this engine's
+  current scope.
+
+No WP numbers are assigned yet; the next work package after this research pass lands should continue
+from WP55.
