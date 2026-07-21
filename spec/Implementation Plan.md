@@ -1035,7 +1035,7 @@ exist yet. Scoped as this phase's final WP (WP35), sequenced after both phases' 
   all match WP32's engine output; a parallel walkthrough with zero cyberware confirms Essence
   displays as 6 and every other value is pixel-for-pixel unchanged from before this phase.
 
-- [ ] **WP35 — Cross-phase: Essence-driven Magic-rating loss.**
+- [x] **WP35 — Cross-phase: Essence-driven Magic-rating loss.**
   Goal: implement the one real rules interaction between Phase I and Phase J — SR5 reduces a
   magically active character's Magic rating as Essence is lost to cyberware. Deliberately last in
   this phase: it's the one WP in either phase whose entire premise depends on both phases' engine

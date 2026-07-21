@@ -1,4 +1,5 @@
 from dataclasses import replace
+from decimal import Decimal
 from types import MappingProxyType
 
 import pytest
@@ -298,6 +299,104 @@ def test_magic_attribute_points_do_not_affect_a_mundane_characters_mag() -> None
     assert stale.magic_type is None
     assert stale.attribute_value("MAG") == 0
     assert stale.power_points == 0
+
+
+def test_magic_essence_loss_is_zero_with_no_essence_improvements() -> None:
+    # Every character buildable before Phase J's cyberware catalog existed had no ESSENCE
+    # improvement at all -- zero behavioral drift is the headline acceptance criterion for WP35.
+    human = _human_choice("D")
+    character = create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    adept = replace(character, magic_type="Adept", magic_rating=4)
+    assert adept.magic_essence_loss == 0
+    assert adept.magic_rating_before_essence_loss == 4
+    assert adept.attribute_value("MAG") == 4
+    assert adept.power_points == 4
+
+
+def test_mundane_character_is_unaffected_by_any_amount_of_essence_loss() -> None:
+    # Core rulebook p.278's Essence-driven Magic-loss rule only makes sense for a magically active
+    # character -- a Mundane character's MAG must stay 0 regardless of how much Essence a stray
+    # ESSENCE improvement (e.g. from cyberware) has removed.
+    human = _human_choice("D")
+    character = create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    character.improvements.add(
+        Improvement(
+            improvement_type=ImprovementType.ESSENCE,
+            target="",
+            value=0,
+            source_type=ImprovementSource.CYBERWARE,
+            source_id="cyberware-datajack",
+            essence_value=Decimal("-5"),
+        )
+    )
+    assert character.magic_type is None
+    assert character.attribute_value("MAG") == 0
+    assert character.power_points == 0
+
+
+def test_essence_loss_reduces_mag_by_the_ceiling_of_essence_lost() -> None:
+    # Core rulebook p.278: "For every point (or fraction thereof) of Essence lost, both your
+    # current Magic Attribute and your maximum Magic Rating are reduced by one." A fractional loss
+    # (1.1 Essence here) still knocks off a full point (2), not a proportional fraction of one.
+    human = _human_choice("D")
+    character = create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    adept = replace(character, magic_type="Adept", magic_rating=6)
+    adept.improvements.add(
+        Improvement(
+            improvement_type=ImprovementType.ESSENCE,
+            target="",
+            value=0,
+            source_type=ImprovementSource.CYBERWARE,
+            source_id="cyberware-item",
+            essence_value=Decimal("-1.1"),
+        )
+    )
+    assert adept.magic_essence_loss == 2
+    assert adept.magic_rating_before_essence_loss == 6
+    assert adept.attribute_value("MAG") == 4
+    assert adept.power_points == 4  # Power Points track the reduced Magic rating too
+
+
+def test_essence_loss_floors_mag_at_zero_rather_than_going_negative() -> None:
+    human = _human_choice("D")
+    character = create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    magician = replace(character, magic_type="Magician", magic_rating=2)
+    magician.improvements.add(
+        Improvement(
+            improvement_type=ImprovementType.ESSENCE,
+            target="",
+            value=0,
+            source_type=ImprovementSource.CYBERWARE,
+            source_id="cyberware-item",
+            essence_value=Decimal("-5.9"),
+        )
+    )
+    assert magician.magic_essence_loss == 6
+    assert magician.attribute_value("MAG") == 0
 
 
 def test_character_attribute_points_is_read_only_mapping() -> None:

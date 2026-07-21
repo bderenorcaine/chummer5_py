@@ -48,7 +48,11 @@
   <h3>Magic</h3>
   <ul>
     <li>Type: {{ magic_type }}</li>
+    {% if magic_essence_loss > 0 %}
+    <li>Magic rating: {{ magic_rating }} (reduced from {{ magic_rating_before_essence_loss }} by Essence loss)</li>
+    {% else %}
     <li>Magic rating: {{ magic_rating }}</li>
+    {% endif %}
     {% if tradition_name %}
     <li>Tradition: {{ tradition_name }}</li>
     {% endif %}

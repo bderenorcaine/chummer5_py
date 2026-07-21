@@ -25,6 +25,7 @@ land without a later reshape, but it resolves to 0 for every attribute until the
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -64,6 +65,13 @@ PRIMARY_ATTRIBUTES = ("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL")
 # an always-zero-budget option.
 SPECIAL_ATTRIBUTES = ("EDG",)
 ALLOCATABLE_ATTRIBUTES = PRIMARY_ATTRIBUTES + SPECIAL_ATTRIBUTES
+
+# WP35: the resolution target `ImprovementType.ESSENCE` improvements are always attached at
+# (chummer5.engine.cyberware.apply_cyberware_improvements) -- there is only one Essence pool per
+# character, the same reasoning chummer5.engine.derived's own `_GLOBAL_TARGET` sentinel documents.
+# Duplicated here (rather than imported from derived.py) to avoid a circular import: derived.py
+# already imports `Character` from this module.
+_ESSENCE_TARGET = ""
 
 
 def sr5_metatypes(metatypes: tuple[Metatype, ...]) -> tuple[Metatype, ...]:
@@ -212,6 +220,14 @@ class Character:
     "`None` until committed" wrapping-field shape as `power_selection` (nothing reads it piecemeal;
     every effect -- Essence cost, and any `FLAT_BONUS` -- reaches `improvements` via
     `chummer5.engine.cyberware.apply_cyberware_improvements`, not via a field read directly).
+
+    **WP35** adds no new field -- it changes `attribute_value("MAG")`'s own formula to subtract
+    `magic_essence_loss` (Σ `ESSENCE` improvements, ceiling-rounded per the rulebook's "per point or
+    fraction thereof" wording), the cross-phase interaction between Phase I's Magic rating and
+    Phase J's Essence tracking. `magic_rating_before_essence_loss`/`magic_essence_loss` are exposed
+    as separate properties purely so the character sheet can show *why* a reduced rating is reduced
+    (see those properties' own docstrings) -- `attribute_value("MAG")` remains the one real,
+    Essence-reduced value every other computation (dice pools, `power_points`) reads.
     """
 
     metatype: Metatype
@@ -257,9 +273,13 @@ class Character:
         if code == "MAG":
             if self.magic_type is None:
                 return 0
-            bonus = self.improvements.resolve(ImprovementType.ATTRIBUTE, code)
-            total = self.magic_rating + self.magic_attribute_points + bonus
-            return min(total, self.attribute_range(code).maximum)
+            # WP35: Essence loss reduces both the current and maximum Magic rating by the same
+            # amount (core rulebook p.278 -- see magic_essence_loss's own docstring for the exact
+            # citation). Since magic_rating_before_essence_loss is already capped at the metatype's
+            # raw MAG maximum, subtracting the same loss from both the current value and that
+            # maximum can never make the (already-capped) current value exceed the reduced maximum
+            # -- so no separate "reduced maximum" cap is needed here, only the floor at 0.
+            return max(self.magic_rating_before_essence_loss - self.magic_essence_loss, 0)
         attribute_range = self.attribute_range(code)
         points = self.attribute_points.get(code, 0)
         bonus = self.improvements.resolve(ImprovementType.ATTRIBUTE, code)
@@ -281,6 +301,48 @@ class Character:
         "don't persist `metatype_qualities`" decision already used elsewhere).
         """
         return self.attribute_value("MAG") if self.magic_type == "Adept" else 0
+
+    @property
+    def magic_rating_before_essence_loss(self) -> int:
+        """The Magic rating `attribute_value("MAG")` computed through WP29, before WP35's
+        Essence-driven reduction: Talent-granted `magic_rating` + `magic_attribute_points` + Σ
+        `ATTRIBUTE` improvements, capped at the metatype's raw MAG maximum. Exposed only for the
+        character sheet's "reduced from N by Essence loss" display (`chummer5.web.app
+        ._character_sheet_context`) -- `attribute_value("MAG")` itself, and everything that reads
+        it (dice pools, `power_points`), must see the real, Essence-reduced value, not this one.
+        `0` for Mundane, mirroring `attribute_value`'s own early return.
+        """
+        if self.magic_type is None:
+            return 0
+        bonus = self.improvements.resolve(ImprovementType.ATTRIBUTE, "MAG")
+        total = self.magic_rating + self.magic_attribute_points + bonus
+        return min(total, self.attribute_range("MAG").maximum)
+
+    @property
+    def magic_essence_loss(self) -> int:
+        """SR5 core rulebook p.278 (extracted ahead of this WP during WP25's own research --
+        see `spec/rulebooks/learnings.md`'s WP25 entry): "Anything that reduces your Essence also
+        reduces your Magic rating. For every point (or fraction thereof) of Essence lost, both
+        your current Magic Attribute and your maximum Magic Rating are reduced by one."
+
+        `math.ceil` of the total Essence lost -- `resolve_essence()` sums each `ESSENCE`
+        improvement's `essence_value` directly (each already a *negative* delta off the metatype's
+        Essence maximum, per `chummer5.engine.derived.essence`'s own `BASE_ESSENCE + Σ`
+        formula), so the lost amount is that sum's negation, not a subtraction from
+        `attribute_range("ESS").maximum` (there is nothing to subtract *from* here -- the maximum
+        itself never changes, only how much has been lost off it). `0` for every character with no
+        `ESSENCE` improvement -- every character before Phase J's cyberware catalog existed, and
+        every Mundane character regardless of how much cyberware they bought (Mundane never reads
+        this at all -- see `attribute_value`'s own `magic_type is None` early return).
+
+        Deliberately not distinguished from a "maximum rating has burned out to 0" case: this
+        project doesn't model Karma-based post-chargen advancement (career mode is out of scope),
+        so the rulebook's separate "current 0 is recoverable, maximum 0 is permanent burnout"
+        distinction has no observable effect here -- both a reduced-to-0 current rating and a
+        reduced-to-0 maximum look identical (Magic rating 0) in a chargen-only engine.
+        """
+        essence_lost = -self.improvements.resolve_essence(_ESSENCE_TARGET)
+        return math.ceil(essence_lost)
 
 
 def create_character(

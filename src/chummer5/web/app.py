@@ -1541,8 +1541,13 @@ def _character_sheet_context(
         "magic_type": character.magic_type,
         # Post-WP29 correction: the *finished* MAG rating (Talent-granted base + any Special
         # Attribute Points spent + improvements), not the raw Talent-granted `magic_rating` alone
-        # -- see chummer5.engine.character.Character's own docstring correction.
+        # -- see chummer5.engine.character.Character's own docstring correction. WP35: this is
+        # already the Essence-reduced value (attribute_value("MAG") itself changed, not this call
+        # site) -- `magic_essence_loss`/`magic_rating_before_essence_loss` below exist only so the
+        # template can show *why* it's reduced, not to recompute the reduction.
         "magic_rating": character.attribute_value("MAG"),
+        "magic_essence_loss": character.magic_essence_loss,
+        "magic_rating_before_essence_loss": character.magic_rating_before_essence_loss,
         "tradition_name": character.tradition.name if character.tradition is not None else None,
         "power_points": character.power_points,
         "drain_resistance": drain_resistance(character),

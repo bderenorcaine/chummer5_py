@@ -28,7 +28,7 @@ from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import metatype_choices
 from chummer5.engine.magic import mvp_power_catalog
-from chummer5.web.app import create_app
+from chummer5.web.app import CYBERWARE, create_app
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
@@ -47,6 +47,10 @@ IMPROVED_POTENTIAL_PHYSICAL = next(
 )
 IMPROVED_PHYSICAL_ATTRIBUTE = next(p for p in MVP_POWERS if p.name == "Improved Physical Attribute")
 SOME_SPELLS = SPELLS[:3]
+# Essence 1, cost 4800 -- comfortably fits letter B's Resources-E budget (6000¥, see
+# `_confirm_human`'s own letter-assignment shape) with a single purchase, unlike every other
+# WP34/test_web_cyberware.py item at this Essence cost (all cost 20,000¥+).
+SUBMACHINE_GUN = next(c for c in CYBERWARE if c.name == "Submachine Gun")
 
 
 def _compact(html: str) -> str:
@@ -559,3 +563,75 @@ def test_save_load_round_trip_preserves_magic_attribute_points() -> None:
     sheet = fresh_client.get("/character/sheet")
     assert "Magic rating: 6" in sheet.text
     assert "Power Points: 6" in sheet.text
+
+
+# -- WP35: Essence-driven Magic-rating loss (the cross-phase Phase I x Phase J interaction) -----
+# Core rulebook p.278 (see spec/rulebooks/learnings.md's WP25 entry, extracted ahead of this WP for
+# exactly this purpose): "For every point (or fraction thereof) of Essence lost, both your current
+# Magic Attribute and your maximum Magic Rating are reduced by one."
+
+
+def test_cyberware_essence_loss_reduces_adept_magic_rating_and_power_points_on_the_sheet() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="B")  # letter B Adept: magic=6
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "B", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
+    )
+    client.post("/ui/skills", data={})
+
+    baseline_sheet = client.get("/character/sheet")
+    assert "Magic rating: 6" in baseline_sheet.text
+    assert "reduced from" not in baseline_sheet.text
+
+    response = client.post("/ui/cyberware", data={f"cyberware_{SUBMACHINE_GUN.id}": "1"})
+    assert response.status_code == 200
+
+    sheet = client.get("/character/sheet")
+    assert "Essence: 5 / 6." in sheet.text  # 6 - 1 (Submachine Gun's Essence cost)
+    assert "Magic rating: 5 (reduced from 6 by Essence loss)" in sheet.text
+    # Power Points track the reduced Magic rating too (Character.power_points reads
+    # attribute_value("MAG"), not the raw Talent-granted magic_rating).
+    assert "Power Points: 5" in sheet.text
+
+
+def test_fractional_essence_loss_still_knocks_off_a_full_magic_point() -> None:
+    # Two Datajacks (Essence 0.1 each -> 0.2 total lost) still reduce Magic by a full point, per the
+    # rulebook's "per point (or fraction thereof)" wording -- not a proportional 0.2 reduction.
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="B")  # letter B Magician: magic=4
+    client.post(
+        "/ui/talent",
+        data={
+            "talent_letter": "B",
+            "talent_codename": "Magician",
+            "tradition_id": HERMETIC.id,
+            "granted_skill_id": [SPELLCASTING.id, COUNTERSPELLING.id],
+        },
+    )
+    client.post("/ui/skills", data={})
+    datajack = next(c for c in CYBERWARE if c.name == "Datajack")
+
+    response = client.post("/ui/cyberware", data={f"cyberware_{datajack.id}": "2"})
+    assert response.status_code == 200
+
+    sheet = client.get("/character/sheet")
+    assert "Essence: 5.8 / 6." in sheet.text  # 6 - 0.2 (two Datajacks at Essence 0.1 each)
+    assert "Magic rating: 3 (reduced from 4 by Essence loss)" in sheet.text
+
+
+def test_mundane_character_with_cyberware_shows_no_magic_section_at_all() -> None:
+    # The Essence-driven Magic-loss rule has nothing to apply to for a Mundane character -- the
+    # whole Magic section stays hidden (per WP29's own "hidden entirely, not shown as zeroes"
+    # convention), regardless of how much cyberware Essence was spent.
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="E")  # Mundane-only letter
+
+    response = client.post("/ui/cyberware", data={f"cyberware_{SUBMACHINE_GUN.id}": "1"})
+    assert response.status_code == 200
+
+    sheet = client.get("/character/sheet")
+    assert "Type: Magician" not in sheet.text
+    assert "Type: Adept" not in sheet.text
+    assert "Magic rating" not in sheet.text
+    assert "Essence: 5 / 6." in sheet.text  # Essence itself is still tracked and shown
