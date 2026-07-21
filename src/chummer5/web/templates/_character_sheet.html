@@ -134,6 +134,19 @@
   {% else %}
   <p>None purchased.</p>
   {% endif %}
+
+  <h3>Cyberware</h3>
+  {% if cyberware_rows %}
+  <ul>
+    {% for row in cyberware_rows %}
+    <li>{{ row.name }} × {{ row.quantity }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>None installed.</p>
+  {% endif %}
+  <p>Essence: {{ essence }} / 6.</p>
+
   <p>Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget }}.</p>
 
   <h3>Derived stats</h3>

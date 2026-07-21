@@ -1,5 +1,13 @@
 """Contacts & starting resources.
 
+**Cyberware (WP34).** `chummer5.engine.cyberware.CyberwareSelection` (Phase J) draws from this same
+nuyen budget too -- `create_resources_selection`'s `cyberware_cost` parameter folds its already-
+computed total cost into the same joint over-budget check `lifestyle_cost` already established,
+rather than `chummer5.engine.cyberware` duplicating a second budget validator of its own. Mirrors
+`lifestyle_cost`'s own relationship to this function exactly, extended from a two-way to a
+three-way shared check. See `chummer5.engine.cyberware`'s module docstring for the confirmed
+"same Step Six pool" citation.
+
 Composes WP2's Resources-priority data (`chummer5.data.priorities`) with WP6's `Character` into
 the last two mundane MVP chargen inputs: contacts and a starting-nuyen spend. Mundane MVP scope
 only — see `spec/Project Overview.md`.
@@ -229,6 +237,10 @@ class ResourcesSelection:
     `chummer5.engine.lifestyle`'s module docstring for why the two selections share one budget.
     `nuyen_spent` itself stays gear-only (unchanged meaning from WP9), so existing callers reading
     "how much was spent on gear" don't need to account for lifestyle separately.
+
+    **WP34**: `cyberware_cost` (default 0) is the character's separately-selected
+    `chummer5.engine.cyberware.CyberwareSelection.nuyen_spent`, folded into `nuyen_remaining` the
+    same way `lifestyle_cost` already is -- see `create_resources_selection`'s docstring.
     """
 
     resources_letter: str
@@ -237,6 +249,7 @@ class ResourcesSelection:
     nuyen_spent: int
     nuyen_remaining: int
     lifestyle_cost: int = 0
+    cyberware_cost: int = 0
 
 
 def starting_nuyen(letter: str, priorities: PriorityTable) -> int:
@@ -250,17 +263,20 @@ def create_resources_selection(
     catalog: Iterable[StarterGearItem] = STARTER_GEAR_CATALOG,
     *,
     lifestyle_cost: int = 0,
+    cyberware_cost: int = 0,
 ) -> ResourcesSelection:
-    """Build a `ResourcesSelection`, validating the combined gear + lifestyle spend against the
-    nuyen budget.
+    """Build a `ResourcesSelection`, validating the combined gear + lifestyle + cyberware spend
+    against the nuyen budget.
 
     Validates: every name in `gear_names` is a `catalog` item's name (repeats allowed -- buying two
     Certified Credsticks is a normal purchase, unlike a quality or skill that can't be picked
-    twice); `gear` cost plus `lifestyle_cost` together don't exceed `letter`'s nuyen budget (WP20:
-    a character's primary Lifestyle draws from this same pool, confirmed against every one of the
-    11 curated mundane fixtures -- see `spec/rulebooks/learnings.md`'s WP20 entry). Does not
-    require the full budget to be spent, mirroring WP6/WP7/WP8's identical choice. `lifestyle_cost`
-    defaults to 0 so every pre-WP20 call site (gear-only, no lifestyle yet selected) is unaffected.
+    twice); `gear` cost plus `lifestyle_cost` plus `cyberware_cost` together don't exceed `letter`'s
+    nuyen budget (WP20: a character's primary Lifestyle draws from this same pool, confirmed
+    against every one of the 11 curated mundane fixtures -- see `spec/rulebooks/learnings.md`'s
+    WP20 entry; WP34: cyberware draws from it too, see `chummer5.engine.cyberware`'s own module
+    docstring). Does not require the full budget to be spent, mirroring WP6/WP7/WP8's identical
+    choice. `lifestyle_cost`/`cyberware_cost` each default to 0 so every pre-WP20/pre-WP34 call
+    site (gear-only, or gear+lifestyle-only) is unaffected.
     """
     by_name = {item.name: item for item in catalog}
     names = list(gear_names)
@@ -272,15 +288,20 @@ def create_resources_selection(
     selected = tuple(by_name[name] for name in names)
     budget = starting_nuyen(letter, priorities)
     spent = sum(item.cost for item in selected)
-    total_spent = spent + lifestyle_cost
+    total_spent = spent + lifestyle_cost + cyberware_cost
     if total_spent > budget:
+        parts = [f"gear ({spent})"]
         if lifestyle_cost:
+            parts.append(f"lifestyle ({lifestyle_cost})")
+        if cyberware_cost:
+            parts.append(f"cyberware ({cyberware_cost})")
+        if len(parts) == 1:
             raise ValueError(
-                f"gear ({spent}) + lifestyle ({lifestyle_cost}) spend {total_spent} exceeds "
-                f"Resources priority {letter}'s nuyen budget of {budget}"
+                f"gear spend {spent} exceeds Resources priority {letter}'s nuyen budget of {budget}"
             )
         raise ValueError(
-            f"gear spend {spent} exceeds Resources priority {letter}'s nuyen budget of {budget}"
+            f"{' + '.join(parts)} spend {total_spent} exceeds Resources priority {letter}'s "
+            f"nuyen budget of {budget}"
         )
 
     return ResourcesSelection(
@@ -290,4 +311,5 @@ def create_resources_selection(
         nuyen_spent=spent,
         nuyen_remaining=budget - total_spent,
         lifestyle_cost=lifestyle_cost,
+        cyberware_cost=cyberware_cost,
     )

@@ -69,7 +69,10 @@ WP (which never had cyberware to lose) round-trips unchanged. `build_character` 
 against WP32's `create_cyberware_selection`, using `resources_selection.nuyen_remaining` (gear +
 Lifestyle already subtracted) as the shared nuyen budget cyberware draws from -- see
 `chummer5.engine.cyberware`'s own docstring for why this is one shared Step Six pool, not a separate
-one.
+one. **WP34** (the cyberware UI) additionally folds `cyberware_selection.nuyen_spent` back into the
+`resources_selection` this function returns, via a second `create_resources_selection` call once
+cyberware is resolved -- see this function's own inline comment for why that re-call always
+succeeds.
 
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
@@ -424,6 +427,21 @@ def build_character(
         save.cyberware_item_ids, cyberware, resources_selection.nuyen_remaining
     )
     apply_cyberware_improvements(character, cyberware_selection)
+
+    # WP34: fold the now-resolved cyberware cost back into `resources_selection` itself, so the
+    # `Character` this function returns carries a `nuyen_remaining` that reflects the true 3-way
+    # gear+Lifestyle+cyberware spend (what `chummer5.web.app._character_sheet_context` and every
+    # other reader of `character.resources_selection` display) rather than the gear+Lifestyle-only
+    # figure computed above, before cyberware was known. Guaranteed to re-validate cleanly:
+    # `create_cyberware_selection` above already confirmed `cyberware_selection.nuyen_spent <=
+    # resources_selection.nuyen_remaining`, so the combined total still fits the same budget.
+    resources_selection = create_resources_selection(
+        save.resources_letter,
+        priorities,
+        gear_names=save.gear_names,
+        lifestyle_cost=lifestyle_selection.total_cost,
+        cyberware_cost=cyberware_selection.nuyen_spent,
+    )
 
     # WP28: Magic-type/tradition/free-skill-grant. `apply_magic_skill_grant_improvements` mutates
     # `character.improvements` in place, the same "call it, don't just build the selection" shape

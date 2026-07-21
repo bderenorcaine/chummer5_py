@@ -1020,7 +1020,7 @@ exist yet. Scoped as this phase's final WP (WP35), sequenced after both phases' 
   every rating-scaled/non-Standard item is itemized as a specific, named rejection reason rather than
   silently dropped or a generic failure.
 
-- [ ] **WP34 — Cyberware chargen UI + character sheet.**
+- [x] **WP34 — Cyberware chargen UI + character sheet.**
   Goal: expose cyberware purchase through the browser, category-grouped like WP21's gear picker, and
   show Essence/cyberware on the character sheet.
   Deliverables:

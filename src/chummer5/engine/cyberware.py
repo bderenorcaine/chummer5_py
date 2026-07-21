@@ -17,8 +17,10 @@ minus whatever gear/Lifestyle already spent), mirroring `chummer5.engine.magic
 .create_magic_attribute_points`'s `other_special_attribute_points_spent` parameter for a second
 selection validated against one shared budget, rather than this module reaching into
 `chummer5.engine.resources.ResourcesSelection` itself. WP34 (the cyberware UI) is where an actual
-three-way gear+Lifestyle+cyberware joint budget gets threaded through the web layer -- this WP is
-engine-only, so no such wiring exists yet.
+three-way gear+Lifestyle+cyberware joint budget gets threaded through the web layer -- this module
+stays decoupled from `chummer5.engine.resources` even then; `ResourcesSelection`/`create_resources_
+selection` gained a `cyberware_cost` parameter instead (mirroring `lifestyle_cost`'s own shape), so
+the joint check still lives in one place without either engine module importing the other.
 
 **Duplicate purchases are legal -- confirmed against real fixture data, not assumed.**
 `Barrett.chum5` and `Bastion.chum5` (2 of the Phase J intro's 8 real cyberware-bearing fixtures)

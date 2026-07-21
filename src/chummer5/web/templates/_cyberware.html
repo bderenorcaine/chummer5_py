@@ -1,0 +1,63 @@
+<div id="cyberware">
+  {% if character %}
+  <h2>Cyberware</h2>
+
+  {% if cyberware_error %}
+  <p class="error">{{ cyberware_error }}</p>
+  {% endif %}
+  {% if cyberware_budget_warning %}
+  <p class="warning">{{ cyberware_budget_warning }}</p>
+  {% endif %}
+
+  <p>
+    Standard grade only. Shares the same nuyen budget as gear and Lifestyle:
+    nuyen remaining for cyberware {{ nuyen_remaining }} / {{ nuyen_available }} (spent
+    {{ nuyen_spent }}). Essence remaining: {{ essence_remaining }} / 6 (spent {{ essence_spent }}).
+  </p>
+
+  <form
+    hx-post="/ui/cyberware"
+    hx-target="#cyberware"
+    hx-swap="outerHTML"
+    hx-trigger="change, input delay:400ms"
+  >
+    {% for group in cyberware_groups %}
+    <details {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
+      <summary>{{ group.category }}</summary>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Cost</th>
+            <th>Essence</th>
+            <th>Quantity</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in group.rows %}
+          <tr>
+            <td>{{ row.item.name }}</td>
+            <td>{{ row.item.cost }}</td>
+            <td>{{ row.item.essence_cost }}</td>
+            <td>
+              <input
+                type="number"
+                name="cyberware_{{ row.item.id }}"
+                value="{{ row.quantity }}"
+                min="0"
+              />
+            </td>
+            <td>{{ row.subtotal }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endfor %}
+    <button type="submit">Update cyberware</button>
+  </form>
+  {% else %}
+  <p>Confirm a metatype and priorities above before installing cyberware.</p>
+  {% endif %}
+</div>

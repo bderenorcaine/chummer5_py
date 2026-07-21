@@ -90,6 +90,26 @@ same reason `quality_selection`/`resources_selection` never needed special-casin
 `submit_attributes` needed one explicit addition (carrying `lifestyle_selection` forward alongside
 `skill_allocation`/`resources_selection`, since it still rebuilds via `create_character()` fresh).
 
+WP34 adds a third new fragment/route, `POST /ui/cyberware` (`chummer5.engine.cyberware`'s
+`create_cyberware_selection`/`apply_cyberware_improvements`), for Phase J's cyberware purchase --
+another new peer section alongside Resources and Lifestyle, not folded into `_resources.html`/
+`submit_resources`, mirroring WP20's own "Lifestyle gets its own section despite sharing a budget"
+choice (see `_cyberware_context`'s docstring for why). All three sections now share one nuyen
+budget: `chummer5.engine.resources.create_resources_selection` gained a `cyberware_cost` parameter
+alongside `lifestyle_cost`, so the joint over-budget check is a genuine three-way one, and
+`_resources_context`/`_lifestyle_context`/`_cyberware_context` each take the other two sections'
+already-committed cost as a plain `int` (the same cross-section wiring `_chargen_body_context`
+already does for gear/Lifestyle, now extended to all three). Unlike quality/contact Improvements, a
+cyberware purchase's `source_id` is the item's own catalog id shared across every duplicate
+purchase (see `chummer5.engine.cyberware`'s own docstring), so `_replace_committed_cyberware`
+removes by *distinct* id, not once per purchased unit. `submit_priorities`'s `dataclasses.replace`-
+in-place carries a committed `cyberware_selection` forward automatically, same as `lifestyle_
+selection`; `submit_attributes` needed one explicit addition (`_relink_cyberware_selection`,
+mirroring `_relink_quality_improvements`'s shape, since it still rebuilds via `create_character()`
+fresh). `_character_sheet_context` gains the character's current Essence
+(`chummer5.engine.derived.essence`, replacing the fixed "6" no character before this WP could ever
+move away from) and a purchased-cyberware list.
+
 WP24 retires "Talent forced to E" as a hardcoded assumption: the priority form gains a 5th letter
 selector (Talent, alongside Heritage/Attributes/Skills/Resources), and `submit_priorities` validates
 a 5-way A-E permutation instead of a 4-way A-D one. This is deliberately zero new player-visible
@@ -125,6 +145,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.datastructures import FormData, UploadFile
 
+from chummer5.data.cyberware import Cyberware, load_cyberware
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import Power, load_powers
@@ -142,8 +163,15 @@ from chummer5.engine.character import (
     create_character,
     metatype_choices,
 )
+from chummer5.engine.cyberware import (
+    CyberwareSelection,
+    apply_cyberware_improvements,
+    create_cyberware_selection,
+)
 from chummer5.engine.derived import (
+    BASE_ESSENCE,
     drain_resistance,
+    essence,
     initiative_dice,
     initiative_value,
     mental_limit,
@@ -231,6 +259,8 @@ PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
+# WP34 (Phase J's UI): the flat-cost, flat-Essence, Standard-grade cyberware catalog (WP31).
+CYBERWARE = load_cyberware()
 # WP29 (Phase I's UI): Talent/tradition/spell/power catalogs, loaded once like every other
 # `chummer5.data` catalog above.
 TRADITIONS = load_traditions()
@@ -409,6 +439,23 @@ def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str
             quantity = 0
         names.extend([item.name] * max(quantity, 0))
     return tuple(names)
+
+
+def _parse_cyberware(form: FormData, catalog: Iterable[Cyberware]) -> tuple[str, ...]:
+    """Expand each cyberware item's submitted quantity into that many repeats of its id -- mirrors
+    `_parse_gear`'s identical shape, keyed by catalog id (not name): `create_cyberware_selection`'s
+    own `item_ids` parameter takes ids, and repeats are legal purchases (a matched pair of
+    cyberlimbs -- see `chummer5.engine.cyberware`'s module docstring), not an error to reject.
+    """
+    ids: list[str] = []
+    for item in catalog:
+        raw = form.get(f"cyberware_{item.id}")
+        try:
+            quantity = int(str(raw)) if raw is not None else 0
+        except ValueError:
+            quantity = 0
+        ids.extend([item.id] * max(quantity, 0))
+    return tuple(ids)
 
 
 def _parse_lifestyle_months(form: FormData) -> int:
@@ -802,6 +849,38 @@ def _replace_committed_powers(character: Character, selection: PowerSelection) -
     return replace(character, power_selection=selection)
 
 
+def _relink_cyberware_selection(
+    character: Character, cyberware_selection: CyberwareSelection | None
+) -> Character:
+    """Re-apply a carried-forward cyberware selection's Essence/bonus Improvements onto a freshly
+    built `Character`, and re-attach the selection itself -- mirrors `_relink_quality_
+    improvements`'s identical shape (a fresh `create_character()` call always starts `cyberware_
+    selection` at `None` and `improvements` empty; see that function's own docstring). Load-bearing
+    only for `submit_attributes`, the one route still rebuilding via `create_character()` fresh.
+    """
+    if cyberware_selection is None:
+        return character
+    apply_cyberware_improvements(character, cyberware_selection)
+    return replace(character, cyberware_selection=cyberware_selection)
+
+
+def _replace_committed_cyberware(character: Character, selection: CyberwareSelection) -> Character:
+    """Swap whatever `CYBERWARE`-sourced Improvements `character.improvements` currently holds for
+    `selection`'s, and re-attach `selection` as `character.cyberware_selection` -- mirrors
+    `_replace_committed_qualities`'s identical shape, with one difference: removes by each
+    *distinct* previously-purchased item id, not once per purchased unit.
+    `ImprovementIndex.remove_source` already retracts every Improvement a given source id granted
+    at once, and a repeated purchase of the same item shares one `source_id` (the item's own
+    catalog id -- see `chummer5.engine.cyberware`'s own "duplicate purchases share one source_id"
+    docstring), so removing that id once already clears every copy.
+    """
+    if character.cyberware_selection is not None:
+        for item_id in {item.id for item in character.cyberware_selection.items}:
+            character.improvements.remove_source(ImprovementSource.CYBERWARE, item_id)
+    apply_cyberware_improvements(character, selection)
+    return replace(character, cyberware_selection=selection)
+
+
 def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
     """Swap whatever QUALITY-sourced Improvements `character.improvements` currently holds for
     `selection`'s, and re-attach `selection` as `character.quality_selection`.
@@ -889,7 +968,7 @@ def _contacts_context(
 
 
 def _resources_selection_for_display(
-    letter: str, gear_names: Iterable[str], lifestyle_cost: int
+    letter: str, gear_names: Iterable[str], lifestyle_cost: int, cyberware_cost: int
 ) -> ResourcesSelection:
     """Recompute a `ResourcesSelection`'s nuyen totals against `letter`'s *current* budget, without
     `create_resources_selection`'s "spend must not exceed budget" check.
@@ -907,6 +986,10 @@ def _resources_selection_for_display(
     or 0 if none yet) folds into `nuyen_remaining` the same way `create_resources_selection` folds
     it in -- passed in rather than recomputed, since this function has no reason to know about
     `chummer5.engine.lifestyle` beyond the one number it needs to share a budget with.
+
+    **WP34**: `cyberware_cost` (the character's currently-selected `cyberware_selection.nuyen_
+    spent`, or 0 if none yet) folds in the same way, extending the shared budget from two sections
+    to three.
     """
     by_name = {item.name: item for item in STARTER_GEAR_CATALOG}
     selected = tuple(by_name[name] for name in gear_names if name in by_name)
@@ -917,8 +1000,9 @@ def _resources_selection_for_display(
         nuyen_budget=budget,
         gear=selected,
         nuyen_spent=spent,
-        nuyen_remaining=budget - spent - lifestyle_cost,
+        nuyen_remaining=budget - spent - lifestyle_cost - cyberware_cost,
         lifestyle_cost=lifestyle_cost,
+        cyberware_cost=cyberware_cost,
     )
 
 
@@ -927,6 +1011,7 @@ def _resources_context(
     resources_letter: str,
     gear_names: tuple[str, ...],
     lifestyle_cost: int,
+    cyberware_cost: int,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -953,6 +1038,10 @@ def _resources_context(
     render -- a deliberate, documented scope boundary (see this WP's worklog), not an oversight;
     both sections' *validation* (whether a submission is actually accepted) is always correct
     regardless, since both call the same joint `create_resources_selection` check.
+
+    **WP34**: `cyberware_cost` (the character's currently-selected `cyberware_selection.nuyen_
+    spent`, or 0 if none yet) folds in the same way, extending the shared-budget check from gear+
+    Lifestyle to gear+Lifestyle+cyberware.
     """
     if character is None:
         return {"character": None, "resources_error": error}
@@ -986,7 +1075,11 @@ def _resources_context(
     if error is None:
         try:
             create_resources_selection(
-                resources_letter, PRIORITIES, gear_names, lifestyle_cost=lifestyle_cost
+                resources_letter,
+                PRIORITIES,
+                gear_names,
+                lifestyle_cost=lifestyle_cost,
+                cyberware_cost=cyberware_cost,
             )
         except ValueError as exc:
             budget_warning = (
@@ -998,7 +1091,7 @@ def _resources_context(
         "gear_groups": gear_groups,
         "nuyen_budget": budget,
         "nuyen_spent": spent,
-        "nuyen_remaining": budget - spent - lifestyle_cost,
+        "nuyen_remaining": budget - spent - lifestyle_cost - cyberware_cost,
         "resources_error": error,
         "resources_budget_warning": budget_warning,
     }
@@ -1010,6 +1103,7 @@ def _lifestyle_context(
     tier_name: str,
     months: int,
     gear_cost: int,
+    cyberware_cost: int,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -1019,7 +1113,9 @@ def _lifestyle_context(
     (`resources_selection.nuyen_spent`, or 0 if none yet) -- passed in rather than recomputed here,
     the mirror image of `_resources_context`'s own `lifestyle_cost` parameter (see its docstring for
     why this cross-section number is threaded through rather than each section reaching into the
-    other's catalog/state directly).
+    other's catalog/state directly). **WP34** adds `cyberware_cost` the same way (the character's
+    currently-selected `cyberware_selection.nuyen_spent`, or 0 if none yet), extending the shared
+    budget from two sections to three.
 
     Same `error`-gated re-validation pattern as `_resources_context`/`_skill_allocation_context`:
     when `error` is unset (i.e. this isn't redisplaying a submission this same request just
@@ -1045,13 +1141,15 @@ def _lifestyle_context(
         except ValueError as exc:
             budget_warning = str(exc)
         else:
-            total_spent = gear_cost + selection.total_cost
+            total_spent = gear_cost + selection.total_cost + cyberware_cost
             if total_spent > budget:
+                parts = [f"gear ({gear_cost})", f"lifestyle ({selection.total_cost})"]
+                if cyberware_cost:
+                    parts.append(f"cyberware ({cyberware_cost})")
                 budget_warning = (
-                    "No longer fits since priorities were last confirmed: gear "
-                    f"({gear_cost}) + lifestyle ({selection.total_cost}) spend {total_spent} "
-                    f"exceeds Resources priority {resources_letter}'s nuyen budget of {budget}. "
-                    "Adjust the lifestyle below to continue."
+                    f"No longer fits since priorities were last confirmed: {' + '.join(parts)} "
+                    f"spend {total_spent} exceeds Resources priority {resources_letter}'s nuyen "
+                    f"budget of {budget}. Adjust the lifestyle below to continue."
                 )
     return {
         "character": character,
@@ -1063,6 +1161,89 @@ def _lifestyle_context(
         "nuyen_budget": budget,
         "lifestyle_error": error,
         "lifestyle_budget_warning": budget_warning,
+    }
+
+
+# Sorted by (category, name) for the picker's category-grouped `<details>` sections, mirroring
+# `STARTER_GEAR_CATALOG`'s own sort -- unlike that catalog, `load_cyberware()`'s XML-document order
+# already groups most categories consecutively but not perfectly (Cyber Implant Weapon and Cyber
+# Implant Weapon Accessory interleave at the end of the file), so a plain `itertools.groupby` over
+# `CYBERWARE` directly would produce spurious duplicate groups. Computed once at import time, not
+# per-request.
+_CYBERWARE_BY_CATEGORY = tuple(sorted(CYBERWARE, key=lambda item: (item.category, item.name)))
+
+
+def _cyberware_context(
+    character: Character | None,
+    resources_letter: str,
+    item_ids: tuple[str, ...],
+    gear_cost: int,
+    lifestyle_cost: int,
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_cyberware.html` (WP34): Phase J's cyberware purchase.
+
+    **A new peer section, not folded into `_resources.html`'s gear picker** -- mirrors WP20's own
+    explicit "Lifestyle gets its own section despite sharing a budget" choice (see that WP's
+    worklog for the full reasoning). SR5 frames "buy gear" and "install cyberware" as distinct
+    chargen decisions with different validation rules (an Essence floor here, not just a nuyen cap),
+    and cramming a second ~60-row catalog into `_resources_context` would make that one context
+    builder responsible for two unrelated catalogs. Shares the same Resources-priority nuyen budget
+    as gear/Lifestyle though -- `gear_cost`/`lifestyle_cost` are those two sections' currently-
+    committed spend, threaded through the same cross-section wiring `_resources_context`/
+    `_lifestyle_context` already use for each other (see their docstrings).
+
+    Same `error`-gated re-validation pattern as `_resources_context`/`_lifestyle_context`: when
+    `error` is unset, re-derives whether the currently-selected items still fit the combined budget
+    (and the Essence floor `create_cyberware_selection` enforces), surfacing a distinct
+    `cyberware_budget_warning` rather than silently going over/under on the next render.
+    """
+    if character is None:
+        return {"character": None, "cyberware_error": error}
+    by_id = {item.id: item for item in CYBERWARE}
+    counts: dict[str, int] = {}
+    for item_id in item_ids:
+        counts[item_id] = counts.get(item_id, 0) + 1
+    cyberware_groups: list[dict[str, Any]] = [
+        {
+            "category": category,
+            "rows": [
+                {
+                    "item": item,
+                    "quantity": counts.get(item.id, 0),
+                    "subtotal": item.cost * counts.get(item.id, 0),
+                }
+                for item in items
+            ],
+        }
+        for category, items in itertools.groupby(
+            _CYBERWARE_BY_CATEGORY, key=lambda item: item.category
+        )
+    ]
+    budget = starting_nuyen(resources_letter, PRIORITIES)
+    nuyen_available = budget - gear_cost - lifestyle_cost
+    spent = sum(int(row["subtotal"]) for group in cyberware_groups for row in group["rows"])
+    essence_spent = sum((by_id[item_id].essence_cost for item_id in item_ids), Decimal(0))
+    budget_warning: str | None = None
+    if error is None:
+        try:
+            create_cyberware_selection(item_ids, CYBERWARE, nuyen_available)
+        except ValueError as exc:
+            budget_warning = (
+                f"No longer fits since priorities were last confirmed: {exc}. "
+                "Adjust cyberware below to continue."
+            )
+    return {
+        "character": character,
+        "cyberware_groups": cyberware_groups,
+        "nuyen_available": nuyen_available,
+        "nuyen_spent": spent,
+        "nuyen_remaining": nuyen_available - spent,
+        "essence_spent": essence_spent,
+        "essence_remaining": BASE_ESSENCE - essence_spent,
+        "cyberware_error": error,
+        "cyberware_budget_warning": budget_warning,
     }
 
 
@@ -1286,14 +1467,21 @@ def _character_sheet_context(
         else ()
     )
     lifestyle_selection = character.lifestyle_selection
+    cyberware_selection = character.cyberware_selection
     resources_selection = _resources_selection_for_display(
         session.resources_letter,
         committed_gear_names,
         lifestyle_selection.total_cost if lifestyle_selection is not None else 0,
+        cyberware_selection.nuyen_spent if cyberware_selection is not None else 0,
     )
     gear_counts: dict[str, int] = {}
     for item in resources_selection.gear:
         gear_counts[item.name] = gear_counts.get(item.name, 0) + 1
+    # WP34: tallied the same way gear is, since duplicate cyberware purchases (a matched pair of
+    # cyberlimbs) are legal -- see chummer5.engine.cyberware's own docstring.
+    cyberware_counts: dict[str, int] = {}
+    for cyberware_item in cyberware_selection.items if cyberware_selection is not None else ():
+        cyberware_counts[cyberware_item.name] = cyberware_counts.get(cyberware_item.name, 0) + 1
 
     return {
         "character": character,
@@ -1375,6 +1563,14 @@ def _character_sheet_context(
             if character.power_selection is not None
             else []
         ),
+        # WP34: current Essence (replaces the fixed "6" no character before this WP could ever
+        # move away from) and a purchased-cyberware recap, the same "None until committed" shape
+        # every other selection-backed sheet section already has.
+        "essence": essence(character),
+        "cyberware_rows": [
+            {"name": name, "quantity": quantity}
+            for name, quantity in sorted(cyberware_counts.items())
+        ],
         "sheet_error": error,
         "sheet_info": info,
     }
@@ -1400,6 +1596,12 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     flat fields and `spell_selection`/`power_selection`, falling back to Mundane defaults only for
     an as-yet-uncommitted Talent selection (`character.magic_type is None`), mirroring the
     Lifestyle fallback immediately above.
+
+    **WP34**: `cyberware_item_ids` threads through the same "selection, not derived value" way
+    every prior field already does, defaulting to `()` for an as-yet-uncommitted selection --
+    `CyberwareSelection.items` may repeat the same id (duplicate purchases are legal, see
+    `chummer5.engine.cyberware`'s own docstring), so this is a flat, repeats-allowed id list, not a
+    `{id: quantity}` mapping, mirroring `gear_names` immediately above.
     """
     character = session.character
     assert character is not None
@@ -1431,6 +1633,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.power_selection is not None
         else ()
     )
+    cyberware_item_ids = (
+        tuple(item.id for item in character.cyberware_selection.items)
+        if character.cyberware_selection is not None
+        else ()
+    )
     return create_character_save(
         metatype_name=character.metatype.name,
         heritage_letter=session.heritage_letter,
@@ -1460,6 +1667,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         spell_ids=spell_ids,
         power_picks=power_picks,
         magic_attribute_points=character.magic_attribute_points,
+        cyberware_item_ids=cyberware_item_ids,
     )
 
 
@@ -1500,9 +1708,9 @@ def _apply_built_character_to_session(
 
 def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> dict[str, Any]:
     """Merge the priority-form context with a clean (non-error) render of the attribute, skill,
-    quality, contact, and resources sections, reflecting the session's currently committed state.
-    Used by both `GET /` and a successful `POST /ui/priorities` (the places that render every
-    section at once).
+    quality, contact, lifestyle, cyberware, and resources sections, reflecting the session's
+    currently committed state. Used by both `GET /` and a successful `POST /ui/priorities` (the
+    places that render every section at once).
 
     **WP19**: also folds a `priority_stale_selections` flag into `priority_ctx` -- `True` if any of
     the attribute/skill/resources sections below just reported their own `*_budget_warning` (see
@@ -1593,11 +1801,29 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.resources_selection is not None
         else 0
     )
+    cyberware_item_ids = (
+        tuple(item.id for item in character.cyberware_selection.items)
+        if character is not None and character.cyberware_selection is not None
+        else ()
+    )
+    cyberware_cost = (
+        character.cyberware_selection.nuyen_spent
+        if character is not None and character.cyberware_selection is not None
+        else 0
+    )
     resources_ctx = _resources_context(
-        character, session.resources_letter, gear_names, lifestyle_cost
+        character, session.resources_letter, gear_names, lifestyle_cost, cyberware_cost
     )
     lifestyle_ctx = _lifestyle_context(
-        character, session.resources_letter, lifestyle_tier_name, lifestyle_months, gear_cost
+        character,
+        session.resources_letter,
+        lifestyle_tier_name,
+        lifestyle_months,
+        gear_cost,
+        cyberware_cost,
+    )
+    cyberware_ctx = _cyberware_context(
+        character, session.resources_letter, cyberware_item_ids, gear_cost, lifestyle_cost
     )
     stale = bool(
         talent_ctx.get("talent_budget_warning")
@@ -1605,6 +1831,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         or skill_ctx.get("skill_budget_warning")
         or resources_ctx.get("resources_budget_warning")
         or lifestyle_ctx.get("lifestyle_budget_warning")
+        or cyberware_ctx.get("cyberware_budget_warning")
     )
     priority_ctx = {**priority_ctx, "priority_stale_selections": stale}
     return {
@@ -1617,6 +1844,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         **quality_ctx,
         **contact_ctx,
         **lifestyle_ctx,
+        **cyberware_ctx,
         **resources_ctx,
     }
 
@@ -1883,6 +2111,11 @@ def create_app() -> FastAPI:
                 # own freshly-validated submission (the Attributes form is where MAG points are
                 # spent, echoing whatever was already committed unless just edited).
                 character = _relink_magic_selection(character, session.talent_letter, previous)
+                # WP34: cyberware's Essence/bonus Improvements need the same re-landing as
+                # quality/metatype/Talent above -- a fresh `create_character()` call always starts
+                # `cyberware_selection` at `None` and `improvements` empty (see `_relink_cyberware_
+                # selection`'s own docstring).
+                character = _relink_cyberware_selection(character, previous.cyberware_selection)
                 character = replace(
                     character,
                     skill_allocation=previous.skill_allocation,
@@ -2074,7 +2307,7 @@ def create_app() -> FastAPI:
     async def submit_resources(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
         if session.character is None:
-            context = _resources_context(None, session.resources_letter, (), 0)
+            context = _resources_context(None, session.resources_letter, (), 0, 0)
         else:
             form = await request.form()
             gear_names = _parse_gear(form, STARTER_GEAR_CATALOG)
@@ -2082,12 +2315,17 @@ def create_app() -> FastAPI:
             lifestyle_cost = (
                 lifestyle_selection.total_cost if lifestyle_selection is not None else 0
             )
+            cyberware_selection = session.character.cyberware_selection
+            cyberware_cost = (
+                cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
+            )
             try:
                 selection = create_resources_selection(
                     session.resources_letter,
                     PRIORITIES,
                     gear_names,
                     lifestyle_cost=lifestyle_cost,
+                    cyberware_cost=cyberware_cost,
                 )
             except ValueError as exc:
                 context = _resources_context(
@@ -2095,12 +2333,17 @@ def create_app() -> FastAPI:
                     session.resources_letter,
                     gear_names,
                     lifestyle_cost,
+                    cyberware_cost,
                     error=str(exc),
                 )
             else:
                 session.character = replace(session.character, resources_selection=selection)
                 context = _resources_context(
-                    session.character, session.resources_letter, gear_names, lifestyle_cost
+                    session.character,
+                    session.resources_letter,
+                    gear_names,
+                    lifestyle_cost,
+                    cyberware_cost,
                 )
         response = templates.TemplateResponse(request, "_resources.html", context)
         if new_cookie is not None:
@@ -2117,6 +2360,7 @@ def create_app() -> FastAPI:
                 DEFAULT_LIFESTYLE_TIER_NAME,
                 DEFAULT_LIFESTYLE_MONTHS,
                 0,
+                0,
             )
         else:
             form = await request.form()
@@ -2129,6 +2373,10 @@ def create_app() -> FastAPI:
                 else ()
             )
             gear_cost = resources_selection.nuyen_spent if resources_selection is not None else 0
+            cyberware_selection = session.character.cyberware_selection
+            cyberware_cost = (
+                cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
+            )
             try:
                 lifestyle_selection = create_lifestyle_selection(tier_name, months, LIFESTYLES)
                 new_resources_selection = create_resources_selection(
@@ -2136,6 +2384,7 @@ def create_app() -> FastAPI:
                     PRIORITIES,
                     gear_names,
                     lifestyle_cost=lifestyle_selection.total_cost,
+                    cyberware_cost=cyberware_cost,
                 )
             except ValueError as exc:
                 context = _lifestyle_context(
@@ -2144,6 +2393,7 @@ def create_app() -> FastAPI:
                     tier_name,
                     months,
                     gear_cost,
+                    cyberware_cost,
                     error=str(exc),
                 )
             else:
@@ -2153,9 +2403,67 @@ def create_app() -> FastAPI:
                     resources_selection=new_resources_selection,
                 )
                 context = _lifestyle_context(
-                    session.character, session.resources_letter, tier_name, months, gear_cost
+                    session.character,
+                    session.resources_letter,
+                    tier_name,
+                    months,
+                    gear_cost,
+                    cyberware_cost,
                 )
         response = templates.TemplateResponse(request, "_lifestyle.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/cyberware", response_class=HTMLResponse)
+    async def submit_cyberware(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None:
+            context = _cyberware_context(None, session.resources_letter, (), 0, 0)
+        else:
+            form = await request.form()
+            item_ids = _parse_cyberware(form, CYBERWARE)
+            resources_selection = session.character.resources_selection
+            gear_names = (
+                tuple(item.name for item in resources_selection.gear)
+                if resources_selection is not None
+                else ()
+            )
+            gear_cost = resources_selection.nuyen_spent if resources_selection is not None else 0
+            lifestyle_selection = session.character.lifestyle_selection
+            lifestyle_cost = (
+                lifestyle_selection.total_cost if lifestyle_selection is not None else 0
+            )
+            nuyen_available = starting_nuyen(session.resources_letter, PRIORITIES) - (
+                gear_cost + lifestyle_cost
+            )
+            try:
+                selection = create_cyberware_selection(item_ids, CYBERWARE, nuyen_available)
+                new_resources_selection = create_resources_selection(
+                    session.resources_letter,
+                    PRIORITIES,
+                    gear_names,
+                    lifestyle_cost=lifestyle_cost,
+                    cyberware_cost=selection.nuyen_spent,
+                )
+            except ValueError as exc:
+                context = _cyberware_context(
+                    session.character,
+                    session.resources_letter,
+                    item_ids,
+                    gear_cost,
+                    lifestyle_cost,
+                    error=str(exc),
+                )
+            else:
+                session.character = _replace_committed_cyberware(session.character, selection)
+                session.character = replace(
+                    session.character, resources_selection=new_resources_selection
+                )
+                context = _cyberware_context(
+                    session.character, session.resources_letter, item_ids, gear_cost, lifestyle_cost
+                )
+        response = templates.TemplateResponse(request, "_cyberware.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
         return response
@@ -2210,6 +2518,7 @@ def create_app() -> FastAPI:
                     traditions=TRADITIONS,
                     spells=SPELLS,
                     powers=POWERS,
+                    cyberware=CYBERWARE,
                 )
             # A user-supplied file's shape is never trusted beyond this point -- malformed JSON
             # (ValueError, via json.JSONDecodeError/UnicodeDecodeError), a missing field
@@ -2256,6 +2565,7 @@ def create_app() -> FastAPI:
                         traditions=TRADITIONS,
                         spells=SPELLS,
                         powers=POWERS,
+                        cyberware=CYBERWARE,
                     )
                 except UnsupportedLegacyCharacterError as exc:
                     error = "Cannot import: " + "; ".join(exc.reasons)
