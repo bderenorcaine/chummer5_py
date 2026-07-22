@@ -99,7 +99,10 @@ class ImprovementSource(Enum):
     `chummer5.engine.bioware.apply_bioware_improvements` — a separate source from `CYBERWARE`
     despite both ever only granting an `ESSENCE`/`FLAT_BONUS`-shaped Improvement, so
     `ImprovementIndex.remove_source` can retract one without touching the other (e.g. a
-    bioware-only re-purchase shouldn't also strip already-committed cyberware).
+    bioware-only re-purchase shouldn't also strip already-committed cyberware). WP47 adds an 8th:
+    `FOCUS`, for `chummer5.engine.foci.apply_foci_improvements` — a bonded focus's `FLAT_BONUS`
+    skill bonus, keyed by the focus's own catalog id (mirrors `CYBERWARE`/`BIOWARE`'s per-item
+    `source_id` convention).
     """
 
     METATYPE = auto()
@@ -109,6 +112,7 @@ class ImprovementSource(Enum):
     ADEPT_POWER = auto()
     CYBERWARE = auto()
     BIOWARE = auto()
+    FOCUS = auto()
 
 
 @dataclass(frozen=True)

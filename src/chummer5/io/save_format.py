@@ -97,6 +97,18 @@ character` the same way it would be for a freshly-committed selection; see `chum
 staleness-prone data). Defaults to `()` ("predates this field"), so every save written before this
 WP round-trips unchanged.
 
+**WP47** adds `foci_picks` -- a magic-active character's bonded foci, as `(focus_id, force)` pairs
+(the same "selection, not derived value" shape `power_picks` already has -- `chummer5.data.foci
+.Focus.id` plus the player-chosen Force, exactly what `create_foci_selection` itself takes).
+Defaults to `()` ("predates this field"), so every save written before this WP round-trips
+unchanged. `build_character` resolves it *after* `bound_spirit_picks` (a fixed evaluation order, the
+same reasoning `bioware_item_ids` already follows relative to `cyberware_item_ids` -- see
+`chummer5.engine.foci`'s own module docstring for why a one-shot reconstruction needs one even
+though neither `create_*_selection` chains into the other's own call): Foci's own Karma budget
+accounts for Bound Spirits' already-resolved `karma_cost`, and its nuyen budget accounts for
+gear/Lifestyle/cyberware/bioware's already-resolved spend, so the *combined* Step Six nuyen and
+leftover-Karma pools are both correctly shared, not each independently assumed unclaimed.
+
 **WP44** adds `build_method` -- which of the two supported priority-letter validity rules
 (`chummer5.engine.build_method.PRIORITY_BUILD_METHOD`/`SUM_TO_TEN_BUILD_METHOD`) produced
 `heritage_letter`/`talent_letter`/`attributes_letter`/`skills_letter`/`resources_letter`. Unlike
@@ -129,6 +141,7 @@ from typing import Any
 
 from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware import Cyberware
+from chummer5.data.foci import Focus
 from chummer5.data.lifestyle import LifestyleTier
 from chummer5.data.metatypes import Metatype
 from chummer5.data.powers import Power
@@ -141,6 +154,7 @@ from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_s
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
+from chummer5.engine.foci import apply_foci_improvements, create_foci_selection
 from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.lifestyle import create_lifestyle_selection
 from chummer5.engine.magic import (
@@ -183,6 +197,10 @@ PowerPickTriple = tuple[str, int, str | None]
 # One `(spirit_type_name, services)` pair, as `create_bound_spirit_selection` already takes -- see
 # that function's own docstring. Named for the same readability reason as PowerPickTriple.
 BoundSpiritPickPair = tuple[str, int]
+
+# One `(focus_id, force)` pair, as `create_foci_selection` already takes -- see that function's own
+# docstring. Named for the same readability reason as PowerPickTriple/BoundSpiritPickPair.
+FociPickPair = tuple[str, int]
 
 
 @dataclass(frozen=True)
@@ -235,6 +253,9 @@ class CharacterSave:
     # why `force` is never persisted. Defaults to () -- "predates this field", the identical shape
     # every other optional selection field defaults to.
     bound_spirit_picks: tuple[BoundSpiritPickPair, ...] = ()
+    # WP47: a magic-active character's bonded foci, as (focus_id, force) pairs. Defaults to () --
+    # "predates this field", the identical shape every other optional selection field defaults to.
+    foci_picks: tuple[FociPickPair, ...] = ()
     # WP44: which priority-letter validity rule produced the 5 letters above -- see module
     # docstring for why this is carried through unvalidated rather than re-checked here.
     build_method: str = PRIORITY_BUILD_METHOD
@@ -266,6 +287,7 @@ def create_character_save(
     bioware_item_ids: Iterable[str] = (),
     karma_converted: int = 0,
     bound_spirit_picks: Iterable[BoundSpiritPickPair] = (),
+    foci_picks: Iterable[FociPickPair] = (),
     build_method: str = PRIORITY_BUILD_METHOD,
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
@@ -301,6 +323,7 @@ def create_character_save(
         bioware_item_ids=tuple(bioware_item_ids),
         karma_converted=karma_converted,
         bound_spirit_picks=tuple(bound_spirit_picks),
+        foci_picks=tuple(foci_picks),
         build_method=build_method,
     )
 
@@ -345,6 +368,9 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "bound_spirit_picks": [
             {"spirit_type": spirit_type, "services": services}
             for spirit_type, services in save.bound_spirit_picks
+        ],
+        "foci_picks": [
+            {"focus_id": focus_id, "force": force} for focus_id, force in save.foci_picks
         ],
         "build_method": save.build_method,
     }
@@ -398,6 +424,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         bound_spirit_picks=(
             (p["spirit_type"], p["services"]) for p in data.get("bound_spirit_picks", ())
         ),
+        foci_picks=((p["focus_id"], p["force"]) for p in data.get("foci_picks", ())),
         build_method=data.get("build_method", PRIORITY_BUILD_METHOD),
     )
 
@@ -424,6 +451,7 @@ def build_character(
     powers: tuple[Power, ...] = (),
     cyberware: tuple[Cyberware, ...] = (),
     bioware: tuple[Bioware, ...] = (),
+    foci: tuple[Focus, ...] = (),
 ) -> Character:
     """Reconstruct a fully-populated `Character` from a `CharacterSave`, re-running the same
     `create_*` validation each selection already has (see module docstring).
@@ -454,6 +482,12 @@ def build_character(
     (every pre-WP45 save) never resolves against it. Resolved *after* cyberware (a fixed evaluation
     order -- see `chummer5.engine.bioware`'s own module docstring), so its Essence-floor/nuyen
     checks correctly account for cyberware's already-resolved spend.
+
+    **WP47**: `foci` defaults to `()` for the same reason -- a save with no `foci_picks` (every
+    pre-WP47 save) never resolves against it. Resolved last of all (after Bound Spirits -- a fixed
+    evaluation order, see `chummer5.engine.foci`'s own module docstring), so its Karma budget
+    accounts for Bound Spirits' already-resolved `karma_cost` and its nuyen budget accounts for
+    gear/Lifestyle/cyberware/bioware's already-resolved spend.
     """
     heritage = priorities.heritage[save.heritage_letter]
     choice = next(
@@ -620,10 +654,49 @@ def build_character(
     # selection reads character.attribute_value("CHA")/("MAG"), both of which depend on the
     # magic_type/tradition/magic_rating/magic_attribute_points fields the replace() above just set
     # (force is always the *live* Magic rating, never a persisted value -- see module docstring).
-    karma_budget = provisional_karma_budget(
+    spirit_karma_budget = provisional_karma_budget(
         quality_selection.karma_cost, contact_selection.karma_cost
     )
     bound_spirit_selection = create_bound_spirit_selection(
-        save.bound_spirit_picks, character, karma_budget
+        save.bound_spirit_picks, character, spirit_karma_budget
     )
-    return replace(character, bound_spirit_selection=bound_spirit_selection)
+    character = replace(character, bound_spirit_selection=bound_spirit_selection)
+
+    # WP47: resolved last of all, against the now-fully-populated `character` (create_foci_
+    # selection reads character.attribute_value("MAG"), which depends on the magic fields the
+    # replace() above already set) -- a fixed evaluation order, aware of Bound Spirits' own
+    # already-resolved karma_cost and of the nuyen resources_selection already spent on gear/
+    # Lifestyle/cyberware/bioware. See chummer5.engine.foci's own module docstring for why a
+    # one-shot reconstruction like this one needs a fixed order even though neither create_*_
+    # selection chains into the other's own call.
+    foci_karma_budget = provisional_karma_budget(
+        quality_selection.karma_cost,
+        contact_selection.karma_cost,
+        bound_spirit_karma_cost=bound_spirit_selection.karma_cost,
+    )
+    foci_selection = create_foci_selection(
+        save.foci_picks,
+        character,
+        foci,
+        resources_selection.nuyen_remaining,
+        foci_karma_budget,
+    )
+    apply_foci_improvements(character, foci_selection)
+
+    # Fold foci's now-resolved nuyen cost back into resources_selection, the same WP34/WP45
+    # "re-call once the last shared-budget spender is known" pattern -- guaranteed to re-validate
+    # cleanly, since create_foci_selection above already confirmed its own nuyen_cost fits the
+    # nuyen_remaining this same resources_selection reported.
+    resources_selection = create_resources_selection(
+        save.resources_letter,
+        priorities,
+        gear_names=save.gear_names,
+        lifestyle_cost=lifestyle_selection.total_cost,
+        cyberware_cost=cyberware_selection.nuyen_spent,
+        bioware_cost=bioware_selection.nuyen_spent,
+        karma_converted=save.karma_converted,
+        foci_cost=foci_selection.nuyen_cost,
+    )
+    return replace(
+        character, foci_selection=foci_selection, resources_selection=resources_selection
+    )

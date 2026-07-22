@@ -44,14 +44,35 @@ STARTING_KARMA = 25
 KARMA_PER_SERVICE = 1
 
 
-def provisional_karma_budget(quality_karma_cost: int, contact_karma_cost: int) -> int:
-    """`STARTING_KARMA` minus whatever qualities/contacts have already spent -- see module
-    docstring for why this is a WP46-local stand-in, not Phase O's eventual unified ledger.
-    Callers pass each selection's own already-computed `karma_cost` (0 if not yet committed),
-    mirroring how `create_resources_selection`'s `lifestyle_cost`/`cyberware_cost` parameters are
-    each the *other* selection's own resolved cost, not something this function re-derives.
+def provisional_karma_budget(
+    quality_karma_cost: int,
+    contact_karma_cost: int,
+    bound_spirit_karma_cost: int = 0,
+    foci_karma_cost: int = 0,
+) -> int:
+    """`STARTING_KARMA` minus whatever qualities/contacts/Bound Spirits/Foci have already spent --
+    see module docstring for why this is a WP46-local stand-in, not Phase O's eventual unified
+    ledger. Callers pass each selection's own already-computed `karma_cost` (0 if not yet
+    committed), mirroring how `create_resources_selection`'s `lifestyle_cost`/`cyberware_cost`
+    parameters are each the *other* selection's own resolved cost, not something this function
+    re-derives.
+
+    **WP47 widens this from 2 terms to 4.** Bound Spirits and Foci (`chummer5.engine.foci`) are two
+    independent Karma-costing selections competing for the same pool, with no inherent evaluation
+    order between them (unlike cyberware/bioware's Essence-floor chaining -- see `chummer5.engine
+    .foci`'s own module docstring) -- every caller resolves both new parameters symmetrically off
+    `character.bound_spirit_selection`/`.foci_selection`'s own already-computed cost, the same way
+    `chummer5.web.app`'s gear/Lifestyle/cyberware/bioware nuyen sections already read each other's
+    committed spend rather than assuming a fixed order. Both default to `0` so every pre-WP47 call
+    site (which never had Foci to account for) keeps working unchanged.
     """
-    return STARTING_KARMA - quality_karma_cost - contact_karma_cost
+    return (
+        STARTING_KARMA
+        - quality_karma_cost
+        - contact_karma_cost
+        - bound_spirit_karma_cost
+        - foci_karma_cost
+    )
 
 
 def offered_spirit_types(tradition: Tradition) -> tuple[str, ...]:

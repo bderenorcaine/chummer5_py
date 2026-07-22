@@ -107,6 +107,14 @@ reaching this point (her tradition isn't one of the 2 offered) and Wesson is an 
 any). A future WP adding real `<spirits>` parsing should upgrade this to the excluded-and-reported
 tier instead, the same way WP28 already did for spells/powers.
 
+**Deliberately not imported either: bonded foci (WP47).** A legacy `<gear>` entry with `<bonded>
+true</bonded>` is how the legacy save format records a bonded focus, but this module never parses
+`<gears>` at all -- the same "no general gear-catalog import" gap `gear_names=()` below already
+documents for ordinary Step Six gear, now extended to Foci for an identical reason (no fixture in
+this project's curated corpus needs it reconstructed, and building a real `<gear>` parser is a
+separate, much larger undertaking than this one-line gap). `foci_picks` is simply never passed to
+`create_character_save` here, defaulting to `()` the same way `bound_spirit_picks` already does.
+
 **Which `<lifestyle>` entry counts as "primary" (WP20).** The legacy save format has no explicit
 "is this the primary Lifestyle" flag (confirmed: no such field exists anywhere in `Lifestyle.cs`,
 only a general `LifestyleType.Standard` -- see `spec/rulebooks/learnings.md`'s WP20 entry). This

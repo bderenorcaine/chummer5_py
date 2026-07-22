@@ -302,6 +302,9 @@ class ResourcesSelection:
     `nuyen_budget` itself stays the pure priority-derived number (unchanged meaning, still
     `== legacy.starting_nuyen` for every fixture); `nuyen_remaining` is the one field that reflects
     the karma-derived top-up.
+
+    **WP47**: `foci_cost` (default 0) is the character's separately-selected `chummer5.engine.foci
+    .FociSelection.nuyen_cost`, folded in the same way `cyberware_cost`/`bioware_cost` already are.
     """
 
     resources_letter: str
@@ -313,6 +316,7 @@ class ResourcesSelection:
     cyberware_cost: int = 0
     bioware_cost: int = 0
     karma_converted: int = 0
+    foci_cost: int = 0
 
 
 def starting_nuyen(letter: str, priorities: PriorityTable) -> int:
@@ -338,22 +342,26 @@ def create_resources_selection(
     cyberware_cost: int = 0,
     bioware_cost: int = 0,
     karma_converted: int = 0,
+    foci_cost: int = 0,
 ) -> ResourcesSelection:
     """Build a `ResourcesSelection`, validating the combined gear + lifestyle + cyberware + bioware
-    spend against the nuyen budget (priority-derived, plus whatever Karma-to-Nuyen conversion adds).
+    + foci spend against the nuyen budget (priority-derived, plus whatever Karma-to-Nuyen conversion
+    adds).
 
     Validates: every name in `gear_names` is a `catalog` item's name (repeats allowed -- buying two
     Certified Credsticks is a normal purchase, unlike a quality or skill that can't be picked
     twice); `karma_converted` is 0-10 (see `karma_to_nuyen`); `gear` cost plus `lifestyle_cost` plus
-    `cyberware_cost` plus `bioware_cost` together don't exceed `letter`'s nuyen budget plus the
-    converted amount (WP20: a character's primary Lifestyle draws from this same pool, confirmed
-    against every one of the 11 curated mundane fixtures -- see `spec/rulebooks/learnings.md`'s
-    WP20 entry; WP34: cyberware draws from it too, see `chummer5.engine.cyberware`'s own module
-    docstring; WP45: bioware draws from it too, see `chummer5.engine.bioware`'s own module
-    docstring; WP43: Karma-to-Nuyen tops up the same pool, see this module's own docstring). Does
-    not require the full budget to be spent, mirroring WP6/WP7/WP8's identical choice.
-    `lifestyle_cost`/`cyberware_cost`/`bioware_cost`/`karma_converted` each default to 0 so every
-    pre-WP20/pre-WP34/pre-WP45/pre-WP43 call site is unaffected.
+    `cyberware_cost` plus `bioware_cost` plus `foci_cost` together don't exceed `letter`'s nuyen
+    budget plus the converted amount (WP20: a character's primary Lifestyle draws from this same
+    pool, confirmed against every one of the 11 curated mundane fixtures -- see
+    `spec/rulebooks/learnings.md`'s WP20 entry; WP34: cyberware draws from it too, see
+    `chummer5.engine.cyberware`'s own module docstring; WP45: bioware draws from it too, see
+    `chummer5.engine.bioware`'s own module docstring; WP47: Foci draws from it too, see
+    `chummer5.engine.foci`'s own module docstring; WP43: Karma-to-Nuyen tops up the same pool, see
+    this module's own docstring). Does not require the full budget to be spent, mirroring
+    WP6/WP7/WP8's identical choice. `lifestyle_cost`/`cyberware_cost`/`bioware_cost`/
+    `karma_converted`/`foci_cost` each default to 0 so every pre-WP20/pre-WP34/pre-WP45/pre-WP43/
+    pre-WP47 call site is unaffected.
     """
     by_name = {item.name: item for item in catalog}
     names = list(gear_names)
@@ -366,7 +374,7 @@ def create_resources_selection(
     budget = starting_nuyen(letter, priorities)
     available = budget + karma_to_nuyen(karma_converted)
     spent = sum(item.cost for item in selected)
-    total_spent = spent + lifestyle_cost + cyberware_cost + bioware_cost
+    total_spent = spent + lifestyle_cost + cyberware_cost + bioware_cost + foci_cost
     if total_spent > available:
         parts = [f"gear ({spent})"]
         if lifestyle_cost:
@@ -375,6 +383,8 @@ def create_resources_selection(
             parts.append(f"cyberware ({cyberware_cost})")
         if bioware_cost:
             parts.append(f"bioware ({bioware_cost})")
+        if foci_cost:
+            parts.append(f"foci ({foci_cost})")
         if len(parts) == 1:
             raise ValueError(
                 f"gear spend {spent} exceeds Resources priority {letter}'s nuyen budget of "
@@ -395,4 +405,5 @@ def create_resources_selection(
         cyberware_cost=cyberware_cost,
         bioware_cost=bioware_cost,
         karma_converted=karma_converted,
+        foci_cost=foci_cost,
     )

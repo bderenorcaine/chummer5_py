@@ -1,0 +1,66 @@
+<div id="foci-selection">
+  {% if character and character.magic_type %}
+  <h2>Foci</h2>
+
+  {% if foci_error %}
+  <p class="error">{{ foci_error }}</p>
+  {% endif %}
+  {% if foci_budget_warning %}
+  <p class="warning">{{ foci_budget_warning }}</p>
+  {% endif %}
+
+  <p>
+    Bond up to {{ foci_max_count }} foci (one per Magic point), total Force at most
+    {{ foci_max_total_force }} (Magic x 2 -- the character-creation cap, tighter than the general
+    Magic x 5 rule). Shares the same nuyen budget as gear/Lifestyle/cyberware/bioware:
+    nuyen remaining {{ foci_nuyen_remaining }} / {{ foci_nuyen_available }} (spent
+    {{ foci_nuyen_spent }}). Shares the same leftover-Karma pool as Bound Spirits:
+    Karma remaining {{ foci_karma_remaining }} / {{ foci_karma_budget }} (spent
+    {{ foci_karma_spent }}).
+  </p>
+
+  <form
+    hx-post="/ui/foci"
+    hx-target="#foci-selection"
+    hx-swap="outerHTML"
+    hx-trigger="change, input delay:400ms"
+  >
+    {% for group in foci_groups %}
+    <details {% if group.rows | selectattr("force", "gt", 0) | list %}open{% endif %}>
+      <summary>{{ group.category }}</summary>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Nuyen/Force</th>
+            <th>Karma/Force</th>
+            <th>Force</th>
+            <th>Nuyen subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in group.rows %}
+          <tr>
+            <td>{{ row.item.name }}</td>
+            <td>{{ row.item.cost_per_force }}</td>
+            <td>{{ row.item.bonding_karma_per_force }}</td>
+            <td>
+              <input
+                type="number"
+                name="focus_force_{{ row.item.id }}"
+                value="{{ row.force }}"
+                min="0"
+              />
+            </td>
+            <td>{{ row.subtotal }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endfor %}
+
+    <button type="submit">Update foci</button>
+  </form>
+  {% endif %}
+</div>

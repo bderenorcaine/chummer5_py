@@ -14,6 +14,7 @@ import pytest
 
 from chummer5.data.bioware import load_bioware
 from chummer5.data.cyberware import load_cyberware
+from chummer5.data.foci import load_foci
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import load_powers
@@ -44,6 +45,7 @@ SPELLS = load_spells()
 POWERS = load_powers()
 CYBERWARE = load_cyberware()
 BIOWARE = load_bioware()
+FOCI = load_foci()
 
 
 def _sample_save() -> CharacterSave:
@@ -654,7 +656,11 @@ def test_build_character_does_not_validate_build_method_against_the_letters() ->
 HERMETIC_ID = next(t.id for t in TRADITIONS if t.name == "Hermetic")
 
 
-def _magician_save(bound_spirit_picks: tuple[tuple[str, int], ...] = ()) -> CharacterSave:
+def _magician_save(
+    bound_spirit_picks: tuple[tuple[str, int], ...] = (),
+    foci_picks: tuple[tuple[str, int], ...] = (),
+    resources_letter: str = "C",
+) -> CharacterSave:
     # Talent letter C's Magician option (Magic 3, no free-skill grant -- see test_magic.py's own
     # "letter C grants no free skill" precedent) keeps this fixture minimal.
     return create_character_save(
@@ -667,7 +673,7 @@ def _magician_save(bound_spirit_picks: tuple[tuple[str, int], ...] = ()) -> Char
         group_points={},
         quality_ids=(),
         contacts=(),
-        resources_letter="C",
+        resources_letter=resources_letter,
         gear_names=(),
         lifestyle_tier_name="Street",
         lifestyle_months=1,
@@ -675,6 +681,7 @@ def _magician_save(bound_spirit_picks: tuple[tuple[str, int], ...] = ()) -> Char
         talent_codename="Magician",
         tradition_id=HERMETIC_ID,
         bound_spirit_picks=bound_spirit_picks,
+        foci_picks=foci_picks,
     )
 
 
@@ -748,3 +755,116 @@ def test_build_character_rejects_a_spirit_type_not_offered_by_the_traditon() -> 
             spells=SPELLS,
             powers=POWERS,
         )
+
+
+# -- WP47: foci_picks -----------------------------------------------------------------------------
+
+ALCHEMICAL_ID = next(f.id for f in FOCI if f.name == "Alchemical Focus")
+POWER_FOCUS_ID = next(f.id for f in FOCI if f.name == "Power Focus")
+
+
+def _build_magician(save: CharacterSave) -> object:
+    return build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+        foci=FOCI,
+    )
+
+
+def test_json_round_trip_preserves_foci_picks() -> None:
+    save = _magician_save(foci_picks=((ALCHEMICAL_ID, 2),))
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["foci_picks"] == [{"focus_id": ALCHEMICAL_ID, "force": 2}]
+
+
+def test_from_json_defaults_foci_picks_for_a_pre_wp47_save() -> None:
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    assert "foci_picks" not in data or data["foci_picks"] == []
+    assert from_json(to_json(save)).foci_picks == ()
+
+
+def test_build_character_applies_foci_selection() -> None:
+    save = _magician_save(foci_picks=((ALCHEMICAL_ID, 2),))
+    character = _build_magician(save)
+    assert character.foci_selection is not None
+    assert character.foci_selection.nuyen_cost == 10000
+    assert character.foci_selection.karma_cost == 6
+    (pick,) = character.foci_selection.picks
+    assert pick.focus.name == "Alchemical Focus"
+    assert pick.force == 2
+    from chummer5.engine.improvements import ImprovementType
+
+    assert character.improvements.resolve(ImprovementType.SKILL, "Alchemy") == 2
+
+
+def test_build_character_folds_foci_nuyen_cost_into_resources_selection() -> None:
+    save = _magician_save(foci_picks=((ALCHEMICAL_ID, 1),))
+    character = _build_magician(save)
+    assert character.resources_selection is not None
+    assert character.resources_selection.foci_cost == 5000
+    budget = PRIORITIES.resources["C"].nuyen
+    assert character.resources_selection.nuyen_remaining == budget - 5000
+
+
+def test_build_character_rejects_foci_exceeding_the_shared_nuyen_budget() -> None:
+    # Resources priority E's nuyen budget is far smaller than a single Force-2 Alchemical Focus
+    # (10,000 nuyen).
+    save = _magician_save(foci_picks=((ALCHEMICAL_ID, 2),), resources_letter="E")
+    with pytest.raises(ValueError, match="exceeds the nuyen budget"):
+        _build_magician(save)
+
+
+def test_build_character_rejects_foci_exceeding_the_provisional_karma_budget() -> None:
+    # Talent letter C -> Magic 3, so the chargen Force cap is 6 and the count cap is 3 -- two
+    # Power Foci at Force 3 each (total Force 6, count 2, Availability 12 each, all within their own
+    # caps) cost 6 Karma/Force x 2 x 3 = 36 Karma, already over STARTING_KARMA (25) with nothing
+    # else spent.
+    save = _magician_save(foci_picks=((POWER_FOCUS_ID, 3), (POWER_FOCUS_ID, 3)))
+    with pytest.raises(ValueError, match="exceeds the Karma budget"):
+        _build_magician(save)
+
+
+def test_build_character_shares_the_karma_pool_between_bound_spirits_and_foci() -> None:
+    # 20 Karma on Bound Spirits (Talent letter C -> Magic 3, so 1 spirit at 20 services fits the
+    # Charisma/count cap) + a Force-2 Alchemical Focus (6 Karma) = 26 > STARTING_KARMA (25) -- only
+    # caught because create_foci_selection's own budget already accounts for Bound Spirits' cost
+    # (see chummer5.engine.foci's module docstring's "fixed evaluation order" paragraph).
+    save = _magician_save(
+        bound_spirit_picks=(("Spirit of Fire", 20),), foci_picks=((ALCHEMICAL_ID, 2),)
+    )
+    with pytest.raises(ValueError, match="exceeds the Karma budget"):
+        _build_magician(save)
+
+
+def test_build_character_allows_an_adept_to_bond_a_focus() -> None:
+    # Bonding only requires being Awakened at all (core rulebook p. 317), not specifically a
+    # Magician -- see chummer5.engine.foci's module docstring.
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="E",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        talent_letter="D",
+        talent_codename="Adept",
+        foci_picks=((ALCHEMICAL_ID, 1),),
+    )
+    character = _build_magician(save)
+    assert character.foci_selection is not None
+    assert character.foci_selection.nuyen_cost == 5000

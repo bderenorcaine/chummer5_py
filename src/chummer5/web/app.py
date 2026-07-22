@@ -159,6 +159,7 @@ from starlette.datastructures import FormData, UploadFile
 
 from chummer5.data.bioware import Bioware, load_bioware
 from chummer5.data.cyberware import Cyberware, load_cyberware
+from chummer5.data.foci import Focus, load_foci
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import Power, load_powers
@@ -205,6 +206,12 @@ from chummer5.engine.derived import (
     physical_limit,
     social_limit,
     stun_condition_monitor,
+)
+from chummer5.engine.foci import (
+    CHARGEN_FORCE_CAP_MULTIPLIER,
+    FociSelection,
+    apply_foci_improvements,
+    create_foci_selection,
 )
 from chummer5.engine.improvements import ImprovementIndex, ImprovementSource
 from chummer5.engine.lifestyle import (
@@ -297,6 +304,8 @@ LIFESTYLES = load_lifestyles()
 CYBERWARE = load_cyberware()
 # WP45: the flat-cost, flat-Essence, low-Availability, Standard-grade bioware catalog.
 BIOWARE = load_bioware()
+# WP47: the Rating-scaled SR5 Foci catalog (32 items, 7 rulebook categories).
+FOCI = load_foci()
 # WP29 (Phase I's UI): Talent/tradition/spell/power catalogs, loaded once like every other
 # `chummer5.data` catalog above.
 TRADITIONS = load_traditions()
@@ -559,6 +568,27 @@ def _parse_bioware(form: FormData, catalog: Iterable[Bioware]) -> tuple[str, ...
             quantity = 0
         ids.extend([item.id] * max(quantity, 0))
     return tuple(ids)
+
+
+def _parse_foci(form: FormData, catalog: Iterable[Focus]) -> tuple[tuple[str, int], ...]:
+    """Read a submitted Force per Foci catalog item into `(focus_id, force)` pairs -- unlike
+    `_parse_cyberware`/`_parse_bioware`'s quantity-per-item shape, this UI offers at most one bonded
+    pick per catalog item (Force 0 means "not bonded"), a deliberate simplification: no real fixture
+    exercises `create_foci_selection`'s own "bond two of the same item" allowance, and a
+    quantity-of-Force-N picker would need a second dimension (how many, at what Force each) no other
+    section's UI has needed yet. An unparseable or non-positive Force is treated as "not bonded",
+    the same robustness clamp `_parse_gear` already applies to a bad quantity.
+    """
+    picks: list[tuple[str, int]] = []
+    for item in catalog:
+        raw = form.get(f"focus_force_{item.id}")
+        try:
+            force = int(str(raw)) if raw is not None else 0
+        except ValueError:
+            force = 0
+        if force > 0:
+            picks.append((item.id, force))
+    return tuple(picks)
 
 
 def _parse_lifestyle_months(form: FormData) -> int:
@@ -937,15 +967,17 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
     currently holds for `selection`'s, and re-attach the 4 flat magic fields.
 
     A (re)confirmed Talent selection also resets `spell_selection`/`power_selection`/`bound_spirit_
-    selection` to `None` and drops any `ADEPT_POWER`-sourced Improvements -- a changed archetype
-    (Mundane -> Magician, Magician -> Adept, or even a changed tradition/letter) invalidates
-    whatever spell/power/spirit budget those selections were validated against (a changed tradition
-    in particular changes which spirit types are even offered -- see `chummer5.engine.spirits
-    .offered_spirit_types`), and there is no sensible partial-carry-forward the way there is for
-    e.g. attribute points against a resized budget (see this WP's worklog for the full reasoning).
-    The player re-picks spells/powers/spirits after any Talent change, the same "start that stage
-    over" behavior a metatype swap already gives `skill_allocation` et al. pre-WP19 -- Talent is
-    foundational in the same way, just narrower in what it resets.
+    selection`/`foci_selection` to `None` and drops any `ADEPT_POWER`-/`FOCUS`-sourced Improvements
+    -- a changed archetype (Mundane -> Magician, Magician -> Adept, or even a changed
+    tradition/letter) invalidates whatever spell/power/spirit/Foci budget those selections were
+    validated against (a changed tradition in particular changes which spirit types are even
+    offered -- see `chummer5.engine.spirits.offered_spirit_types`; a changed Magic rating changes
+    Foci's own count/Force caps -- see `chummer5.engine.foci`), and there is no sensible partial-
+    carry-forward the way there is for e.g. attribute points against a resized budget (see this WP's
+    worklog for the full reasoning). The player re-picks spells/powers/spirits/foci after any Talent
+    change, the same "start that stage over" behavior a metatype swap already gives
+    `skill_allocation` et al. pre-WP19 -- Talent is foundational in the same way, just narrower in
+    what it resets.
 
     **Post-WP29 correction**: `magic_attribute_points` resets to `0` for the identical reason --
     a changed `magic_rating` (different letter/codename) changes how much headroom is even left to
@@ -954,6 +986,7 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
     """
     character.improvements.remove_source(ImprovementSource.TALENT, MAGIC_SKILL_GRANT_SOURCE_ID)
     _remove_adept_power_improvements(character)
+    _remove_foci_improvements(character)
     apply_magic_skill_grant_improvements(character, selection, SKILLS)
     return replace(
         character,
@@ -964,6 +997,7 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
         spell_selection=None,
         power_selection=None,
         bound_spirit_selection=None,
+        foci_selection=None,
         magic_attribute_points=0,
     )
 
@@ -1035,6 +1069,43 @@ def _replace_committed_bioware(character: Character, selection: BiowareSelection
             character.improvements.remove_source(ImprovementSource.BIOWARE, item_id)
     apply_bioware_improvements(character, selection)
     return replace(character, bioware_selection=selection)
+
+
+def _relink_foci_selection(character: Character, foci_selection: FociSelection | None) -> Character:
+    """Re-apply a carried-forward Foci selection's `FLAT_BONUS` skill Improvements onto a freshly
+    built `Character`, and re-attach the selection itself -- mirrors `_relink_bioware_selection`'s
+    identical shape. Load-bearing only for `submit_attributes`, the one route still rebuilding via
+    `create_character()` fresh.
+    """
+    if foci_selection is None:
+        return character
+    apply_foci_improvements(character, foci_selection)
+    return replace(character, foci_selection=foci_selection)
+
+
+def _replace_committed_foci(character: Character, selection: FociSelection) -> Character:
+    """Swap whatever `FOCUS`-sourced Improvements `character.improvements` currently holds for
+    `selection`'s, and re-attach `selection` as `character.foci_selection` -- mirrors
+    `_replace_committed_cyberware`'s identical shape, including removing by each *distinct*
+    previously-bonded item id rather than once per bonded unit.
+    """
+    if character.foci_selection is not None:
+        for item_id in {pick.focus.id for pick in character.foci_selection.picks}:
+            character.improvements.remove_source(ImprovementSource.FOCUS, item_id)
+    apply_foci_improvements(character, selection)
+    return replace(character, foci_selection=selection)
+
+
+def _remove_foci_improvements(character: Character) -> None:
+    """Retract every `FOCUS`-sourced Improvement -- mirrors `_remove_adept_power_improvements`'s
+    identical shape, used by `_replace_committed_talent` (a Talent change invalidates whatever
+    Magic-rating-dependent Foci selection was already committed, the same reasoning that WP applies
+    to `bound_spirit_selection`/`power_selection`).
+    """
+    if character.foci_selection is None:
+        return
+    for item_id in {pick.focus.id for pick in character.foci_selection.picks}:
+        character.improvements.remove_source(ImprovementSource.FOCUS, item_id)
 
 
 def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
@@ -1130,6 +1201,7 @@ def _resources_selection_for_display(
     cyberware_cost: int,
     bioware_cost: int,
     karma_converted: int = 0,
+    foci_cost: int = 0,
 ) -> ResourcesSelection:
     """Recompute a `ResourcesSelection`'s nuyen totals against `letter`'s *current* budget, without
     `create_resources_selection`'s "spend must not exceed budget" check.
@@ -1158,6 +1230,9 @@ def _resources_selection_for_display(
     **WP43**: `karma_converted` (the character's currently-committed `resources_selection
     .karma_converted`, or 0 if none yet) tops up the available budget the same way -- see
     `chummer5.engine.resources`'s own module docstring.
+
+    **WP47**: `foci_cost` (the character's currently-selected `foci_selection.nuyen_cost`, or 0 if
+    none yet) folds in the same way, extending the shared budget to five sections.
     """
     by_name = {item.name: item for item in STARTER_GEAR_CATALOG}
     selected = tuple(by_name[name] for name in gear_names if name in by_name)
@@ -1175,11 +1250,13 @@ def _resources_selection_for_display(
             - lifestyle_cost
             - cyberware_cost
             - bioware_cost
+            - foci_cost
         ),
         lifestyle_cost=lifestyle_cost,
         cyberware_cost=cyberware_cost,
         bioware_cost=bioware_cost,
         karma_converted=karma_converted,
+        foci_cost=foci_cost,
     )
 
 
@@ -1191,6 +1268,7 @@ def _resources_context(
     cyberware_cost: int,
     bioware_cost: int,
     karma_converted: int = 0,
+    foci_cost: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -1228,6 +1306,9 @@ def _resources_context(
     **WP43**: `karma_converted` (this same submission's Karma-to-Nuyen amount, or the character's
     currently-committed one when redisplaying a clean render) tops up the budget the re-validation
     call and the displayed remaining-nuyen number both use.
+
+    **WP47**: `foci_cost` folds in the same way, extending the shared-budget check to
+    gear+Lifestyle+cyberware+bioware+Foci.
     """
     if character is None:
         return {"character": None, "resources_error": error}
@@ -1268,6 +1349,7 @@ def _resources_context(
                 cyberware_cost=cyberware_cost,
                 bioware_cost=bioware_cost,
                 karma_converted=karma_converted,
+                foci_cost=foci_cost,
             )
         except ValueError as exc:
             budget_warning = (
@@ -1286,6 +1368,7 @@ def _resources_context(
             - lifestyle_cost
             - cyberware_cost
             - bioware_cost
+            - foci_cost
         ),
         "karma_converted": karma_converted,
         "max_karma_to_nuyen": MAX_KARMA_TO_NUYEN,
@@ -1304,6 +1387,7 @@ def _lifestyle_context(
     cyberware_cost: int,
     bioware_cost: int,
     karma_converted: int = 0,
+    foci_cost: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -1319,7 +1403,7 @@ def _lifestyle_context(
     shared budget to four sections. **WP43** adds `karma_converted` the same way (the
     character's currently-committed `resources_selection.karma_converted`, or 0 if none yet),
     topping up the budget rather than spending from it -- see `chummer5.engine.resources`'s module
-    docstring.
+    docstring. **WP47** adds `foci_cost` the same way, extending the shared budget to five sections.
 
     Same `error`-gated re-validation pattern as `_resources_context`/`_skill_allocation_context`:
     when `error` is unset (i.e. this isn't redisplaying a submission this same request just
@@ -1345,13 +1429,17 @@ def _lifestyle_context(
         except ValueError as exc:
             budget_warning = str(exc)
         else:
-            total_spent = gear_cost + selection.total_cost + cyberware_cost + bioware_cost
+            total_spent = (
+                gear_cost + selection.total_cost + cyberware_cost + bioware_cost + foci_cost
+            )
             if total_spent > budget:
                 parts = [f"gear ({gear_cost})", f"lifestyle ({selection.total_cost})"]
                 if cyberware_cost:
                     parts.append(f"cyberware ({cyberware_cost})")
                 if bioware_cost:
                     parts.append(f"bioware ({bioware_cost})")
+                if foci_cost:
+                    parts.append(f"foci ({foci_cost})")
                 budget_warning = (
                     f"No longer fits since priorities were last confirmed: {' + '.join(parts)} "
                     f"spend {total_spent} exceeds Resources priority {resources_letter}'s nuyen "
@@ -1379,6 +1467,9 @@ def _lifestyle_context(
 _CYBERWARE_BY_CATEGORY = tuple(sorted(CYBERWARE, key=lambda item: (item.category, item.name)))
 # Same reasoning, applied to WP45's much smaller bioware catalog (2 categories, Basic/Cultured).
 _BIOWARE_BY_CATEGORY = tuple(sorted(BIOWARE, key=lambda item: (item.category, item.name)))
+# Same reasoning, applied to WP47's Foci catalog (7 rulebook categories, not a gear.xml field --
+# see chummer5.data.foci's own docstring for how focus_category is derived).
+_FOCI_BY_CATEGORY = tuple(sorted(FOCI, key=lambda item: (item.focus_category, item.name)))
 
 
 def _catalog_groups(
@@ -1419,6 +1510,7 @@ def _cyberware_context(
     gear_cost: int,
     lifestyle_cost: int,
     karma_converted: int = 0,
+    foci_cost: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -1434,7 +1526,8 @@ def _cyberware_context(
     gear/Lifestyle though -- `gear_cost`/`lifestyle_cost` are those two sections' currently-
     committed spend, threaded through the same cross-section wiring `_resources_context`/
     `_lifestyle_context` already use for each other (see their docstrings). **WP43** adds
-    `karma_converted` the same way, topping up the budget rather than spending from it.
+    `karma_converted` the same way, topping up the budget rather than spending from it. **WP47**
+    adds `foci_cost` the same way, extending the shared budget to five sections.
 
     **WP45: bioware folds into this same section rather than getting its own** -- unlike Lifestyle
     (its own distinct rulebook chargen step), the rulebook's own Step Six groups "Cyberware and
@@ -1460,7 +1553,7 @@ def _cyberware_context(
     cyberware_groups = _catalog_groups(item_ids, _CYBERWARE_BY_CATEGORY, cyberware_by_id)
     bioware_groups = _catalog_groups(bioware_item_ids, _BIOWARE_BY_CATEGORY, bioware_by_id)
     budget = starting_nuyen(resources_letter, PRIORITIES) + _display_karma_to_nuyen(karma_converted)
-    nuyen_available = budget - gear_cost - lifestyle_cost
+    nuyen_available = budget - gear_cost - lifestyle_cost - foci_cost
     cyberware_spent = sum(
         int(row["subtotal"]) for group in cyberware_groups for row in group["rows"]
     )
@@ -1660,6 +1753,7 @@ def _power_selection_context(
 def _spirit_selection_context(
     character: Character | None,
     picks: Iterable[tuple[str, int]],
+    foci_karma_cost: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -1672,7 +1766,12 @@ def _spirit_selection_context(
     `karma_budget` is this WP's own provisional stand-in (see `chummer5.engine.spirits
     .provisional_karma_budget`'s docstring) -- `STARTING_KARMA` minus whatever the character's
     already-committed quality/contact selections have spent, recomputed fresh on every render (not
-    read off a stored total) so it always reflects the character's *current* karma spend.
+    read off a stored total) so it always reflects the character's *current* karma spend. **WP47**
+    adds `foci_karma_cost` (the character's currently-committed `foci_selection.karma_cost`, or 0 if
+    none yet) as a 4th term, the same symmetric cross-section reading `_foci_selection_context`
+    does back for `bound_spirit_karma_cost` -- see `chummer5.engine.foci`'s own module docstring for
+    why interactive re-validation of two already-committed selections reads each other's current
+    cost rather than assuming a fixed order.
 
     **WP19-style staleness re-validation**: when `error` is unset and a Bound Spirit selection is
     already committed, re-runs `create_bound_spirit_selection` against the *current* character/
@@ -1689,6 +1788,7 @@ def _spirit_selection_context(
     karma_budget = provisional_karma_budget(
         character.quality_selection.karma_cost if character.quality_selection is not None else 0,
         character.contact_selection.karma_cost if character.contact_selection is not None else 0,
+        foci_karma_cost=foci_karma_cost,
     )
     entries = list(picks)
     rows = [
@@ -1724,6 +1824,109 @@ def _spirit_selection_context(
         "spirit_karma_remaining": karma_budget - karma_spent,
         "spirit_error": error,
         "spirit_budget_warning": budget_warning,
+    }
+
+
+def _foci_selection_context(
+    character: Character | None,
+    resources_letter: str,
+    picks: Iterable[tuple[str, int]],
+    gear_cost: int,
+    lifestyle_cost: int,
+    cyberware_cost: int,
+    bioware_cost: int,
+    bound_spirit_karma_cost: int,
+    karma_converted: int = 0,
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_foci_selection.html` (WP47): `create_foci_selection` reaching the browser,
+    gated to any magic-active character (Magician or Adept -- see `chummer5.engine.foci`'s own
+    docstring for why this is looser than Bound Spirits' Magician-only gate). `picks` is whatever
+    should be shown filled in, the same echo-the-submission shape as `_spirit_selection_context`'s
+    `picks`.
+
+    **Nuyen**: shares the same Step Six pool gear/Lifestyle/cyberware/bioware already draw from --
+    `gear_cost`/`lifestyle_cost`/`cyberware_cost`/`bioware_cost` are those sections' currently
+    committed spend, the same cross-section wiring `_cyberware_context` already uses for its own
+    four terms, now extended to five.
+
+    **Karma**: `karma_budget` is `chummer5.engine.spirits.provisional_karma_budget`'s own
+    provisional stand-in, given `bound_spirit_karma_cost` (the character's currently-committed
+    `bound_spirit_selection.karma_cost`, or 0 if none yet) as its 3rd term -- see that function's
+    own WP47 docstring paragraph for why this reads the *other* section's current commitment rather
+    than assuming a fixed evaluation order, unlike `chummer5.io.save_format.build_character`'s
+    one-shot reconstruction (which does need one).
+
+    **WP19-style staleness re-validation**: when `error` is unset and a Foci selection is already
+    committed, re-runs `create_foci_selection` against the *current* character/budgets purely to
+    derive `foci_budget_warning` -- an attribute edit (MAG) or a Talent change can each shrink what
+    was previously a valid selection.
+    """
+    if character is None:
+        return {"character": None, "foci_error": error}
+    if character.magic_type is None:
+        return {"character": character, "foci_error": error}
+
+    entries = list(picks)
+    by_id = {item.id: item for item in FOCI}
+    force_by_id = dict(entries)
+    foci_groups = [
+        {
+            "category": category,
+            "rows": [
+                {
+                    "item": item,
+                    "force": force_by_id.get(item.id, 0),
+                    "subtotal": force_by_id.get(item.id, 0) * item.cost_per_force,
+                }
+                for item in items
+            ],
+        }
+        for category, items in itertools.groupby(
+            _FOCI_BY_CATEGORY, key=lambda item: item.focus_category
+        )
+    ]
+
+    nuyen_available = (
+        starting_nuyen(resources_letter, PRIORITIES)
+        + _display_karma_to_nuyen(karma_converted)
+        - gear_cost
+        - lifestyle_cost
+        - cyberware_cost
+        - bioware_cost
+    )
+    nuyen_spent = sum(int(row["subtotal"]) for group in foci_groups for row in group["rows"])
+    karma_budget = provisional_karma_budget(
+        character.quality_selection.karma_cost if character.quality_selection is not None else 0,
+        character.contact_selection.karma_cost if character.contact_selection is not None else 0,
+        bound_spirit_karma_cost=bound_spirit_karma_cost,
+    )
+    karma_spent = sum(
+        force * by_id[focus_id].bonding_karma_per_force for focus_id, force in entries
+    )
+    budget_warning: str | None = None
+    if error is None:
+        try:
+            create_foci_selection(entries, character, FOCI, nuyen_available, karma_budget)
+        except ValueError as exc:
+            budget_warning = (
+                f"No longer fits since priorities/attributes were last confirmed: {exc}. "
+                "Adjust Foci below to continue."
+            )
+    return {
+        "character": character,
+        "foci_groups": foci_groups,
+        "foci_nuyen_available": nuyen_available,
+        "foci_nuyen_spent": nuyen_spent,
+        "foci_nuyen_remaining": nuyen_available - nuyen_spent,
+        "foci_karma_budget": karma_budget,
+        "foci_karma_spent": karma_spent,
+        "foci_karma_remaining": karma_budget - karma_spent,
+        "foci_max_count": character.attribute_value("MAG"),
+        "foci_max_total_force": character.attribute_value("MAG") * CHARGEN_FORCE_CAP_MULTIPLIER,
+        "foci_error": error,
+        "foci_budget_warning": budget_warning,
     }
 
 
@@ -1794,6 +1997,7 @@ def _character_sheet_context(
     lifestyle_selection = character.lifestyle_selection
     cyberware_selection = character.cyberware_selection
     bioware_selection = character.bioware_selection
+    foci_selection = character.foci_selection
     committed_karma_converted = (
         character.resources_selection.karma_converted
         if character.resources_selection is not None
@@ -1806,6 +2010,7 @@ def _character_sheet_context(
         cyberware_selection.nuyen_spent if cyberware_selection is not None else 0,
         bioware_selection.nuyen_spent if bioware_selection is not None else 0,
         committed_karma_converted,
+        foci_selection.nuyen_cost if foci_selection is not None else 0,
     )
     gear_counts: dict[str, int] = {}
     for item in resources_selection.gear:
@@ -1940,6 +2145,22 @@ def _character_sheet_context(
             {"name": name, "quantity": quantity}
             for name, quantity in sorted(bioware_counts.items())
         ],
+        # WP47: bonded foci recap -- name, chosen Force, and each pick's own nuyen/Karma cost.
+        "foci_rows": (
+            [
+                {
+                    "name": pick.focus.name,
+                    "force": pick.force,
+                    "nuyen_cost": pick.force * pick.focus.cost_per_force,
+                    "karma_cost": pick.force * pick.focus.bonding_karma_per_force,
+                }
+                for pick in foci_selection.picks
+            ]
+            if foci_selection is not None
+            else []
+        ),
+        "foci_nuyen_cost": foci_selection.nuyen_cost if foci_selection is not None else 0,
+        "foci_karma_cost": foci_selection.karma_cost if foci_selection is not None else 0,
         "sheet_error": error,
         "sheet_info": info,
     }
@@ -1981,6 +2202,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     **WP46**: `bound_spirit_picks` reads straight off `character.bound_spirit_selection.spirits` as
     `(spirit_type, services)` pairs, `()` for an as-yet-uncommitted selection -- `force` is never
     included (see `chummer5.engine.spirits`'s module docstring for why).
+
+    **WP47**: `foci_picks` reads straight off `character.foci_selection.picks` as `(focus_id,
+    force)` pairs, `()` for an as-yet-uncommitted selection -- unlike Bound Spirits' Force, a
+    focus's Force *is* the player's own chosen value (not re-derived live), so it's included
+    directly.
 
     **WP44**: `build_method` reads straight off `session.build_method` -- unlike every field above,
     it isn't re-derived from `character` at all (nothing on `Character` holds it; see
@@ -2041,6 +2267,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.bound_spirit_selection is not None
         else ()
     )
+    foci_picks = (
+        tuple((pick.focus.id, pick.force) for pick in character.foci_selection.picks)
+        if character.foci_selection is not None
+        else ()
+    )
     return create_character_save(
         metatype_name=character.metatype.name,
         heritage_letter=session.heritage_letter,
@@ -2074,6 +2305,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         bioware_item_ids=bioware_item_ids,
         karma_converted=karma_converted,
         bound_spirit_picks=bound_spirit_picks,
+        foci_picks=foci_picks,
         build_method=session.build_method,
     )
 
@@ -2182,7 +2414,25 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.bound_spirit_selection is not None
         else ()
     )
-    spirit_ctx = _spirit_selection_context(character, spirit_picks)
+    foci_picks = (
+        tuple((pick.focus.id, pick.force) for pick in character.foci_selection.picks)
+        if character is not None and character.foci_selection is not None
+        else ()
+    )
+    # WP47: Bound Spirits and Foci read each other's *currently committed* Karma cost symmetrically
+    # (see chummer5.engine.foci's own module docstring) -- computed here, once, since both
+    # `_spirit_selection_context`/`_foci_selection_context` need the *other* one.
+    bound_spirit_karma_cost = (
+        character.bound_spirit_selection.karma_cost
+        if character is not None and character.bound_spirit_selection is not None
+        else 0
+    )
+    foci_karma_cost_committed = (
+        character.foci_selection.karma_cost
+        if character is not None and character.foci_selection is not None
+        else 0
+    )
+    spirit_ctx = _spirit_selection_context(character, spirit_picks, foci_karma_cost_committed)
     attribute_points = character.attribute_points if character is not None else {}
     magic_points = character.magic_attribute_points if character is not None else 0
     attribute_ctx = _attribute_allocation_context(character, attribute_points, magic_points)
@@ -2249,6 +2499,11 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.resources_selection is not None
         else 0
     )
+    foci_cost = (
+        character.foci_selection.nuyen_cost
+        if character is not None and character.foci_selection is not None
+        else 0
+    )
     resources_ctx = _resources_context(
         character,
         session.resources_letter,
@@ -2257,6 +2512,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         cyberware_cost,
         bioware_cost,
         karma_converted,
+        foci_cost,
     )
     lifestyle_ctx = _lifestyle_context(
         character,
@@ -2267,6 +2523,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         cyberware_cost,
         bioware_cost,
         karma_converted,
+        foci_cost,
     )
     cyberware_ctx = _cyberware_context(
         character,
@@ -2275,6 +2532,18 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         bioware_item_ids,
         gear_cost,
         lifestyle_cost,
+        karma_converted,
+        foci_cost,
+    )
+    foci_ctx = _foci_selection_context(
+        character,
+        session.resources_letter,
+        foci_picks,
+        gear_cost,
+        lifestyle_cost,
+        cyberware_cost,
+        bioware_cost,
+        bound_spirit_karma_cost,
         karma_converted,
     )
     stale = bool(
@@ -2285,6 +2554,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         or lifestyle_ctx.get("lifestyle_budget_warning")
         or cyberware_ctx.get("cyberware_budget_warning")
         or spirit_ctx.get("spirit_budget_warning")
+        or foci_ctx.get("foci_budget_warning")
     )
     priority_ctx = {**priority_ctx, "priority_stale_selections": stale}
     return {
@@ -2295,6 +2565,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         **spell_ctx,
         **power_ctx,
         **spirit_ctx,
+        **foci_ctx,
         **quality_ctx,
         **contact_ctx,
         **lifestyle_ctx,
@@ -2594,6 +2865,8 @@ def create_app() -> FastAPI:
                 character = _relink_cyberware_selection(character, previous.cyberware_selection)
                 # WP45: bioware's Essence/bonus Improvements need the identical re-landing.
                 character = _relink_bioware_selection(character, previous.bioware_selection)
+                # WP47: Foci's FLAT_BONUS skill Improvements need the identical re-landing.
+                character = _relink_foci_selection(character, previous.foci_selection)
                 character = replace(
                     character,
                     skill_allocation=previous.skill_allocation,
@@ -2752,6 +3025,12 @@ def create_app() -> FastAPI:
             form = await request.form()
             picks = _parse_bound_spirits(form, MAX_BOUND_SPIRIT_ROWS)
             character = session.character
+            # WP47: Foci's own committed Karma cost is a 4th term here now -- see chummer5.engine
+            # .foci's module docstring for why interactive re-validation of two already-committed
+            # selections reads each other's current cost symmetrically.
+            foci_karma_cost = (
+                character.foci_selection.karma_cost if character.foci_selection is not None else 0
+            )
             karma_budget = provisional_karma_budget(
                 character.quality_selection.karma_cost
                 if character.quality_selection is not None
@@ -2759,14 +3038,17 @@ def create_app() -> FastAPI:
                 character.contact_selection.karma_cost
                 if character.contact_selection is not None
                 else 0,
+                foci_karma_cost=foci_karma_cost,
             )
             try:
                 selection = create_bound_spirit_selection(picks, character, karma_budget)
             except ValueError as exc:
-                context = _spirit_selection_context(character, picks, error=str(exc))
+                context = _spirit_selection_context(
+                    character, picks, foci_karma_cost, error=str(exc)
+                )
             else:
                 session.character = replace(character, bound_spirit_selection=selection)
-                context = _spirit_selection_context(session.character, picks)
+                context = _spirit_selection_context(session.character, picks, foci_karma_cost)
         response = templates.TemplateResponse(request, "_spirit_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -2974,9 +3256,12 @@ def create_app() -> FastAPI:
             lifestyle_cost = (
                 lifestyle_selection.total_cost if lifestyle_selection is not None else 0
             )
+            # WP47: Foci's own committed nuyen cost shares this same pool now too.
+            foci_selection = session.character.foci_selection
+            foci_cost = foci_selection.nuyen_cost if foci_selection is not None else 0
             nuyen_available = available_nuyen(
                 session.resources_letter, PRIORITIES, karma_converted
-            ) - (gear_cost + lifestyle_cost)
+            ) - (gear_cost + lifestyle_cost + foci_cost)
             try:
                 # Fixed evaluation order (chummer5.engine.bioware's own docstring): cyberware
                 # first, unaware of bioware; bioware second, aware of cyberware's own nuyen/Essence
@@ -2997,6 +3282,7 @@ def create_app() -> FastAPI:
                     cyberware_cost=selection.nuyen_spent,
                     bioware_cost=bioware_selection.nuyen_spent,
                     karma_converted=karma_converted,
+                    foci_cost=foci_cost,
                 )
             except ValueError as exc:
                 context = _cyberware_context(
@@ -3007,6 +3293,7 @@ def create_app() -> FastAPI:
                     gear_cost,
                     lifestyle_cost,
                     karma_converted,
+                    foci_cost,
                     error=str(exc),
                 )
             else:
@@ -3023,8 +3310,105 @@ def create_app() -> FastAPI:
                     gear_cost,
                     lifestyle_cost,
                     karma_converted,
+                    foci_cost,
                 )
         response = templates.TemplateResponse(request, "_cyberware.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/foci", response_class=HTMLResponse)
+    async def submit_foci(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None or session.character.magic_type is None:
+            context = _foci_selection_context(
+                session.character, session.resources_letter, (), 0, 0, 0, 0, 0
+            )
+        else:
+            form = await request.form()
+            picks = _parse_foci(form, FOCI)
+            character = session.character
+            resources_selection = character.resources_selection
+            gear_cost = resources_selection.nuyen_spent if resources_selection is not None else 0
+            karma_converted = (
+                resources_selection.karma_converted if resources_selection is not None else 0
+            )
+            lifestyle_selection = character.lifestyle_selection
+            lifestyle_cost = (
+                lifestyle_selection.total_cost if lifestyle_selection is not None else 0
+            )
+            cyberware_selection = character.cyberware_selection
+            cyberware_cost = (
+                cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
+            )
+            bioware_selection = character.bioware_selection
+            bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
+            bound_spirit_karma_cost = (
+                character.bound_spirit_selection.karma_cost
+                if character.bound_spirit_selection is not None
+                else 0
+            )
+            nuyen_available = available_nuyen(
+                session.resources_letter, PRIORITIES, karma_converted
+            ) - (gear_cost + lifestyle_cost + cyberware_cost + bioware_cost)
+            karma_budget = provisional_karma_budget(
+                character.quality_selection.karma_cost
+                if character.quality_selection is not None
+                else 0,
+                character.contact_selection.karma_cost
+                if character.contact_selection is not None
+                else 0,
+                bound_spirit_karma_cost=bound_spirit_karma_cost,
+            )
+            try:
+                selection = create_foci_selection(
+                    picks, character, FOCI, nuyen_available, karma_budget
+                )
+                new_resources_selection = create_resources_selection(
+                    session.resources_letter,
+                    PRIORITIES,
+                    tuple(
+                        item.name
+                        for item in (
+                            resources_selection.gear if resources_selection is not None else ()
+                        )
+                    ),
+                    lifestyle_cost=lifestyle_cost,
+                    cyberware_cost=cyberware_cost,
+                    bioware_cost=bioware_cost,
+                    karma_converted=karma_converted,
+                    foci_cost=selection.nuyen_cost,
+                )
+            except ValueError as exc:
+                context = _foci_selection_context(
+                    character,
+                    session.resources_letter,
+                    picks,
+                    gear_cost,
+                    lifestyle_cost,
+                    cyberware_cost,
+                    bioware_cost,
+                    bound_spirit_karma_cost,
+                    karma_converted,
+                    error=str(exc),
+                )
+            else:
+                session.character = _replace_committed_foci(character, selection)
+                session.character = replace(
+                    session.character, resources_selection=new_resources_selection
+                )
+                context = _foci_selection_context(
+                    session.character,
+                    session.resources_letter,
+                    picks,
+                    gear_cost,
+                    lifestyle_cost,
+                    cyberware_cost,
+                    bioware_cost,
+                    bound_spirit_karma_cost,
+                    karma_converted,
+                )
+        response = templates.TemplateResponse(request, "_foci_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
         return response
@@ -3081,6 +3465,7 @@ def create_app() -> FastAPI:
                     powers=POWERS,
                     cyberware=CYBERWARE,
                     bioware=BIOWARE,
+                    foci=FOCI,
                 )
             # A user-supplied file's shape is never trusted beyond this point -- malformed JSON
             # (ValueError, via json.JSONDecodeError/UnicodeDecodeError), a missing field

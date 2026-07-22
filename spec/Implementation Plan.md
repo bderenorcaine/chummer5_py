@@ -1453,7 +1453,7 @@ its own two-fixture limitations.
   fixture exercises this** (confirmed above) — acceptance is hand-verified against the rulebook table
   directly, documented as such in the worklog.
 
-- [ ] **WP47 — Foci (gear catalog, bonding, and per-category bonuses).**
+- [x] **WP47 — Foci (gear catalog, bonding, and per-category bonuses).**
   Goal: let a Magic-active character buy a focus (nuyen, from a new gear-catalog entry) and bond it
   (Karma, from leftover-Karma budget), applying whichever of the 7 focus categories' bonuses the item
   grants.

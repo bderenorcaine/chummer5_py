@@ -91,6 +91,16 @@
   </ul>
   <p>Bound Spirits karma cost: {{ bound_spirit_karma_cost }}.</p>
   {% endif %}
+
+  {% if foci_rows %}
+  <h4>Foci</h4>
+  <ul>
+    {% for row in foci_rows %}
+    <li>{{ row.name }} (Force {{ row.force }}, {{ row.nuyen_cost }}¥, {{ row.karma_cost }} Karma)</li>
+    {% endfor %}
+  </ul>
+  <p>Foci nuyen cost: {{ foci_nuyen_cost }}. Foci karma cost: {{ foci_karma_cost }}.</p>
+  {% endif %}
   {% endif %}
 
   <h3>Qualities</h3>

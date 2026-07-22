@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from chummer5.data.traditions import Tradition
     from chummer5.engine.bioware import BiowareSelection
     from chummer5.engine.cyberware import CyberwareSelection
+    from chummer5.engine.foci import FociSelection
     from chummer5.engine.lifestyle import LifestyleSelection
     from chummer5.engine.magic import PowerSelection, SpellSelection
     from chummer5.engine.qualities import QualitySelection
@@ -240,6 +241,14 @@ class Character:
     so a render can show "N of budget Karma spent" without recomputing it, the same reason
     `SpellSelection` wraps `spells` with its own `budget` field instead of being a bare tuple.
 
+    **WP47** adds `foci_selection: FociSelection | None` -- a magically active character's bonded
+    foci, the same "`None` until committed" wrapping-field shape as `bound_spirit_selection` (wraps
+    `picks` alongside `nuyen_cost`/`karma_cost`/both budgets for the same "avoid recomputing on
+    every render" reason). Unlike Bound Spirits, `foci_selection` *does* feed `improvements` for
+    any pick whose catalog item is `FLAT_BONUS` (`chummer5.engine.foci.apply_foci_improvements`),
+    mirroring `power_selection`'s "selection is a record, Improvements are a side effect of
+    applying it" split.
+
     **WP35** adds no new field -- it changes `attribute_value("MAG")`'s own formula to subtract
     `magic_essence_loss` (Σ `ESSENCE` improvements, ceiling-rounded per the rulebook's "per point or
     fraction thereof" wording), the cross-phase interaction between Phase I's Magic rating and
@@ -273,6 +282,7 @@ class Character:
     # class docstring's own paragraph and chummer5.engine.magic.create_magic_attribute_points).
     magic_attribute_points: int = 0
     bound_spirit_selection: BoundSpiritSelection | None = None  # Magician's bound spirits (WP46)
+    foci_selection: FociSelection | None = None  # magic-active character's bonded foci (WP47)
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]
