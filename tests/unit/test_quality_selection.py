@@ -11,14 +11,21 @@ from dataclasses import replace
 
 import pytest
 
+from chummer5.data.mentors import load_mentors
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import BonusSupport, FlatBonus, Quality, load_qualities
-from chummer5.engine.character import create_character, metatype_choices
+from chummer5.data.skills import load_skills
+from chummer5.data.traditions import load_traditions
+from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.derived import mental_limit
 from chummer5.engine.improvements import ImprovementSource, ImprovementType
+from chummer5.engine.magic import create_magic_selection
 from chummer5.engine.qualities import (
+    MENTOR_SPIRIT_QUALITY_NAME,
     QUALITY_KARMA_LIMIT,
+    MentorSpiritPick,
+    apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
     mvp_quality_catalog,
@@ -29,6 +36,10 @@ from chummer5.engine.qualities import (
 QUALITIES = load_qualities()
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
+TRADITIONS = load_traditions()
+SKILLS = load_skills()
+MENTORS = load_mentors()
+MENTOR_SPIRIT = next(q for q in QUALITIES if q.name == MENTOR_SPIRIT_QUALITY_NAME)
 
 # A synthetic Negative-category FLAT_BONUS quality -- no real SR5 quality with this shape currently
 # exists (see module docstring in chummer5.engine.qualities), so the negative-karma-cap rule is
@@ -473,3 +484,246 @@ def test_create_quality_selection_rejects_already_metatype_granted_quality() -> 
     low_light = next(q for q in QUALITIES if q.name == "Low-Light Vision")
     with pytest.raises(ValueError, match="not an MVP-offered quality id"):
         create_quality_selection([low_light.id], offered)
+
+
+# --- WP48: Mentor Spirit --------------------------------------------------------------------------
+
+
+_MAGICAL_SKILL_IDS = [s.id for s in SKILLS if s.category == "Magical Active"][:2]
+
+
+def _magician() -> Character:
+    """A Human Magician, Talent letter A (the letter that actually offers "Magician" -- see
+    `chummer5.data.priorities`; requires satisfying its 2-skill free-skill grant), Hermetic
+    tradition -- mirrors `chummer5.engine.foci`'s own test helper."""
+    character = _mundane_human_character()
+    tradition = next(t for t in TRADITIONS if t.name == "Hermetic")
+    selection = create_magic_selection(
+        "A", "Magician", tradition.id, _MAGICAL_SKILL_IDS, PRIORITIES, TRADITIONS, SKILLS
+    )
+    return replace(
+        character,
+        magic_type=selection.magic_type,
+        magic_rating=selection.magic_rating,
+        tradition=selection.tradition,
+    )
+
+
+def _adept() -> Character:
+    """A Human Adept, Talent letter D (no free-skill grant)."""
+    character = _mundane_human_character()
+    selection = create_magic_selection("D", "Adept", None, [], PRIORITIES, TRADITIONS, SKILLS)
+    return replace(character, magic_type=selection.magic_type, magic_rating=selection.magic_rating)
+
+
+# single-option General, both slots unsupported
+BEAR = next(m for m in MENTORS if m.name == "Bear")
+CAT = next(m for m in MENTORS if m.name == "Cat")  # 2-option General (real player choice)
+DOG = next(m for m in MENTORS if m.name == "Dog")  # single-option General, FLAT_BONUS
+
+
+def test_mentor_spirit_offered_only_for_magic_active_characters() -> None:
+    mundane = _mundane_human_character()
+    mundane_names = {q.name for q in offerable_quality_catalog(mundane, QUALITIES)}
+    assert MENTOR_SPIRIT.name not in mundane_names
+
+    magician = _magician()
+    magician_names = {q.name for q in offerable_quality_catalog(magician, QUALITIES)}
+    assert MENTOR_SPIRIT.name in magician_names
+
+    adept = _adept()
+    adept_names = {q.name for q in offerable_quality_catalog(adept, QUALITIES)}
+    assert MENTOR_SPIRIT.name in adept_names
+
+
+def test_create_quality_selection_rejects_mentor_spirit_for_mundane_via_offered_catalog() -> None:
+    # A Mundane character never even sees Mentor Spirit as offerable -- the ordinary "not an
+    # MVP-offered quality id" path handles it, no Mentor-Spirit-specific check needed here.
+    mundane = _mundane_human_character()
+    offered = offerable_quality_catalog(mundane, QUALITIES)
+    with pytest.raises(ValueError, match="not an MVP-offered quality id"):
+        create_quality_selection([MENTOR_SPIRIT.id], offered, magic_type=None)
+
+
+def test_create_quality_selection_mentor_spirit_requires_an_archetype() -> None:
+    with pytest.raises(ValueError, match="requires an archetype"):
+        create_quality_selection(
+            [MENTOR_SPIRIT.id], QUALITIES, magic_type="Magician", mentor_catalog=MENTORS
+        )
+
+
+def test_create_quality_selection_rejects_orphaned_archetype_pick() -> None:
+    with pytest.raises(ValueError, match="without the Mentor Spirit quality"):
+        create_quality_selection(
+            [],
+            QUALITIES,
+            magic_type="Magician",
+            mentor_catalog=MENTORS,
+            mentor_spirit_archetype_id=DOG.id,
+        )
+
+
+def test_create_quality_selection_rejects_unknown_archetype_id() -> None:
+    with pytest.raises(ValueError, match="not a Mentor Spirit archetype id"):
+        create_quality_selection(
+            [MENTOR_SPIRIT.id],
+            QUALITIES,
+            magic_type="Magician",
+            mentor_catalog=MENTORS,
+            mentor_spirit_archetype_id="not-a-real-archetype",
+        )
+
+
+def test_create_quality_selection_single_option_general_auto_resolves() -> None:
+    selection = create_quality_selection(
+        [MENTOR_SPIRIT.id],
+        QUALITIES,
+        magic_type="Magician",
+        mentor_catalog=MENTORS,
+        mentor_spirit_archetype_id=DOG.id,
+    )
+    assert selection.mentor_spirit == MentorSpiritPick(
+        archetype=DOG,
+        general_choice=DOG.general_options[0],
+        gated_choice=DOG.magician_choice,
+    )
+    assert selection.karma_cost == MENTOR_SPIRIT.karma
+
+
+def test_create_quality_selection_accepts_matching_choice_for_single_option_archetype() -> None:
+    # Deliberately lenient (not "must be None"): a save/load round trip always persists whatever
+    # general_choice.id was actually resolved, even for a single-option archetype -- see this
+    # function's own docstring for why rejecting an explicit-but-matching id would break that.
+    selection = create_quality_selection(
+        [MENTOR_SPIRIT.id],
+        QUALITIES,
+        magic_type="Magician",
+        mentor_catalog=MENTORS,
+        mentor_spirit_archetype_id=DOG.id,
+        mentor_spirit_general_choice_id=DOG.general_options[0].id,
+    )
+    assert selection.mentor_spirit is not None
+    assert selection.mentor_spirit.general_choice == DOG.general_options[0]
+
+
+def test_create_quality_selection_rejects_mismatched_choice_for_single_option_archetype() -> None:
+    with pytest.raises(ValueError, match="not a General bonus option"):
+        create_quality_selection(
+            [MENTOR_SPIRIT.id],
+            QUALITIES,
+            magic_type="Magician",
+            mentor_catalog=MENTORS,
+            mentor_spirit_archetype_id=DOG.id,
+            mentor_spirit_general_choice_id="not-a-real-choice-id",
+        )
+
+
+def test_create_quality_selection_two_option_general_requires_a_pick() -> None:
+    with pytest.raises(ValueError, match="a General bonus option must be chosen"):
+        create_quality_selection(
+            [MENTOR_SPIRIT.id],
+            QUALITIES,
+            magic_type="Magician",
+            mentor_catalog=MENTORS,
+            mentor_spirit_archetype_id=CAT.id,
+        )
+
+
+def test_create_quality_selection_two_option_general_resolves_the_chosen_one() -> None:
+    sneaking_name = "+2 dice on Sneaking Tests"
+    sneaking_option = next(c for c in CAT.general_options if c.name == sneaking_name)
+    selection = create_quality_selection(
+        [MENTOR_SPIRIT.id],
+        QUALITIES,
+        magic_type="Magician",
+        mentor_catalog=MENTORS,
+        mentor_spirit_archetype_id=CAT.id,
+        mentor_spirit_general_choice_id=sneaking_option.id,
+    )
+    assert selection.mentor_spirit is not None
+    assert selection.mentor_spirit.general_choice == sneaking_option
+    assert selection.mentor_spirit.gated_choice == CAT.magician_choice
+
+
+def test_create_quality_selection_gated_choice_resolves_from_magic_type() -> None:
+    selection = create_quality_selection(
+        [MENTOR_SPIRIT.id],
+        QUALITIES,
+        magic_type="Adept",
+        mentor_catalog=MENTORS,
+        mentor_spirit_archetype_id=DOG.id,
+    )
+    assert selection.mentor_spirit is not None
+    assert selection.mentor_spirit.gated_choice == DOG.adept_choice
+
+
+def test_create_quality_selection_mentor_spirit_karma_shares_the_positive_pool() -> None:
+    # Mentor Spirit (5 karma) plus Catlike (7) sum through the ordinary positive_karma path -- no
+    # separate budget, unlike Bound Spirits/Foci's provisional leftover-Karma pool.
+    catlike = _by_name("Catlike")
+    selection = create_quality_selection(
+        [MENTOR_SPIRIT.id, catlike.id],
+        QUALITIES,
+        magic_type="Magician",
+        mentor_catalog=MENTORS,
+        mentor_spirit_archetype_id=DOG.id,
+    )
+    assert selection.positive_karma == 12
+    assert selection.karma_cost == 12
+
+
+def test_apply_mentor_spirit_improvements_dog_general_flat_bonus() -> None:
+    character = _magician()
+    selection = create_quality_selection(
+        [MENTOR_SPIRIT.id],
+        QUALITIES,
+        magic_type="Magician",
+        mentor_catalog=MENTORS,
+        mentor_spirit_archetype_id=DOG.id,
+    )
+    assert selection.mentor_spirit is not None
+
+    apply_mentor_spirit_improvements(character, selection.mentor_spirit)
+
+    # Dog's General bonus is +2 Tracking (FLAT_BONUS); Dog's Magician choice (<spellcategory>) is
+    # NOT_YET_SUPPORTED, so it contributes nothing.
+    assert character.improvements.resolve(ImprovementType.SKILL, "Tracking") == 2
+    for imp in character.improvements.improvements:
+        assert imp.source_type == ImprovementSource.MENTOR_SPIRIT
+        assert imp.source_id == DOG.id
+
+
+def test_apply_mentor_spirit_improvements_bear_applies_nothing_for_magician() -> None:
+    # Bear's General bonus (<damageresistance>) and Magician choice (<spellcategory>) are both
+    # NOT_YET_SUPPORTED -- a real, honestly-classified "this pick currently applies no computed
+    # bonus" case (see chummer5.data.mentors' own docstring).
+    character = _magician()
+    selection = create_quality_selection(
+        [MENTOR_SPIRIT.id],
+        QUALITIES,
+        magic_type="Magician",
+        mentor_catalog=MENTORS,
+        mentor_spirit_archetype_id=BEAR.id,
+    )
+    assert selection.mentor_spirit is not None
+
+    apply_mentor_spirit_improvements(character, selection.mentor_spirit)
+
+    assert character.improvements.improvements == ()
+
+
+def test_apply_mentor_spirit_improvements_can_be_retracted_via_remove_source() -> None:
+    character = _magician()
+    selection = create_quality_selection(
+        [MENTOR_SPIRIT.id],
+        QUALITIES,
+        magic_type="Magician",
+        mentor_catalog=MENTORS,
+        mentor_spirit_archetype_id=DOG.id,
+    )
+    assert selection.mentor_spirit is not None
+    apply_mentor_spirit_improvements(character, selection.mentor_spirit)
+    assert character.improvements.resolve(ImprovementType.SKILL, "Tracking") == 2
+
+    character.improvements.remove_source(ImprovementSource.MENTOR_SPIRIT, DOG.id)
+    assert character.improvements.resolve(ImprovementType.SKILL, "Tracking") == 0

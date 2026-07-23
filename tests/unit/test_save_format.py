@@ -16,6 +16,7 @@ from chummer5.data.bioware import load_bioware
 from chummer5.data.cyberware import load_cyberware
 from chummer5.data.foci import load_foci
 from chummer5.data.lifestyle import load_lifestyles
+from chummer5.data.mentors import load_mentors
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import load_powers
 from chummer5.data.priorities import load_priorities
@@ -46,6 +47,7 @@ POWERS = load_powers()
 CYBERWARE = load_cyberware()
 BIOWARE = load_bioware()
 FOCI = load_foci()
+MENTORS = load_mentors()
 
 
 def _sample_save() -> CharacterSave:
@@ -660,6 +662,9 @@ def _magician_save(
     bound_spirit_picks: tuple[tuple[str, int], ...] = (),
     foci_picks: tuple[tuple[str, int], ...] = (),
     resources_letter: str = "C",
+    quality_ids: tuple[str, ...] = (),
+    mentor_spirit_archetype_id: str | None = None,
+    mentor_spirit_general_choice_id: str | None = None,
 ) -> CharacterSave:
     # Talent letter C's Magician option (Magic 3, no free-skill grant -- see test_magic.py's own
     # "letter C grants no free skill" precedent) keeps this fixture minimal.
@@ -671,7 +676,7 @@ def _magician_save(
         skills_letter="E",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_ids=quality_ids,
         contacts=(),
         resources_letter=resources_letter,
         gear_names=(),
@@ -682,6 +687,8 @@ def _magician_save(
         tradition_id=HERMETIC_ID,
         bound_spirit_picks=bound_spirit_picks,
         foci_picks=foci_picks,
+        mentor_spirit_archetype_id=mentor_spirit_archetype_id,
+        mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
     )
 
 
@@ -775,6 +782,7 @@ def _build_magician(save: CharacterSave) -> object:
         spells=SPELLS,
         powers=POWERS,
         foci=FOCI,
+        mentors=MENTORS,
     )
 
 
@@ -868,3 +876,113 @@ def test_build_character_allows_an_adept_to_bond_a_focus() -> None:
     character = _build_magician(save)
     assert character.foci_selection is not None
     assert character.foci_selection.nuyen_cost == 5000
+
+
+# -- WP48: mentor_spirit_archetype_id / mentor_spirit_general_choice_id ---------------------------
+
+MENTOR_SPIRIT_ID = next(q.id for q in QUALITIES if q.name == "Mentor Spirit")
+CATLIKE_ID = next(q.id for q in QUALITIES if q.name == "Catlike")
+DOG_ID = next(m.id for m in MENTORS if m.name == "Dog")
+CAT_ARCHETYPE_ID = next(m.id for m in MENTORS if m.name == "Cat")
+CAT_SNEAKING_CHOICE_ID = next(
+    c.id
+    for m in MENTORS
+    if m.name == "Cat"
+    for c in m.general_options
+    if c.name == "+2 dice on Sneaking Tests"
+)
+
+
+def test_json_round_trip_preserves_mentor_spirit_pick() -> None:
+    save = _magician_save(
+        quality_ids=(MENTOR_SPIRIT_ID,),
+        mentor_spirit_archetype_id=CAT_ARCHETYPE_ID,
+        mentor_spirit_general_choice_id=CAT_SNEAKING_CHOICE_ID,
+    )
+    assert from_json(to_json(save)) == save
+    data = json.loads(to_json(save))
+    assert data["mentor_spirit_archetype_id"] == CAT_ARCHETYPE_ID
+    assert data["mentor_spirit_general_choice_id"] == CAT_SNEAKING_CHOICE_ID
+
+
+def test_from_json_defaults_mentor_spirit_fields_for_a_pre_wp48_save() -> None:
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    assert "mentor_spirit_archetype_id" not in data or data["mentor_spirit_archetype_id"] is None
+    loaded = from_json(to_json(save))
+    assert loaded.mentor_spirit_archetype_id is None
+    assert loaded.mentor_spirit_general_choice_id is None
+
+
+def test_build_character_applies_mentor_spirit_pick() -> None:
+    save = _magician_save(
+        quality_ids=(MENTOR_SPIRIT_ID,), mentor_spirit_archetype_id=DOG_ID
+    )
+    character = _build_magician(save)
+    assert character.quality_selection is not None
+    pick = character.quality_selection.mentor_spirit
+    assert pick is not None
+    assert pick.archetype.name == "Dog"
+    assert pick.gated_choice is pick.archetype.magician_choice
+    from chummer5.engine.improvements import ImprovementType
+
+    assert character.improvements.resolve(ImprovementType.SKILL, "Tracking") == 2
+
+
+def test_build_character_mentor_spirit_karma_shares_the_positive_quality_pool() -> None:
+    # Mentor Spirit (5) + Catlike (7) = 12, well under QUALITY_KARMA_LIMIT (25) -- the ordinary
+    # positive_karma path, not a separate provisional budget (unlike Bound Spirits/Foci).
+    save = _magician_save(
+        quality_ids=(MENTOR_SPIRIT_ID, CATLIKE_ID), mentor_spirit_archetype_id=DOG_ID
+    )
+    character = _build_magician(save)
+    assert character.quality_selection is not None
+    assert character.quality_selection.positive_karma == 12
+
+
+def test_build_character_two_option_general_choice_resolves() -> None:
+    save = _magician_save(
+        quality_ids=(MENTOR_SPIRIT_ID,),
+        mentor_spirit_archetype_id=CAT_ARCHETYPE_ID,
+        mentor_spirit_general_choice_id=CAT_SNEAKING_CHOICE_ID,
+    )
+    character = _build_magician(save)
+    assert character.quality_selection is not None
+    pick = character.quality_selection.mentor_spirit
+    assert pick is not None
+    assert pick.general_choice.id == CAT_SNEAKING_CHOICE_ID
+    from chummer5.engine.improvements import ImprovementType
+
+    assert character.improvements.resolve(ImprovementType.SKILL, "Sneaking") == 2
+
+
+def test_build_character_rejects_mentor_spirit_without_an_archetype() -> None:
+    save = _magician_save(quality_ids=(MENTOR_SPIRIT_ID,))
+    with pytest.raises(ValueError, match="requires an archetype"):
+        _build_magician(save)
+
+
+def test_build_character_allows_an_adept_to_pick_a_mentor_spirit() -> None:
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="E",
+        skill_points={},
+        group_points={},
+        quality_ids=(MENTOR_SPIRIT_ID,),
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        talent_letter="D",
+        talent_codename="Adept",
+        mentor_spirit_archetype_id=DOG_ID,
+    )
+    character = _build_magician(save)
+    assert character.quality_selection is not None
+    pick = character.quality_selection.mentor_spirit
+    assert pick is not None
+    assert pick.gated_choice is pick.archetype.adept_choice

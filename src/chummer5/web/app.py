@@ -161,6 +161,7 @@ from chummer5.data.bioware import Bioware, load_bioware
 from chummer5.data.cyberware import Cyberware, load_cyberware
 from chummer5.data.foci import Focus, load_foci
 from chummer5.data.lifestyle import load_lifestyles
+from chummer5.data.mentors import MentorSpiritArchetype, load_mentors
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import Power, load_powers
 from chummer5.data.priorities import load_priorities
@@ -234,8 +235,10 @@ from chummer5.engine.magic import (
     offered_talent_options,
 )
 from chummer5.engine.qualities import (
+    MENTOR_SPIRIT_QUALITY_NAME,
     QUALITY_KARMA_LIMIT,
     QualitySelection,
+    apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
     mvp_quality_catalog,
@@ -311,10 +314,16 @@ FOCI = load_foci()
 TRADITIONS = load_traditions()
 SPELLS = load_spells()
 POWERS = load_powers()
+# WP48: the 16 SR5 Mentor Spirit archetypes.
+MENTORS = load_mentors()
 
 # The MVP-offered quality catalog (see chummer5.engine.qualities): 3 FLAT_BONUS qualities, all
 # Positive. Computed once, mirroring MUNDANE_SKILLS/MUNDANE_SKILL_GROUPS below.
 MVP_QUALITIES = mvp_quality_catalog(QUALITIES)
+
+# WP48: the Mentor Spirit quality itself, looked up once by name -- used by `submit_qualities` to
+# recognize whether it's among the submitted quality_id checkboxes (see that route's own comment).
+MENTOR_SPIRIT_QUALITY = next(q for q in QUALITIES if q.name == MENTOR_SPIRIT_QUALITY_NAME)
 
 # The MVP-offered Adept Power catalog (see chummer5.engine.magic): 6 FLAT_BONUS powers.
 MVP_POWERS = mvp_power_catalog(POWERS)
@@ -838,6 +847,10 @@ def _relink_quality_improvements(
     edited. Safe to call unconditionally: returns `character` unchanged if nothing has ever been
     committed.
 
+    **WP48**: also re-applies `quality_selection.mentor_spirit`'s `MENTOR_SPIRIT`-sourced
+    Improvements when present, for the identical reason -- a fresh `create_character()` call's
+    empty index has nothing to remove, so this is always a pure add, never a double-application.
+
     **WP19 note**: still load-bearing for `submit_attributes` (unchanged this WP -- still rebuilds
     via `create_character()`), but no longer called from `submit_priorities`, which WP19 switched
     to `dataclasses.replace`-ing the *previous* `Character` in place. `replace` carries
@@ -849,6 +862,8 @@ def _relink_quality_improvements(
     if quality_selection is None:
         return character
     apply_quality_improvements(character, quality_selection.qualities)
+    if quality_selection.mentor_spirit is not None:
+        apply_mentor_spirit_improvements(character, quality_selection.mentor_spirit)
     return replace(character, quality_selection=quality_selection)
 
 
@@ -983,10 +998,16 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
     a changed `magic_rating` (different letter/codename) changes how much headroom is even left to
     spend, so whatever was previously spent can't be blindly carried forward; the player re-spends
     from the Attributes section after any Talent change, same as spells/powers.
+
+    **WP48**: `quality_selection`'s Mentor Spirit portion (if any) gets the identical "reset on any
+    Talent (re)confirmation" treatment via `_strip_mentor_spirit_selection`, applied surgically
+    rather than wholesale -- see that function's own docstring for why `quality_selection` as a
+    whole can't just be reset to `None` the way spells/powers/spirits/foci are.
     """
     character.improvements.remove_source(ImprovementSource.TALENT, MAGIC_SKILL_GRANT_SOURCE_ID)
     _remove_adept_power_improvements(character)
     _remove_foci_improvements(character)
+    quality_selection = _strip_mentor_spirit_selection(character, character.quality_selection)
     apply_magic_skill_grant_improvements(character, selection, SKILLS)
     return replace(
         character,
@@ -999,6 +1020,7 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
         bound_spirit_selection=None,
         foci_selection=None,
         magic_attribute_points=0,
+        quality_selection=quality_selection,
     )
 
 
@@ -1108,19 +1130,56 @@ def _remove_foci_improvements(character: Character) -> None:
         character.improvements.remove_source(ImprovementSource.FOCUS, item_id)
 
 
-def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
-    """Swap whatever QUALITY-sourced Improvements `character.improvements` currently holds for
-    `selection`'s, and re-attach `selection` as `character.quality_selection`.
+def _strip_mentor_spirit_selection(
+    character: Character, quality_selection: QualitySelection | None
+) -> QualitySelection | None:
+    """Drop just the Mentor Spirit quality and archetype pick from an already-committed
+    `QualitySelection`, keeping every other quality intact (WP48), used by
+    `_replace_committed_talent` below.
 
-    `apply_quality_improvements` only ever adds -- calling it twice for two submissions against
-    the same `Character` (i.e. without an intervening `create_character` rebuild) would double up
-    any quality that stayed selected across both, so previously-applied QUALITY improvements are
-    removed first.
+    Unlike spell/power/spirit/Foci selections, which `_replace_committed_talent` resets to `None`
+    wholesale on any Talent change, `quality_selection` as a whole can't be reset that way -- it
+    also holds every magic-*independent* quality the player picked (Catlike, Indomitable, ...),
+    which a Talent change has no reason to discard. But a Mentor Spirit pick specifically *is*
+    Talent-dependent (its `gated_choice` is resolved from `magic_type`, and the quality stops being
+    offered at all once `magic_type` becomes `None`), so it needs the same "reset on any Talent
+    (re)confirmation" treatment those other selections get, applied surgically instead of wholesale.
+    Removes `MENTOR_SPIRIT`-sourced Improvements as a side effect; `QUALITY`-sourced ones for the
+    remaining qualities are left untouched (`apply_quality_improvements` was never called twice for
+    them, so there's nothing to remove before a no-op re-add would be needed). Returns
+    `quality_selection` unchanged if nothing was ever committed, or if it never included Mentor
+    Spirit in the first place.
+    """
+    if quality_selection is None or quality_selection.mentor_spirit is None:
+        return quality_selection
+    character.improvements.remove_source(
+        ImprovementSource.MENTOR_SPIRIT, quality_selection.mentor_spirit.archetype.id
+    )
+    remaining_ids = [
+        q.id for q in quality_selection.qualities if q.name != MENTOR_SPIRIT_QUALITY_NAME
+    ]
+    offered = offerable_quality_catalog(character, QUALITIES)
+    return create_quality_selection(remaining_ids, offered)
+
+
+def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
+    """Swap whatever QUALITY-/MENTOR_SPIRIT-sourced Improvements `character.improvements` currently
+    holds for `selection`'s, and re-attach `selection` as `character.quality_selection`.
+
+    `apply_quality_improvements`/`apply_mentor_spirit_improvements` only ever add -- calling either
+    twice for two submissions against the same `Character` (i.e. without an intervening
+    `create_character` rebuild) would double up anything that stayed selected across both, so
+    previously-applied Improvements of both kinds are removed first. `MENTOR_SPIRIT` is removed
+    unconditionally (a no-op when nothing was ever picked) rather than only when `selection
+    .mentor_spirit is None`, since a *changed* archetype pick also needs its old Improvements gone
+    before the new ones are applied (WP48).
     """
     for imp in character.improvements.improvements:
-        if imp.source_type == ImprovementSource.QUALITY:
-            character.improvements.remove_source(ImprovementSource.QUALITY, imp.source_id)
+        if imp.source_type in (ImprovementSource.QUALITY, ImprovementSource.MENTOR_SPIRIT):
+            character.improvements.remove_source(imp.source_type, imp.source_id)
     apply_quality_improvements(character, selection.qualities)
+    if selection.mentor_spirit is not None:
+        apply_mentor_spirit_improvements(character, selection.mentor_spirit)
     return replace(character, quality_selection=selection)
 
 
@@ -1128,6 +1187,8 @@ def _quality_selection_context(
     character: Character | None,
     quality_ids: Iterable[str],
     *,
+    mentor_spirit_archetype_id: str | None = None,
+    mentor_spirit_general_choice_id: str | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
     """Context for `_quality_selection.html`. `quality_ids` is whatever should be shown checked --
@@ -1136,7 +1197,18 @@ def _quality_selection_context(
 
     **WP23**: the pickable rows come from `offerable_quality_catalog(character, QUALITIES)`, not
     the module-level `MVP_QUALITIES`, so a quality this character's metatype already grants for
-    free (e.g. an Elf's Low-Light Vision) never appears as something to spend karma on again.
+    free (e.g. an Elf's Low-Light Vision) never appears as something to spend karma on again --
+    also what makes Mentor Spirit itself appear as a row at all for a magic-active character (WP48).
+
+    **WP48**: `mentor_spirit_archetype_id`/`mentor_spirit_general_choice_id` follow the identical
+    "explicit override on echo/submit, fall back to the committed selection otherwise" shape --
+    `None` (the default, used by the main chargen-body render) falls back to `character
+    .quality_selection.mentor_spirit`; `submit_qualities` always passes an explicit value (possibly
+    `None`, meaning "no archetype picked"), which must win even when it differs from what's
+    committed. `mentor_spirit_offered` gates whether `_quality_selection.html` even shows the
+    archetype picker at all -- mirrors `offerable_quality_catalog`'s own `character.magic_type is
+    not None` gate for Mentor Spirit itself, so the picker never appears for a build where the
+    quality isn't even offered.
     """
     if character is None:
         return {"character": None, "quality_error": error}
@@ -1145,6 +1217,20 @@ def _quality_selection_context(
     rows = [{"quality": q, "selected": q.id in ids} for q in offered]
     positive_karma = sum(q.karma for q in offered if q.id in ids and q.category == "Positive")
     negative_karma = -sum(q.karma for q in offered if q.id in ids and q.category == "Negative")
+
+    committed_pick = (
+        character.quality_selection.mentor_spirit
+        if character.quality_selection is not None
+        else None
+    )
+    if mentor_spirit_archetype_id is None and committed_pick is not None:
+        mentor_spirit_archetype_id = committed_pick.archetype.id
+        if mentor_spirit_general_choice_id is None:
+            mentor_spirit_general_choice_id = committed_pick.general_choice.id
+    selected_archetype: MentorSpiritArchetype | None = next(
+        (a for a in MENTORS if a.id == mentor_spirit_archetype_id), None
+    )
+
     return {
         "character": character,
         "quality_rows": rows,
@@ -1152,6 +1238,11 @@ def _quality_selection_context(
         "negative_karma": negative_karma,
         "karma_limit": QUALITY_KARMA_LIMIT,
         "metatype_qualities": character.metatype_qualities,
+        "mentor_spirit_offered": character.magic_type is not None,
+        "mentor_spirit_archetypes": MENTORS,
+        "selected_mentor_spirit_archetype_id": mentor_spirit_archetype_id,
+        "selected_mentor_spirit_archetype": selected_archetype,
+        "selected_mentor_spirit_general_choice_id": mentor_spirit_general_choice_id,
         "quality_error": error,
     }
 
@@ -2094,6 +2185,15 @@ def _character_sheet_context(
         "magic_rating_before_essence_loss": character.magic_rating_before_essence_loss,
         "tradition_name": character.tradition.name if character.tradition is not None else None,
         "power_points": character.power_points,
+        # WP48: the picked Mentor Spirit archetype (None if not taken) -- General/Magician-or-Adept
+        # slot names shown for flavor even where their bonus is NOT_YET_SUPPORTED/NO_EFFECT
+        # (mirrors chummer5.engine.foci's own "the pick is real even when the bonus isn't applied"
+        # posture), since the advantage/disadvantage text is the point of the pick either way.
+        "mentor_spirit": (
+            character.quality_selection.mentor_spirit
+            if character.quality_selection is not None
+            else None
+        ),
         "drain_resistance": drain_resistance(character),
         "spell_names": (
             [spell.name for spell in character.spell_selection.spells]
@@ -2272,6 +2372,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.foci_selection is not None
         else ()
     )
+    mentor_spirit = (
+        character.quality_selection.mentor_spirit
+        if character.quality_selection is not None
+        else None
+    )
     return create_character_save(
         metatype_name=character.metatype.name,
         heritage_letter=session.heritage_letter,
@@ -2306,6 +2411,12 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         karma_converted=karma_converted,
         bound_spirit_picks=bound_spirit_picks,
         foci_picks=foci_picks,
+        mentor_spirit_archetype_id=(
+            mentor_spirit.archetype.id if mentor_spirit is not None else None
+        ),
+        mentor_spirit_general_choice_id=(
+            mentor_spirit.general_choice.id if mentor_spirit is not None else None
+        ),
         build_method=session.build_method,
     )
 
@@ -3062,15 +3173,40 @@ def create_app() -> FastAPI:
         else:
             form = await request.form()
             quality_ids = [str(value) for value in form.getlist("quality_id")]
+            # WP48: the archetype/general-choice fields are only meaningful when Mentor Spirit
+            # itself is checked -- forced to None otherwise, so unchecking the quality never
+            # requires also clearing a stale dropdown just to avoid "an archetype was picked
+            # without the Mentor Spirit quality" (create_quality_selection's own guard against an
+            # orphaned pick, meant for a tampered/stale request, not this ordinary UI interaction).
+            mentor_spirit_archetype_id: str | None = None
+            mentor_spirit_general_choice_id: str | None = None
+            if MENTOR_SPIRIT_QUALITY.id in quality_ids:
+                raw_archetype_id = str(form.get("mentor_spirit_archetype_id") or "")
+                mentor_spirit_archetype_id = raw_archetype_id or None
+                raw_general_choice_id = str(form.get("mentor_spirit_general_choice_id") or "")
+                mentor_spirit_general_choice_id = raw_general_choice_id or None
             # WP23: validate against this character's own offerable catalog, not the raw QUALITIES
             # catalog, so a tampered/stale submission can't buy an already metatype-granted quality
             # either -- `create_quality_selection` already raises "not an MVP-offered quality id"
             # for anything not in whatever catalog it's given, so this alone is sufficient.
             offered = offerable_quality_catalog(session.character, QUALITIES)
             try:
-                selection = create_quality_selection(quality_ids, offered)
+                selection = create_quality_selection(
+                    quality_ids,
+                    offered,
+                    magic_type=session.character.magic_type,
+                    mentor_catalog=MENTORS,
+                    mentor_spirit_archetype_id=mentor_spirit_archetype_id,
+                    mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
+                )
             except ValueError as exc:
-                context = _quality_selection_context(session.character, quality_ids, error=str(exc))
+                context = _quality_selection_context(
+                    session.character,
+                    quality_ids,
+                    mentor_spirit_archetype_id=mentor_spirit_archetype_id,
+                    mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
+                    error=str(exc),
+                )
             else:
                 session.character = _replace_committed_qualities(session.character, selection)
                 context = _quality_selection_context(session.character, quality_ids)
@@ -3466,6 +3602,7 @@ def create_app() -> FastAPI:
                     cyberware=CYBERWARE,
                     bioware=BIOWARE,
                     foci=FOCI,
+                    mentors=MENTORS,
                 )
             # A user-supplied file's shape is never trusted beyond this point -- malformed JSON
             # (ValueError, via json.JSONDecodeError/UnicodeDecodeError), a missing field

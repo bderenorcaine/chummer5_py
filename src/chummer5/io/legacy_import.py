@@ -115,6 +115,21 @@ this project's curated corpus needs it reconstructed, and building a real `<gear
 separate, much larger undertaking than this one-line gap). `foci_picks` is simply never passed to
 `create_character_save` here, defaulting to `()` the same way `bound_spirit_picks` already does.
 
+**Deliberately not imported either: the Mentor Spirit archetype pick (WP48).** `chummer5.io
+.legacy_chum5.LegacyCharacter` has no parsing for a `.chum5`'s `<mentorspirit>` element, so a real
+character's picked archetype can't be recovered even if the "Mentor Spirit" quality itself were
+let through. Nothing changes here as a result: `offered_qualities` above is still built from
+`mvp_quality_catalog(qualities)` (unchanged by WP48 -- only `offerable_quality_catalog`, a
+per-character widening this function has no live `Character` to call with at this point in the
+pipeline, gained Mentor Spirit), so a legacy `qualitysource != "Metatype"` Mentor Spirit pick
+continues to land in `dropped_qualities`, the ordinary excluded-and-reported path every other
+not-yet-importable quality already takes -- correct behavior, not a gap, since there would be
+nothing to attach an archetype to even if the quality itself were accepted. Mirrors WP46/47's
+"flagged, not scheduled" treatment: no fixture in this project's curated corpus has a real,
+selected Mentor Spirit to exercise this either way (see Phase M's own intro in the Implementation
+Plan). A future WP adding real `<mentorspirit>` parsing should upgrade this the same way WP28
+upgraded the old blanket magic rejection into itemized spell/power drops.
+
 **Which `<lifestyle>` entry counts as "primary" (WP20).** The legacy save format has no explicit
 "is this the primary Lifestyle" flag (confirmed: no such field exists anywhere in `Lifestyle.cs`,
 only a general `LifestyleType.Standard` -- see `spec/rulebooks/learnings.md`'s WP20 entry). This

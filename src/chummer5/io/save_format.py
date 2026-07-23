@@ -109,6 +109,21 @@ accounts for Bound Spirits' already-resolved `karma_cost`, and its nuyen budget 
 gear/Lifestyle/cyberware/bioware's already-resolved spend, so the *combined* Step Six nuyen and
 leftover-Karma pools are both correctly shared, not each independently assumed unclaimed.
 
+**WP48** adds `mentor_spirit_archetype_id`/`mentor_spirit_general_choice_id` -- a magic-active
+character's picked Mentor Spirit archetype (the "Mentor Spirit" quality itself is already carried
+by `quality_ids`, unchanged) and, only when that archetype's General bonus slot is itself a
+player choice (3 of 16 SR5 archetypes -- see `chummer5.data.mentors`'s own docstring), which
+option was chosen. Both default to `None` ("predates this field"/"Mentor Spirit not taken"), so
+every pre-WP48 save round-trips unchanged. `build_character` resolves `quality_selection` with
+these threaded through *and* `magic_type` computed up front from `save.talent_codename` (`None`
+for `"Mundane"`, `save.talent_codename` itself otherwise -- exactly what `create_magic_selection`
+would later derive as `MagicSelection.magic_type`, computed early here since `create_quality_
+selection` needs it and quality resolution happens before the Magic-selection block further
+down this function) -- unlike Bound Spirits/Foci, Mentor Spirit's Karma cost is a normal Positive
+Quality cost already covered by `QualitySelection.positive_karma`/`QUALITY_KARMA_LIMIT`, not a
+draw against `chummer5.engine.spirits.provisional_karma_budget`'s separate leftover-Karma pool, so
+no evaluation-order concern with Bound Spirits/Foci exists here.
+
 **WP44** adds `build_method` -- which of the two supported priority-letter validity rules
 (`chummer5.engine.build_method.PRIORITY_BUILD_METHOD`/`SUM_TO_TEN_BUILD_METHOD`) produced
 `heritage_letter`/`talent_letter`/`attributes_letter`/`skills_letter`/`resources_letter`. Unlike
@@ -143,6 +158,7 @@ from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware import Cyberware
 from chummer5.data.foci import Focus
 from chummer5.data.lifestyle import LifestyleTier
+from chummer5.data.mentors import MentorSpiritArchetype
 from chummer5.data.metatypes import Metatype
 from chummer5.data.powers import Power
 from chummer5.data.priorities import PriorityTable
@@ -167,6 +183,7 @@ from chummer5.engine.magic import (
     offered_talent_options,
 )
 from chummer5.engine.qualities import (
+    apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
     resolve_metatype_qualities,
@@ -256,6 +273,12 @@ class CharacterSave:
     # WP47: a magic-active character's bonded foci, as (focus_id, force) pairs. Defaults to () --
     # "predates this field", the identical shape every other optional selection field defaults to.
     foci_picks: tuple[FociPickPair, ...] = ()
+    # WP48: a magic-active character's picked Mentor Spirit archetype id, and (only when that
+    # archetype's General bonus slot is itself a choice) the chosen option's id. Both default to
+    # None -- "predates this field"/"Mentor Spirit not taken", the same shape every other optional
+    # selection field defaults to.
+    mentor_spirit_archetype_id: str | None = None
+    mentor_spirit_general_choice_id: str | None = None
     # WP44: which priority-letter validity rule produced the 5 letters above -- see module
     # docstring for why this is carried through unvalidated rather than re-checked here.
     build_method: str = PRIORITY_BUILD_METHOD
@@ -288,6 +311,8 @@ def create_character_save(
     karma_converted: int = 0,
     bound_spirit_picks: Iterable[BoundSpiritPickPair] = (),
     foci_picks: Iterable[FociPickPair] = (),
+    mentor_spirit_archetype_id: str | None = None,
+    mentor_spirit_general_choice_id: str | None = None,
     build_method: str = PRIORITY_BUILD_METHOD,
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
@@ -324,6 +349,8 @@ def create_character_save(
         karma_converted=karma_converted,
         bound_spirit_picks=tuple(bound_spirit_picks),
         foci_picks=tuple(foci_picks),
+        mentor_spirit_archetype_id=mentor_spirit_archetype_id,
+        mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
         build_method=build_method,
     )
 
@@ -372,6 +399,8 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "foci_picks": [
             {"focus_id": focus_id, "force": force} for focus_id, force in save.foci_picks
         ],
+        "mentor_spirit_archetype_id": save.mentor_spirit_archetype_id,
+        "mentor_spirit_general_choice_id": save.mentor_spirit_general_choice_id,
         "build_method": save.build_method,
     }
 
@@ -425,6 +454,8 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
             (p["spirit_type"], p["services"]) for p in data.get("bound_spirit_picks", ())
         ),
         foci_picks=((p["focus_id"], p["force"]) for p in data.get("foci_picks", ())),
+        mentor_spirit_archetype_id=data.get("mentor_spirit_archetype_id"),
+        mentor_spirit_general_choice_id=data.get("mentor_spirit_general_choice_id"),
         build_method=data.get("build_method", PRIORITY_BUILD_METHOD),
     )
 
@@ -452,6 +483,7 @@ def build_character(
     cyberware: tuple[Cyberware, ...] = (),
     bioware: tuple[Bioware, ...] = (),
     foci: tuple[Focus, ...] = (),
+    mentors: tuple[MentorSpiritArchetype, ...] = (),
 ) -> Character:
     """Reconstruct a fully-populated `Character` from a `CharacterSave`, re-running the same
     `create_*` validation each selection already has (see module docstring).
@@ -516,8 +548,23 @@ def build_character(
         character, metatype_qualities, source_type=ImprovementSource.METATYPE
     )
 
-    quality_selection = create_quality_selection(save.quality_ids, qualities)
+    # WP48: computed early (before the Magic-selection block further down) since
+    # create_quality_selection needs it to resolve a Mentor Spirit archetype pick -- exactly what
+    # create_magic_selection would later derive as MagicSelection.magic_type, for a save whose
+    # talent_codename is already known. See this module's own WP48 docstring paragraph.
+    magic_type = None if save.talent_codename == "Mundane" else save.talent_codename
+
+    quality_selection = create_quality_selection(
+        save.quality_ids,
+        qualities,
+        magic_type=magic_type,
+        mentor_catalog=mentors,
+        mentor_spirit_archetype_id=save.mentor_spirit_archetype_id,
+        mentor_spirit_general_choice_id=save.mentor_spirit_general_choice_id,
+    )
     apply_quality_improvements(character, quality_selection.qualities)
+    if quality_selection.mentor_spirit is not None:
+        apply_mentor_spirit_improvements(character, quality_selection.mentor_spirit)
 
     skill_allocation = create_skill_allocation(
         letter=save.skills_letter,

@@ -51,6 +51,52 @@
         {% endfor %}
       </tbody>
     </table>
+
+    {% if mentor_spirit_offered %}
+    <fieldset>
+      <legend>Mentor Spirit archetype (only applies if the Mentor Spirit quality above is checked)</legend>
+      <label>
+        Archetype
+        <select name="mentor_spirit_archetype_id">
+          <option value="">-- choose an archetype --</option>
+          {% for archetype in mentor_spirit_archetypes %}
+          <option value="{{ archetype.id }}" {% if archetype.id == selected_mentor_spirit_archetype_id %}selected{% endif %}>
+            {{ archetype.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+
+      {% if selected_mentor_spirit_archetype %}
+      <p>{{ selected_mentor_spirit_archetype.advantage }}</p>
+      <p>{{ selected_mentor_spirit_archetype.disadvantage }}</p>
+
+      {% if selected_mentor_spirit_archetype.general_options|length > 1 %}
+      <fieldset>
+        <legend>General bonus: choose one</legend>
+        {% for option in selected_mentor_spirit_archetype.general_options %}
+        <label>
+          <input
+            type="radio"
+            name="mentor_spirit_general_choice_id"
+            value="{{ option.id }}"
+            {% if option.id == selected_mentor_spirit_general_choice_id %}checked{% endif %}
+          />
+          {{ option.name }}
+        </label>
+        {% endfor %}
+      </fieldset>
+      {% endif %}
+
+      <p>
+        Magician bonus: {{ selected_mentor_spirit_archetype.magician_choice.name }}.
+        Adept bonus: {{ selected_mentor_spirit_archetype.adept_choice.name }}.
+        Only the one matching {{ character.magic_type }} applies.
+      </p>
+      {% endif %}
+    </fieldset>
+    {% endif %}
+
     <button type="submit">Update qualities</button>
   </form>
   {% else %}

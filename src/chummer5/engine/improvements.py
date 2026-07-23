@@ -102,7 +102,13 @@ class ImprovementSource(Enum):
     bioware-only re-purchase shouldn't also strip already-committed cyberware). WP47 adds an 8th:
     `FOCUS`, for `chummer5.engine.foci.apply_foci_improvements` — a bonded focus's `FLAT_BONUS`
     skill bonus, keyed by the focus's own catalog id (mirrors `CYBERWARE`/`BIOWARE`'s per-item
-    `source_id` convention).
+    `source_id` convention). WP48 adds a 9th: `MENTOR_SPIRIT`, for `chummer5.engine.qualities
+    .apply_mentor_spirit_improvements` — a picked archetype's General/Magician/Adept `FLAT_BONUS`
+    slots, kept distinct from `QUALITY` (even though the Mentor Spirit quality itself is what
+    gates offering an archetype pick at all) so `ImprovementIndex.remove_source` can retract the
+    archetype's own bonuses independently of the blanket "remove every `QUALITY`-sourced
+    Improvement, then reapply `selection.qualities`" pass `_replace_committed_qualities` already
+    does — that pass has no reason to know about `QualitySelection.mentor_spirit` at all.
     """
 
     METATYPE = auto()
@@ -113,6 +119,7 @@ class ImprovementSource(Enum):
     CYBERWARE = auto()
     BIOWARE = auto()
     FOCUS = auto()
+    MENTOR_SPIRIT = auto()
 
 
 @dataclass(frozen=True)

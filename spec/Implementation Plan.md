@@ -1495,7 +1495,7 @@ its own two-fixture limitations.
   applied Improvement; **no real fixture exercises this** (confirmed above) — hand-verified acceptance,
   documented as such.
 
-- [ ] **WP48 — Mentor Spirits.**
+- [x] **WP48 — Mentor Spirits.**
   Goal: let a Magic-active character take the Mentor Spirit quality and choose a specific archetype,
   each granting **3 distinct bonuses** (general, magician-only, adept-only) — confirmed via the rulebook
   (Magic chapter, "Mentor Spirit Archetypes," p. 320-ish, not yet page-confirmed for this project — do

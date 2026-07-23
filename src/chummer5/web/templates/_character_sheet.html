@@ -101,6 +101,16 @@
   </ul>
   <p>Foci nuyen cost: {{ foci_nuyen_cost }}. Foci karma cost: {{ foci_karma_cost }}.</p>
   {% endif %}
+
+  {% if mentor_spirit %}
+  <h4>Mentor Spirit</h4>
+  <p>
+    {{ mentor_spirit.archetype.name }} —
+    {{ mentor_spirit.general_choice.name }}; {{ mentor_spirit.gated_choice.name }}.
+  </p>
+  <p>{{ mentor_spirit.archetype.advantage }}</p>
+  <p>{{ mentor_spirit.archetype.disadvantage }}</p>
+  {% endif %}
   {% endif %}
 
   <h3>Qualities</h3>
