@@ -95,6 +95,28 @@ def test_imports_yeti_end_to_end() -> None:
     assert automatics_id not in result.save.skill_points  # rating comes from the group, not itself
     assert result.save.group_points.get("Firearms") == bought_groups["Firearms"]
 
+    # Specializations (WP50): Yeti's own recorded 6 <specs> entries -- 5 individually-purchased
+    # skills import cleanly, and Computer's own "Matrix Perception" is dropped (her Computer skill
+    # is karma-only, base<=0, so it never reaches skill_points -- see chummer5.io.legacy_import's
+    # own module docstring). Adding 5 specialization points to her existing 23 individual skill
+    # points exactly fills her 28-point Skills-C budget.
+    skills_by_name = {s.name: s for s in SKILLS}
+    assert {
+        skills_by_name["Compiling"].id: "Machine Sprite",
+        skills_by_name["Cybercombat"].id: "Sprites",
+        skills_by_name["Hacking"].id: "Hosts",
+        skills_by_name["Registering"].id: "Machine Sprite",
+        skills_by_name["Software"].id: "Puppeteer",
+    }.items() <= result.save.specializations.items()
+    assert len(result.save.specializations) == 5
+    assert result.dropped_specializations == ("Computer: Matrix Perception",)
+    assert result.built.skill_allocation is not None
+    assert (
+        sum(result.built.skill_allocation.skill_points.values())
+        + len(result.built.skill_allocation.specializations)
+        == 28
+    )
+
     # Contacts and starting resources.
     assert len(result.save.contacts) == 2
     assert result.built.contact_selection.points_spent == 15

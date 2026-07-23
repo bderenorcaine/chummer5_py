@@ -59,6 +59,7 @@ def _sample_save() -> CharacterSave:
         skills_letter="C",
         skill_points={"skill-hacking": 2},
         group_points={"Firearms": 4},
+        specializations={"skill-hacking": "Networks"},
         quality_ids=("qual-catlike",),
         contacts=(
             Contact(name="Fixer", connection=3, loyalty=3),
@@ -113,6 +114,7 @@ def test_to_json_produces_the_documented_wire_shape() -> None:
     assert data["gear_names"] == ["Meta Link", "Combat Knife"]
     assert data["lifestyle_tier_name"] == "Low"
     assert data["lifestyle_months"] == 1
+    assert data["specializations"] == {"skill-hacking": "Networks"}
 
 
 def test_from_json_rejects_unknown_format_version() -> None:
@@ -1096,4 +1098,63 @@ def test_build_character_rejects_a_second_native_language_without_bilingual() ->
         language_skill_picks=(("English", 0, True), ("Sperethiel", 0, True)),
     )
     with pytest.raises(ValueError, match="at most 1 language"):
+        _build_mundane(save)
+
+
+# -- WP50: specializations -------------------------------------------------------------------------
+
+ARCHERY_ID = next(s.id for s in SKILLS if s.name == "Archery")
+
+
+def _mundane_save_with_skills(
+    skill_points: dict[str, int] | None = None,
+    group_points: dict[str, int] | None = None,
+    specializations: dict[str, str] | None = None,
+) -> CharacterSave:
+    return create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points=skill_points or {},
+        group_points=group_points or {},
+        specializations=specializations or {},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+    )
+
+
+def test_json_round_trip_preserves_specializations() -> None:
+    save = _mundane_save_with_skills(
+        skill_points={ARCHERY_ID: 4}, specializations={ARCHERY_ID: "Longbow"}
+    )
+    assert from_json(to_json(save)) == save
+    data = json.loads(to_json(save))
+    assert data["specializations"] == {ARCHERY_ID: "Longbow"}
+
+
+def test_from_json_defaults_specializations_for_a_pre_wp50_save() -> None:
+    data = json.loads(to_json(_mundane_save_with_skills()))
+    del data["specializations"]
+    loaded = from_json(json.dumps(data))
+    assert loaded.specializations == {}
+
+
+def test_build_character_applies_specialization() -> None:
+    save = _mundane_save_with_skills(
+        skill_points={ARCHERY_ID: 4}, specializations={ARCHERY_ID: "Longbow"}
+    )
+    character = _build_mundane(save)
+    assert character.skill_allocation is not None
+    assert character.skill_allocation.specializations[ARCHERY_ID] == "Longbow"
+
+
+def test_build_character_rejects_specialization_on_an_unbought_skill() -> None:
+    save = _mundane_save_with_skills(specializations={ARCHERY_ID: "Longbow"})
+    with pytest.raises(ValueError, match="cannot add a specialization"):
         _build_mundane(save)

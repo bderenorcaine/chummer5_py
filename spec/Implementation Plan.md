@@ -1578,7 +1578,7 @@ direct inspection of the fixture file rather than assumed present.
   test against `Miko.chum5`'s own recorded Knowledge/Language entries (confirmed present via direct
   fixture inspection this session) rather than only hand-checked cases.
 
-- [ ] **WP50 — Skill specializations (Step Five: skill-point-funded).**
+- [x] **WP50 — Skill specializations (Step Five: skill-point-funded).**
   Goal: let a player spend 1 skill point (from the same Skills-priority budget WP7 already tracks) to
   add one specialization to an individually-purchased skill, wiring up the dice-pool bonus that already
   exists in the engine. Scoped as **Step Five's mechanic specifically** (skill-point funded, no skill-

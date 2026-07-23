@@ -490,6 +490,24 @@ def _parse_points(form: FormData, keys: Iterable[str], prefix: str) -> dict[str,
     return points
 
 
+def _parse_specializations(form: FormData, keys: Iterable[str], prefix: str) -> dict[str, str]:
+    """Read `{prefix}{key}` fields off a submitted form into a sparse `{key: name}` dict (WP50).
+
+    Sparse the same way `_parse_points` is: a blank/absent field means "no specialization for this
+    skill", not an error -- `create_skill_allocation`'s own validation is what rejects a genuinely
+    invalid nonblank entry (unbought skill, group-purchased skill, budget overspend).
+    """
+    specializations: dict[str, str] = {}
+    for key in keys:
+        raw = form.get(f"{prefix}{key}")
+        if raw is None:
+            continue
+        name = str(raw).strip()
+        if name:
+            specializations[key] = name
+    return specializations
+
+
 def _parse_contacts(form: FormData, max_rows: int) -> tuple[Contact, ...]:
     """Read up to `max_rows` contact rows off a submitted form into `Contact`s.
 
@@ -831,29 +849,37 @@ def _skill_allocation_context(
     skills_letter: str,
     skill_points: Mapping[str, int],
     group_points: Mapping[str, int],
+    specializations: Mapping[str, str] = MappingProxyType({}),
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
     """Context for `_skill_allocation.html`. Same echo-the-submission shape as the attribute
-    context above; `skill_points`/`group_points` feed a throwaway `SkillAllocation` used purely for
-    display (rating/dice-pool preview), independent of whether the submission actually validated.
+    context above; `skill_points`/`group_points`/`specializations` feed a throwaway
+    `SkillAllocation` used purely for display (rating/dice-pool preview), independent of whether
+    the submission actually validated.
 
     **WP19**: same `error`-gated re-validation as `_attribute_allocation_context` -- when `error`
     is unset, re-runs `create_skill_allocation` against `skills_letter`/`skill_points`/
-    `group_points` purely to derive `skill_budget_warning`. See that function's docstring for why
-    this needs to be re-derived fresh on every render rather than decided once at submission time.
+    `group_points`/`specializations` purely to derive `skill_budget_warning`. See that function's
+    docstring for why this needs to be re-derived fresh on every render rather than decided once at
+    submission time.
+
+    **WP50**: `skill_rows["pool"]` relies on `dice_pool`'s own default (whether `skill.id` is in
+    `allocation.specializations`) rather than passing `specialized=` explicitly here.
     """
     if character is None:
         return {"character": None, "skill_error": error}
     allocation = SkillAllocation(
         skill_points=MappingProxyType(dict(skill_points)),
         group_points=MappingProxyType(dict(group_points)),
+        specializations=MappingProxyType(dict(specializations)),
     )
     budget = skill_point_budget(skills_letter, PRIORITIES)
     skill_rows = [
         {
             "skill": skill,
             "points": allocation.skill_points.get(skill.id, 0),
+            "specialization": allocation.specializations.get(skill.id, ""),
             "rating": skill_rating(character, allocation, skill),
             "pool": dice_pool(character, allocation, skill),
         }
@@ -866,7 +892,9 @@ def _skill_allocation_context(
     budget_warning: str | None = None
     if error is None:
         try:
-            create_skill_allocation(skills_letter, PRIORITIES, SKILLS, skill_points, group_points)
+            create_skill_allocation(
+                skills_letter, PRIORITIES, SKILLS, skill_points, group_points, specializations
+            )
         except ValueError as exc:
             budget_warning = (
                 f"No longer fits since priorities were last confirmed: {exc}. "
@@ -877,7 +905,9 @@ def _skill_allocation_context(
         "skill_rows": skill_rows,
         "group_rows": group_rows,
         "skills_budget": budget.skills,
-        "skills_remaining": budget.skills - sum(allocation.skill_points.values()),
+        "skills_remaining": (
+            budget.skills - sum(allocation.skill_points.values()) - len(allocation.specializations)
+        ),
         "skill_budget_warning": budget_warning,
         "groups_budget": budget.skill_groups,
         "groups_remaining": budget.skill_groups - sum(allocation.group_points.values()),
@@ -2173,9 +2203,17 @@ def _character_sheet_context(
     # Improvements for one (MUNDANE_SKILLS's exclusion from the *buy* UI still stands -- see that
     # constant's own comment -- so nothing offers points on them), so `rating` stays 0 and the
     # `rating > 0` filter below excludes them exactly as before this WP.
+    # WP50: `dice_pool`'s own default (whether `skill.id` is in `allocation.specializations`)
+    # supplies `specialized=` here, so the sheet's pool matches the buy screen's without repeating
+    # the lookup.
     skill_rows = (
         [
-            {"skill": skill, "rating": rating, "pool": dice_pool(character, allocation, skill)}
+            {
+                "skill": skill,
+                "rating": rating,
+                "specialization": allocation.specializations.get(skill.id, ""),
+                "pool": dice_pool(character, allocation, skill),
+            }
             for skill in ALL_SKILLS_SORTED
             if (rating := skill_rating(character, allocation, skill)) > 0
         ]
@@ -2379,8 +2417,10 @@ def _character_sheet_context(
         # WP49: Knowledge/Language recap -- both empty lists for an as-yet-uncommitted selection,
         # the same "None until committed" shape every other sheet section already has.
         "knowledge_skill_rows": (
-            [{"name": pick.name, "category": pick.category, "rating": pick.rating} for pick in
-             character.knowledge_selection.knowledge_skills]
+            [
+                {"name": pick.name, "category": pick.category, "rating": pick.rating}
+                for pick in character.knowledge_selection.knowledge_skills
+            ]
             if character.knowledge_selection is not None
             else []
         ),
@@ -2444,6 +2484,10 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     `ChargenSession`'s own WP44 docstring paragraph for why), but it still needs to round-trip
     through a save so a reloaded Sum-to-Ten character's next priorities reconfirmation applies the
     right validity rule instead of silently falling back to Priority's bijection.
+
+    **WP50**: `specializations` reads straight off `allocation.specializations`, `{}` for an
+    as-yet-uncommitted Skills section, the same shape `skill_points`/`group_points` immediately
+    above already have (it lives on the same `SkillAllocation`, not a separate `Character` field).
     """
     character = session.character
     assert character is not None
@@ -2511,16 +2555,13 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     knowledge_selection = character.knowledge_selection
     knowledge_skill_picks = (
         tuple(
-            (pick.name, pick.category, pick.rating)
-            for pick in knowledge_selection.knowledge_skills
+            (pick.name, pick.category, pick.rating) for pick in knowledge_selection.knowledge_skills
         )
         if knowledge_selection is not None
         else ()
     )
     language_skill_picks = (
-        tuple(
-            (pick.name, pick.rating, pick.native) for pick in knowledge_selection.languages
-        )
+        tuple((pick.name, pick.rating, pick.native) for pick in knowledge_selection.languages)
         if knowledge_selection is not None
         else ()
     )
@@ -2532,6 +2573,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         skills_letter=session.skills_letter,
         skill_points=allocation.skill_points if allocation is not None else {},
         group_points=allocation.group_points if allocation is not None else {},
+        specializations=allocation.specializations if allocation is not None else {},
         quality_ids=quality_ids,
         contacts=contacts,
         resources_letter=session.resources_letter,
@@ -2699,8 +2741,9 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     allocation = character.skill_allocation if character is not None else None
     skill_points = allocation.skill_points if allocation is not None else {}
     group_points = allocation.group_points if allocation is not None else {}
+    specializations = allocation.specializations if allocation is not None else {}
     skill_ctx = _skill_allocation_context(
-        character, session.skills_letter, skill_points, group_points
+        character, session.skills_letter, skill_points, group_points, specializations
     )
     knowledge_selection = character.knowledge_selection if character is not None else None
     knowledge_skills = (
@@ -3216,9 +3259,15 @@ def create_app() -> FastAPI:
             form = await request.form()
             skill_points = _parse_points(form, (s.id for s in MUNDANE_SKILLS), "skill_")
             group_points = _parse_points(form, MUNDANE_SKILL_GROUPS, "group_")
+            specializations = _parse_specializations(form, (s.id for s in MUNDANE_SKILLS), "spec_")
             try:
                 allocation = create_skill_allocation(
-                    session.skills_letter, PRIORITIES, SKILLS, skill_points, group_points
+                    session.skills_letter,
+                    PRIORITIES,
+                    SKILLS,
+                    skill_points,
+                    group_points,
+                    specializations,
                 )
             except ValueError as exc:
                 context = _skill_allocation_context(
@@ -3226,12 +3275,17 @@ def create_app() -> FastAPI:
                     session.skills_letter,
                     skill_points,
                     group_points,
+                    specializations,
                     error=str(exc),
                 )
             else:
                 session.character = replace(session.character, skill_allocation=allocation)
                 context = _skill_allocation_context(
-                    session.character, session.skills_letter, skill_points, group_points
+                    session.character,
+                    session.skills_letter,
+                    skill_points,
+                    group_points,
+                    specializations,
                 )
         response = templates.TemplateResponse(request, "_skill_allocation.html", context)
         if new_cookie is not None:

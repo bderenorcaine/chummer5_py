@@ -49,7 +49,9 @@
     <h3>Individual skills</h3>
     <p>
       A skill's own points are ignored whenever its group has points spent (the group rating
-      wins) — see the "strict skill groups" rule.
+      wins) — see the "strict skill groups" rule. A specialization costs 1 extra skill point (on
+      top of whatever bought the rating) and only applies to a skill bought individually here —
+      not one whose rating comes from a purchased skill group.
     </p>
     <table>
       <thead>
@@ -59,6 +61,7 @@
           <th>Group</th>
           <th>Points</th>
           <th>Rating</th>
+          <th>Specialization</th>
           <th>Pool</th>
         </tr>
       </thead>
@@ -78,6 +81,14 @@
             />
           </td>
           <td>{{ row.rating }}</td>
+          <td>
+            <input
+              type="text"
+              name="spec_{{ row.skill.id }}"
+              value="{{ row.specialization }}"
+              placeholder="e.g. Axes"
+            />
+          </td>
           <td>{{ row.pool }}</td>
         </tr>
         {% endfor %}

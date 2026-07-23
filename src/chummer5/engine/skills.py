@@ -28,6 +28,33 @@ that don't show up in `Implementation Plan.md`'s one-line summary of this WP:
   not an oversight — flagged explicitly here (unlike WP6) so a future reader doesn't have to
   rediscover it. There's nothing in the corpus that stores a skill's *computed dice pool* to check
   against anyway (see below), so this cut costs no test coverage for this WP.
+
+**WP50 — Step Five's skill-point-funded specialization.** Confirmed via `pdftotext -layout` against
+the core rulebook's own "Purchase Skills" step (p.88, chapter 2) — see
+`spec/rulebooks/learnings.md`'s WP50 entry for the full citation — and cross-checked against the
+Skills chapter's own "SPECIALIZATIONS" section (p.129): a specialization costs 1 skill point (spent
+from the same pool `skill_points` already draws from, on top of whatever points bought the skill's
+own rating), grants `SPECIALIZATION_BONUS` (+2) to that narrow area, and is capped at exactly one
+per skill at character creation. Two restrictions, both enforced by `create_skill_allocation`:
+
+- **A skill group cannot be specialized in Step Five at all.** The rulebook is explicit that buying
+  a specialization for a skill within a purchased group permanently breaks that group, and "this
+  cannot happen in Step Five of character creation — you can only break up a skill group by buying
+  a specialization for it in Step Seven" (p.88; Step Seven's group-breaking case is Phase O's WP53,
+  not this one). Enforced here as "a specialization's skill must already have its own
+  `skill_points` entry of at least 1" — which the existing "strict skill groups" rule already
+  guarantees can't coexist with that skill's group having any points spent, so no separate group
+  check is needed.
+- **You have to have the skill first (Rating >= 1).** Skills chapter, p.129: "If you want a
+  specialization in a skill, you have to have it first (meaning a Rating of at least 1)." Same
+  `skill_points.get(skill_id, 0) >= 1` check as above covers this too.
+
+`SkillAllocation.specializations` is a `dict[skill_id, name]` — keying by skill id both encodes "at
+most one specialization per skill" for free (a dict can't have two values for the same key) and
+mirrors `skill_points`/`group_points`'s own keying. The specialization's *name* (e.g. "Axes",
+"Revolvers") is freeform player-authored text, not a catalog entry — SR5 doesn't enumerate valid
+specialization names, mirroring `chummer5.engine.knowledge.KnowledgeSkillPick`'s identical "no
+catalog, the player invents it" shape.
 """
 
 from __future__ import annotations
@@ -85,6 +112,8 @@ class SkillAllocation:
 
     skill_points: MappingProxyType[str, int]
     group_points: MappingProxyType[str, int]
+    # WP50: skill_id -> specialization name, freeform player-authored text (see module docstring).
+    specializations: MappingProxyType[str, str] = MappingProxyType({})
 
 
 def create_skill_allocation(
@@ -93,6 +122,7 @@ def create_skill_allocation(
     skills: tuple[Skill, ...],
     skill_points: Mapping[str, int],
     group_points: Mapping[str, int],
+    specializations: Mapping[str, str] = MappingProxyType({}),
 ) -> SkillAllocation:
     """Build a `SkillAllocation`, validating the spend against the Skills-priority-letter budget.
 
@@ -102,6 +132,11 @@ def create_skill_allocation(
     has `group_points` spent (the "strict skill groups" rule -- see module docstring); and total
     spend in each pool doesn't exceed that pool's budget for `letter`. Does not require the full
     budget to be spent, mirroring WP6's `create_character`.
+
+    WP50: every `specializations` key must be a known `Skill.id` with a nonblank name and at least 1
+    of its own `skill_points` (see module docstring for why this alone enforces both "no skill group
+    specializations in Step Five" and "you have to have the skill first"). Each specialization costs
+    1 additional skill point, counted against the same `skill_points` budget.
     """
     skills_by_id = {s.id: s for s in skills}
     unknown_skills = set(skill_points) - set(skills_by_id)
@@ -137,12 +172,26 @@ def create_skill_allocation(
                 f"{MAX_SKILL_RATING_CREATE}"
             )
 
+    unknown_spec_skills = set(specializations) - set(skills_by_id)
+    if unknown_spec_skills:
+        raise ValueError(f"not a known skill id: {sorted(unknown_spec_skills)}")
+
+    for skill_id, name in specializations.items():
+        if not name.strip():
+            raise ValueError(f"{skill_id}: a specialization's name must not be blank")
+        if skill_points.get(skill_id, 0) < 1:
+            raise ValueError(
+                f"{skill_id}: cannot add a specialization without at least 1 point spent "
+                "directly on the skill (a skill group cannot be specialized in Step Five, and "
+                "you must have the skill before specializing it)"
+            )
+
     budget = skill_point_budget(letter, priorities)
-    skills_spent = sum(skill_points.values())
+    skills_spent = sum(skill_points.values()) + len(specializations)
     if skills_spent > budget.skills:
         raise ValueError(
-            f"skill point spend {skills_spent} exceeds Skills priority {letter}'s budget of "
-            f"{budget.skills}"
+            f"skill point spend {skills_spent} (including {len(specializations)} "
+            f"specialization(s)) exceeds Skills priority {letter}'s budget of {budget.skills}"
         )
     groups_spent = sum(group_points.values())
     if groups_spent > budget.skill_groups:
@@ -154,6 +203,7 @@ def create_skill_allocation(
     return SkillAllocation(
         skill_points=MappingProxyType(dict(skill_points)),
         group_points=MappingProxyType(dict(group_points)),
+        specializations=MappingProxyType(dict(specializations)),
     )
 
 
@@ -173,14 +223,20 @@ def dice_pool(
     character: Character,
     allocation: SkillAllocation,
     skill: Skill,
-    specialized: bool = False,
+    specialized: bool | None = None,
 ) -> int:
     """`Skill.PoolOtherAttribute`'s unconditional core: rating + linked attribute (+2 if
     specialized, at rating > 0 and not exotic), or the -1 "defaulting" penalty at rating 0 for
     skills that allow it, or 0 otherwise. Wound/sustaining penalties and Improvement-driven pool
     modifiers beyond `ImprovementType.SKILL` are out of MVP scope -- nothing in the MVP Improvement
     engine (WP5/WP8) produces one.
+
+    WP50: `specialized` defaults to whether `skill.id` has an entry in
+    `allocation.specializations` -- pass an explicit `True`/`False` to override (e.g. a synthetic
+    what-if preview with no real `SkillAllocation` behind it).
     """
+    if specialized is None:
+        specialized = skill.id in allocation.specializations
     rating = skill_rating(character, allocation, skill)
     attribute_value = character.attribute_value(skill.attribute)
     if rating > 0:

@@ -296,3 +296,72 @@ def test_attributes_and_skills_endpoints_before_confirmation_do_not_crash() -> N
     assert "Confirm a metatype and priorities" in attr_response.text
     assert skill_response.status_code == 200
     assert "Confirm a metatype and priorities" in skill_response.text
+
+
+# WP50: specializations.
+
+
+def test_submitting_a_specialization_matches_engine_output() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
+    response = client.post(
+        "/ui/skills", data={f"skill_{skill.id}": "3", f"spec_{skill.id}": "Longbow"}
+    )
+
+    assert response.status_code == 200
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    character = create_character(human_choice, "A", "B", PRIORITIES, {})
+    allocation = create_skill_allocation(
+        "C", PRIORITIES, SKILLS, {skill.id: 3}, {}, {skill.id: "Longbow"}
+    )
+    expected_pool = dice_pool(character, allocation, skill)
+    assert 'value="Longbow"' in response.text
+    assert f"<td>{expected_pool}</td>" in response.text
+
+    # The specialization's 1 point is counted against the remaining budget too.
+    budget = PRIORITIES.skills["C"].skills
+    assert f"{budget - 4} / {budget}" in response.text
+
+
+def test_submitting_a_specialization_on_an_unbought_skill_is_rejected() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
+    response = client.post("/ui/skills", data={f"spec_{skill.id}": "Longbow"})
+
+    assert response.status_code == 200
+    assert "cannot add a specialization" in response.text
+
+
+def test_submitting_a_specialization_on_a_group_purchased_skill_is_rejected() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    group = MUNDANE_SKILL_GROUPS[0]
+    grouped_skill = next(s for s in MUNDANE_SKILLS if s.skill_group == group)
+    response = client.post(
+        "/ui/skills",
+        data={f"group_{group}": "2", f"spec_{grouped_skill.id}": "Whatever"},
+    )
+
+    assert response.status_code == 200
+    assert "cannot add a specialization" in response.text
+
+
+def test_character_sheet_shows_the_specialization_name() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
+    client.post("/ui/skills", data={f"skill_{skill.id}": "3", f"spec_{skill.id}": "Longbow"})
+
+    response = client.get("/character/sheet")
+
+    assert response.status_code == 200
+    assert "Longbow" in response.text

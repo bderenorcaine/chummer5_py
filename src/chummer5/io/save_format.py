@@ -148,6 +148,15 @@ it) rather than silently defaulting back to Priority's bijection, which a Sum-to
 own letters might not even satisfy if they repeat. Defaults to `PRIORITY_BUILD_METHOD` ("predates
 this field"), so every pre-WP44 save round-trips unchanged.
 
+**WP50** adds `specializations` -- `skill_id -> name` (mirroring `skill_points`/`group_points`'s
+own `{key: value}` shape, not a flattened tuple like WP49's Knowledge/Language fields, since it's
+already a plain `str -> str` mapping with no third field to carry). Defaults to `{}` ("predates this
+field"), so every pre-WP50 save round-trips unchanged. `build_character` passes it straight into
+`create_skill_allocation` alongside `skill_points`/`group_points` -- no separate resolution step is
+needed, unlike Knowledge/Language's Bilingual dependency, since a specialization's only precondition
+(its skill having at least 1 of its own `skill_points`) is already checked from data this dataclass
+carries directly.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -308,6 +317,9 @@ class CharacterSave:
     # identical shape every other optional selection field defaults to.
     knowledge_skill_picks: tuple[KnowledgeSkillPickTriple, ...] = ()
     language_skill_picks: tuple[LanguageSkillPickTriple, ...] = ()
+    # WP50: skill_id -> specialization name. Defaults to {} -- "predates this field", the identical
+    # shape every other optional selection field defaults to.
+    specializations: MappingProxyType[str, str] = MappingProxyType({})
 
 
 def create_character_save(
@@ -342,6 +354,7 @@ def create_character_save(
     build_method: str = PRIORITY_BUILD_METHOD,
     knowledge_skill_picks: Iterable[KnowledgeSkillPickTriple] = (),
     language_skill_picks: Iterable[LanguageSkillPickTriple] = (),
+    specializations: Mapping[str, str] = MappingProxyType({}),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -382,6 +395,7 @@ def create_character_save(
         build_method=build_method,
         knowledge_skill_picks=tuple(knowledge_skill_picks),
         language_skill_picks=tuple(language_skill_picks),
+        specializations=MappingProxyType(dict(specializations)),
     )
 
 
@@ -440,6 +454,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
             {"name": name, "rating": rating, "native": native}
             for name, rating, native in save.language_skill_picks
         ],
+        "specializations": dict(save.specializations),
     }
 
 
@@ -501,6 +516,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         language_skill_picks=(
             (p["name"], p["rating"], p["native"]) for p in data.get("language_skill_picks", ())
         ),
+        specializations=data.get("specializations", {}),
     )
 
 
@@ -632,6 +648,7 @@ def build_character(
         skills=skills,
         skill_points=save.skill_points,
         group_points=save.group_points,
+        specializations=save.specializations,
     )
 
     contact_selection = create_contact_selection(character, save.contacts)

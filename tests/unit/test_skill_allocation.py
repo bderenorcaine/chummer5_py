@@ -265,3 +265,122 @@ def test_dice_pool_is_zero_at_zero_rating_when_defaulting_not_allowed() -> None:
     )
     assert not SPELLCASTING.can_default
     assert dice_pool(character, allocation, SPELLCASTING) == 0
+
+
+# WP50: specializations.
+
+
+def test_create_skill_allocation_accepts_specialization_on_individually_purchased_skill() -> None:
+    allocation = create_skill_allocation(
+        letter="A",
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        skill_points={ARCHERY.id: 4},
+        group_points={},
+        specializations={ARCHERY.id: "Longbow"},
+    )
+    assert allocation.specializations[ARCHERY.id] == "Longbow"
+
+
+def test_create_skill_allocation_specialization_costs_a_skill_point() -> None:
+    # Letter E: 18 skill points. Archery(6) + Spellcasting(6) + Demolitions(6) = 18, exactly the
+    # budget, with no room left for a specialization's extra point.
+    demolitions = SKILLS_BY_NAME["Demolitions"]
+    assert skill_point_budget("E", PRIORITIES).skills == 18
+    with pytest.raises(ValueError, match="skill point spend"):
+        create_skill_allocation(
+            letter="E",
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            skill_points={ARCHERY.id: 6, SPELLCASTING.id: 6, demolitions.id: 6},
+            group_points={},
+            specializations={ARCHERY.id: "Longbow"},
+        )
+    # Dropping Archery's rating by 1 (to 5) frees exactly the 1 point the specialization costs.
+    allocation = create_skill_allocation(
+        letter="E",
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        skill_points={ARCHERY.id: 5, SPELLCASTING.id: 6, demolitions.id: 6},
+        group_points={},
+        specializations={ARCHERY.id: "Longbow"},
+    )
+    assert allocation.specializations[ARCHERY.id] == "Longbow"
+
+
+def test_create_skill_allocation_rejects_specialization_on_unbought_skill() -> None:
+    with pytest.raises(ValueError, match="cannot add a specialization"):
+        create_skill_allocation(
+            letter="A",
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            skill_points={},
+            group_points={},
+            specializations={ARCHERY.id: "Longbow"},
+        )
+
+
+def test_create_skill_allocation_rejects_specialization_on_group_purchased_skill() -> None:
+    # Automatics' rating comes from the Firearms group, not its own skill_points -- Step Five
+    # forbids specializing it (rulebook p.88: breaking a group like this "cannot happen in Step
+    # Five... only in Step Seven").
+    with pytest.raises(ValueError, match="cannot add a specialization"):
+        create_skill_allocation(
+            letter="A",
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            skill_points={},
+            group_points={"Firearms": 2},
+            specializations={AUTOMATICS.id: "Assault Rifles"},
+        )
+
+
+def test_create_skill_allocation_rejects_blank_specialization_name() -> None:
+    with pytest.raises(ValueError, match="must not be blank"):
+        create_skill_allocation(
+            letter="A",
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            skill_points={ARCHERY.id: 4},
+            group_points={},
+            specializations={ARCHERY.id: "   "},
+        )
+
+
+def test_create_skill_allocation_rejects_specialization_on_unknown_skill_id() -> None:
+    with pytest.raises(ValueError, match="not a known skill id"):
+        create_skill_allocation(
+            letter="A",
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            skill_points={},
+            group_points={},
+            specializations={"not-a-real-skill-id": "Whatever"},
+        )
+
+
+def test_dice_pool_defaults_specialized_from_the_allocation() -> None:
+    character = _human_with_agi(3)
+    allocation = create_skill_allocation(
+        letter="A",
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        skill_points={ARCHERY.id: 4},
+        group_points={},
+        specializations={ARCHERY.id: "Longbow"},
+    )
+    unspecialized = create_skill_allocation(
+        letter="A",
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        skill_points={ARCHERY.id: 4},
+        group_points={},
+    )
+    assert (
+        dice_pool(character, allocation, ARCHERY)
+        == dice_pool(character, unspecialized, ARCHERY) + SPECIALIZATION_BONUS
+    )
+    # An explicit override still wins over the allocation's own state.
+    assert dice_pool(character, allocation, ARCHERY, specialized=False) == dice_pool(
+        character, unspecialized, ARCHERY
+    )

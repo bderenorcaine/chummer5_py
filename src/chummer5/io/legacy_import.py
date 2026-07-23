@@ -25,6 +25,19 @@ result:
   MVP-covered value depends on, mirroring the quality/skill precedent exactly) and an Adept's powers
   (`ImportResult.dropped_powers` — a power not in `mvp_power_catalog` (non-SR5-sourced, or SR5 but
   `NOT_YET_SUPPORTED`) is dropped the same way an unsupported quality is, not half-applied).
+  **WP50** adds one more: a `<skill><specs><spec>` entry whose host skill either doesn't reach
+  `skill_points` at all (group-purchased, karma-only `base <= 0`, or an unresolvable `<suid>`) or is
+  a second-or-later specialization on one skill (this project only models Step Five's "one
+  specialization per skill" rule) is excluded and collected in
+  `ImportResult.dropped_specializations`, formatted `"{skill name}: {specialization name}"`.
+  Confirmed against real corpus data: `Yeti-#ffffff2.chum5` (this project's one full-round-trip
+  Priority fixture) has 6 real specializations recorded, 5 of which import cleanly
+  (Compiling/Cybercombat/Hacking/Registering/Software, all individually purchased) and 1 of which is
+  dropped for exactly this reason (Computer's own "Matrix Perception" — Computer's `<base>` is 0,
+  only `<karma>` is nonzero, so Computer itself never reaches `skill_points` per the pre-existing
+  "karma-bought skill points are out of scope" cut — see `chummer5.engine.skills`'s module docstring
+  — and a specialization can't be imported for a skill
+  that wasn't imported).
 - **Blocking, itemized, fatal.** Content that would make an *already-imported* value silently wrong,
   not just incomplete, is rejected outright via `UnsupportedLegacyCharacterError` before any
   selection is built at all: a build method outside `chummer5.engine.build_method
@@ -371,6 +384,10 @@ class ImportResult:
     dropped_skills: tuple[str, ...]
     dropped_spells: tuple[str, ...]  # WP28: non-SR5-sourced spells, dropped and reported
     dropped_powers: tuple[str, ...]  # WP28: non-SR5-sourced or NOT_YET_SUPPORTED powers, likewise
+    # WP50: a recorded specialization whose host skill isn't individually imported (group-purchased,
+    # karma-only base<=0, or an unresolvable suid) or that's a second+ specialization on one skill
+    # (MVP only supports one) -- see module docstring.
+    dropped_specializations: tuple[str, ...]
 
 
 def import_legacy_character(
@@ -448,6 +465,30 @@ def import_legacy_character(
         if skill.skill_group is not None and skill.skill_group in bought_groups:
             continue
         skill_points[skill.id] = legacy_skill.base
+
+    # WP50: specializations, resolved as a second pass now that `skill_points` is finalized -- a
+    # specialization is only importable when its host skill actually reached `skill_points` (see
+    # module docstring for the three ways it might not: an unresolvable <suid>, a group-purchased
+    # skill, or a karma-only base<=0 skill). Only the first recorded specialization per skill is
+    # kept (this project's model, like the rulebook's own Step Five rule, allows exactly one); any
+    # further ones are dropped and reported like the unimportable case, not silently discarded.
+    specializations: dict[str, str] = {}
+    dropped_specializations: list[str] = []
+    for legacy_skill in legacy.skills:
+        if not legacy_skill.specializations:
+            continue
+        skill = skills_by_id.get(legacy_skill.suid)
+        skill_name = skill.name if skill is not None else legacy_skill.suid
+        if skill is None or skill.id not in skill_points:
+            dropped_specializations.extend(
+                f"{skill_name}: {name}" for name in legacy_skill.specializations
+            )
+            continue
+        specializations[skill.id] = legacy_skill.specializations[0]
+        dropped_specializations.extend(
+            f"{skill_name}: {name} (only one specialization per skill is supported)"
+            for name in legacy_skill.specializations[1:]
+        )
 
     # WP49: Knowledge/Language skills, freeform (no dropping/reporting tier needed -- see module
     # docstring). A `native` Language entry is kept regardless of `base` (a real native pick is
@@ -603,6 +644,7 @@ def import_legacy_character(
         skills_letter=priority_letter(legacy.priorities.skills),
         skill_points=skill_points,
         group_points=bought_groups,
+        specializations=specializations,
         quality_ids=quality_ids,
         contacts=contacts,
         resources_letter=priority_letter(legacy.priorities.resources),
@@ -663,6 +705,7 @@ def import_legacy_character(
         dropped_skills=tuple(dropped_skills),
         dropped_spells=tuple(dropped_spells),
         dropped_powers=tuple(dropped_powers),
+        dropped_specializations=tuple(dropped_specializations),
     )
 
 
