@@ -476,39 +476,54 @@ def test_accepts_standard_grade_flat_bioware_item() -> None:
     assert reflex_recorder.id in {b.id for b in result.built.bioware_selection.items}
 
 
-def test_rejects_karma_bought_attribute_points() -> None:
-    """WP28: a real, previously-latent gap surfaced while researching Wesson's own fixture -- MVP's
-    `create_character` only validates priority-derived attribute points against the priority
-    budget, with no accommodation for a real, standard SR5 rule (spending Karma to buy extra
-    attribute points at chargen, beyond the priority budget). `import_legacy_character`'s
-    pre-existing `attribute_points` formula silently combined both sources before this WP; this
-    test proves the new guard fires instead, mirroring cyberware/metavariant's treatment.
+def test_karma_bought_attribute_points_now_import_instead_of_being_rejected() -> None:
+    """WP52: the old blanket "Karma-bought attribute points" blocking check for
+    `ALLOCATABLE_ATTRIBUTES` (WP28) is retired now that `create_karma_attribute_points` actually
+    models the mechanic -- a real, standard SR5 chargen rule (spending Karma to buy an attribute
+    point beyond the priority budget). EDG `<base>1</base><karma>1</karma>` against Heritage D's
+    3-point special-attribute-points budget for Human (metatype minimum 2, so priority-only rating
+    3) raises EDG to 4 at a real Karma cost of 20 (`(3 + 1) x 5`) -- comfortably inside the 25-Karma
+    starting pool with no qualities/contacts committed in this synthetic character.
     """
-    with pytest.raises(UnsupportedLegacyCharacterError, match="Karma-bought attribute points"):
-        _import(
-            _legacy_character(
-                attributes=MappingProxyType(
-                    {
-                        "EDG": LegacyAttribute(
-                            name="EDG",
-                            metatype_min=2,
-                            metatype_max=7,
-                            metatype_aug_max=7,
-                            base=1,
-                            karma=1,
-                            total_value=4,
-                        )
-                    }
-                )
+    result = import_legacy_character(
+        _legacy_character(
+            attributes=MappingProxyType(
+                {
+                    "EDG": LegacyAttribute(
+                        name="EDG",
+                        metatype_min=2,
+                        metatype_max=7,
+                        metatype_aug_max=7,
+                        base=1,
+                        karma=1,
+                        total_value=4,
+                    )
+                }
             )
-        )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+        cyberware=CYBERWARE,
+        bioware=BIOWARE,
+    )
+    assert result.built.attribute_value("EDG") == 4
+    assert result.built.karma_attribute_selection is not None
+    assert result.built.karma_attribute_selection.points == {"EDG": 1}
+    assert result.built.karma_attribute_selection.karma_cost == 20
 
 
 def test_rejects_karma_bought_mag_points() -> None:
-    """Post-WP29 correction: MAG shares the same "no chargen-time Karma spend modeled" constraint
-    as every other allocatable attribute once it's actually allocatable at all (`magic_enabled`).
+    """Post-WP29 correction: MAG shares EDG's Special-Attribute-Points budget, but WP52
+    deliberately did not extend Karma-funded attribute increases to MAG/RES -- so a Karma-bought
+    MAG point is still rejected outright, just under WP52's own narrower, MAG-specific reason.
     """
-    with pytest.raises(UnsupportedLegacyCharacterError, match="Karma-bought attribute points"):
+    with pytest.raises(UnsupportedLegacyCharacterError, match="Karma-bought Magic"):
         _import(
             _legacy_character(
                 magic_enabled=True,

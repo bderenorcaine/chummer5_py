@@ -134,6 +134,18 @@ class's own docstring) -- `Character` needs no field for it, since neither `crea
 `chummer5.engine.build_method.sum_to_ten_total`'s own docstring), displayed only when Sum-to-Ten is
 the selected method.
 
+WP52 adds a second, Karma-funded points column to the attribute allocation screen (`karma_attr_
+{code}` form fields alongside the existing `attr_{code}` priority-point ones, both submitted
+together via the same `POST /ui/attributes` form) -- Step Seven's leftover-Karma-funded attribute
+increases (`chummer5.engine.character.create_karma_attribute_points`), reusing the same table
+`_attribute_allocation.html` already renders rather than a separate section, since both spends
+land on the same `attribute_value(code)`. `_attribute_allocation_context` gains a `karma_points`
+parameter mirroring `attribute_points`'s own "echo whatever should appear in the form" shape, and a
+`karma_budget`/`karma_remaining` pair (computed the same "add back this section's own current
+commitment" way `_spirit_selection_context`/`_foci_selection_context` already do, per WP51's own
+idiom) so the template can show "N of budget Karma remaining" the same way the priority-point
+columns already show remaining points.
+
 Run locally: `uv run uvicorn chummer5.web.app:app --reload` (or `python -m uvicorn ...` — same
 `uv run python -m X` workaround as `pytest`/`ruff`/`mypy`, see Project Overview.md's Development
 environment note), then open http://127.0.0.1:8000/.
@@ -185,11 +197,15 @@ from chummer5.engine.build_method import (
 )
 from chummer5.engine.character import (
     ALLOCATABLE_ATTRIBUTES,
+    ATTRIBUTE_KARMA_PER_RATING,
     PRIMARY_ATTRIBUTES,
     SPECIAL_ATTRIBUTES,
     Character,
+    KarmaAttributeSelection,
     MetatypeChoice,
     create_character,
+    create_karma_attribute_points,
+    karma_advancement_cost,
     metatype_choices,
 )
 from chummer5.engine.cyberware import (
@@ -732,6 +748,7 @@ def _attribute_allocation_context(
     character: Character | None,
     attribute_points: Mapping[str, int],
     magic_points: int = 0,
+    karma_points: Mapping[str, int] = MappingProxyType({}),
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -759,24 +776,54 @@ def _attribute_allocation_context(
     characters, mirroring the legacy `MAGEnabled` flag's "not just zero, not allocatable at all"
     gating.
 
+    **WP52**: `karma_points` -- leftover-Karma-funded points on top of `attribute_points`, one more
+    parameter alongside `magic_points` rather than folded into `attribute_points` (mirrors that
+    same "separate pool, separate parameter" split) -- `ALLOCATABLE_ATTRIBUTES` only, MAG excluded
+    (see `KarmaAttributeSelection`'s own docstring). Each row's `karma_points`/`value` reflect it;
+    `row.maximum - row.minimum` is deliberately *not* widened for the Karma input's own `max=` --
+    the metatype maximum is the same ceiling both pools share, `create_karma_attribute_points`
+    itself is what rejects the combined total exceeding it, not the template.
+
     **WP19**: when `error` is unset (a clean render, not an echo of a submission this same request
     just rejected), re-runs `create_character` (and, when applicable, `create_magic_attribute_
-    points`) against `character`'s own current metatype/heritage/attributes/Talent state and
-    `attribute_points`/`magic_points`, purely to derive `attribute_budget_warning` from whatever
-    `ValueError` either raises (discarding the exception itself, not its message) --
-    `submit_priorities` no longer resets a carried-forward spend that no longer fits a
-    just-reconfirmed letter/metatype (see its own comment), so this is what surfaces that fact,
-    freshly, on every render for as long as it stays true. Distinct from `attribute_error` (sourced
-    from a `ValueError` raised by *this specific request's* submission, never stored) so a template
-    can style "you just typed something invalid" differently from "this was fine when you entered
-    it, but a priority change since then broke it."
+    points`/`create_karma_attribute_points`) against `character`'s own current metatype/heritage/
+    attributes/Talent state and `attribute_points`/`magic_points`/`karma_points`, purely to derive
+    `attribute_budget_warning` from whatever `ValueError` either raises (discarding the exception
+    itself, not its message) -- `submit_priorities` no longer resets a carried-forward spend that no
+    longer fits a just-reconfirmed letter/metatype (see its own comment), so this is what surfaces
+    that fact, freshly, on every render for as long as it stays true. Distinct from
+    `attribute_error` (sourced from a `ValueError` raised by *this specific request's* submission,
+    never stored) so a
+    template can style "you just typed something invalid" differently from "this was fine when you
+    entered it, but a priority change since then broke it."
     """
     if character is None:
         return {"character": None, "attribute_error": error}
+    # WP52: the caller's own currently-committed Karma-attribute cost is added back onto `character
+    # .karma_remaining` -- the same "exclude this section's own prior commitment" idiom WP51
+    # established for Bound Spirits/Foci -- so re-validating what's already spent here doesn't
+    # double-subtract it.
+    karma_budget = character.karma_remaining + (
+        character.karma_attribute_selection.karma_cost
+        if character.karma_attribute_selection is not None
+        else 0
+    )
+    karma_preview_cost = sum(
+        karma_advancement_cost(
+            character.attribute_range(code).minimum + attribute_points.get(code, 0),
+            points,
+            ATTRIBUTE_KARMA_PER_RATING,
+        )
+        for code, points in karma_points.items()
+        if code in ALLOCATABLE_ATTRIBUTES and points > 0
+    )
     display = replace(
         character,
         attribute_points=MappingProxyType(dict(attribute_points)),
         magic_attribute_points=magic_points,
+        karma_attribute_selection=KarmaAttributeSelection(
+            points=MappingProxyType(dict(karma_points)), karma_cost=karma_preview_cost
+        ),
     )
     primary_budget = PRIORITIES.attributes[character.attributes_letter].points
     primary_spent = sum(attribute_points.get(code, 0) for code in PRIMARY_ATTRIBUTES)
@@ -787,6 +834,7 @@ def _attribute_allocation_context(
             "minimum": display.attribute_range(code).minimum,
             "maximum": display.attribute_range(code).maximum,
             "points": attribute_points.get(code, 0),
+            "karma_points": karma_points.get(code, 0),
             "value": display.attribute_value(code),
         }
         for code in ALLOCATABLE_ATTRIBUTES
@@ -798,6 +846,7 @@ def _attribute_allocation_context(
                 "minimum": character.magic_rating,
                 "maximum": display.attribute_range("MAG").maximum,
                 "points": magic_points,
+                "karma_points": None,  # WP52: MAG is not Karma-allocatable, no input to render
                 "value": display.attribute_value("MAG"),
             }
         )
@@ -823,6 +872,11 @@ def _attribute_allocation_context(
                     character.special_attribute_points,
                     attribute_points.get("EDG", 0),
                 )
+            create_karma_attribute_points(
+                replace(character, attribute_points=MappingProxyType(dict(attribute_points))),
+                karma_points,
+                karma_budget,
+            )
         except ValueError as exc:
             budget_warning = (
                 f"No longer fits since priorities were last confirmed: {exc}. "
@@ -835,6 +889,8 @@ def _attribute_allocation_context(
         "primary_remaining": primary_budget - primary_spent,
         "special_budget": character.special_attribute_points,
         "special_remaining": character.special_attribute_points - special_spent,
+        "karma_budget": karma_budget,
+        "karma_remaining": karma_budget - karma_preview_cost,
         "attribute_error": error,
         "attribute_budget_warning": budget_warning,
     }
@@ -2481,6 +2537,10 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     **WP50**: `specializations` reads straight off `allocation.specializations`, `{}` for an
     as-yet-uncommitted Skills section, the same shape `skill_points`/`group_points` immediately
     above already have (it lives on the same `SkillAllocation`, not a separate `Character` field).
+
+    **WP52**: `karma_attribute_points` reads straight off `character.karma_attribute_selection
+    .points`, `{}` for an as-yet-uncommitted Karma-funded attribute spend, mirroring
+    `attribute_points`'s own shape.
     """
     character = session.character
     assert character is not None
@@ -2602,6 +2662,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         build_method=session.build_method,
         knowledge_skill_picks=knowledge_skill_picks,
         language_skill_picks=language_skill_picks,
+        karma_attribute_points=(
+            character.karma_attribute_selection.points
+            if character.karma_attribute_selection is not None
+            else {}
+        ),
     )
 
 
@@ -2717,7 +2782,14 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     spirit_ctx = _spirit_selection_context(character, spirit_picks)
     attribute_points = character.attribute_points if character is not None else {}
     magic_points = character.magic_attribute_points if character is not None else 0
-    attribute_ctx = _attribute_allocation_context(character, attribute_points, magic_points)
+    karma_attribute_points = (
+        character.karma_attribute_selection.points
+        if character is not None and character.karma_attribute_selection is not None
+        else {}
+    )
+    attribute_ctx = _attribute_allocation_context(
+        character, attribute_points, magic_points, karma_attribute_points
+    )
     allocation = character.skill_allocation if character is not None else None
     skill_points = allocation.skill_points if allocation is not None else {}
     group_points = allocation.group_points if allocation is not None else {}
@@ -3088,6 +3160,9 @@ def create_app() -> FastAPI:
         else:
             form = await request.form()
             attribute_points = _parse_points(form, ALLOCATABLE_ATTRIBUTES, "attr_")
+            # WP52: Karma-funded points, a separate pool from the priority-derived one above --
+            # `karma_attr_{code}` fields, same `ALLOCATABLE_ATTRIBUTES` set (MAG excluded).
+            karma_points = _parse_points(form, ALLOCATABLE_ATTRIBUTES, "karma_attr_")
             previous = session.character
             # Post-WP29 correction: MAG's own points (when allocatable at all -- see this section's
             # own comment below) are parsed and validated separately from `attribute_points`, since
@@ -3108,6 +3183,15 @@ def create_app() -> FastAPI:
                 special_attribute_points=previous.special_attribute_points,
                 karma=0,
             )
+            # WP51: this section's own currently-committed Karma-attribute cost is added back onto
+            # `previous.karma_remaining` -- the same "exclude this section's own prior commitment"
+            # idiom `_spirit_selection_context`/`_foci_selection_context` already established --
+            # so re-spending exactly what was already committed doesn't double-subtract it.
+            karma_budget = previous.karma_remaining + (
+                previous.karma_attribute_selection.karma_cost
+                if previous.karma_attribute_selection is not None
+                else 0
+            )
             try:
                 character = create_character(
                     choice,
@@ -3125,9 +3209,16 @@ def create_app() -> FastAPI:
                         previous.special_attribute_points,
                         attribute_points.get("EDG", 0),
                     )
+                karma_attribute_selection = create_karma_attribute_points(
+                    character, karma_points, karma_budget
+                )
             except ValueError as exc:
                 context = _attribute_allocation_context(
-                    session.character, attribute_points, magic_points, error=str(exc)
+                    session.character,
+                    attribute_points,
+                    magic_points,
+                    karma_points,
+                    error=str(exc),
                 )
             else:
                 # See the identical comment in submit_priorities -- a fresh Character means fresh
@@ -3163,6 +3254,7 @@ def create_app() -> FastAPI:
                     resources_selection=previous.resources_selection,
                     lifestyle_selection=previous.lifestyle_selection,
                     magic_attribute_points=magic_points,
+                    karma_attribute_selection=karma_attribute_selection,
                     # WP46: carried forward by plain reference, same as lifestyle_selection above --
                     # a bound spirit has no Improvement to re-land (see chummer5.engine.spirits'
                     # module docstring), so there's no relink helper needed, just a plain carry.
@@ -3179,7 +3271,9 @@ def create_app() -> FastAPI:
                     knowledge_selection=previous.knowledge_selection,
                 )
                 session.character = character
-                context = _attribute_allocation_context(character, attribute_points, magic_points)
+                context = _attribute_allocation_context(
+                    character, attribute_points, magic_points, karma_points
+                )
         response = templates.TemplateResponse(request, "_attribute_allocation.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

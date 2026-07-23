@@ -8,11 +8,15 @@ from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.engine.character import (
     ALLOCATABLE_ATTRIBUTES,
+    ATTRIBUTE_KARMA_PER_RATING,
     PRIMARY_ATTRIBUTES,
     SPECIAL_ATTRIBUTES,
     STARTING_KARMA,
     Character,
+    KarmaAttributeSelection,
     create_character,
+    create_karma_attribute_points,
+    karma_advancement_cost,
     metatype_choices,
     sr5_metatypes,
 )
@@ -498,3 +502,112 @@ def test_karma_remaining_can_exceed_starting_karma_from_net_negative_qualities()
     assert james.karma_remaining == 26
     assert rob.karma_remaining == 25
     assert kyra.karma_remaining == 26
+
+
+# -- karma_advancement_cost / create_karma_attribute_points (WP52) ------------------------------
+
+
+def test_karma_advancement_cost_matches_the_karma_advancement_table_for_attributes() -> None:
+    # Hand-checked against the core rulebook's own "KARMA ADVANCEMENT TABLE FOR ATTRIBUTES"
+    # (p.106-107, re-confirmed during WP51's own research pass -- spec/rulebooks/learnings.md).
+    assert karma_advancement_cost(1, 1, ATTRIBUTE_KARMA_PER_RATING) == 10  # 1 -> 2
+    assert karma_advancement_cost(1, 2, ATTRIBUTE_KARMA_PER_RATING) == 25  # 1 -> 3
+    assert karma_advancement_cost(4, 1, ATTRIBUTE_KARMA_PER_RATING) == 25  # 4 -> 5
+    assert karma_advancement_cost(4, 2, ATTRIBUTE_KARMA_PER_RATING) == 55  # 4 -> 6
+    assert karma_advancement_cost(3, 0, ATTRIBUTE_KARMA_PER_RATING) == 0  # no points, no cost
+
+
+def test_create_karma_attribute_points_raises_edg_at_the_confirmed_karma_cost() -> None:
+    # Human, Heritage D: EDG minimum 2, 1 priority point spent (rating 3) -- raising to 4 with
+    # Karma costs (3 + 1) x 5 = 20, the exact number Wesson.chum5's own real EDG purchase costs
+    # (see tests/integration/test_magic_fixtures.py's WP52 tests for the fixture cross-check).
+    character = replace(_base_character(), attribute_points=MappingProxyType({"EDG": 1}))
+    assert character.attribute_value("EDG") == 3
+
+    selection = create_karma_attribute_points(character, {"EDG": 1}, karma_budget=25)
+    assert selection.points == {"EDG": 1}
+    assert selection.karma_cost == 20
+
+    character = replace(character, karma_attribute_selection=selection)
+    assert character.attribute_value("EDG") == 4
+    assert character.karma_spent == 20
+    assert character.karma_remaining == STARTING_KARMA - 20
+
+
+def test_create_karma_attribute_points_rejects_unallocatable_or_mag() -> None:
+    character = _base_character()
+    with pytest.raises(ValueError, match="not allocatable in MVP scope"):
+        create_karma_attribute_points(character, {"MAG": 1}, karma_budget=25)
+
+
+def test_create_karma_attribute_points_rejects_negative_spend() -> None:
+    character = _base_character()
+    with pytest.raises(ValueError, match="must not be negative"):
+        create_karma_attribute_points(character, {"EDG": -1}, karma_budget=25)
+
+
+def test_create_karma_attribute_points_rejects_exceeding_metatype_maximum() -> None:
+    # Human EDG range is 2-7; 5 priority points already spent (rating 7, already at max) -- 1 more
+    # Karma point would exceed it.
+    character = replace(_base_character(), attribute_points=MappingProxyType({"EDG": 5}))
+    assert character.attribute_value("EDG") == 7
+    with pytest.raises(ValueError, match="exceeds Human's maximum of 7"):
+        create_karma_attribute_points(character, {"EDG": 1}, karma_budget=999)
+
+
+def test_create_karma_attribute_points_rejects_exceeding_the_karma_budget() -> None:
+    character = replace(_base_character(), attribute_points=MappingProxyType({"EDG": 1}))
+    with pytest.raises(ValueError, match="exceeds the Karma budget of 19"):
+        create_karma_attribute_points(character, {"EDG": 1}, karma_budget=19)  # costs 20
+
+
+def test_create_karma_attribute_points_rejects_a_second_primary_attribute_at_natural_maximum() -> (
+    None
+):
+    # Human BOD/AGI natural maximum is 6; 5 priority points on each (rating 6, already at max) --
+    # this mirrors the rulebook's own Step Seven restatement of the Step Two rule ("Only one
+    # attribute can be at the natural attribute limit... These rules still apply to when you are
+    # spending Karma").
+    character = replace(_base_character(), attribute_points=MappingProxyType({"BOD": 5, "STR": 4}))
+    assert character.attribute_value("BOD") == 6  # already at Human's natural maximum
+    with pytest.raises(ValueError, match="only one Mental or Physical attribute"):
+        create_karma_attribute_points(character, {"STR": 1}, karma_budget=999)  # STR 5 -> 6
+
+
+def test_create_karma_attribute_points_allows_a_lone_attribute_at_natural_maximum() -> None:
+    # The complement of the rejection test above: raising exactly one Mental/Physical attribute to
+    # its natural maximum, with no other already there, is legal.
+    character = replace(_base_character(), attribute_points=MappingProxyType({"STR": 4}))
+    selection = create_karma_attribute_points(character, {"STR": 1}, karma_budget=999)
+    assert selection.points == {"STR": 1}
+
+
+def test_create_karma_attribute_points_does_not_retroactively_check_pure_priority_spend() -> None:
+    # The scope note this WP's own docstring documents, pinned down as a regression test: a
+    # character that already has *two* Mental/Physical attributes at their natural maximum from
+    # priority-point spend alone (a state create_character, WP6, has never itself rejected) must
+    # not be retroactively blocked by an empty or EDG-only karma_points -- this is exactly what the
+    # web layer's submit_attributes calls on every attribute-form submission, including ones that
+    # spend no Karma on a Mental/Physical attribute at all, purely to re-validate any already-
+    # committed Karma spend.
+    character = replace(_base_character(), attribute_points=MappingProxyType({"BOD": 5, "STR": 5}))
+    assert character.attribute_value("BOD") == 6
+    assert character.attribute_value("STR") == 6
+
+    empty_selection = create_karma_attribute_points(character, {}, karma_budget=25)
+    assert empty_selection.points == {}
+
+    edg_only_selection = create_karma_attribute_points(character, {"EDG": 1}, karma_budget=25)
+    assert edg_only_selection.points == {"EDG": 1}
+
+
+def test_karma_attribute_selection_field_defaults_to_none() -> None:
+    assert _base_character().karma_attribute_selection is None
+
+
+def test_karma_attribute_selection_is_a_frozen_dataclass_with_the_expected_fields() -> None:
+    selection = KarmaAttributeSelection(points=MappingProxyType({"EDG": 2}), karma_cost=45)
+    assert selection.points == {"EDG": 2}
+    assert selection.karma_cost == 45
+    with pytest.raises(AttributeError):
+        selection.karma_cost = 0  # type: ignore[misc]

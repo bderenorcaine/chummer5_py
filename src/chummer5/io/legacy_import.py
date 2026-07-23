@@ -183,6 +183,44 @@ nothing about a Technomancer's *mundane-shaped* subset of data (metatype, primar
 active skills, karma, nuyen, contacts) is silently wrong by ignoring Resonance — unlike cyberware,
 there's no MVP-computed value Resonance content would corrupt if left unconsumed.
 
+**WP52 retires the karma-bought-attribute blocking check for `ALLOCATABLE_ATTRIBUTES`, now that
+`chummer5.engine.character.create_karma_attribute_points` actually models chargen-time Karma spend
+on Mental/Physical/Edge attributes.** WP28's own blocking check (see the "blocking, itemized,
+fatal" tier above) rejected *any* nonzero `<attribute><karma>` on an allocatable attribute --
+correct at the time (the mechanic didn't exist). Now `legacy.attributes[code].karma` for each
+`ALLOCATABLE_ATTRIBUTES` code feeds `CharacterSave.karma_attribute_points` instead of being
+rejected outright, and `build_character` validates it the normal way (against the Karma ledger,
+the metatype maximum, and the "only one Mental/Physical attribute at natural maximum" rule).
+**MAG's own `<karma>` field stays blocked** -- WP52 deliberately does not extend Karma-funded
+attribute increases to MAG/RES (see `chummer5.engine.character.KarmaAttributeSelection`'s own
+docstring for why), so a magic-active character with Karma-bought Magic is still rejected, just
+under a narrower, MAG-specific reason than before.
+
+**`Wesson.chum5` still cannot reach a full end-to-end import after WP52 -- a second, previously-
+invisible gap this WP's own research surfaced, distinct from the one it fixes.** His real EDG
+Karma-buy (rating 3 -> 4) legitimately costs 20 Karma (`(3+1) x 5`, confirmed against the legacy
+engine's own `CharacterAttrib.UpgradeKarmaCost` formula, `Attribute.Core.cs` -- the Standard
+`AlternateMetatypeAttributeKarma` houserule that would otherwise discount this is `False` by
+default, so the plain formula applies). His real character could afford it because his real
+`<qualities>` block includes `SINner (Corporate Limited)` (a Negative quality worth Karma value
+-15, i.e. a +15 Karma credit) -- but SINner is not, and per WP22's own scoping deliberately never
+will be, one of this project's MVP-offered qualities (its background-check/social-consequence
+weight is unmodeled narrative content, not a chargen-time computed value -- see WP22's own
+"deliberately deferred" list). Every unsupported quality a legacy character has was already
+silently excluded from the reconstructed `quality_selection` (WP8's "excluded, not silently
+mis-applied" rule) -- including, before now, its Karma-cost side effect -- but nothing was Karma-
+budget-sensitive enough for that omission to actually block an import until WP52 added a
+Karma-spending consumer expensive enough to need it. Confirmed by direct calculation: without
+SINner, Wesson's reconstructed `character.karma_remaining` before the EDG purchase is 15 (`25 -
+10` for the one MVP-offered quality he keeps, Guts); the purchase itself costs 20; with SINner's
+real -15 Karma value included it would be 30, comfortably enough. This is not a WP52 bug -- it's
+the same "corrects the Implementation Plan's own more optimistic acceptance text" situation WP28
+already hit for Miko, just discovered one WP later and via a different mechanism (a Karma-budget
+`ValueError` bubbling out of `build_character`, per this module's own "any create_* rejection
+surfaces unchanged" rule below, rather than an itemized `UnsupportedLegacyCharacterError`). See
+`tests/integration/test_magic_fixtures.py`'s WP52 test for the exact assertion, and this WP's own
+worklog for why fixing SINner's exclusion is out of this WP's scope.
+
 **Import validates by actually building, not just by shape.** `import_chum5`/
 `import_legacy_character` call straight into WP11's `build_character()` before returning, so
 "successfully imports" means "this `CharacterSave` reconstructs into a real `Character` (carrying
@@ -338,23 +376,16 @@ def _blocking_reasons(
             )
     if legacy.metavariant is not None:
         reasons.append(f"metavariant {legacy.metavariant!r} is out of MVP scope")
-    # Post-WP29 correction: MAG shares the same "priority-derived points only, no chargen-time
-    # Karma spend modeled" constraint as every other allocatable attribute once it's actually
-    # allocatable at all (`legacy.magic_enabled`) -- see chummer5.engine.character.Character's own
-    # docstring correction for why MAG is a real point-buy now, sharing EDG's budget.
-    karma_checked_attributes = (
-        (*ALLOCATABLE_ATTRIBUTES, "MAG") if legacy.magic_enabled else ALLOCATABLE_ATTRIBUTES
-    )
-    karma_bought_attributes = sorted(
-        code
-        for code in karma_checked_attributes
-        if code in legacy.attributes and legacy.attributes[code].karma > 0
-    )
-    if karma_bought_attributes:
+    # WP52: `ALLOCATABLE_ATTRIBUTES` (Mental/Physical/EDG) Karma-bought points are now modeled --
+    # see chummer5.engine.character.create_karma_attribute_points -- so only MAG's `<karma>` field
+    # still blocks (Post-WP29 correction gave MAG its own points budget, Special Attribute Points,
+    # but WP52 deliberately did not extend Karma-funded attribute increases to it -- see
+    # KarmaAttributeSelection's own docstring for why).
+    if legacy.magic_enabled and "MAG" in legacy.attributes and legacy.attributes["MAG"].karma > 0:
         reasons.append(
-            "character has Karma-bought attribute points beyond the priority budget on "
-            f"{', '.join(karma_bought_attributes)}; MVP's engine only models priority-derived "
-            "attribute points, not chargen-time Karma spend on attributes"
+            "character has Karma-bought Magic beyond the priority/Special-Attribute-Points "
+            "budget; MVP's engine models Karma-funded attribute increases for Mental/Physical/"
+            "Edge only (WP52) -- raising Magic with Karma remains out of scope"
         )
     if not legacy.lifestyles:
         reasons.append(
@@ -436,16 +467,21 @@ def import_legacy_character(
         if item.improvement_source == BIOWARE_IMPROVEMENT_SOURCE
     ]
 
-    # `.base` only, not `+ legacy_attribute.karma` -- `_blocking_reasons` above already rejects any
-    # character with a nonzero `karma` on an allocatable attribute (a real, separately-discovered
-    # WP28 finding: MVP's `create_character` only validates priority-derived points against the
-    # priority budget, with no accommodation for chargen-time Karma spend on top of it -- see this
-    # WP's own worklog), so `karma` is always `0` for every attribute reaching this point; keeping
-    # both terms here would silently reintroduce the bug this WP's blocking check exists to prevent.
+    # `.base` -- priority-derived points only, validated by `create_character` against the
+    # Attributes/special-attribute-points budgets.
     attribute_points = {
         code: legacy.attributes[code].base
         for code in ALLOCATABLE_ATTRIBUTES
         if code in legacy.attributes
+    }
+    # WP52: `.karma` -- Karma-bought points beyond that priority budget, validated separately by
+    # `create_karma_attribute_points` against the Karma ledger (see this module's own WP52
+    # docstring paragraph for why this replaces the old blanket rejection). `_blocking_reasons`
+    # above still guarantees MAG's own `.karma` is 0 for any character reaching this point.
+    karma_attribute_points = {
+        code: legacy.attributes[code].karma
+        for code in ALLOCATABLE_ATTRIBUTES
+        if code in legacy.attributes and legacy.attributes[code].karma > 0
     }
 
     # Same allocation logic WP6/WP7/WP10's fixture tests already validated against Yeti: a skill
@@ -641,6 +677,7 @@ def import_legacy_character(
         heritage_letter=priority_letter(legacy.priorities.heritage),
         attributes_letter=priority_letter(legacy.priorities.attributes),
         attribute_points=attribute_points,
+        karma_attribute_points=karma_attribute_points,
         skills_letter=priority_letter(legacy.priorities.skills),
         skill_points=skill_points,
         group_points=bought_groups,

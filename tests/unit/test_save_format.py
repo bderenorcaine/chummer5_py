@@ -1158,3 +1158,77 @@ def test_build_character_rejects_specialization_on_an_unbought_skill() -> None:
     save = _mundane_save_with_skills(specializations={ARCHERY_ID: "Longbow"})
     with pytest.raises(ValueError, match="cannot add a specialization"):
         _build_mundane(save)
+
+
+# -- karma_attribute_points (WP52) ---------------------------------------------------------------
+
+
+def _mundane_save_with_karma_attribute_points(
+    karma_attribute_points: dict[str, int] | None = None,
+) -> CharacterSave:
+    return create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={"EDG": 1},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        karma_attribute_points=karma_attribute_points or {},
+    )
+
+
+def test_json_round_trip_preserves_karma_attribute_points() -> None:
+    save = _mundane_save_with_karma_attribute_points({"EDG": 1})
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["karma_attribute_points"] == {"EDG": 1}
+
+
+def test_from_json_defaults_karma_attribute_points_for_a_pre_wp52_save() -> None:
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    assert "karma_attribute_points" not in data or data["karma_attribute_points"] == {}
+    loaded = from_json(to_json(save))
+    assert loaded.karma_attribute_points == {}
+
+
+def test_build_character_applies_karma_attribute_points() -> None:
+    # Human, Heritage D: EDG minimum 2, 1 priority point (rating 3); 1 Karma point raises it to 4
+    # at a real cost of (3 + 1) x 5 = 20 -- well within the 25-Karma starting pool with no
+    # qualities/contacts committed.
+    save = _mundane_save_with_karma_attribute_points({"EDG": 1})
+    character = _build_mundane(save)
+    assert character.karma_attribute_selection is not None
+    assert character.karma_attribute_selection.points == {"EDG": 1}
+    assert character.karma_attribute_selection.karma_cost == 20
+    assert character.attribute_value("EDG") == 4
+    assert character.karma_remaining == 25 - 20
+
+
+def test_build_character_rejects_karma_attribute_points_exceeding_the_karma_budget() -> None:
+    # BOD 1 -> 6 (5 Karma points, no priority points spent) costs 100 Karma, far beyond the
+    # 25-Karma starting pool.
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        karma_attribute_points={"BOD": 5},
+    )
+    with pytest.raises(ValueError, match="exceeds the Karma budget"):
+        _build_mundane(save)

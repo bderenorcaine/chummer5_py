@@ -7,10 +7,12 @@ selections -- extended here to a carried-forward Talent selection specifically.
 
 Neither of the corpus's 2 real magic fixtures (Miko, Wesson) can reach a full round-trip
 `import_chum5()` success even after this WP (see `spec/worklogs/WP28.md` -- Miko for her own non-SR5
-tradition, Wesson for an unrelated Karma-bought-attribute-points gap), so this module builds a
-Magician and an Adept from scratch through the browser instead, using the same letter/codename
-combinations those two fixtures use (`priorities.xml` letter B: Adept magic=6, Magician magic=4),
-rather than trying to reproduce either fixture's exact numbers.
+tradition, Wesson for an unrelated Karma-budget gap -- his real EDG Karma-buy is only affordable
+because of a Negative quality this project doesn't model the Karma credit for; still unresolved as
+of WP52, see `spec/worklogs/WP52.md`), so this module builds a Magician and an Adept from scratch
+through the browser instead, using the same letter/codename combinations those two fixtures use
+(`priorities.xml` letter B: Adept magic=6, Magician magic=4), rather than trying to reproduce
+either fixture's exact numbers.
 """
 
 from __future__ import annotations

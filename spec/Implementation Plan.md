@@ -1668,7 +1668,7 @@ conceptual 25-Karma starting pool. **The foundational piece this phase needs fir
   (25 → 26 / 25 / 26 respectively, per `character_creation_chapter.md`'s Step Four worked example) as a
   real, citable cross-check rather than only a synthetic one.
 
-- [ ] **WP52 — Karma-funded attribute increases.**
+- [x] **WP52 — Karma-funded attribute increases.**
   Goal: let leftover Karma raise a Mental/Physical/Special attribute beyond its priority-derived budget,
   using the `new Rating x 5` formula. This is also the fix for the specific, previously-flagged gap in
   Project Overview's 2026-07-19 entry ("Karma-bought attribute points... never modeled... Wesson's own

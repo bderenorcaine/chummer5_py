@@ -28,6 +28,21 @@ Plan's own more optimistic "Wesson imports end to end" acceptance text.
 `test_wesson_adept_magic_and_drain_via_direct_engine_construction` below proves WP28's actual
 deliverables (Drain Resistance, save/load round-trip) against Wesson's real data anyway, composing
 the same engine functions `import_legacy_character` would have, independent of that import gap.
+
+**WP52** retires WP28's specific "Karma-bought attribute points" blocking check (Phase O now
+models that mechanic for real -- `chummer5.engine.character.create_karma_attribute_points`), but
+`Wesson.chum5` *still* does not reach a full end-to-end import -- a second, previously-invisible
+gap this WP's own research found, unrelated to the one it fixes: his real EDG Karma-buy (rating
+3 -> 4, confirmed 20 Karma via the legacy engine's own `UpgradeKarmaCost` formula) is only
+affordable in the real fixture because of `SINner (Corporate Limited)`'s +15 Karma credit -- a
+Negative quality this project's MVP-offered catalog has never included (WP22's own scoping) and
+still doesn't, so the reconstructed import silently loses that credit the same way it always has,
+except this is the first WP where losing it is expensive enough to matter. See
+`chummer5.io.legacy_import`'s own module docstring (WP52 paragraph) for the full arithmetic and
+citation. `test_wesson_karma_funded_edg_increase_via_direct_engine_construction` below proves
+WP52's actual deliverable (the Karma-funded attribute mechanism, against Wesson's real numbers)
+directly, the same "verify by hand where the fixture's full import can't reach" precedent WP28
+already established one paragraph up.
 """
 
 from __future__ import annotations
@@ -48,7 +63,12 @@ from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
-from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, create_character, metatype_choices
+from chummer5.engine.character import (
+    ALLOCATABLE_ATTRIBUTES,
+    create_character,
+    create_karma_attribute_points,
+    metatype_choices,
+)
 from chummer5.engine.derived import drain_resistance
 from chummer5.engine.magic import (
     apply_magic_skill_grant_improvements,
@@ -238,31 +258,46 @@ def test_wesson_adept_powers_hand_verified_against_the_raw_fixture_and_catalog()
     assert wesson.attributes["MAG"].total_value == 4
 
 
-def test_wesson_also_blocked_for_an_unrelated_karma_bought_attribute_point() -> None:
-    """A real, previously-latent gap this WP's own Wesson research surfaced -- unrelated to magic
-    at all. Wesson's tradition needs no resolution (he's an Adept), so he was expected to be this
-    phase's real "imports end to end" success case per the Implementation Plan's own WP28
-    acceptance text. He is not: his real `<attributes><attribute name="EDG">` carries `<base>1</
-    base><karma>1</karma>` against Heritage E's 1-point special-attribute-points budget for Human --
-    i.e. he spent 1 Karma-bought EDG point *beyond* his priority budget, a real, valid, standard SR5
-    chargen rule (a Karma-for-attribute-points purchase) this engine's `create_character` has never
-    modeled at all (it only validates priority-derived points against the priority budget). This
-    was always true of `import_legacy_character`'s pre-existing `base + karma` attribute-points
-    formula (written in WP12, long before this phase existed) -- it just never actually executed
-    with a nonzero `karma` value before, since Yeti (the only Priority-built fixture among the
-    curated mundane 11) happens to have `karma == 0` on every allocatable attribute. Fixed by
-    rejecting any nonzero-karma allocatable attribute as a new, itemized blocking reason (mirroring
-    cyberware/metavariant's existing treatment) rather than silently mis-validating or
-    under-reporting EDG by 1 -- see `spec/worklogs/WP28.md` for the full research and the "neither
-    of Phase I's 2 real fixtures can achieve a full round-trip import" finding this test and
-    `tests/integration/test_legacy_import_fixtures.py::test_rejects_miko_for_her_own_unresolvable_
-    tradition` establish together.
+def test_wesson_still_blocked_after_wp52_by_the_excluded_sinner_qualitys_lost_karma_credit() -> (
+    None
+):
+    """WP28 originally blocked Wesson's import outright via an itemized `UnsupportedLegacyCharacter
+    Error` ("character has Karma-bought attribute points beyond the priority budget on EDG") --
+    WP52 retires that specific check (`create_karma_attribute_points` now models the mechanic for
+    real). Wesson's import is **still not clean**, though -- WP52's own research found a second,
+    previously-invisible gap: his real EDG Karma-buy (`<attribute name="EDG"><base>1</base><karma>
+    1</karma>` -- rating 3 -> 4) legitimately costs 20 Karma (`(3 + 1) x 5`, confirmed against the
+    legacy engine's own `CharacterAttrib.UpgradeKarmaCost` formula in `Attribute.Core.cs`, Standard
+    settings' `AlternateMetatypeAttributeKarma` discount houserule being off by default). His real
+    character could afford it because his real `<qualities>` block includes `SINner (Corporate
+    Limited)`, a Negative quality worth Karma value -15 (i.e. +15 Karma back) -- but SINner isn't,
+    and per WP22's own scoping ruling never will be, one of this project's MVP-offered qualities
+    (unmodeled background-check/social-consequence narrative weight, not a chargen-time computed
+    value). Every unsupported quality was already silently excluded from the reconstructed
+    `quality_selection` before this WP (WP8's "excluded, not silently mis-applied" rule) -- nothing
+    was Karma-budget-sensitive enough for the lost credit to actually block an import until WP52
+    added a Karma-spending consumer expensive enough to need it. So the failure this test now
+    asserts is a **different, more specific one** than before: a plain `ValueError` bubbling out of
+    `build_character`'s own `create_karma_attribute_points` call (this module's own documented "any
+    create_* rejection surfaces unchanged" behavior for a real rules violation its itemized checks
+    don't anticipate), not an itemized `UnsupportedLegacyCharacterError`.
+
+    Confirmed by direct calculation (see
+    `test_wesson_karma_funded_edg_increase_via_direct_engine_construction` below for the mechanism
+    proven in isolation, unaffected by this gap): without SINner, Wesson's reconstructed `character
+    .karma_remaining` before the EDG purchase is 15 (`25 - 10` for the one MVP-offered quality he
+    keeps, Guts); the purchase itself costs 20; with SINner's real -15 Karma value included it
+    would be 30, comfortably enough. Fixing SINner's exclusion is out of this WP's scope (it's
+    WP22's own, separately-scoped, deliberate cut) -- flagged here rather than silently worked
+    around, mirroring `test_rejects_miko_for_her_own_unresolvable_tradition`'s identical "corrects
+    the Implementation Plan's own more optimistic acceptance text" situation one WP earlier.
     """
     legacy = load_chum5(mundane_fixture_path("Wesson.chum5"))
     assert legacy.attributes["EDG"].base == 1
     assert legacy.attributes["EDG"].karma == 1
+    assert any(q.name == "SINner (Corporate Limited)" and q.karma == -15 for q in legacy.qualities)
 
-    with pytest.raises(UnsupportedLegacyCharacterError) as exc_info:
+    with pytest.raises(ValueError, match="Karma-funded attribute spend") as exc_info:
         import_chum5(
             mundane_fixture_path("Wesson.chum5"),
             metatypes=METATYPES,
@@ -274,11 +309,55 @@ def test_wesson_also_blocked_for_an_unrelated_karma_bought_attribute_point() -> 
             spells=SPELLS,
             powers=POWERS,
         )
-    assert exc_info.value.reasons == (
-        "character has Karma-bought attribute points beyond the priority budget on EDG; MVP's "
-        "engine only models priority-derived attribute points, not chargen-time Karma spend on "
-        "attributes",
+    # Not the itemized UnsupportedLegacyCharacterError -- this ValueError comes from deep inside
+    # build_character's own create_karma_attribute_points call, per this module's own "any create_*
+    # rejection surfaces unchanged" documented behavior.
+    assert not isinstance(exc_info.value, UnsupportedLegacyCharacterError)
+    assert str(exc_info.value) == "Karma-funded attribute spend 20 exceeds the Karma budget of 15"
+
+
+def test_wesson_karma_funded_edg_increase_via_direct_engine_construction() -> None:
+    """Proves WP52's actual deliverable -- `create_karma_attribute_points` -- against Wesson's real
+    EDG Karma-buy numbers directly, the same "verify by hand where the fixture's full import can't
+    reach" precedent WP28 already established for his Drain Resistance/power_points (see
+    `test_wesson_adept_magic_and_drain_via_direct_engine_construction` above) -- necessary because
+    the full `import_chum5` pipeline can't reach this fixture's EDG purchase specifically due to the
+    unrelated SINner-Karma-credit gap the test above documents. A minimal, no-quality character
+    (unlike the import pipeline) has the full 25 Karma of `STARTING_KARMA` available, comfortably
+    covering the real 20-Karma cost -- proving the mechanism itself is correct even though the real
+    fixture's full reconstruction can't currently exercise it end to end.
+    """
+    legacy = load_chum5(mundane_fixture_path("Wesson.chum5"))
+    heritage_letter = priority_letter(legacy.priorities.heritage)
+    attributes_letter = priority_letter(legacy.priorities.attributes)
+    heritage = PRIORITIES.heritage[heritage_letter]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
     )
+    attribute_points = {
+        code: legacy.attributes[code].base
+        for code in ALLOCATABLE_ATTRIBUTES
+        if code in legacy.attributes
+    }
+    character = create_character(
+        metatype_choice=human_choice,
+        heritage_letter=heritage_letter,
+        attributes_letter=attributes_letter,
+        priorities=PRIORITIES,
+        attribute_points=attribute_points,
+    )
+    assert character.attribute_value("EDG") == 3  # metatype min 2 + 1 priority point
+    assert character.karma_remaining == 25
+
+    selection = create_karma_attribute_points(
+        character, {"EDG": legacy.attributes["EDG"].karma}, character.karma_remaining
+    )
+    assert selection.points == {"EDG": 1}
+    assert selection.karma_cost == 20  # (3 + 1) x 5, matches the legacy engine's own formula
+
+    character = replace(character, karma_attribute_selection=selection)
+    assert character.attribute_value("EDG") == legacy.attributes["EDG"].total_value == 4
+    assert character.karma_remaining == 5
 
 
 def test_wesson_adept_magic_and_drain_via_direct_engine_construction() -> None:

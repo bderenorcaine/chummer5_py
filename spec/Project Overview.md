@@ -509,3 +509,41 @@ re-litigated by a future WP:**
    section above; recorded again since it came up in the same ruling as the other two).
 
 See Implementation Plan's Phases L-P for the resulting work packages (WP43 onward).
+
+### 2026-07-23 — WP52 confirms `create_character`'s pure-priority-point path has never enforced
+SR5's "only one Mental/Physical attribute at natural maximum" rule, and surfaces a second,
+unrelated Karma-ledger gap (an excluded quality's Karma credit silently lost)
+
+Two findings while implementing Phase O's WP52 (Karma-funded attribute increases), neither blocking
+that WP but both worth recording so a future WP doesn't rediscover them from scratch.
+
+**Finding 1**: the core rulebook restricts character creation to at most one Mental or Physical
+attribute sitting at its own natural (metatype) maximum — stated at Step Two (p.99) and explicitly
+restated at Step Seven for Karma spend specifically (p.100: "These rules still apply to when you are
+spending Karma"). This engine's `chummer5.engine.character.create_character` (WP6) has never
+enforced it for ordinary priority-point spend — confirmed by `grep`, and confirmed harmless so far
+only because the one priority-build regression fixture (`Yeti-#ffffff2.chum5`) never happens to
+reach a metatype maximum on more than one primary attribute. WP52 enforces the rule for its own new
+Karma-funded spend (`chummer5.engine.character.create_karma_attribute_points`) but deliberately does
+not retrofit `create_character` itself — a different function, a different WP's job if it's ever
+worth doing. See `spec/rulebooks/learnings.md`'s WP52 entry and that function's own "Scope note"
+docstring paragraph for the full detail, including a real implementation trap this surfaced (the web
+layer calls the new validator on *every* attribute-form submission, not just Karma-spending ones, so
+the check has to fire only when the submission itself touches a Mental/Physical attribute — otherwise
+a legal pure-priority spend that happens to hit two maxima would be rejected on the next unrelated
+edit).
+
+**Finding 2**: `Wesson.chum5` (this project's one real Adept fixture) was expected, per WP52's own
+Implementation Plan entry, to finally reach a clean `import_chum5()` round-trip once Karma-bought
+attribute points were modeled — it doesn't. His real EDG Karma-buy (rating 3 → 4) legitimately costs
+20 Karma (confirmed against the legacy engine's own `UpgradeKarmaCost` formula), affordable in the
+real character only because his real `SINner (Corporate Limited)` quality carries a +15 Karma
+credit — a quality this project has never offered (WP22's own scoping ruling, unmodeled
+background-check/social-consequence narrative weight) and still doesn't. Every unsupported quality a
+legacy import drops was already silently losing its Karma-cost side effect before this WP (WP8's
+"excluded, not silently mis-applied" rule already implied this); WP52 is simply the first WP whose
+own Karma-spending consumer is expensive enough for that loss to matter. Not fixed here — fixing it
+would mean reopening WP22's own SINner exclusion, out of scope for a Phase O attribute-spend WP. See
+`chummer5.io.legacy_import`'s own WP52 docstring paragraph and `spec/worklogs/WP52.md` for the full
+arithmetic and the tests that pin down the corrected (still-blocked, but for a new and different
+reason) behavior.

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -84,6 +84,28 @@ _ESSENCE_TARGET = ""
 # `chummer5.engine.spirits.STARTING_KARMA` (WP46); moved here as the unified ledger's one home --
 # see `Character.karma_remaining`'s own docstring.
 STARTING_KARMA = 25
+
+# WP52: core rulebook p.106-107, "the cost to improve an attribute is new Rating x 5 Karma" (see
+# the "KARMA ADVANCEMENT TABLE FOR ATTRIBUTES", reconstructed and confirmed exactly by WP51's own
+# research pass -- spec/rulebooks/learnings.md's WP51 entry). Applies uniformly to every
+# `ALLOCATABLE_ATTRIBUTES` code (the Training Rate Table lists "Improving an attribute (Mental,
+# Physical, Magic, Resonance)" and "Improving Edge" as the same Karma-cost table, just different
+# training time) -- WP52 itself only offers this on `ALLOCATABLE_ATTRIBUTES` (Mental/Physical/EDG),
+# deliberately excluding MAG/RES as their own, not-yet-built follow-up (see
+# `KarmaAttributeSelection`'s own docstring).
+ATTRIBUTE_KARMA_PER_RATING = 5
+
+
+def karma_advancement_cost(start_rating: int, points: int, karma_per_rating: int) -> int:
+    """Cumulative Karma cost to raise a rating by `points` steps from `start_rating`, `new_rating
+    x karma_per_rating` summed per step -- the shared shape behind every row of the core
+    rulebook's Karma Advancement Tables (p.106-107): Attributes use `karma_per_rating=5`
+    (`ATTRIBUTE_KARMA_PER_RATING` above); Active Skills/Skill Groups/Knowledge & Language Skills
+    (WP53) use 2/5/1 respectively over the identical cumulative shape -- see
+    `spec/rulebooks/learnings.md`'s WP51 entry for the table cross-check that confirmed all four.
+    `points=0` costs `0` (no steps to sum).
+    """
+    return sum((start_rating + step) * karma_per_rating for step in range(1, points + 1))
 
 
 def sr5_metatypes(metatypes: tuple[Metatype, ...]) -> tuple[Metatype, ...]:
@@ -287,6 +309,15 @@ class Character:
     fields -- each just needs one more `+ (self.x_selection.karma_cost if ... else 0)` term below,
     mirroring how `bound_spirit_selection`/`foci_selection` joined the sum in WP46/WP47 before this
     property existed to hold them.
+
+    **WP52** adds `karma_attribute_selection: KarmaAttributeSelection | None` -- leftover-Karma-
+    funded attribute increases (Step Seven), the same "`None` until committed" wrapping-selection
+    shape as `bound_spirit_selection`/`foci_selection` (wraps `points` alongside its own resolved
+    `karma_cost`, so a render can show "N Karma spent on attributes" without recomputing it).
+    `attribute_value` reads `karma_attribute_selection.points` as one more additive term on top of
+    `attribute_points`, and `karma_spent` gains a matching `karma_attribute_selection.karma_cost`
+    term -- see `create_karma_attribute_points`'s own docstring for the validation (cost formula,
+    metatype-maximum check, and the "only one Mental/Physical attribute at natural maximum" rule).
     """
 
     metatype: Metatype
@@ -315,6 +346,8 @@ class Character:
     bound_spirit_selection: BoundSpiritSelection | None = None  # Magician's bound spirits (WP46)
     foci_selection: FociSelection | None = None  # magic-active character's bonded foci (WP47)
     knowledge_selection: KnowledgeSelection | None = None  # Knowledge/Language skills (WP49)
+    # Leftover-Karma-funded attribute increases beyond the priority budget (Step Seven, WP52).
+    karma_attribute_selection: KarmaAttributeSelection | None = None
 
     @property
     def karma_spent(self) -> int:
@@ -332,6 +365,11 @@ class Character:
                 else 0
             )
             + (self.foci_selection.karma_cost if self.foci_selection is not None else 0)
+            + (
+                self.karma_attribute_selection.karma_cost
+                if self.karma_attribute_selection is not None
+                else 0
+            )
         )
 
     @property
@@ -376,8 +414,13 @@ class Character:
             return max(self.magic_rating_before_essence_loss - self.magic_essence_loss, 0)
         attribute_range = self.attribute_range(code)
         points = self.attribute_points.get(code, 0)
+        karma_points = (
+            self.karma_attribute_selection.points.get(code, 0)
+            if self.karma_attribute_selection is not None
+            else 0
+        )
         bonus = self.improvements.resolve(ImprovementType.ATTRIBUTE, code)
-        return min(attribute_range.minimum + points + bonus, attribute_range.maximum)
+        return min(attribute_range.minimum + points + karma_points + bonus, attribute_range.maximum)
 
     @property
     def power_points(self) -> int:
@@ -495,3 +538,123 @@ def create_character(
         attribute_points=MappingProxyType(dict(attribute_points)),
         improvements=ImprovementIndex(),
     )
+
+
+@dataclass(frozen=True)
+class KarmaAttributeSelection:
+    """Leftover-Karma-funded attribute increases beyond the priority-derived `attribute_points`/
+    `special_attribute_points` budgets (Step Seven, WP52; see the Implementation Plan's Phase O
+    intro and `create_karma_attribute_points`'s own docstring).
+
+    `points` mirrors `attribute_points`'s own shape and meaning -- however many *additional*
+    points, per `ALLOCATABLE_ATTRIBUTES` code, were bought with Karma on top of whatever
+    priority-budget points that attribute already has. Always the *full* resulting map, not an
+    incremental delta on top of a prior `KarmaAttributeSelection` -- the same "recompute wholesale,
+    not incrementally" shape every other selection in this engine uses (`create_quality_selection`,
+    `create_bound_spirit_selection`, ...): a resubmission is a complete re-declaration of every
+    Karma-funded attribute point, not a diff against what was there before.
+
+    Deliberately **excludes MAG/RES** even though `ALLOCATABLE_ATTRIBUTES` is the only set checked
+    here -- MAG has its own, already-built Karma-free mechanism for growing past its Talent-granted
+    starting rating (`create_magic_attribute_points`, spending *Special Attribute Points*, not
+    Karma), and RES stays out of scope entirely per the Project Overview. The core rulebook's own
+    Karma Advancement Table (p.106) does list Magic/Resonance under the same `new Rating x 5`
+    formula this class uses for Mental/Physical/Edge, so a future WP *could* extend
+    `ALLOCATABLE_ATTRIBUTES`-style Karma spend to MAG -- deliberately not attempted here, since it
+    would also need to interact with WP35's Essence-driven Magic-loss formula
+    (`Character.magic_essence_loss`) in a way no current fixture exercises, mirroring this
+    project's "don't build past what's asked or verified" discipline.
+    """
+
+    points: MappingProxyType[str, int]
+    karma_cost: int
+
+
+def create_karma_attribute_points(
+    character: Character, karma_points: Mapping[str, int], karma_budget: int
+) -> KarmaAttributeSelection:
+    """Validate and build a `KarmaAttributeSelection`.
+
+    `karma_points` raises an `ALLOCATABLE_ATTRIBUTES` attribute beyond its priority-derived budget
+    at `new Rating x 5` Karma per rating step, cumulative (core rulebook p.106-107, "KARMA
+    ADVANCEMENT TABLE FOR ATTRIBUTES" -- see `karma_advancement_cost`/`ATTRIBUTE_KARMA_PER_RATING`
+    and `spec/rulebooks/learnings.md`'s WP51 entry for the confirming research pass).
+
+    Validates: every key is one of `ALLOCATABLE_ATTRIBUTES` (MAG/RES are never allocatable here --
+    see `KarmaAttributeSelection`'s own docstring); no negative spend; the resulting value
+    (metatype minimum + priority points + Karma points) does not exceed the metatype's maximum for
+    that attribute; **at most one of `PRIMARY_ATTRIBUTES` may sit at its own natural maximum**
+    after this spend (core rulebook p.100, Step Seven: "Only one attribute can be at the natural
+    attribute limit... These rules still apply to when you are spending Karma" -- restating Step
+    Two's own restriction, p.99, which explicitly excludes Magic/Edge/Resonance from this
+    limitation, so `SPECIAL_ATTRIBUTES`/EDG is not checked against it here); and the total Karma
+    cost does not exceed `karma_budget` (the caller's responsibility to derive -- typically
+    `character.karma_remaining + <this selection's own currently-committed karma_cost>`, mirroring
+    every other Karma-spending `create_*` function's `karma_budget` parameter; see WP51's worklog
+    for this "add back this section's own current commitment" idiom).
+
+    **Scope note**: the "only one at natural maximum" check only fires when `karma_points` actually
+    raises a `PRIMARY_ATTRIBUTES` code -- an empty or EDG-only `karma_points` skips it entirely,
+    *even if* `character` already has two-plus Mental/Physical attributes at their natural maximum
+    from priority-point spend alone. This matters in practice, not just hypothetically: the web
+    layer (`chummer5.web.app.submit_attributes`) calls this function on *every* attribute-form
+    submission, including ones that spend no Karma at all, purely to re-validate whatever Karma
+    spend is already committed -- if the check ran unconditionally, a perfectly legal pure-priority
+    spend that happens to reach the metatype maximum on more than one Mental/Physical attribute
+    (`create_character`, WP6, never itself validated that restriction for the pure-priority path)
+    would be rejected the moment the player touched the attribute form again, with no Karma
+    involved at all. Confirmed this is a real, reachable case, not just theoretical: caught by
+    `tests/unit/test_web_attribute_skill_allocation.py`'s own WP19 reconfirmation test during this
+    WP's own manual verification, which spends BOD/AGI/REA all up to Human's natural maximum (6) via
+    priority points alone -- see this function's own tests for the synthetic regression case that
+    pins this behavior down directly.
+    """
+    unknown = set(karma_points) - set(ALLOCATABLE_ATTRIBUTES)
+    if unknown:
+        raise ValueError(f"not allocatable in MVP scope: {sorted(unknown)}")
+
+    nonzero_points = MappingProxyType({code: pts for code, pts in karma_points.items() if pts})
+    cost = 0
+    for code, points in nonzero_points.items():
+        if points < 0:
+            raise ValueError(f"{code}: Karma-funded points must not be negative, got {points}")
+        attribute_range = character.attribute_range(code)
+        start_rating = attribute_range.minimum + character.attribute_points.get(code, 0)
+        total = start_rating + points
+        if total > attribute_range.maximum:
+            raise ValueError(
+                f"{code}: {total} (priority + Karma) exceeds {character.metatype.name}'s "
+                f"maximum of {attribute_range.maximum}"
+            )
+        cost += karma_advancement_cost(start_rating, points, ATTRIBUTE_KARMA_PER_RATING)
+
+    if cost > karma_budget:
+        raise ValueError(
+            f"Karma-funded attribute spend {cost} exceeds the Karma budget of {karma_budget}"
+        )
+
+    selection = KarmaAttributeSelection(points=nonzero_points, karma_cost=cost)
+
+    # The "only one at natural maximum" check only fires when *this* Karma spend actually raises a
+    # PRIMARY_ATTRIBUTES code -- an empty `karma_points` (the common case: every ordinary attribute
+    # -point submission on the web layer calls this function too, to keep any already-committed
+    # Karma spend re-validated) or one that only touches EDG must never trip it, since neither
+    # changes whether any Mental/Physical attribute sits at its maximum. This also means a character
+    # that already has two-plus Mental/Physical attributes at maximum from priority-point spend
+    # alone (a state `create_character` has never itself rejected -- see this function's own
+    # docstring "Scope note") is left alone by a `karma_points={}` or EDG-only call; only a spend
+    # that would touch a Mental/Physical rating is actually checked against the rule.
+    if any(code in PRIMARY_ATTRIBUTES for code in nonzero_points):
+        candidate = replace(character, karma_attribute_selection=selection)
+        at_natural_maximum = sum(
+            1
+            for code in PRIMARY_ATTRIBUTES
+            if candidate.attribute_value(code) >= candidate.attribute_range(code).maximum
+        )
+        if at_natural_maximum > 1:
+            raise ValueError(
+                "only one Mental or Physical attribute may sit at its natural maximum at "
+                f"character creation -- this Karma spend would put {at_natural_maximum} there"
+            )
+
+    return selection

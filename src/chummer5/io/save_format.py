@@ -157,6 +157,14 @@ needed, unlike Knowledge/Language's Bilingual dependency, since a specialization
 (its skill having at least 1 of its own `skill_points`) is already checked from data this dataclass
 carries directly.
 
+**WP52** adds `karma_attribute_points` -- attribute code -> extra points bought with leftover
+Karma, mirroring `attribute_points`'s own `{code: points}` shape (see
+`chummer5.engine.character.KarmaAttributeSelection`). Defaults to `{}` ("predates this field"), so
+every pre-WP52 save round-trips unchanged. Resolved in `build_character` after `quality_selection`/
+`contact_selection` are attached (so `character.karma_remaining` at that point already reflects
+both) but before `bound_spirit_selection` (which reads `character.attribute_value("CHA")` --
+one of `PRIMARY_ATTRIBUTES`, so it must see any Karma-funded CHA increase already applied).
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -187,7 +195,12 @@ from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
 from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_selection
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
-from chummer5.engine.character import Character, create_character, metatype_choices
+from chummer5.engine.character import (
+    Character,
+    create_character,
+    create_karma_attribute_points,
+    metatype_choices,
+)
 from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
 from chummer5.engine.foci import apply_foci_improvements, create_foci_selection
 from chummer5.engine.improvements import ImprovementSource
@@ -320,6 +333,11 @@ class CharacterSave:
     # WP50: skill_id -> specialization name. Defaults to {} -- "predates this field", the identical
     # shape every other optional selection field defaults to.
     specializations: MappingProxyType[str, str] = MappingProxyType({})
+    # WP52: attribute code -> extra points bought with leftover Karma beyond the priority budget
+    # (ALLOCATABLE_ATTRIBUTES only -- see chummer5.engine.character.KarmaAttributeSelection's own
+    # docstring for why MAG/RES are excluded). Defaults to {} -- "predates this field", the
+    # identical shape every other optional selection field defaults to.
+    karma_attribute_points: MappingProxyType[str, int] = MappingProxyType({})
 
 
 def create_character_save(
@@ -355,6 +373,7 @@ def create_character_save(
     knowledge_skill_picks: Iterable[KnowledgeSkillPickTriple] = (),
     language_skill_picks: Iterable[LanguageSkillPickTriple] = (),
     specializations: Mapping[str, str] = MappingProxyType({}),
+    karma_attribute_points: Mapping[str, int] = MappingProxyType({}),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -396,6 +415,7 @@ def create_character_save(
         knowledge_skill_picks=tuple(knowledge_skill_picks),
         language_skill_picks=tuple(language_skill_picks),
         specializations=MappingProxyType(dict(specializations)),
+        karma_attribute_points=MappingProxyType(dict(karma_attribute_points)),
     )
 
 
@@ -455,6 +475,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
             for name, rating, native in save.language_skill_picks
         ],
         "specializations": dict(save.specializations),
+        "karma_attribute_points": dict(save.karma_attribute_points),
     }
 
 
@@ -517,6 +538,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
             (p["name"], p["rating"], p["native"]) for p in data.get("language_skill_picks", ())
         ),
         specializations=data.get("specializations", {}),
+        karma_attribute_points=data.get("karma_attribute_points", {}),
     )
 
 
@@ -775,14 +797,28 @@ def build_character(
         knowledge_selection=knowledge_selection,
     )
 
-    # WP46: resolved last, against the now-fully-populated `character` -- create_bound_spirit_
+    # WP52: resolved next, against the now-fully-populated `character` -- `character.karma_
+    # remaining` at this point already reflects quality_selection/contact_selection (both set by
+    # the replace() above) and nothing else (karma_attribute_selection/bound_spirit_selection/
+    # foci_selection are all still None), so it's exactly the right budget to validate this
+    # selection's own Karma spend against. Resolved *before* Bound Spirits specifically because
+    # create_bound_spirit_selection below reads character.attribute_value("CHA") -- one of
+    # PRIMARY_ATTRIBUTES, so it must see any Karma-funded CHA increase already applied, not the
+    # pre-Karma value.
+    karma_attribute_selection = create_karma_attribute_points(
+        character, save.karma_attribute_points, character.karma_remaining
+    )
+    character = replace(character, karma_attribute_selection=karma_attribute_selection)
+
+    # WP46: resolved next, against the now-fully-populated `character` -- create_bound_spirit_
     # selection reads character.attribute_value("CHA")/("MAG"), both of which depend on the
-    # magic_type/tradition/magic_rating/magic_attribute_points fields the replace() above just set
-    # (force is always the *live* Magic rating, never a persisted value -- see module docstring).
-    # WP51: `character.karma_remaining` at this point already reflects quality_selection/
-    # contact_selection (both set by the replace() above) and nothing else (bound_spirit_selection/
-    # foci_selection are still None), so it's exactly the pre-WP51 `provisional_karma_budget(
-    # quality_selection.karma_cost, contact_selection.karma_cost)` call it replaces.
+    # magic_type/tradition/magic_rating/magic_attribute_points/karma_attribute_selection fields
+    # already set above (force is always the *live* Magic rating, never a persisted value -- see
+    # module docstring). WP51: `character.karma_remaining` at this point already reflects quality_
+    # selection/contact_selection/karma_attribute_selection and nothing else (bound_spirit_
+    # selection/foci_selection are still None), so it's exactly the pre-WP51 `provisional_karma_
+    # budget(quality_selection.karma_cost, contact_selection.karma_cost)` call it replaces, widened
+    # by WP52's own term.
     bound_spirit_selection = create_bound_spirit_selection(
         save.bound_spirit_picks, character, character.karma_remaining
     )

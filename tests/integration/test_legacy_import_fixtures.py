@@ -178,9 +178,13 @@ def test_rejects_miko_for_her_own_unresolvable_tradition() -> None:
     offers -- and there is no sensible "import without a tradition" fallback for a Magician (see
     `chummer5.io.legacy_import`'s module docstring). This corrects the Implementation Plan's own
     WP28 acceptance text, which expected Miko to import end to end -- see `spec/worklogs/WP28.md`
-    for the full research. `Wesson.chum5` (an Adept, needing no tradition at all) is this phase's
-    real success case instead -- see `test_imports_wesson_adept_end_to_end` in
-    `tests/integration/test_magic_fixtures.py`.
+    for the full research. `Wesson.chum5` (an Adept, needing no tradition at all) was hoped to be
+    this phase's real success case instead, but WP52's own research found he *also* can't reach a
+    full end-to-end import (an unrelated Karma-budget gap, not a magic-scoping one) -- see
+    `tests/integration/test_magic_fixtures.py`'s
+    `test_wesson_still_blocked_after_wp52_by_the_excluded_sinner_qualitys_lost_karma_credit` and
+    `test_wesson_karma_funded_edg_increase_via_direct_engine_construction` for the full detail and
+    for WP52's actual deliverable proven directly against his real numbers instead.
     """
     legacy = load_chum5(LEGACY_TESTFILES_DIR / "Miko.chum5")
     assert legacy.tradition_name == "Shinto"
