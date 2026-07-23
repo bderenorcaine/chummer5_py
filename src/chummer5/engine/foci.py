@@ -33,10 +33,8 @@ scales with the Force chosen at bonding time). `create_foci_selection` rejects a
 Availability ruling at the one point it can actually be checked -- against the specific Force a
 player picked, not a fixed catalog value.
 
-**Karma shares the same provisional pool Bound Spirits draws from.** Both are Karma-costing
-Magic-only chargen extras built against `chummer5.engine.spirits.provisional_karma_budget`'s
-deliberately-provisional stand-in (no Phase O ledger yet -- see that function's own docstring),
-widened this WP to accept both `bound_spirit_karma_cost` and `foci_karma_cost`. Neither
+**Karma shares the same pool Bound Spirits draws from -- `Character.karma_remaining` (Phase O's
+unified ledger, WP51).** Both are Karma-costing Magic-only chargen extras. Neither
 `create_bound_spirit_selection` nor `create_foci_selection` chains into the other's own call the
 way `create_bioware_selection` takes cyberware's `essence_spent` directly -- each just takes a
 caller-resolved `karma_budget: int`. That still leaves two different contexts with two different

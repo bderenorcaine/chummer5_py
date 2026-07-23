@@ -732,7 +732,7 @@ def test_build_character_applies_bound_spirit_selection() -> None:
     assert spirit.force == character.attribute_value("MAG") == 3
 
 
-def test_build_character_rejects_bound_spirits_exceeding_the_provisional_karma_budget() -> None:
+def test_build_character_rejects_bound_spirits_exceeding_the_karma_budget() -> None:
     # STARTING_KARMA is 25 -- 26 services on one spirit alone already exceeds it, with nothing else
     # spent from qualities/contacts in this fixture.
     save = _magician_save((("Spirit of Fire", 26),))
@@ -832,7 +832,7 @@ def test_build_character_rejects_foci_exceeding_the_shared_nuyen_budget() -> Non
         _build_magician(save)
 
 
-def test_build_character_rejects_foci_exceeding_the_provisional_karma_budget() -> None:
+def test_build_character_rejects_foci_exceeding_the_karma_budget() -> None:
     # Talent letter C -> Magic 3, so the chargen Force cap is 6 and the count cap is 3 -- two
     # Power Foci at Force 3 each (total Force 6, count 2, Availability 12 each, all within their own
     # caps) cost 6 Karma/Force x 2 x 3 = 36 Karma, already over STARTING_KARMA (25) with nothing

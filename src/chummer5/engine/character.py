@@ -77,6 +77,14 @@ ALLOCATABLE_ATTRIBUTES = PRIMARY_ATTRIBUTES + SPECIAL_ATTRIBUTES
 # already imports `Character` from this module.
 _ESSENCE_TARGET = ""
 
+# WP51: core rulebook p. 64, "All characters in Shadowrun start with 25 Karma they will use to
+# improve themselves" -- cross-checked against the Step Four worked example (James ends Step Four
+# with 26 Karma, not 25, having spent 19 on Positive Qualities and gained 20 from Negative ones --
+# i.e. the pool moves from this fixed starting point, it isn't itself variable). Formerly
+# `chummer5.engine.spirits.STARTING_KARMA` (WP46); moved here as the unified ledger's one home --
+# see `Character.karma_remaining`'s own docstring.
+STARTING_KARMA = 25
+
 
 def sr5_metatypes(metatypes: tuple[Metatype, ...]) -> tuple[Metatype, ...]:
     """Restrict a metatype catalog to `source == "SR5"` entries.
@@ -257,6 +265,28 @@ class Character:
     as separate properties purely so the character sheet can show *why* a reduced rating is reduced
     (see those properties' own docstrings) -- `attribute_value("MAG")` remains the one real,
     Essence-reduced value every other computation (dice pools, `power_points`) reads.
+
+    **WP51 adds no new field either -- `karma_spent`/`karma_remaining` are computed properties, not
+    stored state.** Phase O's unified Karma ledger, replacing the several independent one-shot
+    checks `quality_selection`/`contact_selection`/`bound_spirit_selection`/`foci_selection` each
+    used to validate their own Karma cost against separately (the pre-WP51 pattern
+    `chummer5.engine.spirits.provisional_karma_budget`, now retired, made explicit: every caller
+    had to remember to sum each already-committed selection's `karma_cost` by hand). A computed
+    property is the right shape here for the same reason the class docstring's opening paragraph
+    already established for `Character` as a whole: every summand (`quality_selection.karma_cost`,
+    etc.) is itself already a validated, frozen sub-object's own resolved cost, so there is nothing
+    to incrementally track -- summing them fresh on every read is cheap (character-sized, not
+    corpus-sized) and can never drift out of sync with whatever is actually committed, the same
+    "reconstruct wholesale to validate" principle the Project Overview's Improvement-engine section
+    applies to jointly-constrained values. `karma_remaining` naturally starts at
+    `STARTING_KARMA - quality_selection.karma_cost` once qualities are committed and nothing else
+    is -- which is already the rulebook's own "post-Step-Four total" (James/Rob/Kyra's 26/25/26, not
+    a flat 25), with no separate "starting Karma" field needed, since `QualitySelection.karma_cost`
+    is already signed (`positive_karma - negative_karma`) to produce exactly that net effect. Widens
+    automatically as future Phase O WPs (attribute/skill/spell Karma spends, WP52-54) add their own
+    fields -- each just needs one more `+ (self.x_selection.karma_cost if ... else 0)` term below,
+    mirroring how `bound_spirit_selection`/`foci_selection` joined the sum in WP46/WP47 before this
+    property existed to hold them.
     """
 
     metatype: Metatype
@@ -285,6 +315,37 @@ class Character:
     bound_spirit_selection: BoundSpiritSelection | None = None  # Magician's bound spirits (WP46)
     foci_selection: FociSelection | None = None  # magic-active character's bonded foci (WP47)
     knowledge_selection: KnowledgeSelection | None = None  # Knowledge/Language skills (WP49)
+
+    @property
+    def karma_spent(self) -> int:
+        """Σ every committed Karma-spending (or, for net-negative Qualities, Karma-refunding)
+        selection's own `karma_cost` -- see class docstring's WP51 paragraph. `0` for a selection
+        that hasn't been committed yet (`None`), the same "unset means not yet spent" default every
+        other selection field already has.
+        """
+        return (
+            (self.quality_selection.karma_cost if self.quality_selection is not None else 0)
+            + (self.contact_selection.karma_cost if self.contact_selection is not None else 0)
+            + (
+                self.bound_spirit_selection.karma_cost
+                if self.bound_spirit_selection is not None
+                else 0
+            )
+            + (self.foci_selection.karma_cost if self.foci_selection is not None else 0)
+        )
+
+    @property
+    def karma_remaining(self) -> int:
+        """`STARTING_KARMA - karma_spent` -- Phase O's unified "Karma remaining" ledger. Can exceed
+        `STARTING_KARMA` when net Negative-Quality Karma outweighs net Positive-Quality Karma spent
+        (the rulebook's own James/Kyra worked examples both do -- see class docstring's WP51
+        paragraph), and can go negative for an over-budget selection built without going through
+        this property's own validation (nothing here rejects negative Karma; each `create_*`
+        function still validates its own spend against a caller-supplied budget derived from this
+        property, the same "validation lives in the create_* function, not the aggregate" split
+        every other selection already has).
+        """
+        return STARTING_KARMA - self.karma_spent
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]

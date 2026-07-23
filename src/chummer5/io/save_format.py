@@ -121,8 +121,8 @@ would later derive as `MagicSelection.magic_type`, computed early here since `cr
 selection` needs it and quality resolution happens before the Magic-selection block further
 down this function) -- unlike Bound Spirits/Foci, Mentor Spirit's Karma cost is a normal Positive
 Quality cost already covered by `QualitySelection.positive_karma`/`QUALITY_KARMA_LIMIT`, not a
-draw against `chummer5.engine.spirits.provisional_karma_budget`'s separate leftover-Karma pool, so
-no evaluation-order concern with Bound Spirits/Foci exists here.
+separate draw against `Character.karma_remaining` (WP51's unified ledger; Bound Spirits/Foci's own
+leftover-Karma pool), so no evaluation-order concern with Bound Spirits/Foci exists here.
 
 **WP49** adds `knowledge_skill_picks`/`language_skill_picks` -- a player's Knowledge/Language skill
 spend, as `(name, category, rating)`/`(name, rating, native)` tuples (the same "selection, not
@@ -218,7 +218,7 @@ from chummer5.engine.resources import (
     create_resources_selection,
 )
 from chummer5.engine.skills import create_skill_allocation
-from chummer5.engine.spirits import create_bound_spirit_selection, provisional_karma_budget
+from chummer5.engine.spirits import create_bound_spirit_selection
 
 # Bumped only if a future WP changes this format's shape in a way older saves can't be read as.
 # MVP has exactly one version; there is no migration path yet because there is nothing to migrate
@@ -779,11 +779,12 @@ def build_character(
     # selection reads character.attribute_value("CHA")/("MAG"), both of which depend on the
     # magic_type/tradition/magic_rating/magic_attribute_points fields the replace() above just set
     # (force is always the *live* Magic rating, never a persisted value -- see module docstring).
-    spirit_karma_budget = provisional_karma_budget(
-        quality_selection.karma_cost, contact_selection.karma_cost
-    )
+    # WP51: `character.karma_remaining` at this point already reflects quality_selection/
+    # contact_selection (both set by the replace() above) and nothing else (bound_spirit_selection/
+    # foci_selection are still None), so it's exactly the pre-WP51 `provisional_karma_budget(
+    # quality_selection.karma_cost, contact_selection.karma_cost)` call it replaces.
     bound_spirit_selection = create_bound_spirit_selection(
-        save.bound_spirit_picks, character, spirit_karma_budget
+        save.bound_spirit_picks, character, character.karma_remaining
     )
     character = replace(character, bound_spirit_selection=bound_spirit_selection)
 
@@ -793,18 +794,15 @@ def build_character(
     # already-resolved karma_cost and of the nuyen resources_selection already spent on gear/
     # Lifestyle/cyberware/bioware. See chummer5.engine.foci's own module docstring for why a
     # one-shot reconstruction like this one needs a fixed order even though neither create_*_
-    # selection chains into the other's own call.
-    foci_karma_budget = provisional_karma_budget(
-        quality_selection.karma_cost,
-        contact_selection.karma_cost,
-        bound_spirit_karma_cost=bound_spirit_selection.karma_cost,
-    )
+    # selection chains into the other's own call. WP51: `character.karma_remaining` now also
+    # reflects the bound_spirit_selection the replace() above just attached, so it's exactly the
+    # pre-WP51 `provisional_karma_budget(..., bound_spirit_karma_cost=...)` call it replaces.
     foci_selection = create_foci_selection(
         save.foci_picks,
         character,
         foci,
         resources_selection.nuyen_remaining,
-        foci_karma_budget,
+        character.karma_remaining,
     )
     apply_foci_improvements(character, foci_selection)
 

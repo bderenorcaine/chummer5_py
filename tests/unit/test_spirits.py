@@ -13,7 +13,6 @@ from chummer5.engine.spirits import (
     BoundSpiritSelection,
     create_bound_spirit_selection,
     offered_spirit_types,
-    provisional_karma_budget,
 )
 
 PRIORITIES = load_priorities()
@@ -68,26 +67,6 @@ def _magician(*, cha_points: int = 0, tradition_name: str = "Hermetic") -> Chara
 
 def test_offered_spirit_types_reads_the_traditions_spirit_affinities() -> None:
     assert offered_spirit_types(HERMETIC) == HERMETIC.spirits.offered_types
-
-
-# -- provisional_karma_budget -------------------------------------------------------------------
-
-
-def test_provisional_karma_budget_with_nothing_spent() -> None:
-    assert provisional_karma_budget(0, 0) == STARTING_KARMA
-
-
-def test_provisional_karma_budget_subtracts_quality_and_contact_cost() -> None:
-    assert provisional_karma_budget(10, 3) == STARTING_KARMA - 13
-
-
-def test_provisional_karma_budget_can_go_above_starting_karma_from_net_negative_qualities() -> (
-    None
-):
-    # Rulebook's own worked example: James ends Step Four with 26 Karma (not 25), having spent 19
-    # on Positive Qualities and gained 20 from Negative ones -- quality_karma_cost is negative in
-    # that case (create_quality_selection's own karma_cost = positive - negative).
-    assert provisional_karma_budget(-1, 0) == STARTING_KARMA + 1
 
 
 # -- create_bound_spirit_selection ---------------------------------------------------------------

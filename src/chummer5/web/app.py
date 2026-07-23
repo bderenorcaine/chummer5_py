@@ -276,11 +276,7 @@ from chummer5.engine.skills import (
     skill_point_budget,
     skill_rating,
 )
-from chummer5.engine.spirits import (
-    create_bound_spirit_selection,
-    offered_spirit_types,
-    provisional_karma_budget,
-)
+from chummer5.engine.spirits import create_bound_spirit_selection, offered_spirit_types
 from chummer5.io.legacy_import import (
     UnsupportedLegacyCharacterError,
     import_chum5,
@@ -1989,7 +1985,6 @@ def _power_selection_context(
 def _spirit_selection_context(
     character: Character | None,
     picks: Iterable[tuple[str, int]],
-    foci_karma_cost: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -1999,15 +1994,14 @@ def _spirit_selection_context(
     `picks` is whatever should be shown filled in, same echo-the-submission shape as `_spell_
     selection_context`'s `spell_ids`.
 
-    `karma_budget` is this WP's own provisional stand-in (see `chummer5.engine.spirits
-    .provisional_karma_budget`'s docstring) -- `STARTING_KARMA` minus whatever the character's
-    already-committed quality/contact selections have spent, recomputed fresh on every render (not
-    read off a stored total) so it always reflects the character's *current* karma spend. **WP47**
-    adds `foci_karma_cost` (the character's currently-committed `foci_selection.karma_cost`, or 0 if
-    none yet) as a 4th term, the same symmetric cross-section reading `_foci_selection_context`
-    does back for `bound_spirit_karma_cost` -- see `chummer5.engine.foci`'s own module docstring for
-    why interactive re-validation of two already-committed selections reads each other's current
-    cost rather than assuming a fixed order.
+    `karma_budget` is `character.karma_remaining` (WP51's unified ledger) with Bound Spirits' own
+    currently-committed cost added back in -- `karma_remaining` already has it subtracted out
+    (it's part of the sum), but re-validating a *new* Bound Spirit pick needs the budget as it would
+    be with nothing yet committed to this section, the same way every other section's re-validation
+    excludes its own prior commitment. Recomputed fresh on every render (not read off a stored
+    total), so it always reflects the character's *current* karma spend -- including Foci's, read
+    directly off `character.foci_selection` rather than threaded through as a parameter (pre-WP51,
+    callers had to pass this by hand; now it's just part of the same `character` already passed in).
 
     **WP19-style staleness re-validation**: when `error` is unset and a Bound Spirit selection is
     already committed, re-runs `create_bound_spirit_selection` against the *current* character/
@@ -2021,11 +2015,12 @@ def _spirit_selection_context(
     if character.magic_type != "Magician":
         return {"character": character, "spirit_error": error}
     offered = offered_spirit_types(character.tradition) if character.tradition is not None else ()
-    karma_budget = provisional_karma_budget(
-        character.quality_selection.karma_cost if character.quality_selection is not None else 0,
-        character.contact_selection.karma_cost if character.contact_selection is not None else 0,
-        foci_karma_cost=foci_karma_cost,
+    own_committed_cost = (
+        character.bound_spirit_selection.karma_cost
+        if character.bound_spirit_selection is not None
+        else 0
     )
+    karma_budget = character.karma_remaining + own_committed_cost
     entries = list(picks)
     rows = [
         {
@@ -2071,7 +2066,6 @@ def _foci_selection_context(
     lifestyle_cost: int,
     cyberware_cost: int,
     bioware_cost: int,
-    bound_spirit_karma_cost: int,
     karma_converted: int = 0,
     *,
     error: str | None = None,
@@ -2087,12 +2081,12 @@ def _foci_selection_context(
     committed spend, the same cross-section wiring `_cyberware_context` already uses for its own
     four terms, now extended to five.
 
-    **Karma**: `karma_budget` is `chummer5.engine.spirits.provisional_karma_budget`'s own
-    provisional stand-in, given `bound_spirit_karma_cost` (the character's currently-committed
-    `bound_spirit_selection.karma_cost`, or 0 if none yet) as its 3rd term -- see that function's
-    own WP47 docstring paragraph for why this reads the *other* section's current commitment rather
-    than assuming a fixed evaluation order, unlike `chummer5.io.save_format.build_character`'s
-    one-shot reconstruction (which does need one).
+    **Karma**: `karma_budget` is `character.karma_remaining` (WP51's unified ledger) with Foci's own
+    currently-committed cost added back in -- the same "exclude this section's own prior
+    commitment" shape `_spirit_selection_context`'s own `karma_budget` uses, mirrored here. Bound
+    Spirits' current commitment is read directly off `character.bound_spirit_selection` (part of
+    `karma_remaining`'s own sum) rather than threaded through as a parameter, the same
+    simplification WP51 made possible on the Bound Spirits side.
 
     **WP19-style staleness re-validation**: when `error` is unset and a Foci selection is already
     committed, re-runs `create_foci_selection` against the *current* character/budgets purely to
@@ -2133,11 +2127,10 @@ def _foci_selection_context(
         - bioware_cost
     )
     nuyen_spent = sum(int(row["subtotal"]) for group in foci_groups for row in group["rows"])
-    karma_budget = provisional_karma_budget(
-        character.quality_selection.karma_cost if character.quality_selection is not None else 0,
-        character.contact_selection.karma_cost if character.contact_selection is not None else 0,
-        bound_spirit_karma_cost=bound_spirit_karma_cost,
+    own_committed_cost = (
+        character.foci_selection.karma_cost if character.foci_selection is not None else 0
     )
+    karma_budget = character.karma_remaining + own_committed_cost
     karma_spent = sum(
         force * by_id[focus_id].bonding_karma_per_force for focus_id, force in entries
     )
@@ -2721,20 +2714,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.foci_selection is not None
         else ()
     )
-    # WP47: Bound Spirits and Foci read each other's *currently committed* Karma cost symmetrically
-    # (see chummer5.engine.foci's own module docstring) -- computed here, once, since both
-    # `_spirit_selection_context`/`_foci_selection_context` need the *other* one.
-    bound_spirit_karma_cost = (
-        character.bound_spirit_selection.karma_cost
-        if character is not None and character.bound_spirit_selection is not None
-        else 0
-    )
-    foci_karma_cost_committed = (
-        character.foci_selection.karma_cost
-        if character is not None and character.foci_selection is not None
-        else 0
-    )
-    spirit_ctx = _spirit_selection_context(character, spirit_picks, foci_karma_cost_committed)
+    spirit_ctx = _spirit_selection_context(character, spirit_picks)
     attribute_points = character.attribute_points if character is not None else {}
     magic_points = character.magic_attribute_points if character is not None else 0
     attribute_ctx = _attribute_allocation_context(character, attribute_points, magic_points)
@@ -2852,7 +2832,6 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         lifestyle_cost,
         cyberware_cost,
         bioware_cost,
-        bound_spirit_karma_cost,
         karma_converted,
     )
     stale = bool(
@@ -3381,30 +3360,22 @@ def create_app() -> FastAPI:
             form = await request.form()
             picks = _parse_bound_spirits(form, MAX_BOUND_SPIRIT_ROWS)
             character = session.character
-            # WP47: Foci's own committed Karma cost is a 4th term here now -- see chummer5.engine
-            # .foci's module docstring for why interactive re-validation of two already-committed
-            # selections reads each other's current cost symmetrically.
-            foci_karma_cost = (
-                character.foci_selection.karma_cost if character.foci_selection is not None else 0
+            # WP51: budget excludes Bound Spirits' own currently-committed cost (about to be
+            # replaced by this submission) -- see _spirit_selection_context's own docstring for why
+            # this is `karma_remaining` with that one term added back in.
+            own_committed_cost = (
+                character.bound_spirit_selection.karma_cost
+                if character.bound_spirit_selection is not None
+                else 0
             )
-            karma_budget = provisional_karma_budget(
-                character.quality_selection.karma_cost
-                if character.quality_selection is not None
-                else 0,
-                character.contact_selection.karma_cost
-                if character.contact_selection is not None
-                else 0,
-                foci_karma_cost=foci_karma_cost,
-            )
+            karma_budget = character.karma_remaining + own_committed_cost
             try:
                 selection = create_bound_spirit_selection(picks, character, karma_budget)
             except ValueError as exc:
-                context = _spirit_selection_context(
-                    character, picks, foci_karma_cost, error=str(exc)
-                )
+                context = _spirit_selection_context(character, picks, error=str(exc))
             else:
                 session.character = replace(character, bound_spirit_selection=selection)
-                context = _spirit_selection_context(session.character, picks, foci_karma_cost)
+                context = _spirit_selection_context(session.character, picks)
         response = templates.TemplateResponse(request, "_spirit_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3703,7 +3674,7 @@ def create_app() -> FastAPI:
         session, new_cookie = resolve_session(request)
         if session.character is None or session.character.magic_type is None:
             context = _foci_selection_context(
-                session.character, session.resources_letter, (), 0, 0, 0, 0, 0
+                session.character, session.resources_letter, (), 0, 0, 0, 0
             )
         else:
             form = await request.form()
@@ -3724,23 +3695,16 @@ def create_app() -> FastAPI:
             )
             bioware_selection = character.bioware_selection
             bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
-            bound_spirit_karma_cost = (
-                character.bound_spirit_selection.karma_cost
-                if character.bound_spirit_selection is not None
-                else 0
-            )
             nuyen_available = available_nuyen(
                 session.resources_letter, PRIORITIES, karma_converted
             ) - (gear_cost + lifestyle_cost + cyberware_cost + bioware_cost)
-            karma_budget = provisional_karma_budget(
-                character.quality_selection.karma_cost
-                if character.quality_selection is not None
-                else 0,
-                character.contact_selection.karma_cost
-                if character.contact_selection is not None
-                else 0,
-                bound_spirit_karma_cost=bound_spirit_karma_cost,
+            # WP51: budget excludes Foci's own currently-committed cost (about to be replaced by
+            # this submission) -- see _foci_selection_context's own docstring for why this is
+            # `karma_remaining` with that one term added back in.
+            own_committed_cost = (
+                character.foci_selection.karma_cost if character.foci_selection is not None else 0
             )
+            karma_budget = character.karma_remaining + own_committed_cost
             try:
                 selection = create_foci_selection(
                     picks, character, FOCI, nuyen_available, karma_budget
@@ -3769,7 +3733,6 @@ def create_app() -> FastAPI:
                     lifestyle_cost,
                     cyberware_cost,
                     bioware_cost,
-                    bound_spirit_karma_cost,
                     karma_converted,
                     error=str(exc),
                 )
@@ -3786,7 +3749,6 @@ def create_app() -> FastAPI:
                     lifestyle_cost,
                     cyberware_cost,
                     bioware_cost,
-                    bound_spirit_karma_cost,
                     karma_converted,
                 )
         response = templates.TemplateResponse(request, "_foci_selection.html", context)

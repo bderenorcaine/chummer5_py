@@ -15,14 +15,12 @@ conjures; Mystic Adept itself is out of this project's scope entirely). Gating o
 None` ties the check to the actual data dependency (which spirit types are even offered comes from
 the tradition) rather than duplicating a redundant `magic_type == "Magician"` test.
 
-**Karma budget is a caller-supplied `int`, not something this module computes from `Character`.**
-Per the Implementation Plan's own WP46/WP47 entries: no unified "leftover Karma" ledger exists yet
-(Phase O, not yet built) -- `provisional_karma_budget` below is a minimal, deliberately-temporary
-stand-in (starting Karma minus the only two Karma-costing selections that exist today: qualities
-and contacts), not Phase O's future real ledger. It mirrors the shape Phase O's own WP51 intro
-already sketches (`starting_karma - Σ every known Karma-spending selection's cost`) so retrofitting
-is a rename, not a redesign, once WP51 lands -- at which point this function should be retired in
-favor of the real one.
+**Karma budget is a caller-supplied `int`, resolved from `Character.karma_remaining` (Phase O's
+unified ledger, WP51) plus whatever this selection's own already-committed cost needs adding back
+in for a re-validation -- not something this module computes itself.** Through WP47, this module
+used to expose its own `provisional_karma_budget` stand-in (starting Karma minus whichever of
+qualities/contacts/Bound Spirits/Foci existed by then) -- retired now that `Character.karma_
+remaining` is the real thing it was standing in for; see that property's own docstring.
 """
 
 from __future__ import annotations
@@ -31,48 +29,19 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from chummer5.data.traditions import Tradition
-from chummer5.engine.character import Character
+from chummer5.engine.character import STARTING_KARMA, Character
 
-# Core rulebook p. 64 ("All characters in Shadowrun start with 25 Karma they will use to improve
-# themselves"), cross-checked against the Step Six worked example (James ends Step Four with 26
-# Karma, not 25, having spent 19 on Positive Qualities and gained 20 from Negative ones -- i.e. the
-# pool moves from this fixed starting point, it isn't itself variable).
-STARTING_KARMA = 25
+__all__ = [
+    "STARTING_KARMA",
+    "BoundSpirit",
+    "BoundSpiritSelection",
+    "create_bound_spirit_selection",
+    "offered_spirit_types",
+]
 
 # Core rulebook, Step Seven's "Additional Purchases & Restrictions" table (p. 98): "1 Karma per
 # service (Force of spirit is equal to Character's Magic Attribute rating)."
 KARMA_PER_SERVICE = 1
-
-
-def provisional_karma_budget(
-    quality_karma_cost: int,
-    contact_karma_cost: int,
-    bound_spirit_karma_cost: int = 0,
-    foci_karma_cost: int = 0,
-) -> int:
-    """`STARTING_KARMA` minus whatever qualities/contacts/Bound Spirits/Foci have already spent --
-    see module docstring for why this is a WP46-local stand-in, not Phase O's eventual unified
-    ledger. Callers pass each selection's own already-computed `karma_cost` (0 if not yet
-    committed), mirroring how `create_resources_selection`'s `lifestyle_cost`/`cyberware_cost`
-    parameters are each the *other* selection's own resolved cost, not something this function
-    re-derives.
-
-    **WP47 widens this from 2 terms to 4.** Bound Spirits and Foci (`chummer5.engine.foci`) are two
-    independent Karma-costing selections competing for the same pool, with no inherent evaluation
-    order between them (unlike cyberware/bioware's Essence-floor chaining -- see `chummer5.engine
-    .foci`'s own module docstring) -- every caller resolves both new parameters symmetrically off
-    `character.bound_spirit_selection`/`.foci_selection`'s own already-computed cost, the same way
-    `chummer5.web.app`'s gear/Lifestyle/cyberware/bioware nuyen sections already read each other's
-    committed spend rather than assuming a fixed order. Both default to `0` so every pre-WP47 call
-    site (which never had Foci to account for) keeps working unchanged.
-    """
-    return (
-        STARTING_KARMA
-        - quality_karma_cost
-        - contact_karma_cost
-        - bound_spirit_karma_cost
-        - foci_karma_cost
-    )
 
 
 def offered_spirit_types(tradition: Tradition) -> tuple[str, ...]:

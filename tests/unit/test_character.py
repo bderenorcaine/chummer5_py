@@ -10,16 +10,21 @@ from chummer5.engine.character import (
     ALLOCATABLE_ATTRIBUTES,
     PRIMARY_ATTRIBUTES,
     SPECIAL_ATTRIBUTES,
+    STARTING_KARMA,
     Character,
     create_character,
     metatype_choices,
     sr5_metatypes,
 )
+from chummer5.engine.foci import FociSelection
 from chummer5.engine.improvements import (
     Improvement,
     ImprovementSource,
     ImprovementType,
 )
+from chummer5.engine.qualities import QualitySelection
+from chummer5.engine.resources import ContactSelection
+from chummer5.engine.spirits import BoundSpiritSelection
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
@@ -409,3 +414,87 @@ def test_character_attribute_points_is_read_only_mapping() -> None:
         attribute_points={"BOD": 1},
     )
     assert isinstance(character.attribute_points, MappingProxyType)
+
+
+# -- karma_spent / karma_remaining (WP51: unified Karma ledger) ---------------------------------
+
+
+def _base_character() -> Character:
+    human = _human_choice("D")
+    return create_character(
+        metatype_choice=human,
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+
+
+def test_karma_remaining_is_starting_karma_with_nothing_committed() -> None:
+    character = _base_character()
+    assert character.karma_spent == 0
+    assert character.karma_remaining == STARTING_KARMA
+
+
+def test_karma_remaining_subtracts_quality_and_contact_cost() -> None:
+    character = replace(
+        _base_character(),
+        quality_selection=QualitySelection(
+            qualities=(), positive_karma=10, negative_karma=0, karma_cost=10
+        ),
+        contact_selection=ContactSelection(
+            contacts=(), free_points=0, points_spent=3, karma_cost=3
+        ),
+    )
+    assert character.karma_spent == 13
+    assert character.karma_remaining == STARTING_KARMA - 13
+
+
+def test_karma_remaining_sums_all_four_selection_types() -> None:
+    # Widens the pre-WP51 provisional_karma_budget's own 4-term sum (WP47) into a single property
+    # read directly off the character, rather than every caller re-deriving it by hand.
+    character = replace(
+        _base_character(),
+        quality_selection=QualitySelection(
+            qualities=(), positive_karma=5, negative_karma=0, karma_cost=5
+        ),
+        contact_selection=ContactSelection(
+            contacts=(), free_points=0, points_spent=2, karma_cost=2
+        ),
+        bound_spirit_selection=BoundSpiritSelection(spirits=(), karma_cost=4, karma_budget=0),
+        foci_selection=FociSelection(
+            picks=(), nuyen_cost=0, karma_cost=6, nuyen_budget=0, karma_budget=0
+        ),
+    )
+    assert character.karma_spent == 5 + 2 + 4 + 6
+    assert character.karma_remaining == STARTING_KARMA - 17
+
+
+def test_karma_remaining_can_exceed_starting_karma_from_net_negative_qualities() -> None:
+    # Rulebook's own worked examples (Step Four, character_creation_chapter.md): James ends with 26
+    # Karma (19 spent on Positive, 20 gained from Negative -- net -1), Rob with 25 (20 spent, 20
+    # gained -- net 0), Kyra with 26 (23 spent, 24 gained -- net -1). QualitySelection.karma_cost is
+    # already signed (positive_karma - negative_karma), so karma_remaining reproduces exactly these
+    # three totals with no separate "starting Karma" field needed -- see Character's own WP51
+    # docstring paragraph.
+    james = replace(
+        _base_character(),
+        quality_selection=QualitySelection(
+            qualities=(), positive_karma=19, negative_karma=20, karma_cost=19 - 20
+        ),
+    )
+    rob = replace(
+        _base_character(),
+        quality_selection=QualitySelection(
+            qualities=(), positive_karma=20, negative_karma=20, karma_cost=20 - 20
+        ),
+    )
+    kyra = replace(
+        _base_character(),
+        quality_selection=QualitySelection(
+            qualities=(), positive_karma=23, negative_karma=24, karma_cost=23 - 24
+        ),
+    )
+    assert james.karma_remaining == 26
+    assert rob.karma_remaining == 25
+    assert kyra.karma_remaining == 26

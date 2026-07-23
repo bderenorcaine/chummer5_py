@@ -1639,7 +1639,7 @@ that don't share a running total with anything else or with each other beyond bo
 conceptual 25-Karma starting pool. **The foundational piece this phase needs first is a unified ledger**
 — WP51 — that the later WPs (and, retroactively, qualities/contacts) draw from together.
 
-- [ ] **WP51 — Unified Karma ledger.**
+- [x] **WP51 — Unified Karma ledger.**
   Goal: give `Character` a single running "Karma remaining" value that every Karma-spending selection
   (qualities, contacts, and this phase's new attribute/skill/spell purchases) reads from and writes to
   together, replacing today's several independent one-shot checks — the same kind of foundational
