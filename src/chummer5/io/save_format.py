@@ -124,6 +124,16 @@ Quality cost already covered by `QualitySelection.positive_karma`/`QUALITY_KARMA
 draw against `chummer5.engine.spirits.provisional_karma_budget`'s separate leftover-Karma pool, so
 no evaluation-order concern with Bound Spirits/Foci exists here.
 
+**WP49** adds `knowledge_skill_picks`/`language_skill_picks` -- a player's Knowledge/Language skill
+spend, as `(name, category, rating)`/`(name, rating, native)` tuples (the same "selection, not
+derived value" shape every prior field has -- `chummer5.engine.knowledge.KnowledgeSkillPick`/
+`LanguageSkillPick` themselves, just flattened for JSON). Defaults to `()` for both ("predates this
+field"), so every pre-WP49 save round-trips unchanged. `build_character` resolves this immediately
+after `quality_selection` (not before) -- Bilingual's `NATIVE_LANGUAGE_LIMIT` Improvement, applied
+by `apply_quality_improvements` a few lines above, has to already be on `character.improvements`
+before `create_knowledge_selection` reads it (see
+`chummer5.engine.knowledge.native_language_limit`).
+
 **WP44** adds `build_method` -- which of the two supported priority-letter validity rules
 (`chummer5.engine.build_method.PRIORITY_BUILD_METHOD`/`SUM_TO_TEN_BUILD_METHOD`) produced
 `heritage_letter`/`talent_letter`/`attributes_letter`/`skills_letter`/`resources_letter`. Unlike
@@ -172,6 +182,11 @@ from chummer5.engine.character import Character, create_character, metatype_choi
 from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
 from chummer5.engine.foci import apply_foci_improvements, create_foci_selection
 from chummer5.engine.improvements import ImprovementSource
+from chummer5.engine.knowledge import (
+    KnowledgeSkillPick,
+    LanguageSkillPick,
+    create_knowledge_selection,
+)
 from chummer5.engine.lifestyle import create_lifestyle_selection
 from chummer5.engine.magic import (
     apply_magic_skill_grant_improvements,
@@ -218,6 +233,13 @@ BoundSpiritPickPair = tuple[str, int]
 # One `(focus_id, force)` pair, as `create_foci_selection` already takes -- see that function's own
 # docstring. Named for the same readability reason as PowerPickTriple/BoundSpiritPickPair.
 FociPickPair = tuple[str, int]
+
+# One `(name, category, rating)` triple, as `chummer5.engine.knowledge.KnowledgeSkillPick` carries
+# -- see that class's own docstring. Named for the same readability reason as PowerPickTriple.
+KnowledgeSkillPickTriple = tuple[str, str, int]
+
+# One `(name, rating, native)` triple, as `chummer5.engine.knowledge.LanguageSkillPick` carries.
+LanguageSkillPickTriple = tuple[str, int, bool]
 
 
 @dataclass(frozen=True)
@@ -282,6 +304,10 @@ class CharacterSave:
     # WP44: which priority-letter validity rule produced the 5 letters above -- see module
     # docstring for why this is carried through unvalidated rather than re-checked here.
     build_method: str = PRIORITY_BUILD_METHOD
+    # WP49: Knowledge/Language skill picks. Both default to () -- "predates this field", the
+    # identical shape every other optional selection field defaults to.
+    knowledge_skill_picks: tuple[KnowledgeSkillPickTriple, ...] = ()
+    language_skill_picks: tuple[LanguageSkillPickTriple, ...] = ()
 
 
 def create_character_save(
@@ -314,6 +340,8 @@ def create_character_save(
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
     build_method: str = PRIORITY_BUILD_METHOD,
+    knowledge_skill_picks: Iterable[KnowledgeSkillPickTriple] = (),
+    language_skill_picks: Iterable[LanguageSkillPickTriple] = (),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -352,6 +380,8 @@ def create_character_save(
         mentor_spirit_archetype_id=mentor_spirit_archetype_id,
         mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
         build_method=build_method,
+        knowledge_skill_picks=tuple(knowledge_skill_picks),
+        language_skill_picks=tuple(language_skill_picks),
     )
 
 
@@ -402,6 +432,14 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "mentor_spirit_archetype_id": save.mentor_spirit_archetype_id,
         "mentor_spirit_general_choice_id": save.mentor_spirit_general_choice_id,
         "build_method": save.build_method,
+        "knowledge_skill_picks": [
+            {"name": name, "category": category, "rating": rating}
+            for name, category, rating in save.knowledge_skill_picks
+        ],
+        "language_skill_picks": [
+            {"name": name, "rating": rating, "native": native}
+            for name, rating, native in save.language_skill_picks
+        ],
     }
 
 
@@ -457,6 +495,12 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         mentor_spirit_archetype_id=data.get("mentor_spirit_archetype_id"),
         mentor_spirit_general_choice_id=data.get("mentor_spirit_general_choice_id"),
         build_method=data.get("build_method", PRIORITY_BUILD_METHOD),
+        knowledge_skill_picks=(
+            (p["name"], p["category"], p["rating"]) for p in data.get("knowledge_skill_picks", ())
+        ),
+        language_skill_picks=(
+            (p["name"], p["rating"], p["native"]) for p in data.get("language_skill_picks", ())
+        ),
     )
 
 
@@ -565,6 +609,22 @@ def build_character(
     apply_quality_improvements(character, quality_selection.qualities)
     if quality_selection.mentor_spirit is not None:
         apply_mentor_spirit_improvements(character, quality_selection.mentor_spirit)
+
+    # WP49: resolved right here, not earlier -- Bilingual's NATIVE_LANGUAGE_LIMIT Improvement
+    # (applied by apply_quality_improvements just above) must already be on character.improvements
+    # before create_knowledge_selection reads it (see chummer5.engine.knowledge
+    # .native_language_limit).
+    knowledge_selection = create_knowledge_selection(
+        character,
+        (
+            KnowledgeSkillPick(name=name, category=category, rating=rating)
+            for name, category, rating in save.knowledge_skill_picks
+        ),
+        (
+            LanguageSkillPick(name=name, rating=rating, native=native)
+            for name, rating, native in save.language_skill_picks
+        ),
+    )
 
     skill_allocation = create_skill_allocation(
         letter=save.skills_letter,
@@ -695,6 +755,7 @@ def build_character(
         magic_attribute_points=magic_attribute_points,
         cyberware_selection=cyberware_selection,
         bioware_selection=bioware_selection,
+        knowledge_selection=knowledge_selection,
     )
 
     # WP46: resolved last, against the now-fully-populated `character` -- create_bound_spirit_

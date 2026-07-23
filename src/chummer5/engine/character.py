@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from chummer5.engine.bioware import BiowareSelection
     from chummer5.engine.cyberware import CyberwareSelection
     from chummer5.engine.foci import FociSelection
+    from chummer5.engine.knowledge import KnowledgeSelection
     from chummer5.engine.lifestyle import LifestyleSelection
     from chummer5.engine.magic import PowerSelection, SpellSelection
     from chummer5.engine.qualities import QualitySelection
@@ -283,6 +284,7 @@ class Character:
     magic_attribute_points: int = 0
     bound_spirit_selection: BoundSpiritSelection | None = None  # Magician's bound spirits (WP46)
     foci_selection: FociSelection | None = None  # magic-active character's bonded foci (WP47)
+    knowledge_selection: KnowledgeSelection | None = None  # Knowledge/Language skills (WP49)
 
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]

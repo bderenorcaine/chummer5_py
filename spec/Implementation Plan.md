@@ -1545,7 +1545,7 @@ one recorded Knowledge/Language skill (`<knoskills>` contains an English/Languag
 specialization (`<spec>Staves</spec>`) — both usable as acceptance-test ground truth, confirmed via
 direct inspection of the fixture file rather than assumed present.
 
-- [ ] **WP49 — Knowledge & Language skills.**
+- [x] **WP49 — Knowledge & Language skills.**
   Goal: let a player spend the free Knowledge/Language point budget — `(Intuition + Logic) x 2` per the
   rulebook (Step Five, p. 89) — on freeform-named Knowledge skills (with a suggested/example list, not an
   enforced catalog, per the rulebook's own "Common Knowledge Skills in 2075"/"Knowledge Category

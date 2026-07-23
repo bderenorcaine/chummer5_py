@@ -65,6 +65,13 @@ class ImprovementType(Enum):
     than silently returning 0 for every such improvement (their real `value` field is unused/`0`
     by convention). Threaded through before any real producer exists yet, same as every other
     member here at its own introduction -- WP31/WP32 (cyberware) are the first real producer.
+
+    **WP49 adds an 11th, `NATIVE_LANGUAGE_LIMIT`**, for `chummer5.engine.knowledge
+    .create_knowledge_selection` -- another single character-wide total (one native-language cap
+    per character), resolved against `_GLOBAL_TARGET` the same way the Limit trio already is. The
+    Bilingual quality (`<bonus><nativelanguagelimit>1</nativelanguagelimit></bonus>`) is its first
+    real producer -- see `chummer5.data.qualities`'s module docstring for why this bare-numeric-leaf
+    shape reuses the same flat-bonus classification the Indomitable trio already established.
     """
 
     ATTRIBUTE = auto()
@@ -78,6 +85,7 @@ class ImprovementType(Enum):
     STUN_CM = auto()
     DRAIN_RESISTANCE = auto()
     ESSENCE = auto()
+    NATIVE_LANGUAGE_LIMIT = auto()
 
 
 class ImprovementSource(Enum):

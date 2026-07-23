@@ -267,10 +267,30 @@ def test_barrett_attributes_and_qualities() -> None:
     assert qualities_by_name["SINner (Corporate)"].quality_type == "Negative"
 
 
-def test_no_knowledge_skills_are_parsed() -> None:
-    # WP3 precedent: knowledge skills are out of MVP scope, so <newskills><knoskills> is never
-    # touched. Yeti's file has 5 knowledge skills (English Language, Japanese Language, ...); none
-    # should leak into `.skills`.
+def test_knowledge_skills_do_not_leak_into_active_skills() -> None:
+    # Knowledge/Language skills are a separate parser (_parse_knowledge_skills, WP49) from active
+    # skills (_parse_skills) -- Yeti's file has 5 <knoskills> entries (English, Japanese, Host
+    # Design, Host Networking, Matrix); none should leak into `.skills`.
     character = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
     assert len(character.skills) == 62
     assert all(skill.category != "Language" for skill in character.skills)
+
+
+def test_knowledge_skills_are_parsed_from_knoskills() -> None:
+    # WP49: raw <newskills><knoskills><skill> extraction, hand-checked directly against Yeti's own
+    # XML (see spec/rulebooks/learnings.md's WP49 entry). None of these 5 entries carry
+    # <isnativelanguage> at all (the fixture predates that field) -- `native` defaults to False.
+    character = load_chum5(mundane_fixture_path(PRIORITY_BUILD_FIXTURE))
+    by_name = {k.name: k for k in character.knowledge_skills}
+    assert len(character.knowledge_skills) == 5
+    assert by_name["English"].category == "Language"
+    assert by_name["English"].base == 0
+    assert by_name["English"].native is False
+    assert by_name["Japanese"].category == "Language"
+    assert by_name["Japanese"].base == 6
+    assert by_name["Host Design"].category == "Language"
+    assert by_name["Host Design"].base == 6
+    assert by_name["Host Networking"].category == "Language"
+    assert by_name["Host Networking"].base == 6
+    assert by_name["Matrix"].category == "Professional"
+    assert by_name["Matrix"].base == 4

@@ -80,9 +80,11 @@ def _by_name(name: str) -> Quality:
 
 def test_mvp_quality_catalog_is_exactly_the_fourteen_offerable_qualities() -> None:
     # WP8's 3 FLAT_BONUS qualities (Catlike, Double-Jointed, Natural Athlete) + WP22's 3 new
-    # FLAT_BONUS Indomitable qualities + WP22's 8 verified-NO_EFFECT qualities = 14. Two of the
-    # NO_EFFECT qualities (Simsense Vertigo, Unsteady Hands) are Negative -- the first Negative
-    # qualities MVP has ever offered (see module docstring); the other 12 are Positive.
+    # FLAT_BONUS Indomitable qualities + WP22's 8 verified-NO_EFFECT qualities = 14, +1 for WP49's
+    # Bilingual (see spec/rulebooks/learnings.md's WP49 entry -- Bilingual was NOT_YET_SUPPORTED
+    # before this WP, despite the Implementation Plan's own WP49 entry assuming otherwise) = 15.
+    # Two of the NO_EFFECT qualities (Simsense Vertigo, Unsteady Hands) are Negative -- the first
+    # Negative qualities MVP has ever offered (see module docstring); the other 13 are Positive.
     offered = mvp_quality_catalog(QUALITIES)
     assert {q.name for q in offered} == {
         "Catlike",
@@ -99,6 +101,7 @@ def test_mvp_quality_catalog_is_exactly_the_fourteen_offerable_qualities() -> No
         "Thermographic Vision",
         "Simsense Vertigo",
         "Unsteady Hands",
+        "Bilingual",
     }
     assert all(
         q.bonus_support in (BonusSupport.FLAT_BONUS, BonusSupport.NO_EFFECT) for q in offered

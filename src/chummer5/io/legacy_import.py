@@ -130,6 +130,24 @@ selected Mentor Spirit to exercise this either way (see Phase M's own intro in t
 Plan). A future WP adding real `<mentorspirit>` parsing should upgrade this the same way WP28
 upgraded the old blanket magic rejection into itemized spell/power drops.
 
+**Knowledge/Language skills (WP49): imported faithfully, but no fixture in the corpus records a
+native language at all.** Every `<newskills><knoskills>` entry becomes a `KnowledgeSkillPick`
+(Academic/Interest/Professional/Street) or `LanguageSkillPick` (Language), keyed on the same
+`<skillcategory>` the save itself uses -- no dropping/reporting tier is needed here (unlike
+qualities/skills/spells/powers) since names are freeform, not catalog-matched. `native` reads
+straight from `LegacyKnowledgeSkill.native` (`<isnativelanguage>`, WP49) -- which happens to be
+`False`
+for every entry in every fixture this project's own corpus has, since all three Priority-built
+fixtures (`Yeti-#ffffff2.chum5`, `Miko.chum5`, `Wesson.chum5`) predate that field's introduction in
+the legacy engine (see `chummer5.io.legacy_chum5.LegacyKnowledgeSkill`'s own docstring and
+`spec/rulebooks/learnings.md`'s WP49 entry). A real, honest gap, not a bug: a legacy character's
+native language(s) cannot be recovered from any fixture this project has, so an imported
+character's `knowledge_selection` never marks one native even when the source character clearly
+has one (e.g. Yeti's own "English" entry, recorded at `<base>0</base>` with no native flag at all)
+-- that specific entry is simply excluded by the ordinary `base <= 0` skip (see the code below),
+the same filter that already excludes a real placeholder-empty `<skill>` entry (confirmed present
+in `Wesson.chum5`).
+
 **Which `<lifestyle>` entry counts as "primary" (WP20).** The legacy save format has no explicit
 "is this the primary Lifestyle" flag (confirmed: no such field exists anywhere in `Lifestyle.cs`,
 only a general `LifestyleType.Standard` -- see `spec/rulebooks/learnings.md`'s WP20 entry). This
@@ -169,6 +187,7 @@ from pathlib import Path
 
 from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware import Cyberware
+from chummer5.data.knowledge import KNOWLEDGE_CATEGORY_NAMES
 from chummer5.data.lifestyle import STARTING_TIER_NAMES, LifestyleTier
 from chummer5.data.metatypes import Metatype
 from chummer5.data.powers import Power
@@ -430,6 +449,27 @@ def import_legacy_character(
             continue
         skill_points[skill.id] = legacy_skill.base
 
+    # WP49: Knowledge/Language skills, freeform (no dropping/reporting tier needed -- see module
+    # docstring). A `native` Language entry is kept regardless of `base` (a real native pick is
+    # legitimately recorded at 0 cost by design -- see chummer5.engine.knowledge.LanguageSkillPick's
+    # own docstring); every other entry skips `base <= 0`, which excludes both an unmarked-native
+    # language recorded at 0 cost with no `<isnativelanguage>` marker at all (e.g. Yeti's own
+    # "English") and a real placeholder-empty `<skill>` entry (confirmed present in Wesson.chum5) --
+    # neither is a real player spend to reconstruct.
+    knowledge_skill_picks: list[tuple[str, str, int]] = []
+    language_skill_picks: list[tuple[str, int, bool]] = []
+    for legacy_knowledge in legacy.knowledge_skills:
+        if legacy_knowledge.category in KNOWLEDGE_CATEGORY_NAMES:
+            if legacy_knowledge.base <= 0:
+                continue
+            knowledge_skill_picks.append(
+                (legacy_knowledge.name, legacy_knowledge.category, legacy_knowledge.base)
+            )
+        elif legacy_knowledge.native or legacy_knowledge.base > 0:
+            language_skill_picks.append(
+                (legacy_knowledge.name, legacy_knowledge.base, legacy_knowledge.native)
+            )
+
     # WP23: `<qualitysource>Metatype</qualitysource>` isn't exclusively "this metatype's real
     # racial quality" in the legacy data -- it's the broader "auto-granted at character creation,
     # not manually picked from the quality list" tag, which also covers e.g. a Talent selection's
@@ -598,6 +638,8 @@ def import_legacy_character(
         # _blocking_reasons above) -- see chummer5.io.save_format's own docstring for why nothing
         # downstream re-validates it.
         build_method=legacy.build_method,
+        knowledge_skill_picks=knowledge_skill_picks,
+        language_skill_picks=language_skill_picks,
     )
 
     built = build_character(

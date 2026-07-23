@@ -44,6 +44,29 @@
   <p>No skills rated above 0.</p>
   {% endif %}
 
+  <h3>Knowledge &amp; Language Skills</h3>
+  {% if knowledge_skill_rows or language_rows %}
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Category</th><th>Rating</th></tr>
+    </thead>
+    <tbody>
+      {% for row in knowledge_skill_rows %}
+      <tr><td>{{ row.name }}</td><td>{{ row.category }}</td><td>{{ row.rating }}</td></tr>
+      {% endfor %}
+      {% for row in language_rows %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>Language</td>
+        <td>{% if row.native %}N{% else %}{{ row.rating }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No knowledge or language skills recorded.</p>
+  {% endif %}
+
   {% if magic_type %}
   <h3>Magic</h3>
   <ul>

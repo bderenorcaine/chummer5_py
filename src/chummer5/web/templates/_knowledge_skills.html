@@ -1,0 +1,109 @@
+<div id="knowledge-skills">
+  {% if character %}
+  <h2>Knowledge &amp; Language Skills</h2>
+
+  {% if knowledge_error %}
+  <p class="error">{{ knowledge_error }}</p>
+  {% endif %}
+  {% if knowledge_budget_warning %}
+  <p class="warning">{{ knowledge_budget_warning }}</p>
+  {% endif %}
+
+  <p>
+    Free points remaining: {{ knowledge_free_points - knowledge_points_spent }} / {{ knowledge_free_points }} ((Intuition + Logic) &times; 2).
+    Native languages: up to {{ native_language_limit }} free (marked below, no rating needed).
+  </p>
+
+  <form
+    hx-post="/ui/knowledge"
+    hx-target="#knowledge-skills"
+    hx-swap="outerHTML"
+    hx-trigger="change, input delay:400ms"
+  >
+    <h3>Knowledge skills</h3>
+    <p>
+      Freeform — type any name; the category determines the linked attribute. Suggested examples:
+      {% for category in knowledge_categories %}
+      {{ category.name }} ({{ category.linked_attribute }}: {{ category.examples | join(", ") }}){% if not loop.last %}; {% endif %}
+      {% endfor %}
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Rating</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in knowledge_rows %}
+        <tr>
+          <td>
+            <input type="text" name="knowledge_name_{{ row.index }}" value="{{ row.name }}" />
+          </td>
+          <td>
+            <select name="knowledge_category_{{ row.index }}">
+              <option value=""></option>
+              {% for category in knowledge_categories %}
+              <option value="{{ category.name }}" {% if row.category == category.name %}selected{% endif %}>
+                {{ category.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <input
+              type="number"
+              name="knowledge_rating_{{ row.index }}"
+              value="{{ row.rating }}"
+              min="0"
+              max="{{ max_skill_rating }}"
+            />
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Language skills</h3>
+    <p>Suggested examples: {{ suggested_languages | join(", ") }}.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Rating</th>
+          <th>Native (free)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in language_rows %}
+        <tr>
+          <td>
+            <input type="text" name="language_name_{{ row.index }}" value="{{ row.name }}" />
+          </td>
+          <td>
+            <input
+              type="number"
+              name="language_rating_{{ row.index }}"
+              value="{{ row.rating }}"
+              min="0"
+              max="{{ max_skill_rating }}"
+            />
+          </td>
+          <td>
+            <input
+              type="checkbox"
+              name="language_native_{{ row.index }}"
+              {% if row.native %}checked{% endif %}
+            />
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Update knowledge &amp; language skills</button>
+  </form>
+  {% else %}
+  <p>Confirm a metatype and priorities above before adding knowledge/language skills.</p>
+  {% endif %}
+</div>

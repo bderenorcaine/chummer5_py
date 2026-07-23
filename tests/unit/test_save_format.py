@@ -986,3 +986,114 @@ def test_build_character_allows_an_adept_to_pick_a_mentor_spirit() -> None:
     pick = character.quality_selection.mentor_spirit
     assert pick is not None
     assert pick.gated_choice is pick.archetype.adept_choice
+
+
+# -- WP49: knowledge_skill_picks / language_skill_picks -------------------------------------------
+
+BILINGUAL_ID = next(q.id for q in QUALITIES if q.name == "Bilingual")
+
+
+def _mundane_save_with_knowledge(
+    knowledge_skill_picks: tuple[tuple[str, str, int], ...] = (),
+    language_skill_picks: tuple[tuple[str, int, bool], ...] = (),
+    quality_ids: tuple[str, ...] = (),
+    attribute_points: dict[str, int] | None = None,
+) -> CharacterSave:
+    return create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points=attribute_points or {"INT": 3, "LOG": 2},
+        skills_letter="E",
+        skill_points={},
+        group_points={},
+        quality_ids=quality_ids,
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        knowledge_skill_picks=knowledge_skill_picks,
+        language_skill_picks=language_skill_picks,
+    )
+
+
+def _build_mundane(save: CharacterSave) -> object:
+    return build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+
+
+def test_json_round_trip_preserves_knowledge_and_language_picks() -> None:
+    save = _mundane_save_with_knowledge(
+        knowledge_skill_picks=(("Corporations", "Street", 3),),
+        language_skill_picks=(("English", 0, True), ("Japanese", 2, False)),
+    )
+    assert from_json(to_json(save)) == save
+    data = json.loads(to_json(save))
+    assert data["knowledge_skill_picks"] == [
+        {"name": "Corporations", "category": "Street", "rating": 3}
+    ]
+    assert data["language_skill_picks"] == [
+        {"name": "English", "rating": 0, "native": True},
+        {"name": "Japanese", "rating": 2, "native": False},
+    ]
+
+
+def test_from_json_defaults_knowledge_picks_for_a_pre_wp49_save() -> None:
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    assert "knowledge_skill_picks" not in data or data["knowledge_skill_picks"] == []
+    loaded = from_json(to_json(save))
+    assert loaded.knowledge_skill_picks == ()
+    assert loaded.language_skill_picks == ()
+
+
+def test_build_character_applies_knowledge_selection() -> None:
+    save = _mundane_save_with_knowledge(
+        knowledge_skill_picks=(("Corporations", "Street", 3),),
+        language_skill_picks=(("English", 0, True), ("Japanese", 2, False)),
+    )
+    character = _build_mundane(save)
+    assert character.knowledge_selection is not None
+    assert character.knowledge_selection.free_points == 14  # (INT 4 + LOG 3) * 2
+    assert character.knowledge_selection.points_spent == 5  # native English costs 0
+    assert {k.name: k.rating for k in character.knowledge_selection.knowledge_skills} == {
+        "Corporations": 3
+    }
+
+
+def test_build_character_rejects_knowledge_spend_exceeding_the_free_budget() -> None:
+    save = _mundane_save_with_knowledge(
+        knowledge_skill_picks=(("Corporations", "Street", 6),),
+        attribute_points={"INT": 0, "LOG": 0},  # (1+1)*2 = 4-point budget
+    )
+    with pytest.raises(ValueError, match="exceeds the free budget"):
+        _build_mundane(save)
+
+
+def test_build_character_bilingual_raises_the_native_language_limit() -> None:
+    # WP49's real fixture-independent finding: Bilingual was NOT_YET_SUPPORTED before this WP (see
+    # spec/rulebooks/learnings.md's WP49 entry) -- this proves its ImprovementType
+    # .NATIVE_LANGUAGE_LIMIT bonus is applied *before* create_knowledge_selection reads it.
+    save = _mundane_save_with_knowledge(
+        quality_ids=(BILINGUAL_ID,),
+        language_skill_picks=(("English", 0, True), ("Sperethiel", 0, True)),
+    )
+    character = _build_mundane(save)
+    assert character.knowledge_selection is not None
+    assert character.knowledge_selection.native_language_limit == 2
+    assert character.knowledge_selection.points_spent == 0
+
+
+def test_build_character_rejects_a_second_native_language_without_bilingual() -> None:
+    save = _mundane_save_with_knowledge(
+        language_skill_picks=(("English", 0, True), ("Sperethiel", 0, True)),
+    )
+    with pytest.raises(ValueError, match="at most 1 language"):
+        _build_mundane(save)

@@ -8,8 +8,9 @@ parser. Instead, each in-scope quality's `<bonus>` is classified as one of three
 values:
 
 - `FLAT_BONUS` — an unconditional, flat point bonus to one or more specifically-named skills,
-  attributes, or (since WP22) Inherent Limits — the shapes simple enough to feed directly into
-  WP5's Improvement engine without a condition/selection sub-parser.
+  attributes, (since WP22) Inherent Limits, or (since WP49) the native-language limit — the shapes
+  simple enough to feed directly into WP5's Improvement engine without a condition/selection
+  sub-parser.
 - `NO_EFFECT` (WP22) — a verified-inert quality: an empty `<bonus/>` node *and* individually
   confirmed, via the rulebook text and a `grep` of the legacy C# for by-name special-casing,
   to produce no computed value anywhere this engine's scope reaches (combat/Matrix/vehicle/
@@ -56,10 +57,17 @@ _FLAT_ATTRIBUTE_FIELDS = frozenset({"name", "val"})
 # Social Limit per character). Maps to the FlatBonus.target_kind values
 # `chummer5.engine.qualities._TARGET_KIND_TO_IMPROVEMENT_TYPE` resolves against the derived-stats
 # global sentinel target (see `chummer5.engine.derived._GLOBAL_TARGET`).
-_LIMIT_BONUS_TAGS = {
+#
+# WP49 adds `nativelanguagelimit` (Bilingual's own `<bonus>`, verified to be the identical
+# bare-numeric-leaf shape -- see spec/rulebooks/learnings.md's WP49 entry): a Plan-stated "already
+# offered" claim turned out to be wrong (Bilingual was actually `NOT_YET_SUPPORTED` before this WP),
+# so classifying it here is what makes it FLAT_BONUS -- and therefore offerable at all -- for the
+# first time.
+_GLOBAL_BONUS_TAGS = {
     "mentallimit": "mental_limit",
     "physicallimit": "physical_limit",
     "sociallimit": "social_limit",
+    "nativelanguagelimit": "native_language_limit",
 }
 
 # WP22 Tranche 2: SR5 qualities individually verified (rulebook text + a `grep` of the legacy C#
@@ -166,10 +174,10 @@ def _classify_bonus(
                     value=int(child.findtext("val", "0")),
                 )
             )
-        elif child.tag in _LIMIT_BONUS_TAGS and len(child) == 0 and child.text is not None:
+        elif child.tag in _GLOBAL_BONUS_TAGS and len(child) == 0 and child.text is not None:
             flat_bonuses.append(
                 FlatBonus(
-                    target_kind=_LIMIT_BONUS_TAGS[child.tag],
+                    target_kind=_GLOBAL_BONUS_TAGS[child.tag],
                     target_name="",
                     value=int(child.text),
                 )

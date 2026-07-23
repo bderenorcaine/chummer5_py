@@ -45,6 +45,28 @@ class LegacySkill:
 
 
 @dataclass(frozen=True)
+class LegacyKnowledgeSkill:
+    """One raw `<knoskills><skill>` entry (WP49). Freeform -- no `suid` cross-reference the way
+    `LegacySkill` has, since Knowledge/Language skills aren't a fixed catalog (see
+    `chummer5.engine.knowledge`'s module docstring).
+
+    `native` (`<isnativelanguage>`) defaults to `False` when the tag is absent entirely -- a real
+    finding, not a parsing gap: every Priority-built fixture in this corpus (`Yeti-#ffffff2.chum5`,
+    `Miko.chum5`, `Wesson.chum5`) predates the legacy engine's own introduction of this field (all
+    three save at `appversion` 5.202.x; the field's "legacy sweep" migration only back-fills saves
+    `>= 5.212.72` -- see `spec/rulebooks/learnings.md`'s WP49 entry), so none of them record a
+    native language at all, even where one clearly exists in play (e.g. Yeti's own "English" entry
+    at `<base>0</base>`).
+    """
+
+    name: str
+    category: str  # <skillcategory>: "Academic"/"Interest"/"Professional"/"Street"/"Language"
+    base: int
+    karma: int
+    native: bool
+
+
+@dataclass(frozen=True)
 class LegacySkillGroup:
     id: str  # instance-scoped; skills.xml's <skillgroups> has no ids to cross-reference against
     name: str
@@ -188,6 +210,9 @@ class LegacyCharacter:
     attributes: MappingProxyType[str, LegacyAttribute]
     skills: tuple[LegacySkill, ...]
     skill_groups: tuple[LegacySkillGroup, ...]
+    # <newskills><knoskills><skill>... (WP49) -- every raw Knowledge/Language entry; see
+    # LegacyKnowledgeSkill's own docstring for the native-language caveat.
+    knowledge_skills: tuple[LegacyKnowledgeSkill, ...]
     qualities: tuple[LegacyQuality, ...]
     contacts: tuple[LegacyContact, ...]
     contact_points_budget: int  # <contactpoints>: cached CHA*3 free-contact-point budget (WP9)
@@ -258,14 +283,37 @@ def _parse_skill(elem: ET.Element) -> LegacySkill:
 
 
 def _parse_skills(newskills_elem: ET.Element | None) -> tuple[LegacySkill, ...]:
-    # Deliberately only <newskills><skills>, not <knoskills> (knowledge skills) — out of MVP scope
-    # per WP3's precedent (see spec/worklogs/WP3.md).
+    # Deliberately only <newskills><skills> here -- <knoskills> (knowledge skills) has its own
+    # parser, _parse_knowledge_skills, since it's a structurally different shape (freeform, no
+    # suid; see LegacyKnowledgeSkill's own docstring). Out of MVP scope through WP48 (WP3's
+    # precedent); WP49 adds the sibling parser below.
     if newskills_elem is None:
         return ()
     skills_elem = newskills_elem.find("skills")
     if skills_elem is None:
         return ()
     return tuple(_parse_skill(s) for s in skills_elem.findall("skill"))
+
+
+def _parse_knowledge_skill(elem: ET.Element) -> LegacyKnowledgeSkill:
+    return LegacyKnowledgeSkill(
+        name=elem.findtext("name", ""),
+        category=elem.findtext("skillcategory", ""),
+        base=int(elem.findtext("base", "0")),
+        karma=int(elem.findtext("karma", "0")),
+        native=_parse_bool(elem.findtext("isnativelanguage")),
+    )
+
+
+def _parse_knowledge_skills(newskills_elem: ET.Element | None) -> tuple[LegacyKnowledgeSkill, ...]:
+    # <newskills><knoskills>, a sibling of <skills>/<groups> -- see LegacyKnowledgeSkill's own
+    # docstring for why this is a separate shape from _parse_skills (freeform, no suid).
+    if newskills_elem is None:
+        return ()
+    knoskills_elem = newskills_elem.find("knoskills")
+    if knoskills_elem is None:
+        return ()
+    return tuple(_parse_knowledge_skill(s) for s in knoskills_elem.findall("skill"))
 
 
 def _parse_skill_groups(newskills_elem: ET.Element | None) -> tuple[LegacySkillGroup, ...]:
@@ -416,7 +464,8 @@ def _parse_priorities(root: ET.Element) -> PrioritySelections:
 def load_chum5(path: Path) -> LegacyCharacter:
     """Parse a legacy `.chum5` save file into a `LegacyCharacter` of MVP-relevant raw fields.
 
-    Deliberately excludes knowledge skills (out of MVP scope per WP3's precedent). Contacts (WP9)
+    WP49 adds `knowledge_skills` (every raw `<knoskills>` entry -- previously excluded per WP3's
+    precedent). Contacts (WP9)
     are now included: every `<contact>` entry plus the character-level `<contactpoints>` cached
     free-budget value (see `spec/worklogs/WP9.md`). Cyberware/bioware presence is now flagged (WP12,
     `has_cyberware`) since it's a real blocking condition for import -- see `spec/worklogs/WP12.md`.
@@ -444,6 +493,7 @@ def load_chum5(path: Path) -> LegacyCharacter:
         attributes=_parse_attributes(root.find("attributes")),
         skills=_parse_skills(newskills_elem),
         skill_groups=_parse_skill_groups(newskills_elem),
+        knowledge_skills=_parse_knowledge_skills(newskills_elem),
         qualities=_parse_qualities(root.find("qualities")),
         contacts=_parse_contacts(root.find("contacts")),
         contact_points_budget=int(root.findtext("contactpoints", "0")),

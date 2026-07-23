@@ -25,6 +25,7 @@ from chummer5.io.legacy_chum5 import (
     LegacyAttribute,
     LegacyCharacter,
     LegacyCyberware,
+    LegacyKnowledgeSkill,
     LegacyLifestyle,
     LegacyPower,
     LegacyQuality,
@@ -82,6 +83,7 @@ def _legacy_character(**overrides: object) -> LegacyCharacter:
         attributes=MappingProxyType({}),
         skills=(),
         skill_groups=(),
+        knowledge_skills=(),
         qualities=(),
         contacts=(),
         contact_points_budget=0,
@@ -898,3 +900,57 @@ def test_flat_bonus_power_is_imported_with_its_rating() -> None:
     (pick,) = result.built.power_selection.picks
     assert pick.rating == 2
     assert pick.selected_attribute == "BOD"
+
+
+def test_knowledge_and_language_skills_resolve_by_category() -> None:
+    """WP49: `<knoskills>` entries split on `<skillcategory>` -- Academic/Interest/Professional/
+    Street become `KnowledgeSkillPick`s, Language becomes a `LanguageSkillPick`; a `base <= 0`
+    entry (a real placeholder-empty `<skill>`, confirmed present in `Wesson.chum5`, or an
+    unmarked-native language recorded at 0 cost, confirmed present in `Yeti-#ffffff2.chum5`) is
+    skipped, mirroring the identical `base <= 0` skip active skills already use.
+    """
+    result = import_legacy_character(
+        _legacy_character(
+            knowledge_skills=(
+                LegacyKnowledgeSkill(
+                    name="Corporations", category="Street", base=2, karma=0, native=False
+                ),
+                LegacyKnowledgeSkill(
+                    name="Japanese", category="Language", base=1, karma=0, native=False
+                ),
+                LegacyKnowledgeSkill(name="", category="", base=0, karma=0, native=False),
+            )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert result.save.knowledge_skill_picks == (("Corporations", "Street", 2),)
+    assert result.save.language_skill_picks == (("Japanese", 1, False),)
+    assert result.built.knowledge_selection is not None
+    assert result.built.knowledge_selection.free_points == 4  # Human minimum INT 1 + LOG 1, * 2
+    assert result.built.knowledge_selection.points_spent == 3
+
+
+def test_native_language_flag_reaches_the_built_character() -> None:
+    result = import_legacy_character(
+        _legacy_character(
+            knowledge_skills=(
+                LegacyKnowledgeSkill(
+                    name="English", category="Language", base=0, karma=0, native=True
+                ),
+            )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert result.save.language_skill_picks == (("English", 0, True),)
+    assert result.built.knowledge_selection is not None
+    (language,) = result.built.knowledge_selection.languages
+    assert language.native is True
+    assert result.built.knowledge_selection.points_spent == 0

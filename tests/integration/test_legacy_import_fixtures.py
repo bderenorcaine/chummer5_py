@@ -109,6 +109,23 @@ def test_imports_yeti_end_to_end() -> None:
     assert result.built.lifestyle_selection.months == 1
     assert result.built.lifestyle_selection.total_cost == 2000
 
+    # Knowledge/Language (WP49): Yeti's own recorded <knoskills> -- 4 real entries once "English"
+    # (base 0, no native marker in this pre-5.212.72 fixture -- see spec/rulebooks/learnings.md's
+    # WP49 entry) is excluded by the ordinary base<=0 skip. INT 5 + LOG 6 gives a 22-point budget,
+    # spent in full: Matrix (Professional, 4) + Host Design/Host Networking/Japanese (Language, 6
+    # each) = 22.
+    knowledge_selection = result.built.knowledge_selection
+    assert knowledge_selection is not None
+    assert knowledge_selection.free_points == 22
+    assert knowledge_selection.points_spent == 22
+    assert {k.name: k.rating for k in knowledge_selection.knowledge_skills} == {"Matrix": 4}
+    assert {la.name: la.rating for la in knowledge_selection.languages} == {
+        "Host Design": 6,
+        "Host Networking": 6,
+        "Japanese": 6,
+    }
+    assert all(not la.native for la in knowledge_selection.languages)
+
 
 def test_rejects_sumtoten_mundane_fixture() -> None:
     """Barrett is `SumtoTen`-built, which WP44 accepts on its own -- but she's still rejected, for

@@ -73,14 +73,17 @@ def test_supported_vs_unsupported_counts_are_visible() -> None:
     # WP22 widens FLAT_BONUS from 3 (Catlike, Double-Jointed, Natural Athlete) to 6 by adding
     # the Indomitable trio (Mental/Physical/Social), and introduces NO_EFFECT for 8
     # individually-verified qualities (Gearhead, Guts, Juryrigger, Natural Hardening,
-    # Low-Light Vision, Thermographic Vision, Simsense Vertigo, Unsteady Hands). The rest
-    # (select-a-target choices, category-wide/conditional bonuses, notoriety shifts,
-    # multi-effect bonuses, attribute max/min changes, etc.) are NOT_YET_SUPPORTED: 96 - 6 - 8 = 82.
+    # Low-Light Vision, Thermographic Vision, Simsense Vertigo, Unsteady Hands). WP49 adds a 7th
+    # FLAT_BONUS: Bilingual's own <nativelanguagelimit> (see spec/rulebooks/learnings.md's WP49
+    # entry -- Bilingual was NOT_YET_SUPPORTED before this WP, despite the Implementation Plan's own
+    # WP49 entry assuming it was already offered). The rest (select-a-target choices, category-wide/
+    # conditional bonuses, notoriety shifts, multi-effect bonuses, attribute max/min changes, etc.)
+    # are NOT_YET_SUPPORTED: 96 - 7 - 8 = 81.
     qualities = load_qualities()
     counts = count_by_support(qualities)
-    assert counts[BonusSupport.FLAT_BONUS] == 6
+    assert counts[BonusSupport.FLAT_BONUS] == 7
     assert counts[BonusSupport.NO_EFFECT] == 8
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 82
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 81
 
 
 def test_indomitable_mental_limit_bonus_is_supported() -> None:

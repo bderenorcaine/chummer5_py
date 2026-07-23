@@ -160,6 +160,7 @@ from starlette.datastructures import FormData, UploadFile
 from chummer5.data.bioware import Bioware, load_bioware
 from chummer5.data.cyberware import Cyberware, load_cyberware
 from chummer5.data.foci import Focus, load_foci
+from chummer5.data.knowledge import KNOWLEDGE_CATEGORIES, SUGGESTED_LANGUAGES
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.mentors import MentorSpiritArchetype, load_mentors
 from chummer5.data.metatypes import load_metatypes
@@ -215,6 +216,13 @@ from chummer5.engine.foci import (
     create_foci_selection,
 )
 from chummer5.engine.improvements import ImprovementIndex, ImprovementSource
+from chummer5.engine.knowledge import (
+    KnowledgeSkillPick,
+    LanguageSkillPick,
+    create_knowledge_selection,
+    free_knowledge_points,
+    native_language_limit,
+)
 from chummer5.engine.lifestyle import (
     MAX_LIFESTYLE_MONTHS,
     MIN_LIFESTYLE_MONTHS,
@@ -343,6 +351,11 @@ MAX_CONTACT_ROWS = 8
 # WP46: same fixed-row precedent as MAX_CONTACT_ROWS, sized generously above any SR5-core
 # metatype's plausible Charisma (the real cap `create_bound_spirit_selection` enforces).
 MAX_BOUND_SPIRIT_ROWS = 10
+
+# WP49: same fixed-row precedent as MAX_CONTACT_ROWS/MAX_BOUND_SPIRIT_ROWS -- generously sized
+# above any SR5-core metatype's plausible (INT+LOG)*2 budget at 1 point per row.
+MAX_KNOWLEDGE_ROWS = 12
+MAX_LANGUAGE_ROWS = 4
 
 # MVP's regular Skills-priority point-buy UI stays mundane-only even after WP29 -- a Mundane
 # character's MAG/RES are always 0 and can never be raised in chargen (RES/Resonance stays out of
@@ -523,6 +536,46 @@ def _parse_bound_spirits(form: FormData, max_rows: int) -> tuple[tuple[str, int]
         except ValueError:
             services = 0
         picks.append((spirit_type, services))
+    return tuple(picks)
+
+
+def _parse_knowledge_skills(form: FormData, max_rows: int) -> tuple[KnowledgeSkillPick, ...]:
+    """Read up to `max_rows` Knowledge-skill rows off a submitted form -- mirrors
+    `_parse_contacts`'s identical fixed-row shape. Any row whose name field is blank is skipped
+    entirely; a malformed rating is treated as 0 rather than dropping the row
+    (`create_knowledge_selection`'s own 1-6 range check is what rejects a 0, the same "let the
+    engine validate what it's already responsible for" choice `_parse_contacts` makes for
+    Connection/Loyalty).
+    """
+    picks = []
+    for i in range(max_rows):
+        name = str(form.get(f"knowledge_name_{i}") or "").strip()
+        if not name:
+            continue
+        category = str(form.get(f"knowledge_category_{i}") or "")
+        try:
+            rating = int(str(form.get(f"knowledge_rating_{i}", "0")))
+        except ValueError:
+            rating = 0
+        picks.append(KnowledgeSkillPick(name=name, category=category, rating=rating))
+    return tuple(picks)
+
+
+def _parse_languages(form: FormData, max_rows: int) -> tuple[LanguageSkillPick, ...]:
+    """Read up to `max_rows` Language-skill rows off a submitted form -- same shape as
+    `_parse_knowledge_skills` above, plus a `native` checkbox.
+    """
+    picks = []
+    for i in range(max_rows):
+        name = str(form.get(f"language_name_{i}") or "").strip()
+        if not name:
+            continue
+        native = form.get(f"language_native_{i}") is not None
+        try:
+            rating = int(str(form.get(f"language_rating_{i}", "0")))
+        except ValueError:
+            rating = 0
+        picks.append(LanguageSkillPick(name=name, rating=rating, native=native))
     return tuple(picks)
 
 
@@ -830,6 +883,68 @@ def _skill_allocation_context(
         "groups_remaining": budget.skill_groups - sum(allocation.group_points.values()),
         "max_skill_rating": MAX_SKILL_RATING_CREATE,
         "skill_error": error,
+    }
+
+
+def _knowledge_selection_context(
+    character: Character | None,
+    knowledge_skills: tuple[KnowledgeSkillPick, ...],
+    languages: tuple[LanguageSkillPick, ...],
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Context for `_knowledge_skills.html`. Same echo-the-submission/re-validate-fresh shape as
+    `_skill_allocation_context` -- `knowledge_skills`/`languages` feed a throwaway echo of the
+    submission regardless of whether it actually validated; when `error` is unset, re-runs
+    `create_knowledge_selection` purely to detect whether an attribute edit since the last commit
+    shrank INT/LOG below what's already spent (WP19-style "no longer fits" staleness), the same
+    re-derive-fresh-on-every-render precedent every other carried-forward selection follows.
+    """
+    if character is None:
+        return {"character": None, "knowledge_error": error}
+    knowledge_rows = [
+        {
+            "index": i,
+            "name": knowledge_skills[i].name if i < len(knowledge_skills) else "",
+            "category": knowledge_skills[i].category if i < len(knowledge_skills) else "",
+            "rating": knowledge_skills[i].rating if i < len(knowledge_skills) else "",
+        }
+        for i in range(MAX_KNOWLEDGE_ROWS)
+    ]
+    language_rows = [
+        {
+            "index": i,
+            "name": languages[i].name if i < len(languages) else "",
+            "rating": languages[i].rating if i < len(languages) else "",
+            "native": languages[i].native if i < len(languages) else False,
+        }
+        for i in range(MAX_LANGUAGE_ROWS)
+    ]
+    free_points = free_knowledge_points(character)
+    points_spent = sum(k.rating for k in knowledge_skills) + sum(
+        la.rating for la in languages if not la.native
+    )
+    budget_warning: str | None = None
+    if error is None:
+        try:
+            create_knowledge_selection(character, knowledge_skills, languages)
+        except ValueError as exc:
+            budget_warning = (
+                f"No longer fits since attributes were last confirmed: {exc}. "
+                "Adjust the entries below to continue."
+            )
+    return {
+        "character": character,
+        "knowledge_rows": knowledge_rows,
+        "language_rows": language_rows,
+        "knowledge_categories": KNOWLEDGE_CATEGORIES,
+        "suggested_languages": SUGGESTED_LANGUAGES,
+        "knowledge_free_points": free_points,
+        "knowledge_points_spent": points_spent,
+        "native_language_limit": native_language_limit(character),
+        "max_skill_rating": MAX_SKILL_RATING_CREATE,
+        "knowledge_budget_warning": budget_warning,
+        "knowledge_error": error,
     }
 
 
@@ -2261,6 +2376,22 @@ def _character_sheet_context(
         ),
         "foci_nuyen_cost": foci_selection.nuyen_cost if foci_selection is not None else 0,
         "foci_karma_cost": foci_selection.karma_cost if foci_selection is not None else 0,
+        # WP49: Knowledge/Language recap -- both empty lists for an as-yet-uncommitted selection,
+        # the same "None until committed" shape every other sheet section already has.
+        "knowledge_skill_rows": (
+            [{"name": pick.name, "category": pick.category, "rating": pick.rating} for pick in
+             character.knowledge_selection.knowledge_skills]
+            if character.knowledge_selection is not None
+            else []
+        ),
+        "language_rows": (
+            [
+                {"name": pick.name, "rating": pick.rating, "native": pick.native}
+                for pick in character.knowledge_selection.languages
+            ]
+            if character.knowledge_selection is not None
+            else []
+        ),
         "sheet_error": error,
         "sheet_info": info,
     }
@@ -2377,6 +2508,22 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.quality_selection is not None
         else None
     )
+    knowledge_selection = character.knowledge_selection
+    knowledge_skill_picks = (
+        tuple(
+            (pick.name, pick.category, pick.rating)
+            for pick in knowledge_selection.knowledge_skills
+        )
+        if knowledge_selection is not None
+        else ()
+    )
+    language_skill_picks = (
+        tuple(
+            (pick.name, pick.rating, pick.native) for pick in knowledge_selection.languages
+        )
+        if knowledge_selection is not None
+        else ()
+    )
     return create_character_save(
         metatype_name=character.metatype.name,
         heritage_letter=session.heritage_letter,
@@ -2418,6 +2565,8 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
             mentor_spirit.general_choice.id if mentor_spirit is not None else None
         ),
         build_method=session.build_method,
+        knowledge_skill_picks=knowledge_skill_picks,
+        language_skill_picks=language_skill_picks,
     )
 
 
@@ -2553,6 +2702,12 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     skill_ctx = _skill_allocation_context(
         character, session.skills_letter, skill_points, group_points
     )
+    knowledge_selection = character.knowledge_selection if character is not None else None
+    knowledge_skills = (
+        knowledge_selection.knowledge_skills if knowledge_selection is not None else ()
+    )
+    languages = knowledge_selection.languages if knowledge_selection is not None else ()
+    knowledge_ctx = _knowledge_selection_context(character, knowledge_skills, languages)
     quality_ids = (
         tuple(q.id for q in character.quality_selection.qualities)
         if character is not None and character.quality_selection is not None
@@ -2661,6 +2816,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         talent_ctx.get("talent_budget_warning")
         or attribute_ctx.get("attribute_budget_warning")
         or skill_ctx.get("skill_budget_warning")
+        or knowledge_ctx.get("knowledge_budget_warning")
         or resources_ctx.get("resources_budget_warning")
         or lifestyle_ctx.get("lifestyle_budget_warning")
         or cyberware_ctx.get("cyberware_budget_warning")
@@ -2673,6 +2829,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         **talent_ctx,
         **attribute_ctx,
         **skill_ctx,
+        **knowledge_ctx,
         **spell_ctx,
         **power_ctx,
         **spirit_ctx,
@@ -2991,6 +3148,13 @@ def create_app() -> FastAPI:
                     # "no longer fits" warning if this attribute edit shrank CHA/MAG below what was
                     # already committed.
                     bound_spirit_selection=previous.bound_spirit_selection,
+                    # WP49: same plain-carry treatment -- Knowledge/Language has no Improvement of
+                    # its own to re-land either (it only *consumes* Bilingual's
+                    # NATIVE_LANGUAGE_LIMIT, already re-landed by `_relink_quality_improvements`
+                    # above). `_knowledge_selection_context`'s own WP19-style re-validation surfaces
+                    # a "no longer fits" warning if this attribute edit shrank INT/LOG below what
+                    # was already spent.
+                    knowledge_selection=previous.knowledge_selection,
                 )
                 session.character = character
                 context = _attribute_allocation_context(character, attribute_points, magic_points)
@@ -3070,6 +3234,33 @@ def create_app() -> FastAPI:
                     session.character, session.skills_letter, skill_points, group_points
                 )
         response = templates.TemplateResponse(request, "_skill_allocation.html", context)
+        if new_cookie is not None:
+            response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/ui/knowledge", response_class=HTMLResponse)
+    async def submit_knowledge(request: Request) -> HTMLResponse:
+        session, new_cookie = resolve_session(request)
+        if session.character is None:
+            context = _knowledge_selection_context(None, (), ())
+        else:
+            form = await request.form()
+            knowledge_skills = _parse_knowledge_skills(form, MAX_KNOWLEDGE_ROWS)
+            languages = _parse_languages(form, MAX_LANGUAGE_ROWS)
+            try:
+                selection = create_knowledge_selection(
+                    session.character, knowledge_skills, languages
+                )
+            except ValueError as exc:
+                context = _knowledge_selection_context(
+                    session.character, knowledge_skills, languages, error=str(exc)
+                )
+            else:
+                session.character = replace(session.character, knowledge_selection=selection)
+                context = _knowledge_selection_context(
+                    session.character, knowledge_skills, languages
+                )
+        response = templates.TemplateResponse(request, "_knowledge_skills.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
         return response

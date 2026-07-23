@@ -74,6 +74,10 @@ _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "mental_limit": ImprovementType.MENTAL_LIMIT,
     "physical_limit": ImprovementType.PHYSICAL_LIMIT,
     "social_limit": ImprovementType.SOCIAL_LIMIT,
+    # WP49: Bilingual's own <nativelanguagelimit> -- see chummer5.data.qualities' module docstring
+    # for the classification, and chummer5.engine.knowledge.create_knowledge_selection for the one
+    # consumer of ImprovementType.NATIVE_LANGUAGE_LIMIT.
+    "native_language_limit": ImprovementType.NATIVE_LANGUAGE_LIMIT,
 }
 
 # WP22: FLAT_BONUS has a real Improvement to apply; NO_EFFECT is offerable too -- it's a
