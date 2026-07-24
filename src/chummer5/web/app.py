@@ -233,8 +233,11 @@ from chummer5.engine.foci import (
 )
 from chummer5.engine.improvements import ImprovementIndex, ImprovementSource
 from chummer5.engine.knowledge import (
+    KarmaKnowledgeSelection,
+    KnowledgeSelection,
     KnowledgeSkillPick,
     LanguageSkillPick,
+    create_karma_knowledge_selection,
     create_knowledge_selection,
     free_knowledge_points,
     native_language_limit,
@@ -286,7 +289,9 @@ from chummer5.engine.resources import (
 )
 from chummer5.engine.skills import (
     MAX_SKILL_RATING_CREATE,
+    KarmaSkillSelection,
     SkillAllocation,
+    create_karma_skill_selection,
     create_skill_allocation,
     dice_pool,
     skill_point_budget,
@@ -609,6 +614,33 @@ def _parse_languages(form: FormData, max_rows: int) -> tuple[LanguageSkillPick, 
     return tuple(picks)
 
 
+def _parse_karma_points_by_name(
+    form: FormData, name_prefix: str, karma_prefix: str, max_rows: int
+) -> dict[str, int]:
+    """Read `{name_prefix}{i}`/`{karma_prefix}{i}` row pairs off a submitted form into a sparse
+    `{name: karma_points}` dict (WP53) -- keyed by the row's own name, not its index, since
+    `create_karma_knowledge_selection` resolves Karma spend by name (see that function's own
+    docstring). A fresh pass over the raw form fields, independent of `_parse_knowledge_skills`/
+    `_parse_languages`'s own compacted (blank rows skipped) output -- pairing a karma field with
+    the compacted list by index would misalign the moment an earlier row is blank.
+    """
+    points: dict[str, int] = {}
+    for i in range(max_rows):
+        name = str(form.get(f"{name_prefix}{i}") or "").strip()
+        if not name:
+            continue
+        raw = form.get(f"{karma_prefix}{i}")
+        if raw is None:
+            continue
+        try:
+            value = int(str(raw))
+        except ValueError:
+            continue
+        if value != 0:
+            points[name] = value
+    return points
+
+
 def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str, ...]:
     """Expand each starter-gear item's submitted quantity into that many repeats of its name --
     `create_resources_selection`'s `gear_names` is a flat, repeats-allowed name list (see
@@ -902,6 +934,9 @@ def _skill_allocation_context(
     skill_points: Mapping[str, int],
     group_points: Mapping[str, int],
     specializations: Mapping[str, str] = MappingProxyType({}),
+    karma_skill_points: Mapping[str, int] = MappingProxyType({}),
+    karma_group_points: Mapping[str, int] = MappingProxyType({}),
+    karma_specializations: Mapping[str, str] = MappingProxyType({}),
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -918,6 +953,19 @@ def _skill_allocation_context(
 
     **WP50**: `skill_rows["pool"]` relies on `dice_pool`'s own default (whether `skill.id` is in
     `allocation.specializations`) rather than passing `specialized=` explicitly here.
+
+    **WP53**: `karma_skill_points`/`karma_group_points`/`karma_specializations` -- submitted
+    together with the priority-point fields above in the same `POST /ui/skills` form, mirroring
+    WP52's `karma_attr_{code}` precedent -- feed a *preview* `KarmaSkillSelection`, built by calling
+    `create_karma_skill_selection` itself against a throwaway character carrying this render's own
+    `allocation` (not the character's last-committed one, since the two are submitted and validated
+    together) and a deliberately huge budget, so only a genuine structural problem (an unknown id, a
+    group-funding/breaking conflict, ...) -- not "over budget," which the real re-validation pass
+    below already reports separately -- suppresses the preview (falls back to no Karma overlay
+    rather than raising through this display-only path). `display` is `character` with that preview
+    attached, which `skill_rating`/`dice_pool` read directly (see `chummer5.engine.skills`'
+    own docstring for why they read `character.karma_skill_selection` rather than taking it as a
+    parameter).
     """
     if character is None:
         return {"character": None, "skill_error": error}
@@ -926,19 +974,42 @@ def _skill_allocation_context(
         group_points=MappingProxyType(dict(group_points)),
         specializations=MappingProxyType(dict(specializations)),
     )
+    try:
+        preview_karma_selection: KarmaSkillSelection | None = create_karma_skill_selection(
+            replace(character, skill_allocation=allocation),
+            SKILLS,
+            karma_skill_points,
+            karma_group_points,
+            karma_specializations,
+            karma_budget=10**9,
+        )
+    except ValueError:
+        preview_karma_selection = None
+    display = replace(character, karma_skill_selection=preview_karma_selection)
+    karma_budget = character.karma_remaining + (
+        character.karma_skill_selection.karma_cost
+        if character.karma_skill_selection is not None
+        else 0
+    )
     budget = skill_point_budget(skills_letter, PRIORITIES)
     skill_rows = [
         {
             "skill": skill,
             "points": allocation.skill_points.get(skill.id, 0),
             "specialization": allocation.specializations.get(skill.id, ""),
-            "rating": skill_rating(character, allocation, skill),
-            "pool": dice_pool(character, allocation, skill),
+            "karma_points": karma_skill_points.get(skill.id, 0),
+            "karma_specialization": karma_specializations.get(skill.id, ""),
+            "rating": skill_rating(display, allocation, skill),
+            "pool": dice_pool(display, allocation, skill),
         }
         for skill in MUNDANE_SKILLS
     ]
     group_rows = [
-        {"name": group, "points": allocation.group_points.get(group, 0)}
+        {
+            "name": group,
+            "points": allocation.group_points.get(group, 0),
+            "karma_points": karma_group_points.get(group, 0),
+        }
         for group in MUNDANE_SKILL_GROUPS
     ]
     budget_warning: str | None = None
@@ -947,13 +1018,21 @@ def _skill_allocation_context(
             create_skill_allocation(
                 skills_letter, PRIORITIES, SKILLS, skill_points, group_points, specializations
             )
+            create_karma_skill_selection(
+                replace(character, skill_allocation=allocation),
+                SKILLS,
+                karma_skill_points,
+                karma_group_points,
+                karma_specializations,
+                karma_budget,
+            )
         except ValueError as exc:
             budget_warning = (
                 f"No longer fits since priorities were last confirmed: {exc}. "
                 "Adjust the points below to continue."
             )
     return {
-        "character": character,
+        "character": display,
         "skill_rows": skill_rows,
         "group_rows": group_rows,
         "skills_budget": budget.skills,
@@ -964,6 +1043,12 @@ def _skill_allocation_context(
         "groups_budget": budget.skill_groups,
         "groups_remaining": budget.skill_groups - sum(allocation.group_points.values()),
         "max_skill_rating": MAX_SKILL_RATING_CREATE,
+        "karma_budget": karma_budget,
+        "karma_remaining": (
+            karma_budget - preview_karma_selection.karma_cost
+            if preview_karma_selection is not None
+            else karma_budget
+        ),
         "skill_error": error,
     }
 
@@ -972,6 +1057,7 @@ def _knowledge_selection_context(
     character: Character | None,
     knowledge_skills: tuple[KnowledgeSkillPick, ...],
     languages: tuple[LanguageSkillPick, ...],
+    karma_points: Mapping[str, int] = MappingProxyType({}),
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -981,6 +1067,13 @@ def _knowledge_selection_context(
     `create_knowledge_selection` purely to detect whether an attribute edit since the last commit
     shrank INT/LOG below what's already spent (WP19-style "no longer fits" staleness), the same
     re-derive-fresh-on-every-render precedent every other carried-forward selection follows.
+
+    **WP53**: `karma_points` -- submitted in the same form as `knowledge_skills`/`languages`,
+    keyed by pick *name* (see `chummer5.engine.knowledge`'s own WP53 paragraph for why) -- feeds a
+    *preview* `KarmaKnowledgeSelection`, the same "call the real validator against a throwaway
+    huge budget, fall back to no overlay on any structural failure" shape
+    `_skill_allocation_context` uses, since Knowledge/Language picks have no dice-pool preview to
+    compute (only a "Karma remaining" summary line and each row's own Karma-boosted total).
     """
     if character is None:
         return {"character": None, "knowledge_error": error}
@@ -990,6 +1083,9 @@ def _knowledge_selection_context(
             "name": knowledge_skills[i].name if i < len(knowledge_skills) else "",
             "category": knowledge_skills[i].category if i < len(knowledge_skills) else "",
             "rating": knowledge_skills[i].rating if i < len(knowledge_skills) else "",
+            "karma_points": (
+                karma_points.get(knowledge_skills[i].name, 0) if i < len(knowledge_skills) else 0
+            ),
         }
         for i in range(MAX_KNOWLEDGE_ROWS)
     ]
@@ -999,6 +1095,7 @@ def _knowledge_selection_context(
             "name": languages[i].name if i < len(languages) else "",
             "rating": languages[i].rating if i < len(languages) else "",
             "native": languages[i].native if i < len(languages) else False,
+            "karma_points": karma_points.get(languages[i].name, 0) if i < len(languages) else 0,
         }
         for i in range(MAX_LANGUAGE_ROWS)
     ]
@@ -1006,10 +1103,35 @@ def _knowledge_selection_context(
     points_spent = sum(k.rating for k in knowledge_skills) + sum(
         la.rating for la in languages if not la.native
     )
+    preview_knowledge_selection = KnowledgeSelection(
+        knowledge_skills=knowledge_skills,
+        languages=languages,
+        free_points=free_points,
+        points_spent=points_spent,
+        native_language_limit=native_language_limit(character),
+    )
+    try:
+        preview_karma_knowledge: KarmaKnowledgeSelection | None = create_karma_knowledge_selection(
+            replace(character, knowledge_selection=preview_knowledge_selection),
+            karma_points,
+            karma_budget=10**9,
+        )
+    except ValueError:
+        preview_karma_knowledge = None
+    karma_budget = character.karma_remaining + (
+        character.karma_knowledge_selection.karma_cost
+        if character.karma_knowledge_selection is not None
+        else 0
+    )
     budget_warning: str | None = None
     if error is None:
         try:
             create_knowledge_selection(character, knowledge_skills, languages)
+            create_karma_knowledge_selection(
+                replace(character, knowledge_selection=preview_knowledge_selection),
+                karma_points,
+                karma_budget,
+            )
         except ValueError as exc:
             budget_warning = (
                 f"No longer fits since attributes were last confirmed: {exc}. "
@@ -1026,6 +1148,12 @@ def _knowledge_selection_context(
         "native_language_limit": native_language_limit(character),
         "max_skill_rating": MAX_SKILL_RATING_CREATE,
         "knowledge_budget_warning": budget_warning,
+        "karma_budget": karma_budget,
+        "karma_remaining": (
+            karma_budget - preview_karma_knowledge.karma_cost
+            if preview_karma_knowledge is not None
+            else karma_budget
+        ),
         "knowledge_error": error,
     }
 
@@ -2242,6 +2370,11 @@ def _character_sheet_context(
         return {"character": None, "sheet_error": error, "sheet_info": info}
 
     allocation = character.skill_allocation
+    karma_knowledge_points = (
+        character.karma_knowledge_selection.points
+        if character.karma_knowledge_selection is not None
+        else {}
+    )
     # WP29: the full `SKILLS` catalog, not `MUNDANE_SKILLS` -- a Magician's Talent free-skill grant
     # (chummer5.engine.magic.apply_magic_skill_grant_improvements) can raise a Magical Active
     # skill's rating above 0 via a pure Improvement, with no `SkillAllocation` points spent on it at
@@ -2255,12 +2388,26 @@ def _character_sheet_context(
     # WP50: `dice_pool`'s own default (whether `skill.id` is in `allocation.specializations`)
     # supplies `specialized=` here, so the sheet's pool matches the buy screen's without repeating
     # the lookup.
+    # WP53: `rating`/`pool` already reflect any Karma-funded skill/group spend -- `skill_rating`/
+    # `dice_pool` read `character.karma_skill_selection` directly (see that module's own WP53
+    # docstring paragraph), not something this context needs to fold in itself. `specialization`
+    # does need the explicit fallback below: it's the one field `dice_pool`'s auto-detect resolves
+    # internally without exposing which of the two sources (skill-point-funded vs. Karma-funded)
+    # supplied it, and this row display needs the name itself, not just whether one exists.
+    karma_skill_selection = character.karma_skill_selection
     skill_rows = (
         [
             {
                 "skill": skill,
                 "rating": rating,
-                "specialization": allocation.specializations.get(skill.id, ""),
+                "specialization": (
+                    allocation.specializations.get(skill.id)
+                    or (
+                        karma_skill_selection.specializations.get(skill.id, "")
+                        if karma_skill_selection is not None
+                        else ""
+                    )
+                ),
                 "pool": dice_pool(character, allocation, skill),
             }
             for skill in ALL_SKILLS_SORTED
@@ -2365,6 +2512,17 @@ def _character_sheet_context(
             character.quality_selection.karma_cost if character.quality_selection is not None else 0
         ),
         "contact_karma_cost": contact_selection.karma_cost,
+        # WP53: Step Seven's own two new Karma-spend categories, alongside quality/contact above.
+        "karma_skill_cost": (
+            character.karma_skill_selection.karma_cost
+            if character.karma_skill_selection is not None
+            else 0
+        ),
+        "karma_knowledge_cost": (
+            character.karma_knowledge_selection.karma_cost
+            if character.karma_knowledge_selection is not None
+            else 0
+        ),
         "initiative_value": initiative_value(character),
         "initiative_dice": initiative_dice(character),
         "physical_limit": physical_limit(character),
@@ -2465,9 +2623,18 @@ def _character_sheet_context(
         "foci_karma_cost": foci_selection.karma_cost if foci_selection is not None else 0,
         # WP49: Knowledge/Language recap -- both empty lists for an as-yet-uncommitted selection,
         # the same "None until committed" shape every other sheet section already has.
+        # WP53: `rating` here includes any Karma-funded increase on top of the free-point-funded
+        # base (`character.karma_knowledge_selection.points`, keyed by name -- see that class's own
+        # docstring) -- unlike skill_rows above, nothing in the engine folds this in automatically
+        # (a Knowledge/Language pick's own `rating` field is the free-point-funded figure only),
+        # so this context does the addition itself.
         "knowledge_skill_rows": (
             [
-                {"name": pick.name, "category": pick.category, "rating": pick.rating}
+                {
+                    "name": pick.name,
+                    "category": pick.category,
+                    "rating": pick.rating + karma_knowledge_points.get(pick.name, 0),
+                }
                 for pick in character.knowledge_selection.knowledge_skills
             ]
             if character.knowledge_selection is not None
@@ -2475,7 +2642,11 @@ def _character_sheet_context(
         ),
         "language_rows": (
             [
-                {"name": pick.name, "rating": pick.rating, "native": pick.native}
+                {
+                    "name": pick.name,
+                    "rating": pick.rating + karma_knowledge_points.get(pick.name, 0),
+                    "native": pick.native,
+                }
                 for pick in character.knowledge_selection.languages
             ]
             if character.knowledge_selection is not None
@@ -2667,6 +2838,26 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
             if character.karma_attribute_selection is not None
             else {}
         ),
+        karma_skill_points=(
+            character.karma_skill_selection.skill_points
+            if character.karma_skill_selection is not None
+            else {}
+        ),
+        karma_group_points=(
+            character.karma_skill_selection.group_points
+            if character.karma_skill_selection is not None
+            else {}
+        ),
+        karma_specializations=(
+            character.karma_skill_selection.specializations
+            if character.karma_skill_selection is not None
+            else {}
+        ),
+        karma_knowledge_points=(
+            character.karma_knowledge_selection.points
+            if character.karma_knowledge_selection is not None
+            else {}
+        ),
     )
 
 
@@ -2794,15 +2985,40 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     skill_points = allocation.skill_points if allocation is not None else {}
     group_points = allocation.group_points if allocation is not None else {}
     specializations = allocation.specializations if allocation is not None else {}
+    karma_skill_selection = character.karma_skill_selection if character is not None else None
+    karma_skill_points = (
+        karma_skill_selection.skill_points if karma_skill_selection is not None else {}
+    )
+    karma_group_points = (
+        karma_skill_selection.group_points if karma_skill_selection is not None else {}
+    )
+    karma_specializations = (
+        karma_skill_selection.specializations if karma_skill_selection is not None else {}
+    )
     skill_ctx = _skill_allocation_context(
-        character, session.skills_letter, skill_points, group_points, specializations
+        character,
+        session.skills_letter,
+        skill_points,
+        group_points,
+        specializations,
+        karma_skill_points,
+        karma_group_points,
+        karma_specializations,
     )
     knowledge_selection = character.knowledge_selection if character is not None else None
     knowledge_skills = (
         knowledge_selection.knowledge_skills if knowledge_selection is not None else ()
     )
     languages = knowledge_selection.languages if knowledge_selection is not None else ()
-    knowledge_ctx = _knowledge_selection_context(character, knowledge_skills, languages)
+    karma_knowledge_selection = (
+        character.karma_knowledge_selection if character is not None else None
+    )
+    karma_knowledge_points = (
+        karma_knowledge_selection.points if karma_knowledge_selection is not None else {}
+    )
+    knowledge_ctx = _knowledge_selection_context(
+        character, knowledge_skills, languages, karma_knowledge_points
+    )
     quality_ids = (
         tuple(q.id for q in character.quality_selection.qualities)
         if character is not None and character.quality_selection is not None
@@ -3269,6 +3485,13 @@ def create_app() -> FastAPI:
                     # a "no longer fits" warning if this attribute edit shrank INT/LOG below what
                     # was already spent.
                     knowledge_selection=previous.knowledge_selection,
+                    # WP53: same plain-carry treatment -- neither Karma-funded selection has an
+                    # Improvement of its own to re-land (a Karma-funded skill/specialization is a
+                    # pure rating increase, not an Improvement -- see chummer5.engine.skills' own
+                    # WP53 paragraph), and neither depends on an attribute value, only on
+                    # skill_allocation/knowledge_selection, both already carried forward above.
+                    karma_skill_selection=previous.karma_skill_selection,
+                    karma_knowledge_selection=previous.karma_knowledge_selection,
                 )
                 session.character = character
                 context = _attribute_allocation_context(
@@ -3333,6 +3556,16 @@ def create_app() -> FastAPI:
             skill_points = _parse_points(form, (s.id for s in MUNDANE_SKILLS), "skill_")
             group_points = _parse_points(form, MUNDANE_SKILL_GROUPS, "group_")
             specializations = _parse_specializations(form, (s.id for s in MUNDANE_SKILLS), "spec_")
+            # WP53: Karma-funded points/specializations, submitted in the same form (mirrors
+            # WP52's karma_attr_{code} precedent).
+            karma_skill_points = _parse_points(
+                form, (s.id for s in MUNDANE_SKILLS), "karma_skill_"
+            )
+            karma_group_points = _parse_points(form, MUNDANE_SKILL_GROUPS, "karma_group_")
+            karma_specializations = _parse_specializations(
+                form, (s.id for s in MUNDANE_SKILLS), "karma_spec_"
+            )
+            previous = session.character
             try:
                 allocation = create_skill_allocation(
                     session.skills_letter,
@@ -3342,6 +3575,24 @@ def create_app() -> FastAPI:
                     group_points,
                     specializations,
                 )
+                # WP51: this section's own currently-committed Karma-skill cost is added back onto
+                # `previous.karma_remaining` -- the same "exclude this section's own prior
+                # commitment" idiom `_spirit_selection_context`/`_attribute_allocation_context`
+                # already established -- so re-spending exactly what was already committed doesn't
+                # double-subtract it.
+                karma_budget = previous.karma_remaining + (
+                    previous.karma_skill_selection.karma_cost
+                    if previous.karma_skill_selection is not None
+                    else 0
+                )
+                karma_selection = create_karma_skill_selection(
+                    replace(previous, skill_allocation=allocation),
+                    SKILLS,
+                    karma_skill_points,
+                    karma_group_points,
+                    karma_specializations,
+                    karma_budget,
+                )
             except ValueError as exc:
                 context = _skill_allocation_context(
                     session.character,
@@ -3349,16 +3600,26 @@ def create_app() -> FastAPI:
                     skill_points,
                     group_points,
                     specializations,
+                    karma_skill_points,
+                    karma_group_points,
+                    karma_specializations,
                     error=str(exc),
                 )
             else:
-                session.character = replace(session.character, skill_allocation=allocation)
+                session.character = replace(
+                    session.character,
+                    skill_allocation=allocation,
+                    karma_skill_selection=karma_selection,
+                )
                 context = _skill_allocation_context(
                     session.character,
                     session.skills_letter,
                     skill_points,
                     group_points,
                     specializations,
+                    karma_skill_points,
+                    karma_group_points,
+                    karma_specializations,
                 )
         response = templates.TemplateResponse(request, "_skill_allocation.html", context)
         if new_cookie is not None:
@@ -3374,18 +3635,38 @@ def create_app() -> FastAPI:
             form = await request.form()
             knowledge_skills = _parse_knowledge_skills(form, MAX_KNOWLEDGE_ROWS)
             languages = _parse_languages(form, MAX_LANGUAGE_ROWS)
+            # WP53: Karma-funded points, keyed by name, submitted in the same form.
+            karma_points = _parse_karma_points_by_name(
+                form, "knowledge_name_", "knowledge_karma_", MAX_KNOWLEDGE_ROWS
+            )
+            karma_points.update(
+                _parse_karma_points_by_name(
+                    form, "language_name_", "language_karma_", MAX_LANGUAGE_ROWS
+                )
+            )
+            previous = session.character
             try:
-                selection = create_knowledge_selection(
-                    session.character, knowledge_skills, languages
+                selection = create_knowledge_selection(previous, knowledge_skills, languages)
+                karma_budget = previous.karma_remaining + (
+                    previous.karma_knowledge_selection.karma_cost
+                    if previous.karma_knowledge_selection is not None
+                    else 0
+                )
+                karma_selection = create_karma_knowledge_selection(
+                    replace(previous, knowledge_selection=selection), karma_points, karma_budget
                 )
             except ValueError as exc:
                 context = _knowledge_selection_context(
-                    session.character, knowledge_skills, languages, error=str(exc)
+                    session.character, knowledge_skills, languages, karma_points, error=str(exc)
                 )
             else:
-                session.character = replace(session.character, knowledge_selection=selection)
+                session.character = replace(
+                    session.character,
+                    knowledge_selection=selection,
+                    karma_knowledge_selection=karma_selection,
+                )
                 context = _knowledge_selection_context(
-                    session.character, knowledge_skills, languages
+                    session.character, knowledge_skills, languages, karma_points
                 )
         response = templates.TemplateResponse(request, "_knowledge_skills.html", context)
         if new_cookie is not None:

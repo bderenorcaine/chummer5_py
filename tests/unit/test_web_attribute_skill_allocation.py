@@ -364,4 +364,109 @@ def test_character_sheet_shows_the_specialization_name() -> None:
     response = client.get("/character/sheet")
 
     assert response.status_code == 200
-    assert "Longbow" in response.text
+
+
+# WP53: Karma-funded skill/skill-group increases and specializations, including group-breaking.
+
+
+def test_submitting_karma_skill_points_matches_engine_output() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
+    response = client.post(
+        "/ui/skills", data={f"skill_{skill.id}": "2", f"karma_skill_{skill.id}": "2"}
+    )
+
+    assert response.status_code == 200
+    # 2->3 costs 6, 3->4 costs 8 -- 14 Karma total, out of the starting 25.
+    assert f"<td>{4}</td>" in response.text
+    assert "Karma remaining for skills: 11 / 25" in response.text
+
+
+def test_submitting_karma_group_points_matches_engine_output() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    group = "Firearms"
+    response = client.post(
+        "/ui/skills", data={f"group_{group}": "1", f"karma_group_{group}": "1"}
+    )
+
+    assert response.status_code == 200
+    # 1->2 costs new_rating x 5 = 10 Karma.
+    assert "Karma remaining for skills: 15 / 25" in response.text
+
+
+def test_submitting_karma_specialization_breaks_a_purchased_group() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)  # Skills C: skill_groups budget is 2
+
+    automatics = next(s for s in MUNDANE_SKILLS if s.name == "Automatics")
+    longarms = next(s for s in MUNDANE_SKILLS if s.name == "Longarms")
+    client.post("/ui/skills", data={"group_Firearms": "2"})
+
+    response = client.post(
+        "/ui/skills", data={"group_Firearms": "2", f"karma_spec_{automatics.id}": "Assault Rifles"}
+    )
+
+    assert response.status_code == 200
+    assert "Karma remaining for skills: 18 / 25" in response.text  # 7 Karma flat
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    character = create_character(human_choice, "A", "B", PRIORITIES, {})
+    allocation = create_skill_allocation("C", PRIORITIES, SKILLS, {}, {"Firearms": 2})
+    unspecialized_pool = dice_pool(character, allocation, longarms)
+    # Automatics is now individually specialized (+2), Longarms stays plain group-rated.
+    assert f"<td>{unspecialized_pool + 2}</td>" in response.text
+    assert f"<td>{unspecialized_pool}</td>" in response.text
+
+
+def test_submitting_karma_skill_points_on_group_member_breaks_the_group_without_a_spec() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    automatics = next(s for s in MUNDANE_SKILLS if s.name == "Automatics")
+    client.post("/ui/skills", data={"group_Firearms": "2"})
+
+    response = client.post(
+        "/ui/skills", data={"group_Firearms": "2", f"karma_skill_{automatics.id}": "1"}
+    )
+
+    assert response.status_code == 200
+    # 2->3 costs new_rating x 2 = 6 Karma.
+    assert "Karma remaining for skills: 19 / 25" in response.text
+    assert f"<td>{3}</td>" in response.text  # Automatics' own individually-raised rating
+
+
+def test_submitting_karma_skill_points_over_budget_is_rejected() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
+    # 0 -> 6 costs 2*(1+2+3+4+5+6) = 42 Karma, over the 25-Karma starting budget, while staying
+    # within the chargen rating cap (6) so the rejection is genuinely budget-driven, not a rating
+    # overflow.
+    response = client.post("/ui/skills", data={f"karma_skill_{skill.id}": "6"})
+
+    assert response.status_code == 200
+    assert "exceeds the Karma budget" in response.text
+
+
+def test_character_sheet_shows_karma_funded_specialization() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    automatics = next(s for s in MUNDANE_SKILLS if s.name == "Automatics")
+    client.post("/ui/skills", data={"group_Firearms": "2"})
+    client.post(
+        "/ui/skills", data={"group_Firearms": "2", f"karma_spec_{automatics.id}": "Assault Rifles"}
+    )
+
+    response = client.get("/character/sheet")
+
+    assert response.status_code == 200
+    assert "Assault Rifles" in response.text
+    assert "Skill/skill-group karma cost: 7." in response.text

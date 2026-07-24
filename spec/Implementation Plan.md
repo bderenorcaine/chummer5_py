@@ -1711,7 +1711,7 @@ isn't being computed, not just discover it by reading this document.
   per WP28/Project Overview's own citation) confirming his Karma-bought EDG point resolves correctly —
   a real, existing fixture this phase directly unblocks, not a synthetic case.
 
-- [ ] **WP53 — Karma-funded skill/skill-group increases (including group-breaking).**
+- [x] **WP53 — Karma-funded skill/skill-group increases (including group-breaking).**
   Goal: let leftover Karma raise an Active skill (`new Rating x 2`), Active skill group
   (`new Rating x 5`), or Knowledge/Language skill (`new Rating x 1`) beyond its priority-derived budget,
   and implement the rulebook's specific Step Seven rule that **buying a Karma-funded specialization for a

@@ -1232,3 +1232,116 @@ def test_build_character_rejects_karma_attribute_points_exceeding_the_karma_budg
     )
     with pytest.raises(ValueError, match="exceeds the Karma budget"):
         _build_mundane(save)
+
+
+# -- karma_skill_points / karma_group_points / karma_specializations / karma_knowledge_points ---
+# -- (WP53) ---------------------------------------------------------------------------------------
+
+
+def _mundane_save_with_karma_skills(
+    *,
+    skill_points: dict[str, int] | None = None,
+    group_points: dict[str, int] | None = None,
+    karma_skill_points: dict[str, int] | None = None,
+    karma_group_points: dict[str, int] | None = None,
+    karma_specializations: dict[str, str] | None = None,
+    knowledge_skill_picks: tuple[tuple[str, str, int], ...] = (),
+    karma_knowledge_points: dict[str, int] | None = None,
+) -> CharacterSave:
+    return create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="A",
+        skill_points=skill_points or {},
+        group_points=group_points or {},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        knowledge_skill_picks=knowledge_skill_picks,
+        karma_skill_points=karma_skill_points or {},
+        karma_group_points=karma_group_points or {},
+        karma_specializations=karma_specializations or {},
+        karma_knowledge_points=karma_knowledge_points or {},
+    )
+
+
+def test_json_round_trip_preserves_karma_skill_fields() -> None:
+    archery_id = next(s.id for s in SKILLS if s.name == "Archery")
+    save = _mundane_save_with_karma_skills(
+        skill_points={archery_id: 2},
+        karma_skill_points={archery_id: 1},
+        karma_group_points={"Firearms": 1},
+        karma_specializations={archery_id: "Longbow"},
+        karma_knowledge_points={"Corporations": 1},
+    )
+    assert from_json(to_json(save)) == save
+    data = json.loads(to_json(save))
+    assert data["karma_skill_points"] == {archery_id: 1}
+    assert data["karma_group_points"] == {"Firearms": 1}
+    assert data["karma_specializations"] == {archery_id: "Longbow"}
+    assert data["karma_knowledge_points"] == {"Corporations": 1}
+
+
+def test_from_json_defaults_karma_skill_fields_for_a_pre_wp53_save() -> None:
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    for key in (
+        "karma_skill_points",
+        "karma_group_points",
+        "karma_specializations",
+        "karma_knowledge_points",
+    ):
+        assert key not in data or data[key] == {}
+    loaded = from_json(to_json(save))
+    assert loaded.karma_skill_points == {}
+    assert loaded.karma_group_points == {}
+    assert loaded.karma_specializations == {}
+    assert loaded.karma_knowledge_points == {}
+
+
+def test_build_character_applies_karma_skill_points() -> None:
+    archery_id = next(s.id for s in SKILLS if s.name == "Archery")
+    save = _mundane_save_with_karma_skills(
+        skill_points={archery_id: 2}, karma_skill_points={archery_id: 2}
+    )
+    character = _build_mundane(save)
+    assert character.karma_skill_selection is not None
+    # 2->3 (6) + 3->4 (8) = 14 Karma.
+    assert character.karma_skill_selection.karma_cost == 14
+    assert character.karma_remaining == 25 - 14
+
+
+def test_build_character_applies_karma_group_breaking_specialization() -> None:
+    automatics_id = next(s.id for s in SKILLS if s.name == "Automatics")
+    save = _mundane_save_with_karma_skills(
+        group_points={"Firearms": 2}, karma_specializations={automatics_id: "Assault Rifles"}
+    )
+    character = _build_mundane(save)
+    assert character.karma_skill_selection is not None
+    assert character.karma_skill_selection.broken_groups == frozenset({"Firearms"})
+    assert character.karma_skill_selection.karma_cost == 7
+    assert character.karma_remaining == 25 - 7
+
+
+def test_build_character_applies_karma_knowledge_points() -> None:
+    save = _mundane_save_with_karma_skills(
+        knowledge_skill_picks=(("Corporations", "Street", 2),),
+        karma_knowledge_points={"Corporations": 1},
+    )
+    character = _build_mundane(save)
+    assert character.karma_knowledge_selection is not None
+    # 2->3 costs new_rating x 1 = 3 Karma.
+    assert character.karma_knowledge_selection.karma_cost == 3
+    assert character.karma_remaining == 25 - 3
+
+
+def test_build_character_rejects_karma_skill_points_exceeding_the_karma_budget() -> None:
+    archery_id = next(s.id for s in SKILLS if s.name == "Archery")
+    save = _mundane_save_with_karma_skills(karma_skill_points={archery_id: 6})
+    with pytest.raises(ValueError, match="exceeds the Karma budget"):
+        _build_mundane(save)

@@ -12,6 +12,7 @@
   <p>
     Free points remaining: {{ knowledge_free_points - knowledge_points_spent }} / {{ knowledge_free_points }} ((Intuition + Logic) &times; 2).
     Native languages: up to {{ native_language_limit }} free (marked below, no rating needed).
+    Karma remaining for knowledge/language: {{ karma_remaining }} / {{ karma_budget }}.
   </p>
 
   <form
@@ -27,12 +28,17 @@
       {{ category.name }} ({{ category.linked_attribute }}: {{ category.examples | join(", ") }}){% if not loop.last %}; {% endif %}
       {% endfor %}
     </p>
+    <p>
+      "Karma pts" (Step Seven) raises a committed skill's rating beyond its free-point spend, at
+      new Rating &times; 1 Karma per point.
+    </p>
     <table>
       <thead>
         <tr>
           <th>Name</th>
           <th>Category</th>
           <th>Rating</th>
+          <th>Karma pts</th>
         </tr>
       </thead>
       <tbody>
@@ -60,6 +66,15 @@
               max="{{ max_skill_rating }}"
             />
           </td>
+          <td>
+            <input
+              type="number"
+              name="knowledge_karma_{{ row.index }}"
+              value="{{ row.karma_points }}"
+              min="0"
+              max="{{ max_skill_rating }}"
+            />
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -73,6 +88,7 @@
           <th>Name</th>
           <th>Rating</th>
           <th>Native (free)</th>
+          <th>Karma pts</th>
         </tr>
       </thead>
       <tbody>
@@ -95,6 +111,15 @@
               type="checkbox"
               name="language_native_{{ row.index }}"
               {% if row.native %}checked{% endif %}
+            />
+          </td>
+          <td>
+            <input
+              type="number"
+              name="language_karma_{{ row.index }}"
+              value="{{ row.karma_points }}"
+              min="0"
+              max="{{ max_skill_rating }}"
             />
           </td>
         </tr>

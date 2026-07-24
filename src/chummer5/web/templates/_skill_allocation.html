@@ -12,6 +12,7 @@
   <p>
     Skill points remaining: {{ skills_remaining }} / {{ skills_budget }}.
     Skill group points remaining: {{ groups_remaining }} / {{ groups_budget }}.
+    Karma remaining for skills: {{ karma_remaining }} / {{ karma_budget }}.
   </p>
 
   <form
@@ -21,11 +22,16 @@
     hx-trigger="change, input delay:400ms"
   >
     <h3>Skill groups</h3>
+    <p>
+      "Karma pts" (Step Seven) raises a group's rating beyond its priority points, at
+      new Rating &times; 5 Karma per point.
+    </p>
     <table>
       <thead>
         <tr>
           <th>Group</th>
           <th>Points</th>
+          <th>Karma pts</th>
         </tr>
       </thead>
       <tbody>
@@ -37,6 +43,15 @@
               type="number"
               name="group_{{ row.name }}"
               value="{{ row.points }}"
+              min="0"
+              max="{{ max_skill_rating }}"
+            />
+          </td>
+          <td>
+            <input
+              type="number"
+              name="karma_group_{{ row.name }}"
+              value="{{ row.karma_points }}"
               min="0"
               max="{{ max_skill_rating }}"
             />
@@ -53,6 +68,13 @@
       top of whatever bought the rating) and only applies to a skill bought individually here —
       not one whose rating comes from a purchased skill group.
     </p>
+    <p>
+      "Karma pts"/"Karma spec" (Step Seven) can raise or specialize a skill beyond what the columns
+      above allow, at new Rating &times; 2 Karma per point / 7 Karma flat per specialization —
+      including a skill whose rating comes from a purchased group, which permanently breaks that
+      group from this point forward (its other members keep their current rating, but can no
+      longer be raised together as a group).
+    </p>
     <table>
       <thead>
         <tr>
@@ -60,8 +82,10 @@
           <th>Attribute</th>
           <th>Group</th>
           <th>Points</th>
+          <th>Karma pts</th>
           <th>Rating</th>
           <th>Specialization</th>
+          <th>Karma spec</th>
           <th>Pool</th>
         </tr>
       </thead>
@@ -80,12 +104,29 @@
               max="{{ max_skill_rating }}"
             />
           </td>
+          <td>
+            <input
+              type="number"
+              name="karma_skill_{{ row.skill.id }}"
+              value="{{ row.karma_points }}"
+              min="0"
+              max="{{ max_skill_rating }}"
+            />
+          </td>
           <td>{{ row.rating }}</td>
           <td>
             <input
               type="text"
               name="spec_{{ row.skill.id }}"
               value="{{ row.specialization }}"
+              placeholder="e.g. Axes"
+            />
+          </td>
+          <td>
+            <input
+              type="text"
+              name="karma_spec_{{ row.skill.id }}"
+              value="{{ row.karma_specialization }}"
               placeholder="e.g. Axes"
             />
           </td>

@@ -55,6 +55,36 @@ mirrors `skill_points`/`group_points`'s own keying. The specialization's *name* 
 "Revolvers") is freeform player-authored text, not a catalog entry — SR5 doesn't enumerate valid
 specialization names, mirroring `chummer5.engine.knowledge.KnowledgeSkillPick`'s identical "no
 catalog, the player invents it" shape.
+
+**WP53 — Step Seven's Karma-funded skill/skill-group increases, including group-breaking.**
+Confirmed via `pdftotext -layout` against the same "Purchase Skills" passage (p. 87-88) WP50 already
+cited, read past WP50's own quoted sentence: a skill group's rating can be broken and one member
+raised individually "during game play" (i.e. outside Step Five), and "skill groups cannot be broken
+up in this step [Five]... skill groups can be broken up in Step Seven" — see
+`spec/rulebooks/learnings.md`'s WP53 entry for the full citation, including the finding that this is
+a **second, independent trigger** for breaking a group alongside WP50's own specialization-based
+one: raising one member's rating directly with Karma breaks the group exactly the same way a
+Karma-funded specialization does, with no specialization required. `KARMA_SKILL_PER_RATING`
+(2)/`KARMA_SKILL_GROUP_PER_RATING` (5) come from the "KARMA ADVANCEMENT TABLE FOR SKILLS" (p.
+106-107, confirmed by WP51's own research pass); `KARMA_SPECIALIZATION_COST` (7, flat, not a
+per-rating formula) comes from the same page's "CHARACTER IMPROVEMENT TABLE" (also already banked
+by WP51's research, since a specialization has no "rating" to plug into `karma_advancement_cost`'s
+shape at all).
+
+`KarmaSkillSelection` wraps the whole Step Seven skill-side spend: `skill_points`/`group_points`
+mirror `SkillAllocation`'s own shape (extra Karma-funded points on top of whatever the priority
+budget already bought), `specializations` mirrors `SkillAllocation.specializations` (Karma-funded
+ones specifically -- 7 Karma flat each, validated against `character.skill_allocation`'s own
+skill-point-funded specializations for the "at most one per skill" rule), and `broken_groups`
+records which group names this selection itself broke (derived, not player-submitted -- see
+`create_karma_skill_selection`'s own docstring). Knowledge/Language Karma increases are a *separate*
+selection, `chummer5.engine.knowledge.KarmaKnowledgeSelection` -- Knowledge/Language picks are
+player-authored names living on `character.knowledge_selection`, not `Skill` catalog entries this
+module's own `skills: tuple[Skill, ...]` parameter could resolve, and (more importantly) they're
+submitted through a different web-layer form/route (`POST /ui/knowledge`) than Active
+skills/groups/specializations (`POST /ui/skills`) -- keeping them as two independent `Character`
+fields avoids one route's submission silently clobbering the other's already-committed Karma spend
+the way a single shared selection object would if each route naively replaced it whole.
 """
 
 from __future__ import annotations
@@ -65,7 +95,7 @@ from types import MappingProxyType
 
 from chummer5.data.priorities import PriorityTable
 from chummer5.data.skills import Skill
-from chummer5.engine.character import Character
+from chummer5.engine.character import Character, karma_advancement_cost
 from chummer5.engine.improvements import ImprovementType
 
 # CharacterSettings.MaxSkillRatingCreate (legacy default, confirmed in CharacterSettings.cs:
@@ -83,6 +113,16 @@ SPECIALIZATION_BONUS = 2
 # "untrained" (rating 0, `can_default = True`). Legacy has several Improvement-driven ways to zero
 # this out (Reflex Recorder, RemoveSkillDefaultPenalty, ...); none are in MVP scope.
 DEFAULT_MODIFIER = -1
+
+# WP53: core rulebook p.106-107, "KARMA ADVANCEMENT TABLE FOR SKILLS" (confirmed by WP51's own
+# research pass -- spec/rulebooks/learnings.md's WP51/WP53 entries) -- Active Skill/Active Skill
+# Group rows, fed into karma_advancement_cost the same way ATTRIBUTE_KARMA_PER_RATING is.
+KARMA_SKILL_PER_RATING = 2
+KARMA_SKILL_GROUP_PER_RATING = 5
+
+# WP53: same page's "CHARACTER IMPROVEMENT TABLE" -- a flat, non-per-rating cost ("New
+# specialization (for Active, Knowledge, or Language)"), distinct from every formula above.
+KARMA_SPECIALIZATION_COST = 7
 
 
 @dataclass(frozen=True)
@@ -207,14 +247,235 @@ def create_skill_allocation(
     )
 
 
+@dataclass(frozen=True)
+class KarmaSkillSelection:
+    """Leftover-Karma-funded Active skill/skill-group rating increases and specializations (Step
+    Seven, WP53) -- see `create_karma_skill_selection`'s own docstring for the validation this
+    wraps, and the module docstring's WP53 paragraph for why Knowledge/Language Karma spend is a
+    separate selection (`chummer5.engine.knowledge.KarmaKnowledgeSelection`), not part of this one.
+
+    `skill_points`/`group_points` mirror `SkillAllocation`'s own shape: however many *additional*
+    points, per skill id / group name, were bought with Karma on top of whatever the priority
+    budget (`character.skill_allocation`) already funded. `specializations` mirrors `SkillAllocation
+    .specializations` the same way -- skill id -> Karma-funded specialization name, 7 Karma flat
+    each. `broken_groups` is *derived*, not player-submitted: the set of group names this selection
+    itself broke by individually funding or specializing one of that group's member skills (see
+    `create_karma_skill_selection`'s own docstring for exactly when that happens). Always the full
+    resulting state, not an incremental delta on top of a prior `KarmaSkillSelection` -- the same
+    "recompute wholesale, not incrementally" shape `KarmaAttributeSelection` already established.
+    """
+
+    skill_points: MappingProxyType[str, int]
+    group_points: MappingProxyType[str, int]
+    specializations: MappingProxyType[str, str]
+    broken_groups: frozenset[str]
+    karma_cost: int
+
+
+def create_karma_skill_selection(
+    character: Character,
+    skills: tuple[Skill, ...],
+    karma_skill_points: Mapping[str, int] = MappingProxyType({}),
+    karma_group_points: Mapping[str, int] = MappingProxyType({}),
+    karma_specializations: Mapping[str, str] = MappingProxyType({}),
+    karma_budget: int = 0,
+) -> KarmaSkillSelection:
+    """Validate and build a `KarmaSkillSelection` against `character.skill_allocation`'s own
+    already-committed priority-point spend.
+
+    **Group-breaking (WP53's own core mechanic).** A group whose member skill(s) already have
+    points spent via `character.skill_allocation.group_points` is normally "strict" (WP7): every
+    member shares one uniform, group-funded rating. Step Seven relaxes this in exactly two ways,
+    both confirmed via `pdftotext -layout` against the core rulebook's own Skills-chapter Step Five
+    text (p. 87-88 -- see `spec/rulebooks/learnings.md`'s WP53 entry for the full citation,
+    including why this is a *second* trigger distinct from WP50's own specialization-only one):
+    raising one member's rating *individually* with `karma_skill_points`, or buying that member a
+    Karma-funded specialization via `karma_specializations` -- either one "breaks" that member's
+    group from this point forward, so it becomes individually tracked (frozen at whatever rating
+    the group already had, plus whatever this selection itself adds to that one member) while every
+    other member stays at the group's own rating. A group referenced by *both* `karma_group_points`
+    (funding the group as a whole) and `karma_skill_points`/`karma_specializations` (breaking one of
+    its own members) in the same submission is rejected outright -- contradictory in the same
+    submission, not a sequencing question this function could resolve on its own.
+
+    Validates: every `karma_skill_points`/`karma_group_points` key is a known skill id / skill
+    group name; every `karma_specializations` key is a known skill id; no negative spend; no
+    resulting rating exceeds `MAX_SKILL_RATING_CREATE`; a group can only be freshly Karma-funded
+    from 0 (`karma_group_points` with no existing `character.skill_allocation.group_points` entry)
+    if none of its members already have individually-spent points (priority or Karma) -- the
+    "strict skill groups" rule extended to Karma, mirroring `create_skill_allocation`'s own check;
+    a specialization's skill must not already have one (from `character.skill_allocation
+    .specializations` or from `karma_specializations` itself) and must have a rating of at least 1
+    (post-spend, for a skill this same submission raises via `karma_skill_points`) before it can be
+    specialized; and the total Karma cost does not exceed `karma_budget` (the caller's
+    responsibility to derive -- typically `character.karma_remaining + <this selection's own
+    currently-committed karma_cost>`, mirroring `create_karma_attribute_points`'s identical
+    parameter; see WP51's worklog for this "add back this section's own current commitment" idiom).
+
+    Uses `character.skill_allocation`'s `skill_points`/`group_points`/`specializations` as the
+    starting point for every Karma-funded rating step's cost (`karma_advancement_cost`) -- an
+    unset `character.skill_allocation` (nothing committed yet) is treated as all-empty, the same
+    "None means nothing spent yet" default every other selection in this engine uses.
+    """
+    allocation = character.skill_allocation
+    existing_skill_points = (
+        allocation.skill_points if allocation is not None else MappingProxyType({})
+    )
+    existing_group_points = (
+        allocation.group_points if allocation is not None else MappingProxyType({})
+    )
+    existing_specializations = (
+        allocation.specializations if allocation is not None else MappingProxyType({})
+    )
+
+    skills_by_id = {s.id: s for s in skills}
+    group_names = {s.skill_group for s in skills if s.skill_group is not None}
+
+    unknown_skills = set(karma_skill_points) - set(skills_by_id)
+    if unknown_skills:
+        raise ValueError(f"not a known skill id: {sorted(unknown_skills)}")
+    unknown_groups = set(karma_group_points) - group_names
+    if unknown_groups:
+        raise ValueError(f"not a known skill group: {sorted(unknown_groups)}")
+    unknown_spec_skills = set(karma_specializations) - set(skills_by_id)
+    if unknown_spec_skills:
+        raise ValueError(f"not a known skill id: {sorted(unknown_spec_skills)}")
+
+    # A group is "broken" by this selection if it's currently group-purchased (has an existing
+    # group_points entry) and one of its own members is targeted by karma_skill_points or
+    # karma_specializations -- see this function's own "Group-breaking" docstring paragraph.
+    broken_groups: set[str] = set()
+    for skill_id in set(karma_skill_points) | set(karma_specializations):
+        group = skills_by_id[skill_id].skill_group
+        if group is not None and existing_group_points.get(group, 0) > 0:
+            broken_groups.add(group)
+
+    conflicting_groups = set(karma_group_points) & broken_groups
+    if conflicting_groups:
+        raise ValueError(
+            f"cannot Karma-fund skill group(s) {sorted(conflicting_groups)} while also breaking "
+            "them by individually raising or specializing one of their member skills in the same "
+            "submission"
+        )
+
+    cost = 0
+
+    for skill_id, points in karma_skill_points.items():
+        if points < 0:
+            raise ValueError(f"{skill_id}: Karma-funded points must not be negative, got {points}")
+        if points == 0:
+            continue
+        skill = skills_by_id[skill_id]
+        group = skill.skill_group
+        if group is not None and group in broken_groups:
+            start_rating = existing_group_points.get(group, 0)
+        else:
+            start_rating = existing_skill_points.get(skill_id, 0)
+        total = start_rating + points
+        if total > MAX_SKILL_RATING_CREATE:
+            raise ValueError(
+                f"{skill_id}: {total} exceeds the chargen skill rating maximum of "
+                f"{MAX_SKILL_RATING_CREATE}"
+            )
+        cost += karma_advancement_cost(start_rating, points, KARMA_SKILL_PER_RATING)
+
+    for group, points in karma_group_points.items():
+        if points < 0:
+            raise ValueError(f"{group}: Karma-funded points must not be negative, got {points}")
+        if points == 0:
+            continue
+        start_rating = existing_group_points.get(group, 0)
+        if start_rating == 0:
+            members_with_points = sorted(
+                s.id
+                for s in skills
+                if s.skill_group == group
+                and (
+                    existing_skill_points.get(s.id, 0) > 0
+                    or karma_skill_points.get(s.id, 0) > 0
+                )
+            )
+            if members_with_points:
+                raise ValueError(
+                    f"{group}: cannot Karma-fund a fresh skill group while its member skill(s) "
+                    f"{members_with_points} already have individually-spent points "
+                    "(strict skill groups)"
+                )
+        total = start_rating + points
+        if total > MAX_SKILL_RATING_CREATE:
+            raise ValueError(
+                f"{group}: {total} exceeds the chargen skill rating maximum of "
+                f"{MAX_SKILL_RATING_CREATE}"
+            )
+        cost += karma_advancement_cost(start_rating, points, KARMA_SKILL_GROUP_PER_RATING)
+
+    for skill_id, name in karma_specializations.items():
+        if not name.strip():
+            raise ValueError(f"{skill_id}: a specialization's name must not be blank")
+        if skill_id in existing_specializations:
+            raise ValueError(
+                f"{skill_id}: already has a specialization "
+                f"({existing_specializations[skill_id]!r})"
+            )
+        skill = skills_by_id[skill_id]
+        group = skill.skill_group
+        if group is not None and group in broken_groups:
+            rating_after = existing_group_points.get(group, 0) + karma_skill_points.get(
+                skill_id, 0
+            )
+        else:
+            rating_after = existing_skill_points.get(skill_id, 0) + karma_skill_points.get(
+                skill_id, 0
+            )
+        if rating_after < 1:
+            raise ValueError(
+                f"{skill_id}: cannot add a specialization without at least 1 point in the skill"
+            )
+        cost += KARMA_SPECIALIZATION_COST
+
+    if cost > karma_budget:
+        raise ValueError(
+            f"Karma-funded skill spend {cost} exceeds the Karma budget of {karma_budget}"
+        )
+
+    return KarmaSkillSelection(
+        skill_points=MappingProxyType({k: v for k, v in karma_skill_points.items() if v}),
+        group_points=MappingProxyType({k: v for k, v in karma_group_points.items() if v}),
+        specializations=MappingProxyType(dict(karma_specializations)),
+        broken_groups=frozenset(broken_groups),
+        karma_cost=cost,
+    )
+
+
 def skill_rating(character: Character, allocation: SkillAllocation, skill: Skill) -> int:
     """`Skill.Rating`: a skill's group rating if its group has points spent, else its own points,
     plus Σ improvements, capped at `MAX_SKILL_RATING_CREATE`.
+
+    **WP53**: `character.karma_skill_selection` -- if set -- adds Karma-funded points on top,
+    reading its own `broken_groups` to decide whether a group member's rating is still group-wide
+    (unbroken: group_points + karma group_points) or individually tracked (broken: the group's own
+    frozen rating + this skill's own karma_skill_points), and an ordinary individually-tracked
+    skill's rating gains its own karma_skill_points the same way.
     """
-    group_rating = (
-        allocation.group_points.get(skill.skill_group, 0) if skill.skill_group is not None else 0
-    )
-    points = group_rating if group_rating > 0 else allocation.skill_points.get(skill.id, 0)
+    karma = character.karma_skill_selection
+    group = skill.skill_group
+    broken = karma is not None and group is not None and group in karma.broken_groups
+    if group is not None and not broken:
+        group_rating = allocation.group_points.get(group, 0)
+        if karma is not None:
+            group_rating += karma.group_points.get(group, 0)
+    else:
+        group_rating = 0
+    if group_rating > 0:
+        points = group_rating
+    elif broken and group is not None:
+        points = allocation.group_points.get(group, 0)
+        if karma is not None:
+            points += karma.skill_points.get(skill.id, 0)
+    else:
+        points = allocation.skill_points.get(skill.id, 0)
+        if karma is not None:
+            points += karma.skill_points.get(skill.id, 0)
     bonus = character.improvements.resolve(ImprovementType.SKILL, skill.name)
     return min(points + bonus, MAX_SKILL_RATING_CREATE)
 
@@ -234,9 +495,15 @@ def dice_pool(
     WP50: `specialized` defaults to whether `skill.id` has an entry in
     `allocation.specializations` -- pass an explicit `True`/`False` to override (e.g. a synthetic
     what-if preview with no real `SkillAllocation` behind it).
+
+    WP53: also true when `skill.id` has a Karma-funded specialization in
+    `character.karma_skill_selection.specializations`.
     """
     if specialized is None:
-        specialized = skill.id in allocation.specializations
+        karma = character.karma_skill_selection
+        specialized = skill.id in allocation.specializations or (
+            karma is not None and skill.id in karma.specializations
+        )
     rating = skill_rating(character, allocation, skill)
     attribute_value = character.attribute_value(skill.attribute)
     if rating > 0:

@@ -52,21 +52,37 @@ CHA/contact points -- nothing in this engine's current scope ever produces an `I
 .ATTRIBUTE` bonus targeting INT or LOG (checked directly: no offered SR5 quality/power/cyberware/
 bioware item does), so the distinction has no observable effect yet, the same "real rule, currently
 unobservable" note `chummer5.engine.resources`'s own docstring already makes for CHA.
+
+**WP53 — Step Seven's Karma-funded Knowledge/Language rating increases.** Core rulebook p.106-107,
+"KARMA ADVANCEMENT TABLE FOR SKILLS": Knowledge Skills and Language Skills share one row,
+`new Rating x 1` per step (confirmed by WP51's own research pass -- see `spec/rulebooks/learnings
+.md`'s WP51 entry; both `chummer5.engine.skills`' Active-skill/skill-group Karma formulas and this
+one come from the same table). `KarmaKnowledgeSelection` is a separate selection from
+`chummer5.engine.skills.KarmaSkillSelection`, not folded into it -- see that module's own WP53
+docstring paragraph for why (different catalog, different web-layer route). A pick's *name* (not a
+catalog id -- Knowledge/Language skills have none, see this module's own opening paragraph) is what
+`karma_points` keys against, resolved against whatever `character.knowledge_selection` already has
+committed; native language picks (rating fixed at 0, no numeric rating to raise) are never eligible.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from chummer5.data.knowledge import KNOWLEDGE_CATEGORY_NAMES
-from chummer5.engine.character import Character
+from chummer5.engine.character import Character, karma_advancement_cost
 from chummer5.engine.improvements import ImprovementType
 from chummer5.engine.skills import MAX_SKILL_RATING_CREATE
 
 # Core rulebook p. 89: "Characters receive free Knowledge and Language skills points equal to
 # (Intuition rating + Logic rating) x 2."
 FREE_POINTS_PER_INT_LOG = 2
+
+# WP53: core rulebook p.106-107, "KARMA ADVANCEMENT TABLE FOR SKILLS" -- Knowledge/Language Skills
+# row, `new Rating x 1` (see module docstring's own WP53 paragraph).
+KARMA_KNOWLEDGE_PER_RATING = 1
 
 # Core rulebook p. 89-90: one native language is always free; Bilingual raises this by 1 (see
 # module docstring). `ImprovementType.NATIVE_LANGUAGE_LIMIT` resolves the Bilingual-granted part;
@@ -199,3 +215,76 @@ def create_knowledge_selection(
         points_spent=points_spent,
         native_language_limit=limit,
     )
+
+
+@dataclass(frozen=True)
+class KarmaKnowledgeSelection:
+    """Leftover-Karma-funded Knowledge/Language rating increases (Step Seven, WP53) -- see
+    `create_karma_knowledge_selection`'s own docstring for the validation this wraps.
+
+    `points` is keyed by pick *name* (not a catalog id -- see module docstring), resolved against
+    whatever `character.knowledge_selection` already has committed. Always the full resulting
+    state, not an incremental delta -- the same "recompute wholesale" shape
+    `KarmaAttributeSelection`/`KarmaSkillSelection` already established.
+    """
+
+    points: MappingProxyType[str, int]
+    karma_cost: int
+
+
+def create_karma_knowledge_selection(
+    character: Character, karma_points: Mapping[str, int], karma_budget: int
+) -> KarmaKnowledgeSelection:
+    """Validate and build a `KarmaKnowledgeSelection`.
+
+    `karma_points` raises a committed, non-native Knowledge or Language pick's rating (looked up by
+    name against `character.knowledge_selection.knowledge_skills`/`.languages`) at `new Rating x 1`
+    Karma per rating step, cumulative (see module docstring's WP53 paragraph).
+
+    Validates: every key names a committed, non-native Knowledge/Language pick (unambiguously --
+    a name shared between a Knowledge pick and a Language pick, which `create_knowledge_selection`
+    itself never rejects since it checks each list's names for uniqueness separately, is rejected
+    here rather than guessed at); no negative spend; the resulting rating does not exceed
+    `MAX_SKILL_RATING_CREATE`; and the total Karma cost does not exceed `karma_budget` (the
+    caller's responsibility to derive -- typically `character.karma_remaining + <this selection's
+    own currently-committed karma_cost>`, mirroring every other Karma-spending `create_*`
+    function's `karma_budget` parameter).
+    """
+    knowledge_selection = character.knowledge_selection
+
+    def _current_rating(name: str) -> int:
+        if knowledge_selection is None:
+            raise ValueError(f"{name!r} is not a committed knowledge/language skill")
+        matches = [p.rating for p in knowledge_selection.knowledge_skills if p.name == name]
+        matches += [
+            p.rating for p in knowledge_selection.languages if p.name == name and not p.native
+        ]
+        if not matches:
+            raise ValueError(f"{name!r} is not a committed, non-native knowledge/language skill")
+        if len(matches) > 1:
+            raise ValueError(
+                f"{name!r} ambiguously matches more than one committed knowledge/language skill"
+            )
+        return matches[0]
+
+    nonzero_points = MappingProxyType({name: pts for name, pts in karma_points.items() if pts})
+    cost = 0
+    for name, points in nonzero_points.items():
+        if points < 0:
+            raise ValueError(f"{name!r}: Karma-funded points must not be negative, got {points}")
+        start_rating = _current_rating(name)
+        total = start_rating + points
+        if total > MAX_SKILL_RATING_CREATE:
+            raise ValueError(
+                f"{name!r}: {total} exceeds the chargen skill rating maximum of "
+                f"{MAX_SKILL_RATING_CREATE}"
+            )
+        cost += karma_advancement_cost(start_rating, points, KARMA_KNOWLEDGE_PER_RATING)
+
+    if cost > karma_budget:
+        raise ValueError(
+            f"Karma-funded knowledge/language spend {cost} exceeds the Karma budget of "
+            f"{karma_budget}"
+        )
+
+    return KarmaKnowledgeSelection(points=nonzero_points, karma_cost=cost)

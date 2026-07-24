@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from chummer5.data.metatypes import load_metatypes
@@ -11,8 +13,10 @@ from chummer5.engine.character import Character, create_character, metatype_choi
 from chummer5.engine.improvements import ImprovementType
 from chummer5.engine.knowledge import (
     BASE_NATIVE_LANGUAGE_LIMIT,
+    KARMA_KNOWLEDGE_PER_RATING,
     KnowledgeSkillPick,
     LanguageSkillPick,
+    create_karma_knowledge_selection,
     create_knowledge_selection,
     free_knowledge_points,
     native_language_limit,
@@ -188,3 +192,90 @@ def test_max_rating_of_six_is_accepted() -> None:
         character, (KnowledgeSkillPick(name="X", category="Street", rating=6),), ()
     )
     assert selection.points_spent == 6
+
+
+# WP53: Karma-funded Knowledge/Language rating increases.
+
+
+def _character_with_knowledge_selection(
+    knowledge: tuple[KnowledgeSkillPick, ...] = (), languages: tuple[LanguageSkillPick, ...] = ()
+) -> Character:
+    character = _human_with_int_log(3, 2)  # 14-point budget, generous enough for these tests
+    selection = create_knowledge_selection(character, knowledge, languages)
+    return replace(character, knowledge_selection=selection)
+
+
+def test_karma_knowledge_points_raises_a_knowledge_skill_rating() -> None:
+    character = _character_with_knowledge_selection(
+        knowledge=(KnowledgeSkillPick(name="Corporations", category="Street", rating=2),)
+    )
+    selection = create_karma_knowledge_selection(
+        character, {"Corporations": 1}, karma_budget=100
+    )
+    # KARMA ADVANCEMENT TABLE FOR SKILLS, Knowledge Skills row: 2->3 costs new_rating x 1 = 3.
+    assert KARMA_KNOWLEDGE_PER_RATING == 1
+    assert selection.karma_cost == 3
+    assert selection.points["Corporations"] == 1
+
+
+def test_karma_knowledge_points_raises_a_language_skill_rating() -> None:
+    character = _character_with_knowledge_selection(
+        languages=(LanguageSkillPick(name="Japanese", rating=1),)
+    )
+    selection = create_karma_knowledge_selection(character, {"Japanese": 2}, karma_budget=100)
+    # 1->2 (2) + 2->3 (3) = 5.
+    assert selection.karma_cost == 5
+
+
+def test_karma_knowledge_points_rejects_unknown_name() -> None:
+    character = _character_with_knowledge_selection()
+    with pytest.raises(ValueError, match="not a committed"):
+        create_karma_knowledge_selection(character, {"Nope": 1}, karma_budget=100)
+
+
+def test_karma_knowledge_points_rejects_native_language() -> None:
+    character = _character_with_knowledge_selection(
+        languages=(LanguageSkillPick(name="English", rating=0, native=True),)
+    )
+    with pytest.raises(ValueError, match="not a committed, non-native"):
+        create_karma_knowledge_selection(character, {"English": 1}, karma_budget=100)
+
+
+def test_karma_knowledge_points_rejects_negative_spend() -> None:
+    character = _character_with_knowledge_selection(
+        knowledge=(KnowledgeSkillPick(name="Corporations", category="Street", rating=2),)
+    )
+    with pytest.raises(ValueError, match="must not be negative"):
+        create_karma_knowledge_selection(character, {"Corporations": -1}, karma_budget=100)
+
+
+def test_karma_knowledge_points_rejects_rating_above_chargen_max() -> None:
+    character = _character_with_knowledge_selection(
+        knowledge=(
+            KnowledgeSkillPick(
+                name="Corporations", category="Street", rating=MAX_SKILL_RATING_CREATE
+            ),
+        )
+    )
+    with pytest.raises(ValueError, match="exceeds the chargen skill rating maximum"):
+        create_karma_knowledge_selection(character, {"Corporations": 1}, karma_budget=100)
+
+
+def test_karma_knowledge_selection_rejects_over_budget_spend() -> None:
+    character = _character_with_knowledge_selection(
+        knowledge=(KnowledgeSkillPick(name="Corporations", category="Street", rating=2),)
+    )
+    with pytest.raises(ValueError, match="exceeds the Karma budget"):
+        create_karma_knowledge_selection(character, {"Corporations": 1}, karma_budget=0)
+
+
+def test_karma_knowledge_points_rejects_ambiguous_name_shared_with_a_language() -> None:
+    # create_knowledge_selection checks each list's own names for uniqueness separately, so a
+    # Knowledge pick and a Language pick can legally share a name -- Karma spend against that name
+    # must not silently guess which one was meant.
+    character = _character_with_knowledge_selection(
+        knowledge=(KnowledgeSkillPick(name="Sioux", category="Street", rating=2),),
+        languages=(LanguageSkillPick(name="Sioux", rating=1),),
+    )
+    with pytest.raises(ValueError, match="ambiguously matches"):
+        create_karma_knowledge_selection(character, {"Sioux": 1}, karma_budget=100)

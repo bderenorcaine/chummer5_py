@@ -165,6 +165,17 @@ every pre-WP52 save round-trips unchanged. Resolved in `build_character` after `
 both) but before `bound_spirit_selection` (which reads `character.attribute_value("CHA")` --
 one of `PRIMARY_ATTRIBUTES`, so it must see any Karma-funded CHA increase already applied).
 
+**WP53** adds `karma_skill_points`/`karma_group_points`/`karma_specializations` (mirroring
+`skill_points`/`group_points`/`specializations`' own shapes -- see
+`chummer5.engine.skills.KarmaSkillSelection`) and `karma_knowledge_points` (mirroring
+`knowledge_skill_picks`/`language_skill_picks`'s "name is the key, not an id" shape -- see
+`chummer5.engine.knowledge.KarmaKnowledgeSelection`). All four default to `{}` ("predates this
+field"), so every pre-WP53 save round-trips unchanged. Resolved in `build_character` right after
+`karma_attribute_selection` (both Step Seven spends against the same ledger, in the order
+`chummer5.web.app`'s own `submit_attributes`/`submit_skills` already establish -- attributes
+first) and before Bound Spirits, which reads `character.karma_remaining` and must therefore see
+both already-resolved.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -207,6 +218,7 @@ from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.knowledge import (
     KnowledgeSkillPick,
     LanguageSkillPick,
+    create_karma_knowledge_selection,
     create_knowledge_selection,
 )
 from chummer5.engine.lifestyle import create_lifestyle_selection
@@ -230,7 +242,7 @@ from chummer5.engine.resources import (
     create_contact_selection,
     create_resources_selection,
 )
-from chummer5.engine.skills import create_skill_allocation
+from chummer5.engine.skills import create_karma_skill_selection, create_skill_allocation
 from chummer5.engine.spirits import create_bound_spirit_selection
 
 # Bumped only if a future WP changes this format's shape in a way older saves can't be read as.
@@ -338,6 +350,15 @@ class CharacterSave:
     # docstring for why MAG/RES are excluded). Defaults to {} -- "predates this field", the
     # identical shape every other optional selection field defaults to.
     karma_attribute_points: MappingProxyType[str, int] = MappingProxyType({})
+    # WP53: Karma-funded Active skill/skill-group increases and specializations, mirroring
+    # skill_points/group_points/specializations' own shapes. Defaults to {} -- "predates this
+    # field", the identical shape every other optional selection field defaults to.
+    karma_skill_points: MappingProxyType[str, int] = MappingProxyType({})
+    karma_group_points: MappingProxyType[str, int] = MappingProxyType({})
+    karma_specializations: MappingProxyType[str, str] = MappingProxyType({})
+    # WP53: Karma-funded Knowledge/Language rating increases, keyed by pick name (see
+    # chummer5.engine.knowledge.KarmaKnowledgeSelection). Defaults to {} -- "predates this field".
+    karma_knowledge_points: MappingProxyType[str, int] = MappingProxyType({})
 
 
 def create_character_save(
@@ -374,6 +395,10 @@ def create_character_save(
     language_skill_picks: Iterable[LanguageSkillPickTriple] = (),
     specializations: Mapping[str, str] = MappingProxyType({}),
     karma_attribute_points: Mapping[str, int] = MappingProxyType({}),
+    karma_skill_points: Mapping[str, int] = MappingProxyType({}),
+    karma_group_points: Mapping[str, int] = MappingProxyType({}),
+    karma_specializations: Mapping[str, str] = MappingProxyType({}),
+    karma_knowledge_points: Mapping[str, int] = MappingProxyType({}),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -416,6 +441,10 @@ def create_character_save(
         language_skill_picks=tuple(language_skill_picks),
         specializations=MappingProxyType(dict(specializations)),
         karma_attribute_points=MappingProxyType(dict(karma_attribute_points)),
+        karma_skill_points=MappingProxyType(dict(karma_skill_points)),
+        karma_group_points=MappingProxyType(dict(karma_group_points)),
+        karma_specializations=MappingProxyType(dict(karma_specializations)),
+        karma_knowledge_points=MappingProxyType(dict(karma_knowledge_points)),
     )
 
 
@@ -476,6 +505,10 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         ],
         "specializations": dict(save.specializations),
         "karma_attribute_points": dict(save.karma_attribute_points),
+        "karma_skill_points": dict(save.karma_skill_points),
+        "karma_group_points": dict(save.karma_group_points),
+        "karma_specializations": dict(save.karma_specializations),
+        "karma_knowledge_points": dict(save.karma_knowledge_points),
     }
 
 
@@ -539,6 +572,10 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         ),
         specializations=data.get("specializations", {}),
         karma_attribute_points=data.get("karma_attribute_points", {}),
+        karma_skill_points=data.get("karma_skill_points", {}),
+        karma_group_points=data.get("karma_group_points", {}),
+        karma_specializations=data.get("karma_specializations", {}),
+        karma_knowledge_points=data.get("karma_knowledge_points", {}),
     )
 
 
@@ -602,6 +639,11 @@ def build_character(
     evaluation order, see `chummer5.engine.foci`'s own module docstring), so its Karma budget
     accounts for Bound Spirits' already-resolved `karma_cost` and its nuyen budget accounts for
     gear/Lifestyle/cyberware/bioware's already-resolved spend.
+
+    **WP53**: `save.karma_skill_points`/`karma_group_points`/`karma_specializations`/`karma_
+    knowledge_points` are resolved right after `karma_attribute_selection` (both are Step Seven
+    spends against the identical Karma ledger) and before Bound Spirits -- see the inline comment
+    at that call site for the exact evaluation-order reasoning.
     """
     heritage = priorities.heritage[save.heritage_letter]
     choice = next(
@@ -809,6 +851,26 @@ def build_character(
         character, save.karma_attribute_points, character.karma_remaining
     )
     character = replace(character, karma_attribute_selection=karma_attribute_selection)
+
+    # WP53: resolved next, right after karma_attribute_selection -- character.karma_remaining now
+    # also reflects that selection's own cost, exactly the "add the next Step Seven spend's own
+    # section, then re-derive the budget for the one after it" evaluation order this function
+    # already established for WP52. skill_allocation/knowledge_selection are both already attached
+    # (the replace() above), which is all create_karma_skill_selection/create_karma_knowledge_
+    # selection need to resolve their own starting ratings from.
+    karma_skill_selection = create_karma_skill_selection(
+        character,
+        skills,
+        save.karma_skill_points,
+        save.karma_group_points,
+        save.karma_specializations,
+        character.karma_remaining,
+    )
+    character = replace(character, karma_skill_selection=karma_skill_selection)
+    karma_knowledge_selection = create_karma_knowledge_selection(
+        character, save.karma_knowledge_points, character.karma_remaining
+    )
+    character = replace(character, karma_knowledge_selection=karma_knowledge_selection)
 
     # WP46: resolved next, against the now-fully-populated `character` -- create_bound_spirit_
     # selection reads character.attribute_value("CHA")/("MAG"), both of which depend on the

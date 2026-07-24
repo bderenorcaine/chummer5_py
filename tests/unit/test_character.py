@@ -26,8 +26,10 @@ from chummer5.engine.improvements import (
     ImprovementSource,
     ImprovementType,
 )
+from chummer5.engine.knowledge import KarmaKnowledgeSelection
 from chummer5.engine.qualities import QualitySelection
 from chummer5.engine.resources import ContactSelection
+from chummer5.engine.skills import KarmaSkillSelection
 from chummer5.engine.spirits import BoundSpiritSelection
 
 METATYPES = load_metatypes()
@@ -611,3 +613,32 @@ def test_karma_attribute_selection_is_a_frozen_dataclass_with_the_expected_field
     assert selection.karma_cost == 45
     with pytest.raises(AttributeError):
         selection.karma_cost = 0  # type: ignore[misc]
+
+
+# -- karma_skill_selection / karma_knowledge_selection (WP53) -----------------------------------
+
+
+def test_karma_skill_selection_field_defaults_to_none() -> None:
+    assert _base_character().karma_skill_selection is None
+
+
+def test_karma_knowledge_selection_field_defaults_to_none() -> None:
+    assert _base_character().karma_knowledge_selection is None
+
+
+def test_karma_spent_sums_karma_skill_and_knowledge_selections() -> None:
+    character = replace(
+        _base_character(),
+        karma_skill_selection=KarmaSkillSelection(
+            skill_points=MappingProxyType({}),
+            group_points=MappingProxyType({}),
+            specializations=MappingProxyType({}),
+            broken_groups=frozenset(),
+            karma_cost=14,
+        ),
+        karma_knowledge_selection=KarmaKnowledgeSelection(
+            points=MappingProxyType({}), karma_cost=3
+        ),
+    )
+    assert character.karma_spent == 14 + 3
+    assert character.karma_remaining == STARTING_KARMA - 17

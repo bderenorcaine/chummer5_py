@@ -46,12 +46,12 @@ if TYPE_CHECKING:
     from chummer5.engine.bioware import BiowareSelection
     from chummer5.engine.cyberware import CyberwareSelection
     from chummer5.engine.foci import FociSelection
-    from chummer5.engine.knowledge import KnowledgeSelection
+    from chummer5.engine.knowledge import KarmaKnowledgeSelection, KnowledgeSelection
     from chummer5.engine.lifestyle import LifestyleSelection
     from chummer5.engine.magic import PowerSelection, SpellSelection
     from chummer5.engine.qualities import QualitySelection
     from chummer5.engine.resources import ContactSelection, ResourcesSelection
-    from chummer5.engine.skills import SkillAllocation
+    from chummer5.engine.skills import KarmaSkillSelection, SkillAllocation
     from chummer5.engine.spirits import BoundSpiritSelection
 
 # MVP content-scope filter (see Project Overview's "Core rulebook only" note and WP2's worklog):
@@ -318,6 +318,19 @@ class Character:
     `attribute_points`, and `karma_spent` gains a matching `karma_attribute_selection.karma_cost`
     term -- see `create_karma_attribute_points`'s own docstring for the validation (cost formula,
     metatype-maximum check, and the "only one Mental/Physical attribute at natural maximum" rule).
+
+    **WP53** adds `karma_skill_selection: KarmaSkillSelection | None` and `karma_knowledge_
+    selection: KarmaKnowledgeSelection | None` -- leftover-Karma-funded Active skill/skill-group/
+    specialization spend and Knowledge/Language rating spend respectively, the identical
+    "`None` until committed" wrapping-selection shape as `karma_attribute_selection` (each wraps its
+    own resolved `karma_cost`). Two separate fields, not one -- see `chummer5.engine.skills`'
+    module docstring's own WP53 paragraph for why (different catalogs, different web-layer routes).
+    Neither is read by `attribute_value`; `chummer5.engine.skills.skill_rating`/`dice_pool` read
+    `karma_skill_selection` directly off `character` (mirroring how `skill_rating` already reads
+    `character.improvements` directly rather than taking it as a parameter), and nothing in this
+    engine computes a Knowledge/Language "dice pool" for `karma_knowledge_selection` to feed --
+    it's a pure roster-rating increase, the same reason `KnowledgeSelection` itself isn't read
+    piecemeal by any formula. `karma_spent` gains matching terms for both.
     """
 
     metatype: Metatype
@@ -348,6 +361,10 @@ class Character:
     knowledge_selection: KnowledgeSelection | None = None  # Knowledge/Language skills (WP49)
     # Leftover-Karma-funded attribute increases beyond the priority budget (Step Seven, WP52).
     karma_attribute_selection: KarmaAttributeSelection | None = None
+    # Leftover-Karma-funded Active skill/skill-group/specialization spend (Step Seven, WP53).
+    karma_skill_selection: KarmaSkillSelection | None = None
+    # Leftover-Karma-funded Knowledge/Language skill rating spend (Step Seven, WP53).
+    karma_knowledge_selection: KarmaKnowledgeSelection | None = None
 
     @property
     def karma_spent(self) -> int:
@@ -368,6 +385,16 @@ class Character:
             + (
                 self.karma_attribute_selection.karma_cost
                 if self.karma_attribute_selection is not None
+                else 0
+            )
+            + (
+                self.karma_skill_selection.karma_cost
+                if self.karma_skill_selection is not None
+                else 0
+            )
+            + (
+                self.karma_knowledge_selection.karma_cost
+                if self.karma_knowledge_selection is not None
                 else 0
             )
         )

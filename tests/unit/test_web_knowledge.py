@@ -200,3 +200,83 @@ def test_reconfirming_a_lower_attributes_budget_flags_the_existing_knowledge_spe
     assert "No longer fits since attributes were last confirmed" in response.text
     # The committed selection itself survives (still shown, not discarded).
     assert 'value="Corporations"' in response.text
+
+
+# WP53: Karma-funded Knowledge/Language rating increases.
+
+
+def test_submitting_karma_knowledge_points_matches_engine_output() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)  # 4-point free budget
+
+    response = client.post(
+        "/ui/knowledge",
+        data={
+            "knowledge_name_0": "Corporations",
+            "knowledge_category_0": "Street",
+            "knowledge_rating_0": "2",
+            "knowledge_karma_0": "1",
+        },
+    )
+
+    assert response.status_code == 200
+    # 2->3 costs new_rating x 1 = 3 Karma.
+    assert "Karma remaining for knowledge/language: 22 / 25" in response.text
+
+
+def test_submitting_karma_language_points_matches_engine_output() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/ui/knowledge",
+        data={
+            "language_name_0": "Japanese",
+            "language_rating_0": "1",
+            "language_karma_0": "2",
+        },
+    )
+
+    assert response.status_code == 200
+    # 1->2 (2) + 2->3 (3) = 5 Karma.
+    assert "Karma remaining for knowledge/language: 20 / 25" in response.text
+
+
+def test_submitting_karma_knowledge_points_above_the_chargen_rating_cap_is_rejected() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    # Raise the free-point budget enough to legally spend 5 points on one pick (4-point floor is
+    # too small on its own).
+    client.post("/ui/attributes", data={"attr_INT": "1"})
+
+    response = client.post(
+        "/ui/knowledge",
+        data={
+            "knowledge_name_0": "Corporations",
+            "knowledge_category_0": "Street",
+            "knowledge_rating_0": "5",
+            "knowledge_karma_0": "2",  # 5 + 2 = 7, over the chargen cap of 6
+        },
+    )
+
+    assert response.status_code == 200
+    assert "exceeds the chargen skill rating maximum" in response.text
+
+
+def test_character_sheet_shows_karma_boosted_knowledge_rating() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post(
+        "/ui/knowledge",
+        data={
+            "knowledge_name_0": "Corporations",
+            "knowledge_category_0": "Street",
+            "knowledge_rating_0": "2",
+            "knowledge_karma_0": "1",
+        },
+    )
+
+    response = client.get("/character/sheet")
+
+    assert response.status_code == 200
+    assert "Knowledge/language karma cost: 3." in response.text
