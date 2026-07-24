@@ -69,6 +69,70 @@ def test_quality_with_no_bonus_element_is_not_yet_supported() -> None:
     assert gremlins.raw_bonus is None
 
 
+def test_select_text_quality_is_classified_correctly() -> None:
+    # Hand-checked: SINner (National)'s <bonus> is a bare <selecttext/>, no other children.
+    qualities = load_qualities()
+    sinner_national = next(q for q in qualities if q.name == "SINner (National)")
+    assert sinner_national.bonus_support == BonusSupport.SELECT_TEXT
+    assert sinner_national.flat_bonuses == ()
+    assert sinner_national.karma == -5
+
+
+def test_select_text_quality_with_a_notoriety_sibling_is_still_select_text() -> None:
+    # SINner (Criminal)'s <bonus> carries both <notoriety>1</notoriety> and <selecttext/> -- the
+    # Notoriety side is unmodeled (Project Overview's "Unmodeled real effects" table), not a second
+    # thing this classifier needs to recognize structurally; name-gating (like NO_EFFECT) sidesteps
+    # needing to parse <notoriety> at all.
+    qualities = load_qualities()
+    sinner_criminal = next(q for q in qualities if q.name == "SINner (Criminal)")
+    assert sinner_criminal.bonus_support == BonusSupport.SELECT_TEXT
+    assert sinner_criminal.flat_bonuses == ()
+
+
+def test_sinner_variants_forbid_each_other() -> None:
+    # Hand-checked: qualities.xml's <forbidden><oneof> block for each of the 4 SINner variants
+    # names the other 3.
+    qualities = load_qualities()
+    by_name = {q.name for q in qualities}
+    for name in (
+        "SINner (National)",
+        "SINner (Corporate Limited)",
+        "SINner (Criminal)",
+        "SINner (Corporate)",
+    ):
+        quality = next(q for q in qualities if q.name == name)
+        assert set(quality.forbidden_names) == {
+            n
+            for n in (
+                "SINner (National)",
+                "SINner (Corporate Limited)",
+                "SINner (Criminal)",
+                "SINner (Corporate)",
+            )
+            if n != name
+        }
+    assert {"SINner (National)", "SINner (Corporate Limited)", "SINner (Criminal)"} <= by_name
+
+
+def test_natural_immunity_forbids_weak_immune_system() -> None:
+    # Hand-checked: both Natural Immunity variants forbid Weak Immune System (itself NOT_YET_
+    # SUPPORTED -- not offered by mvp_quality_catalog -- so this exclusion is unreachable via the
+    # offered catalog today; still parsed correctly, per WP55's "implement it correctly even though
+    # it currently can't fire" instruction).
+    qualities = load_qualities()
+    for name in ("Natural Immunity (Natural)", "Natural Immunity (Synthetic)"):
+        quality = next(q for q in qualities if q.name == name)
+        assert quality.forbidden_names == ("Weak Immune System",)
+    weak_immune_system = next(q for q in qualities if q.name == "Weak Immune System")
+    assert weak_immune_system.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+
+
+def test_quality_with_no_forbidden_block_has_empty_forbidden_names() -> None:
+    qualities = load_qualities()
+    catlike = next(q for q in qualities if q.name == "Catlike")
+    assert catlike.forbidden_names == ()
+
+
 def test_supported_vs_unsupported_counts_are_visible() -> None:
     # WP22 widens FLAT_BONUS from 3 (Catlike, Double-Jointed, Natural Athlete) to 6 by adding
     # the Indomitable trio (Mental/Physical/Social), and introduces NO_EFFECT for 8
@@ -76,14 +140,17 @@ def test_supported_vs_unsupported_counts_are_visible() -> None:
     # Low-Light Vision, Thermographic Vision, Simsense Vertigo, Unsteady Hands). WP49 adds a 7th
     # FLAT_BONUS: Bilingual's own <nativelanguagelimit> (see spec/rulebooks/learnings.md's WP49
     # entry -- Bilingual was NOT_YET_SUPPORTED before this WP, despite the Implementation Plan's own
-    # WP49 entry assuming it was already offered). The rest (select-a-target choices, category-wide/
-    # conditional bonuses, notoriety shifts, multi-effect bonuses, attribute max/min changes, etc.)
-    # are NOT_YET_SUPPORTED: 96 - 7 - 8 = 81.
+    # WP49 entry assuming it was already offered). WP55 introduces SELECT_TEXT for 9 individually
+    # verified qualities (SINner x4, Code of Honor, Codeblock, Social Stress, Natural Immunity x2).
+    # The rest (select-a-target choices with a real computed effect, category-wide/conditional
+    # bonuses, notoriety shifts, multi-effect bonuses, attribute max/min changes, etc.) are
+    # NOT_YET_SUPPORTED: 96 - 7 - 8 - 9 = 72.
     qualities = load_qualities()
     counts = count_by_support(qualities)
     assert counts[BonusSupport.FLAT_BONUS] == 7
     assert counts[BonusSupport.NO_EFFECT] == 8
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 81
+    assert counts[BonusSupport.SELECT_TEXT] == 9
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 72
 
 
 def test_indomitable_mental_limit_bonus_is_supported() -> None:

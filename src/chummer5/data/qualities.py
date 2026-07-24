@@ -20,12 +20,28 @@ values:
   different kind of engine support (a metatype-gate check, a mutual-exclusion check) that WP22
   didn't build, not because their bonus is unverified. See `spec/worklogs/WP22.md` and
   `spec/rulebooks/learnings.md`'s WP22 entry for the full per-quality research.
+- `SELECT_TEXT` (WP55) — a quality whose only unrecognized `<bonus>` content is a `<selecttext>`
+  node (a free-text detail the player fills in, e.g. which SIN, which protected group, which
+  disease) plus, for one quality (SINner (Criminal)), an accompanying `<notoriety>` this project's
+  never modeled (documented, not applied — see Project Overview's "Unmodeled real effects" table).
+  Name-gated (`_VERIFIED_SELECT_TEXT_NAMES`), the identical pattern `NO_EFFECT` already
+  established — see `spec/worklogs/WP55.md` and `spec/rulebooks/learnings.md`'s WP55 entry for the
+  full per-quality research into why each of these 9 has no *other* unmodeled computed effect.
 - `NOT_YET_SUPPORTED` — everything else.
 
 WP8 offers only `FLAT_BONUS` qualities to the player; WP22 widens that to `FLAT_BONUS` and
-`NO_EFFECT` (see `chummer5.engine.qualities.mvp_quality_catalog`). `NOT_YET_SUPPORTED` qualities
-are excluded from the offered list rather than silently applied with their bonus dropped. See
-`spec/worklogs/WP3.md`.
+`NO_EFFECT`; WP55 widens it again to include `SELECT_TEXT` (see
+`chummer5.engine.qualities.mvp_quality_catalog`). `NOT_YET_SUPPORTED` qualities are excluded from
+the offered list rather than silently applied with their bonus dropped. See `spec/worklogs/WP3.md`.
+
+**`Quality.forbidden_names` (WP55)** is a general parse of `<forbidden><oneof><quality>...` —
+every SR5 quality's mutual-exclusion list, not just the 9 this WP offers (e.g. SINner's 4-way
+mutual exclusion, Natural Immunity vs. the not-yet-offered Weak Immune System). Parsed uniformly
+since it costs nothing extra (the shape is a plain list of sibling `<quality>` name tags in every
+one of the 31 SR5 qualities that carry a `<forbidden>` block at all — confirmed no other shape
+exists), so a future WP offering e.g. Insomnia (Basic)/(Full) or Distinctive Style/Blandness (WP22's
+own "deliberately deferred" pair) gets mutual-exclusion enforcement for free rather than needing to
+extend this parser too.
 """
 
 from __future__ import annotations
@@ -94,12 +110,34 @@ _VERIFIED_NO_EFFECT_NAMES = frozenset(
     }
 )
 
+# WP55: 9 SR5 qualities individually verified (rulebook text via `pdftotext -layout`, cross-checked
+# against qualities.xml) to have no computed effect this engine's scope reaches beyond the free-text
+# detail itself -- see spec/rulebooks/learnings.md's WP55 entry for the full per-quality citation.
+# SINner (Criminal)'s own <bonus> also carries a <notoriety>1</notoriety> sibling to <selecttext> --
+# the wholly unmodeled Notoriety/reputation system this project shares with 18 other SR5 qualities
+# (Project Overview's "Unmodeled real effects" table), not a second thing this classifier needs to
+# recognize structurally.
+_VERIFIED_SELECT_TEXT_NAMES = frozenset(
+    {
+        "SINner (National)",
+        "SINner (Corporate Limited)",
+        "SINner (Criminal)",
+        "SINner (Corporate)",
+        "Code of Honor",
+        "Codeblock",
+        "Social Stress",
+        "Natural Immunity (Natural)",
+        "Natural Immunity (Synthetic)",
+    }
+)
+
 
 class BonusSupport(Enum):
-    """Whether/how a quality's `<bonus>` node was parsed. See module docstring for the 3 values."""
+    """Whether/how a quality's `<bonus>` node was parsed. See module docstring for the 4 values."""
 
     FLAT_BONUS = "flat_bonus"
     NO_EFFECT = "no_effect"
+    SELECT_TEXT = "select_text"
     NOT_YET_SUPPORTED = "not_yet_supported"
 
 
@@ -130,6 +168,10 @@ class Quality:
     bonus_support: BonusSupport
     flat_bonuses: tuple[FlatBonus, ...]  # populated only when bonus_support is FLAT_BONUS
     raw_bonus: str | None  # serialized <bonus> element, kept for future parser work; None if absent
+    # WP55: other quality *names* this one may never be taken alongside (parsed from
+    # <forbidden><oneof><quality>...) -- () if the quality carries no <forbidden> block at all. See
+    # module docstring for why this is parsed generally, not just for this WP's own 9 qualities.
+    forbidden_names: tuple[str, ...] = ()
 
 
 def _is_flat_skill_bonus(elem: ET.Element) -> bool:
@@ -153,6 +195,8 @@ def _classify_bonus(
     """
     if name in _VERIFIED_NO_EFFECT_NAMES:
         return BonusSupport.NO_EFFECT, ()
+    if name in _VERIFIED_SELECT_TEXT_NAMES:
+        return BonusSupport.SELECT_TEXT, ()
     if bonus_elem is None or len(bonus_elem) == 0:
         return BonusSupport.NOT_YET_SUPPORTED, ()
 
@@ -187,6 +231,20 @@ def _classify_bonus(
     return BonusSupport.FLAT_BONUS, tuple(flat_bonuses)
 
 
+def _parse_forbidden_names(elem: ET.Element) -> tuple[str, ...]:
+    """Parse `<forbidden><oneof><quality>...` -- the only shape found among all SR5 qualities'
+    `<forbidden>` blocks (verified: every one is a single `<oneof>` wrapping only `<quality>`
+    children). Returns `()` if the quality carries no `<forbidden>` block at all.
+    """
+    forbidden_elem = elem.find("forbidden")
+    if forbidden_elem is None:
+        return ()
+    oneof_elem = forbidden_elem.find("oneof")
+    if oneof_elem is None:
+        return ()
+    return tuple(q.text for q in oneof_elem.findall("quality") if q.text)
+
+
 def _parse_quality(elem: ET.Element) -> Quality:
     bonus_elem = elem.find("bonus")
     support, flat_bonuses = _classify_bonus(elem.findtext("name", ""), bonus_elem)
@@ -204,6 +262,7 @@ def _parse_quality(elem: ET.Element) -> Quality:
         bonus_support=support,
         flat_bonuses=flat_bonuses,
         raw_bonus=raw_bonus,
+        forbidden_names=_parse_forbidden_names(elem),
     )
 
 

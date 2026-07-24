@@ -167,15 +167,15 @@ Implementation Plan for the first WP built under the new policy.
 | Simsense Vertigo | Quality (Negative) | Karma credit only | -2 dice pool to all AR/VR/simsense tests (p. 83) — no Matrix/AR test system exists | WP22 |
 | Unsteady Hands | Quality (Negative) | Karma credit only | -2 dice pool for Agility-based tests, re-triggerable via an Agility+Body(4) test after a stressful encounter (p. 87) — no in-play test-resolution system exists | WP22 |
 | Resistance to Pathogens/Toxins | Quality (Positive); metatype-granted only (Dwarf), not player-purchasable | Free grant only | +1 dice pool to Resistance Tests vs. pathogens/toxins, or both at the 8-Karma level (p. 79) — no toxin/pathogen resistance subsystem exists (the same bucket Allergy's 8 SR5 variants are already excluded for) | WP23 |
-
-*(Once WP55 ships, this table gains 9 more rows: SINner ×4 (all four carry unmodeled
-background-check/arrest consequences, p. 84-85; SINner (Criminal) additionally carries an
-unmodeled Notoriety point), Code of Honor (p. 79, in-play Karma-loss/Public-Awareness
-consequences), Codeblock (p. 80, a -2 dice pool modifier on a chosen Matrix action), Social Stress
-(p. 85, a glitch-threshold shift on Leadership/Etiquette tests), and Natural Immunity
-(Natural)/(Synthetic) (p. 76, full immunity to one chosen disease or toxin). WP55's own worklog is
-responsible for adding them here, not this sentence — remove this parenthetical once that WP
-lands.)*
+| SINner (National) | Quality (Negative) | Karma credit + chosen SIN detail (free text) | Background-check/arrest consequences described across a full page (p. 84) — no background-check/arrest-risk subsystem exists | WP55 |
+| SINner (Corporate Limited) | Quality (Negative) | Karma credit + chosen SIN detail (free text) | Same background-check/arrest consequences as National, p. 84 | WP55 |
+| SINner (Criminal) | Quality (Negative) | Karma credit + chosen SIN detail (free text) | Same background-check/arrest consequences (p. 84-85), plus an unmodeled Notoriety point (`<notoriety>1</notoriety>`) — no Notoriety/reputation subsystem exists | WP55 |
+| SINner (Corporate) | Quality (Negative) | Karma credit + chosen SIN detail (free text) | Same background-check/arrest consequences, p. 85 — the single largest-magnitude Negative quality in the SR5 core catalog | WP55 |
+| Code of Honor | Quality (Negative) | Karma credit + chosen protected-group detail (free text) | In-play Karma-loss/Public-Awareness consequences for violating the code (p. 79) — no in-play consequence-tracking subsystem exists | WP55 |
+| Codeblock | Quality (Negative) | Karma credit + chosen Matrix-action detail (free text) | -2 dice pool modifier on the chosen Matrix action (p. 80) — no Matrix rules exist | WP55 |
+| Social Stress | Quality (Negative) | Karma credit + chosen cause/trigger detail (free text) | Reduces the number of 1s required to glitch a Leadership/Etiquette test by 1 (p. 85) — no test-resolution/glitch system exists | WP55 |
+| Natural Immunity (Natural) | Quality (Positive) | Karma cost + chosen disease/toxin detail (free text) | Full immunity to one chosen disease or toxin (p. 76) — no toxin/pathogen resistance subsystem exists (the same bucket Allergy's 8 SR5 variants are already in) | WP55 |
+| Natural Immunity (Synthetic) | Quality (Positive) | Karma cost + chosen disease/toxin detail (free text) | Same as Natural, at the higher (synthetic) tier, p. 76 | WP55 |
 
 ## Architecture & major design decisions
 
@@ -590,3 +590,32 @@ would mean reopening WP22's own SINner exclusion, out of scope for a Phase O att
 `chummer5.io.legacy_import`'s own WP52 docstring paragraph and `spec/worklogs/WP52.md` for the full
 arithmetic and the tests that pin down the corrected (still-blocked, but for a new and different
 reason) behavior.
+
+### 2026-07-24 — WP55 closes the SINner gap WP52 found, generalizes quality mutual-exclusion
+parsing, and reaffirms the "significance" judgment call framing this WP itself retires
+
+Built the free-text ("`<selecttext>`") quality-selection mechanism WP22 flagged as missing, and used
+it to offer the 9 qualities WP22's own research had already fully characterized as needing only that
+mechanism (SINner ×4, Code of Honor, Codeblock, Social Stress, Natural Immunity ×2) — see this
+section's own table above for what's modeled vs. not per quality. Two findings worth recording:
+
+**`Wesson.chum5` finally reaches a full end-to-end `import_chum5()` round-trip** — the first WP to
+get there, after WP28 (blocked on Talent/tradition scope) and WP52 (blocked on this exact SINner
+gap) both fell short. His real `SINner (Corporate Limited)` pick's `<extra>` ("Lone Star Security
+Services") resolves directly into `QualitySelection.quality_text` via the same field
+`LegacyPower.extra` already threads through for select-attribute Adept powers — no new legacy-import
+parsing was needed beyond reading a field this project already had.
+
+**`Quality.forbidden_names` (parsed from `<forbidden><oneof><quality>`) was built generally, for
+every SR5 quality, not just this WP's own 9** — it costs nothing extra (a uniform, single-shape
+parse confirmed across all 31 SR5 qualities carrying a `<forbidden>` block), so WP22's two
+"deliberately deferred" mutually-exclusive pairs (Insomnia (Basic)/(Full); Distinctive Style/
+Blandness) get correct exclusion enforcement for free whenever a future WP offers either — no new
+work needed on `create_quality_selection`'s side when that happens.
+
+This WP also finishes the retroactive reversal this section's own policy note above (settled the
+same day) started: WP22's original "significance" judgment call — excluding SINner/Code of Honor/
+Codeblock/Social Stress/Natural Immunity specifically, rather than offering them with a documented
+gap — no longer reflects this project's policy. All 9 are now offered in full, karma charged/
+credited correctly, with every unmodeled consequence recorded in the table above rather than used as
+a reason to withhold the quality.

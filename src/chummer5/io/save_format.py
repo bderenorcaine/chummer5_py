@@ -176,6 +176,13 @@ field"), so every pre-WP53 save round-trips unchanged. Resolved in `build_charac
 first) and before Bound Spirits, which reads `character.karma_remaining` and must therefore see
 both already-resolved.
 
+**WP55** adds `quality_text` -- `{quality_id: free_text}` for exactly the selected `BonusSupport
+.SELECT_TEXT` qualities (e.g. SINner's chosen SIN, Code of Honor's protected group). Defaults to
+`{}` ("predates this field"), so every pre-WP55 save round-trips unchanged. Threaded straight into
+`create_quality_selection`'s new `quality_text` parameter alongside `save.quality_ids` -- no
+separate resolution step is needed, since `create_quality_selection` itself validates that every
+selected `SELECT_TEXT` quality has a non-blank entry and that no entry is orphaned.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -359,6 +366,11 @@ class CharacterSave:
     # WP53: Karma-funded Knowledge/Language rating increases, keyed by pick name (see
     # chummer5.engine.knowledge.KarmaKnowledgeSelection). Defaults to {} -- "predates this field".
     karma_knowledge_points: MappingProxyType[str, int] = MappingProxyType({})
+    # WP55: quality id -> free-text detail, for exactly the SELECT_TEXT qualities among quality_ids
+    # (e.g. which SIN, which protected group -- see chummer5.engine.qualities.QualitySelection
+    # .quality_text). Defaults to {} -- "predates this field", the identical shape every other
+    # optional selection field defaults to.
+    quality_text: MappingProxyType[str, str] = MappingProxyType({})
 
 
 def create_character_save(
@@ -399,6 +411,7 @@ def create_character_save(
     karma_group_points: Mapping[str, int] = MappingProxyType({}),
     karma_specializations: Mapping[str, str] = MappingProxyType({}),
     karma_knowledge_points: Mapping[str, int] = MappingProxyType({}),
+    quality_text: Mapping[str, str] = MappingProxyType({}),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -445,6 +458,7 @@ def create_character_save(
         karma_group_points=MappingProxyType(dict(karma_group_points)),
         karma_specializations=MappingProxyType(dict(karma_specializations)),
         karma_knowledge_points=MappingProxyType(dict(karma_knowledge_points)),
+        quality_text=MappingProxyType(dict(quality_text)),
     )
 
 
@@ -509,6 +523,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "karma_group_points": dict(save.karma_group_points),
         "karma_specializations": dict(save.karma_specializations),
         "karma_knowledge_points": dict(save.karma_knowledge_points),
+        "quality_text": dict(save.quality_text),
     }
 
 
@@ -576,6 +591,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         karma_group_points=data.get("karma_group_points", {}),
         karma_specializations=data.get("karma_specializations", {}),
         karma_knowledge_points=data.get("karma_knowledge_points", {}),
+        quality_text=data.get("quality_text", {}),
     )
 
 
@@ -694,6 +710,7 @@ def build_character(
         mentor_catalog=mentors,
         mentor_spirit_archetype_id=save.mentor_spirit_archetype_id,
         mentor_spirit_general_choice_id=save.mentor_spirit_general_choice_id,
+        quality_text=save.quality_text,
     )
     apply_quality_improvements(character, quality_selection.qualities)
     if quality_selection.mentor_spirit is not None:

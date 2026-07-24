@@ -22,7 +22,7 @@
     hx-post="/ui/qualities"
     hx-target="#quality-selection"
     hx-swap="outerHTML"
-    hx-trigger="change"
+    hx-trigger="change, input delay:400ms"
   >
     <table>
       <thead>
@@ -31,6 +31,7 @@
           <th>Quality</th>
           <th>Category</th>
           <th>Karma</th>
+          <th>Detail</th>
         </tr>
       </thead>
       <tbody>
@@ -47,6 +48,16 @@
           <td>{{ row.quality.name }}</td>
           <td>{{ row.quality.category }}</td>
           <td>{{ row.quality.karma }}</td>
+          <td>
+            {% if row.needs_text %}
+            <input
+              type="text"
+              name="quality_text_{{ row.quality.id }}"
+              value="{{ row.text_value }}"
+              placeholder="required detail (e.g. which SIN)"
+            />
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

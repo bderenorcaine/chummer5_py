@@ -221,6 +221,17 @@ surfaces unchanged" rule below, rather than an itemized `UnsupportedLegacyCharac
 `tests/integration/test_magic_fixtures.py`'s WP52 test for the exact assertion, and this WP's own
 worklog for why fixing SINner's exclusion is out of this WP's scope.
 
+**WP55 resolves the SINner gap above -- `Wesson.chum5` now reaches a full end-to-end import.**
+SINner (Corporate Limited) and 8 other previously-`NOT_YET_SUPPORTED` qualities are now
+`BonusSupport.SELECT_TEXT` and offered (see `chummer5.data.qualities`'s module docstring), so the
+quality-resolution loop above picks them up like any other offered quality -- the only new step is
+resolving each one's own `<extra>` (the same free-text field `LegacyPower.extra` already threads
+through for select-attribute powers) into the `quality_text` dict `create_character_save` now takes.
+No itemized check was added for a SELECT_TEXT quality with a blank `<extra>` (none of the curated
+corpus's real instances have one) -- if one ever did, `build_character`'s own `create_quality_
+selection` call would reject it with a plain `ValueError`, the same "any create_* rejection surfaces
+unchanged" fallback this module already relies on elsewhere (see the paragraph below).
+
 **Import validates by actually building, not just by shape.** `import_chum5`/
 `import_legacy_character` call straight into WP11's `build_character()` before returning, so
 "successfully imports" means "this `CharacterSave` reconstructs into a real `Character` (carrying
@@ -243,7 +254,7 @@ from chummer5.data.lifestyle import STARTING_TIER_NAMES, LifestyleTier
 from chummer5.data.metatypes import Metatype
 from chummer5.data.powers import Power
 from chummer5.data.priorities import PriorityTable
-from chummer5.data.qualities import Quality
+from chummer5.data.qualities import BonusSupport, Quality
 from chummer5.data.skills import Skill
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
@@ -570,16 +581,23 @@ def import_legacy_character(
     offered_qualities = {q.id: q for q in mvp_quality_catalog(qualities)}
     quality_ids: list[str] = []
     dropped_qualities: list[str] = []
+    quality_text: dict[str, str] = {}
     for legacy_quality in legacy.qualities:
         if (
             legacy_quality.quality_source == "Metatype"
             and legacy_quality.name in metatype_quality_names
         ):
             continue
-        if legacy_quality.id in offered_qualities:
-            quality_ids.append(legacy_quality.id)
-        else:
+        offered = offered_qualities.get(legacy_quality.id)
+        if offered is None:
             dropped_qualities.append(legacy_quality.name)
+            continue
+        quality_ids.append(legacy_quality.id)
+        # WP55: a SELECT_TEXT quality's own <extra> is exactly the free-text detail
+        # create_quality_selection now requires -- the same field LegacyPower.extra already
+        # threads through for select-attribute powers (see chummer5.io.legacy_chum5's docstring).
+        if offered.bonus_support == BonusSupport.SELECT_TEXT:
+            quality_text[legacy_quality.id] = legacy_quality.extra
 
     contacts = tuple(
         Contact(name=c.name, connection=c.connection, loyalty=c.loyalty, free=c.free)
@@ -683,6 +701,7 @@ def import_legacy_character(
         group_points=bought_groups,
         specializations=specializations,
         quality_ids=quality_ids,
+        quality_text=quality_text,
         contacts=contacts,
         resources_letter=priority_letter(legacy.priorities.resources),
         # No general gear-catalog import -- WP9's STARTER_GEAR_CATALOG is a deliberately minimal

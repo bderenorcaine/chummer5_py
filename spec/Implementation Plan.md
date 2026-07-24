@@ -1758,7 +1758,7 @@ isn't being computed, not just discover it by reading this document.
   Karma-funded extra spells specifically (both Miko/Wesson's own spell counts match their free grants
   exactly, per WP26's own acceptance notes) — hand-verified, documented as such.
 
-- [ ] **WP55 — SINner and the other selecttext-blocked-but-policy-eligible qualities (free-text
+- [x] **WP55 — SINner and the other selecttext-blocked-but-policy-eligible qualities (free-text
   quality-selection mechanism, 9 qualities offered).**
   Goal: offer SINner — surfaced as a real, concrete gap by WP52's own research, not a speculative
   addition: `Wesson.chum5`'s real `SINner (Corporate Limited)` pick is exactly what makes his real

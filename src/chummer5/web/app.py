@@ -178,7 +178,7 @@ from chummer5.data.mentors import MentorSpiritArchetype, load_mentors
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import Power, load_powers
 from chummer5.data.priorities import load_priorities
-from chummer5.data.qualities import load_qualities
+from chummer5.data.qualities import BonusSupport, load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
@@ -1485,7 +1485,11 @@ def _strip_mentor_spirit_selection(
         q.id for q in quality_selection.qualities if q.name != MENTOR_SPIRIT_QUALITY_NAME
     ]
     offered = offerable_quality_catalog(character, QUALITIES)
-    return create_quality_selection(remaining_ids, offered)
+    # WP55: Mentor Spirit itself is never a SELECT_TEXT quality, so quality_selection.quality_text
+    # already has exactly the right entries for remaining_ids with nothing orphaned by its removal.
+    return create_quality_selection(
+        remaining_ids, offered, quality_text=quality_selection.quality_text
+    )
 
 
 def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
@@ -1515,6 +1519,7 @@ def _quality_selection_context(
     *,
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
+    quality_text: Mapping[str, str] | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
     """Context for `_quality_selection.html`. `quality_ids` is whatever should be shown checked --
@@ -1535,12 +1540,33 @@ def _quality_selection_context(
     archetype picker at all -- mirrors `offerable_quality_catalog`'s own `character.magic_type is
     not None` gate for Mentor Spirit itself, so the picker never appears for a build where the
     quality isn't even offered.
+
+    **WP55**: `quality_text` follows the identical "explicit override on echo/submit, fall back to
+    the committed selection otherwise" shape as the Mentor Spirit fields -- `None` (the default)
+    falls back to `character.quality_selection.quality_text`; `submit_qualities` always passes an
+    explicit (possibly empty) mapping. Each row gets a `needs_text`/`text_value` pair so the
+    template can render a free-text input next to exactly the `SELECT_TEXT` qualities, pre-filled
+    with whatever's already committed or was just submitted.
     """
     if character is None:
         return {"character": None, "quality_error": error}
     offered = offerable_quality_catalog(character, QUALITIES)
     ids = set(quality_ids)
-    rows = [{"quality": q, "selected": q.id in ids} for q in offered]
+    if quality_text is None:
+        quality_text = (
+            character.quality_selection.quality_text
+            if character.quality_selection is not None
+            else {}
+        )
+    rows = [
+        {
+            "quality": q,
+            "selected": q.id in ids,
+            "needs_text": q.bonus_support == BonusSupport.SELECT_TEXT,
+            "text_value": quality_text.get(q.id, ""),
+        }
+        for q in offered
+    ]
     positive_karma = sum(q.karma for q in offered if q.id in ids and q.category == "Positive")
     negative_karma = -sum(q.karma for q in offered if q.id in ids and q.category == "Negative")
 
@@ -2463,8 +2489,15 @@ def _character_sheet_context(
         if allocation is not None
         else []
     )
+    # WP55: a SELECT_TEXT quality's chosen free-text detail is shown alongside its name (e.g.
+    # "SINner (National) (UCAS)") rather than needing its own context key/template branch.
     quality_names = (
-        [q.name for q in character.quality_selection.qualities]
+        [
+            f"{q.name} ({character.quality_selection.quality_text[q.id]})"
+            if q.id in character.quality_selection.quality_text
+            else q.name
+            for q in character.quality_selection.qualities
+        ]
         if character.quality_selection is not None
         else []
     )
@@ -2826,6 +2859,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.quality_selection is not None
         else None
     )
+    quality_text = (
+        character.quality_selection.quality_text
+        if character.quality_selection is not None
+        else {}
+    )
     knowledge_selection = character.knowledge_selection
     knowledge_skill_picks = (
         tuple(
@@ -2849,6 +2887,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         group_points=allocation.group_points if allocation is not None else {},
         specializations=allocation.specializations if allocation is not None else {},
         quality_ids=quality_ids,
+        quality_text=quality_text,
         contacts=contacts,
         resources_letter=session.resources_letter,
         gear_names=gear_names,
@@ -3845,6 +3884,15 @@ def create_app() -> FastAPI:
             # either -- `create_quality_selection` already raises "not an MVP-offered quality id"
             # for anything not in whatever catalog it's given, so this alone is sufficient.
             offered = offerable_quality_catalog(session.character, QUALITIES)
+            # WP55: only read a quality_text_{id} field for a quality that's both checked and
+            # SELECT_TEXT -- mirrors the Mentor Spirit fields' "only meaningful when the quality
+            # itself is checked" precedent just above, so unchecking a SINner variant never requires
+            # also clearing its stale text box first.
+            quality_text = {
+                q.id: str(form.get(f"quality_text_{q.id}") or "")
+                for q in offered
+                if q.bonus_support == BonusSupport.SELECT_TEXT and q.id in quality_ids
+            }
             try:
                 selection = create_quality_selection(
                     quality_ids,
@@ -3853,6 +3901,7 @@ def create_app() -> FastAPI:
                     mentor_catalog=MENTORS,
                     mentor_spirit_archetype_id=mentor_spirit_archetype_id,
                     mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
+                    quality_text=quality_text,
                 )
             except ValueError as exc:
                 context = _quality_selection_context(
@@ -3860,11 +3909,14 @@ def create_app() -> FastAPI:
                     quality_ids,
                     mentor_spirit_archetype_id=mentor_spirit_archetype_id,
                     mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
+                    quality_text=quality_text,
                     error=str(exc),
                 )
             else:
                 session.character = _replace_committed_qualities(session.character, selection)
-                context = _quality_selection_context(session.character, quality_ids)
+                context = _quality_selection_context(
+                    session.character, quality_ids, quality_text=quality_text
+                )
         response = templates.TemplateResponse(request, "_quality_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

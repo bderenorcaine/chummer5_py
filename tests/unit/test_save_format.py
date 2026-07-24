@@ -1345,3 +1345,60 @@ def test_build_character_rejects_karma_skill_points_exceeding_the_karma_budget()
     save = _mundane_save_with_karma_skills(karma_skill_points={archery_id: 6})
     with pytest.raises(ValueError, match="exceeds the Karma budget"):
         _build_mundane(save)
+
+
+# -- WP55: quality_text (free-text quality detail, e.g. which SIN) --------------------------------
+
+SINNER_NATIONAL_ID = next(q.id for q in QUALITIES if q.name == "SINner (National)")
+
+
+def _mundane_save_with_quality_text(
+    quality_ids: tuple[str, ...], quality_text: dict[str, str]
+) -> CharacterSave:
+    return create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="E",
+        skill_points={},
+        group_points={},
+        quality_ids=quality_ids,
+        quality_text=quality_text,
+        contacts=(),
+        resources_letter="C",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+    )
+
+
+def test_json_round_trip_preserves_quality_text() -> None:
+    save = _mundane_save_with_quality_text(
+        (SINNER_NATIONAL_ID,), {SINNER_NATIONAL_ID: "UCAS"}
+    )
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["quality_text"] == {SINNER_NATIONAL_ID: "UCAS"}
+
+
+def test_from_json_defaults_quality_text_for_a_pre_wp55_save() -> None:
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    assert "quality_text" not in data or data["quality_text"] == {}
+    assert from_json(to_json(save)).quality_text == {}
+
+
+def test_build_character_applies_quality_text() -> None:
+    save = _mundane_save_with_quality_text(
+        (SINNER_NATIONAL_ID,), {SINNER_NATIONAL_ID: "UCAS"}
+    )
+    character = _build_mundane(save)
+    assert character.quality_selection is not None
+    assert character.quality_selection.quality_text == {SINNER_NATIONAL_ID: "UCAS"}
+    assert character.quality_selection.negative_karma == 5
+
+
+def test_build_character_rejects_select_text_quality_with_missing_text() -> None:
+    save = _mundane_save_with_quality_text((SINNER_NATIONAL_ID,), {})
+    with pytest.raises(ValueError, match="requires a free-text detail"):
+        _build_mundane(save)

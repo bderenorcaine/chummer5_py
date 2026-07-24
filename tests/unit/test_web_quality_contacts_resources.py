@@ -229,6 +229,59 @@ def test_unknown_quality_id_is_rejected() -> None:
     assert "not an MVP-offered quality id" in response.text
 
 
+# -- WP55: free-text quality-selection mechanism (SINner et al.) ---------------------------------
+
+_SINNER_NATIONAL = next(q for q in MVP_QUALITIES if q.name == "SINner (National)")
+_SINNER_CORPORATE = next(q for q in MVP_QUALITIES if q.name == "SINner (Corporate)")
+
+
+def test_select_text_quality_without_a_detail_is_rejected() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post("/ui/qualities", data={"quality_id": _SINNER_NATIONAL.id})
+
+    assert response.status_code == 200
+    assert "requires a free-text detail" in response.text
+
+
+def test_select_text_quality_with_a_detail_is_accepted_and_echoed() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/ui/qualities",
+        data={
+            "quality_id": _SINNER_NATIONAL.id,
+            f"quality_text_{_SINNER_NATIONAL.id}": "UCAS",
+        },
+    )
+
+    assert response.status_code == 200
+    assert f"5 / {QUALITY_KARMA_LIMIT}" in response.text  # Negative Quality karma
+    assert 'value="UCAS"' in response.text
+
+    sheet = client.get("/character/sheet")
+    assert "SINner (National) (UCAS)" in sheet.text
+
+
+def test_select_text_quality_mutual_exclusion_is_rejected() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/ui/qualities",
+        data={
+            "quality_id": [_SINNER_NATIONAL.id, _SINNER_CORPORATE.id],
+            f"quality_text_{_SINNER_NATIONAL.id}": "UCAS",
+            f"quality_text_{_SINNER_CORPORATE.id}": "Ares",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "cannot be taken together with" in response.text
+
+
 def test_adding_a_contact_matches_engine_output() -> None:
     client = TestClient(create_app())
     _confirm_human(client)

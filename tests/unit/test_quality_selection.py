@@ -78,13 +78,15 @@ def _by_name(name: str) -> Quality:
     return next(q for q in QUALITIES if q.name == name)
 
 
-def test_mvp_quality_catalog_is_exactly_the_fourteen_offerable_qualities() -> None:
+def test_mvp_quality_catalog_is_exactly_the_twenty_four_offerable_qualities() -> None:
     # WP8's 3 FLAT_BONUS qualities (Catlike, Double-Jointed, Natural Athlete) + WP22's 3 new
     # FLAT_BONUS Indomitable qualities + WP22's 8 verified-NO_EFFECT qualities = 14, +1 for WP49's
     # Bilingual (see spec/rulebooks/learnings.md's WP49 entry -- Bilingual was NOT_YET_SUPPORTED
-    # before this WP, despite the Implementation Plan's own WP49 entry assuming otherwise) = 15.
-    # Two of the NO_EFFECT qualities (Simsense Vertigo, Unsteady Hands) are Negative -- the first
-    # Negative qualities MVP has ever offered (see module docstring); the other 13 are Positive.
+    # before this WP, despite the Implementation Plan's own WP49 entry assuming otherwise) = 15,
+    # +9 for WP55's SELECT_TEXT qualities (SINner x4, Code of Honor, Codeblock, Social Stress,
+    # Natural Immunity x2) = 24. Two of the NO_EFFECT qualities (Simsense Vertigo, Unsteady Hands)
+    # plus the 4 SINner variants, Code of Honor, Codeblock, and Social Stress (7 more) are
+    # Negative -- 9 Negative qualities total, the rest (15) Positive.
     offered = mvp_quality_catalog(QUALITIES)
     assert {q.name for q in offered} == {
         "Catlike",
@@ -102,22 +104,44 @@ def test_mvp_quality_catalog_is_exactly_the_fourteen_offerable_qualities() -> No
         "Simsense Vertigo",
         "Unsteady Hands",
         "Bilingual",
+        "SINner (National)",
+        "SINner (Corporate Limited)",
+        "SINner (Criminal)",
+        "SINner (Corporate)",
+        "Code of Honor",
+        "Codeblock",
+        "Social Stress",
+        "Natural Immunity (Natural)",
+        "Natural Immunity (Synthetic)",
     }
     assert all(
-        q.bonus_support in (BonusSupport.FLAT_BONUS, BonusSupport.NO_EFFECT) for q in offered
+        q.bonus_support
+        in (BonusSupport.FLAT_BONUS, BonusSupport.NO_EFFECT, BonusSupport.SELECT_TEXT)
+        for q in offered
     )
     negative_names = {q.name for q in offered if q.category == "Negative"}
-    assert negative_names == {"Simsense Vertigo", "Unsteady Hands"}
+    assert negative_names == {
+        "Simsense Vertigo",
+        "Unsteady Hands",
+        "SINner (National)",
+        "SINner (Corporate Limited)",
+        "SINner (Criminal)",
+        "SINner (Corporate)",
+        "Code of Honor",
+        "Codeblock",
+        "Social Stress",
+    }
 
 
 def test_mvp_quality_catalog_excludes_qualities_researched_and_rejected_this_wp() -> None:
     # WP22's Implementation Plan entry names these explicitly as researched-and-excluded, not
     # silently missing: Astral Beacon/Astral Chameleon/Focused Concentration (magic-gated or
     # unreachable by mundane characters), Gremlins (Notoriety-gated, a system this project doesn't
-    # model). See spec/rulebooks/learnings.md's WP22 entry for the full research pass, which also
-    # covers Prejudiced/SINner/Home Ground/Code of Honor/Codeblock/Social Stress/Natural
-    # Immunity/Spirit Affinity -- all excluded for needing a free-text "select a target" mechanism
-    # this WP didn't build.
+    # model). See spec/rulebooks/learnings.md's WP22 entry for the full research pass. WP55 later
+    # built the free-text mechanism and offered 9 of the 16 qualities WP22 identified as needing it
+    # (see that WP's own entry) -- Home Ground, Spirit Affinity, and the 6 Prejudiced variants stay
+    # excluded (each needs its own, still-unbuilt kind of engine support: a branching bonus, a
+    # magic-gate, a dice-pool-modifier mechanism, respectively).
     offered_names = {q.name for q in mvp_quality_catalog(QUALITIES)}
     excluded_names = {
         "Astral Beacon",
@@ -125,11 +149,6 @@ def test_mvp_quality_catalog_excludes_qualities_researched_and_rejected_this_wp(
         "Focused Concentration",
         "Gremlins",
         "Home Ground",
-        "Code of Honor",
-        "Codeblock",
-        "Social Stress",
-        "Natural Immunity (Natural)",
-        "Natural Immunity (Synthetic)",
         "Spirit Affinity",
         "Prejudiced (Common, Biased)",
         "Prejudiced (Common, Outspoken)",
@@ -137,10 +156,6 @@ def test_mvp_quality_catalog_excludes_qualities_researched_and_rejected_this_wp(
         "Prejudiced (Specific, Biased)",
         "Prejudiced (Specific, Outspoken)",
         "Prejudiced (Specific, Radical)",
-        "SINner (Corporate)",
-        "SINner (National)",
-        "SINner (Corporate Limited)",
-        "SINner (Criminal)",
     }
     assert excluded_names.isdisjoint(offered_names)
     # Every name above is a real SR5 quality, not a typo -- guards this test itself against silently
@@ -730,3 +745,128 @@ def test_apply_mentor_spirit_improvements_can_be_retracted_via_remove_source() -
 
     character.improvements.remove_source(ImprovementSource.MENTOR_SPIRIT, DOG.id)
     assert character.improvements.resolve(ImprovementType.SKILL, "Tracking") == 0
+
+
+# --- WP55: free-text quality-selection mechanism (SINner, Code of Honor, Codeblock, Social Stress,
+# Natural Immunity) ---------------------------------------------------------------------------
+
+
+def test_create_quality_selection_requires_text_for_select_text_quality() -> None:
+    sinner = _by_name("SINner (National)")
+    with pytest.raises(ValueError, match="requires a free-text detail"):
+        create_quality_selection([sinner.id], QUALITIES)
+
+
+def test_create_quality_selection_rejects_blank_text_for_select_text_quality() -> None:
+    sinner = _by_name("SINner (National)")
+    with pytest.raises(ValueError, match="requires a free-text detail"):
+        create_quality_selection([sinner.id], QUALITIES, quality_text={sinner.id: "   "})
+
+
+def test_create_quality_selection_accepts_and_strips_text_for_select_text_quality() -> None:
+    sinner = _by_name("SINner (National)")
+    selection = create_quality_selection(
+        [sinner.id], QUALITIES, quality_text={sinner.id: "  UCAS  "}
+    )
+    assert selection.quality_text == {sinner.id: "UCAS"}
+    assert selection.negative_karma == 5
+
+
+def test_create_quality_selection_rejects_orphaned_select_text() -> None:
+    catlike = _by_name("Catlike")
+    with pytest.raises(ValueError, match="wasn't selected or doesn't use one"):
+        create_quality_selection(
+            [catlike.id], QUALITIES, quality_text={"not-a-selected-select-text-id": "whatever"}
+        )
+
+
+def test_create_quality_selection_rejects_text_for_a_non_select_text_quality() -> None:
+    catlike = _by_name("Catlike")
+    with pytest.raises(ValueError, match="wasn't selected or doesn't use one"):
+        create_quality_selection(
+            [catlike.id], QUALITIES, quality_text={catlike.id: "whatever"}
+        )
+
+
+def test_create_quality_selection_rejects_sinner_mutual_exclusion() -> None:
+    national = _by_name("SINner (National)")
+    corporate = _by_name("SINner (Corporate)")
+    with pytest.raises(ValueError, match="cannot be taken together with"):
+        create_quality_selection(
+            [national.id, corporate.id],
+            QUALITIES,
+            quality_text={national.id: "UCAS", corporate.id: "Ares"},
+        )
+
+
+def test_create_quality_selection_all_four_sinner_variants_are_pairwise_exclusive() -> None:
+    names = (
+        "SINner (National)",
+        "SINner (Corporate Limited)",
+        "SINner (Criminal)",
+        "SINner (Corporate)",
+    )
+    for i, name_a in enumerate(names):
+        for name_b in names[i + 1 :]:
+            a = _by_name(name_a)
+            b = _by_name(name_b)
+            with pytest.raises(ValueError, match="cannot be taken together with"):
+                create_quality_selection(
+                    [a.id, b.id], QUALITIES, quality_text={a.id: "x", b.id: "y"}
+                )
+
+
+def test_create_quality_selection_natural_immunity_mutual_exclusion_via_synthetic_catalog() -> None:
+    # Weak Immune System is NOT_YET_SUPPORTED (never offered by mvp_quality_catalog), so this
+    # exclusion can't be reached through the real offered catalog today -- proven instead with a
+    # synthetic stand-in quality, the same "prove the rule in isolation" pattern this module already
+    # uses for the karma-cap boundary tests above. See spec/worklogs/WP55.md.
+    natural_immunity = _by_name("Natural Immunity (Natural)")
+    assert natural_immunity.forbidden_names == ("Weak Immune System",)
+    synthetic_weak_immune_system = Quality(
+        id="synthetic-weak-immune-system",
+        name="Weak Immune System",
+        category="Negative",
+        karma=-10,
+        limit=None,
+        source="SR5",
+        page=0,
+        bonus_support=BonusSupport.NO_EFFECT,
+        flat_bonuses=(),
+        raw_bonus=None,
+        forbidden_names=("Natural Immunity (Natural)", "Natural Immunity (Synthetic)"),
+    )
+    catalog = (*QUALITIES, synthetic_weak_immune_system)
+    with pytest.raises(ValueError, match="cannot be taken together with"):
+        create_quality_selection(
+            [natural_immunity.id, synthetic_weak_immune_system.id],
+            catalog,
+            quality_text={natural_immunity.id: "Ebola"},
+        )
+
+
+def test_create_quality_selection_multiple_select_text_qualities_independent_texts() -> None:
+    code_of_honor = _by_name("Code of Honor")
+    codeblock = _by_name("Codeblock")
+    selection = create_quality_selection(
+        [code_of_honor.id, codeblock.id],
+        QUALITIES,
+        quality_text={code_of_honor.id: "Never harm children", codeblock.id: "Matrix Perception"},
+    )
+    assert selection.quality_text == {
+        code_of_honor.id: "Never harm children",
+        codeblock.id: "Matrix Perception",
+    }
+    assert selection.negative_karma == 25  # 15 + 10
+
+
+def test_apply_quality_improvements_select_text_quality_adds_no_improvements() -> None:
+    # SELECT_TEXT qualities have no <val>-bearing bonus to apply -- flat_bonuses is () by
+    # construction, mirroring NO_EFFECT's identical shape.
+    character = _mundane_human_character()
+    sinner = _by_name("SINner (National)")
+    selection = create_quality_selection(
+        [sinner.id], QUALITIES, quality_text={sinner.id: "UCAS"}
+    )
+    apply_quality_improvements(character, selection.qualities)
+    assert character.improvements.improvements == ()

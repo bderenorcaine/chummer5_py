@@ -47,8 +47,9 @@ per-archetype research.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from chummer5.data.mentors import MentorChoice, MentorSpiritArchetype, gated_choice
 from chummer5.data.metatypes import Metatype
@@ -83,7 +84,10 @@ _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
 # WP22: FLAT_BONUS has a real Improvement to apply; NO_EFFECT is offerable too -- it's a
 # verified-inert quality (see chummer5.data.qualities module docstring) with an empty
 # flat_bonuses tuple, so apply_quality_improvements is naturally a no-op for it, no special case.
-_OFFERABLE_SUPPORT = (BonusSupport.FLAT_BONUS, BonusSupport.NO_EFFECT)
+# WP55: SELECT_TEXT is offerable too, for the identical "empty flat_bonuses, no-op to apply" reason
+# -- its only requirement (a free-text detail) is validated by create_quality_selection itself, not
+# by apply_quality_improvements.
+_OFFERABLE_SUPPORT = (BonusSupport.FLAT_BONUS, BonusSupport.NO_EFFECT, BonusSupport.SELECT_TEXT)
 
 
 def _mentor_spirit_quality(catalog: Iterable[Quality]) -> Quality | None:
@@ -146,6 +150,11 @@ class QualitySelection:
 
     `mentor_spirit` (WP48) is `None` unless "Mentor Spirit" is among `qualities` -- see
     `create_quality_selection`'s own docstring for how it's resolved and validated.
+
+    `quality_text` (WP55) is `{quality_id: free_text}`, populated for exactly the selected
+    `BonusSupport.SELECT_TEXT` qualities (e.g. which SIN, which protected group) -- never for any
+    other quality, and never missing an entry for a selected `SELECT_TEXT` one (both directions
+    enforced by `create_quality_selection`).
     """
 
     qualities: tuple[Quality, ...]
@@ -153,6 +162,7 @@ class QualitySelection:
     negative_karma: int
     karma_cost: int
     mentor_spirit: MentorSpiritPick | None = None
+    quality_text: MappingProxyType[str, str] = MappingProxyType({})
 
 
 def create_quality_selection(
@@ -163,14 +173,24 @@ def create_quality_selection(
     mentor_catalog: Iterable[MentorSpiritArchetype] = (),
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
+    quality_text: Mapping[str, str] | None = None,
 ) -> QualitySelection:
     """Build a `QualitySelection`, validating against the MVP-offered catalog and the karma cap.
 
     Validates: every id is one of `mvp_quality_catalog(catalog)`'s qualities, widened by Mentor
     Spirit itself when `magic_type` is `"Magician"`/`"Adept"` (see
-    `_add_mentor_spirit_if_eligible`); no quality is selected more than once; summed
-    Positive-category karma doesn't exceed `QUALITY_KARMA_LIMIT`; summed Negative-category karma
-    magnitude doesn't exceed it either, checked independently (see module docstring).
+    `_add_mentor_spirit_if_eligible`); no quality is selected more than once; no two selected
+    qualities forbid each other (WP55, `Quality.forbidden_names`, e.g. SINner's 4-way mutual
+    exclusion); summed Positive-category karma doesn't exceed `QUALITY_KARMA_LIMIT`; summed
+    Negative-category karma magnitude doesn't exceed it either, checked independently (see module
+    docstring).
+
+    **WP55**: `quality_text` is `{quality_id: free_text}`, required for exactly the selected
+    `BonusSupport.SELECT_TEXT` qualities -- a missing or blank (whitespace-only) entry for a
+    selected one is rejected ("quality requires a free-text detail"), and an entry keyed to a
+    quality that either wasn't selected or doesn't need one is rejected too (the same "don't
+    silently ignore a stale/tampered field" rule `mentor_spirit_archetype_id` already follows).
+    Every value is stored stripped in the returned `QualitySelection.quality_text`.
 
     **WP48**: if `MENTOR_SPIRIT_QUALITY_NAME` is among `quality_ids`, `mentor_spirit_archetype_id`
     must resolve against `mentor_catalog`, `magic_type` must be `"Magician"` or `"Adept"` (Mentor
@@ -201,6 +221,16 @@ def create_quality_selection(
         raise ValueError(f"quality selected more than once: {duplicates}")
 
     selected = tuple(offered_by_id[qid] for qid in ids)
+
+    # WP55: mutual exclusion (Quality.forbidden_names, e.g. SINner's 4-way exclusivity, Natural
+    # Immunity vs. the not-yet-offered Weak Immune System). Checked by name, not id, since a
+    # forbidden name need not itself be offered for the check to matter.
+    selected_names = {q.name for q in selected}
+    for quality in selected:
+        conflicts = sorted(set(quality.forbidden_names) & selected_names)
+        if conflicts:
+            raise ValueError(f"{quality.name} cannot be taken together with: {conflicts}")
+
     positive_karma = sum(q.karma for q in selected if q.category == "Positive")
     negative_karma = -sum(q.karma for q in selected if q.category == "Negative")
 
@@ -214,6 +244,26 @@ def create_quality_selection(
             f"Negative Qualities grant {negative_karma} karma, exceeding the "
             f"{QUALITY_KARMA_LIMIT}-karma limit"
         )
+
+    # WP55: every selected SELECT_TEXT quality needs a non-blank free-text detail; no entry may be
+    # supplied for anything else (a stale/tampered field, the same discipline the Mentor Spirit
+    # orphan-pick check below already follows).
+    quality_text_map = dict(quality_text or {})
+    select_text_ids = {q.id for q in selected if q.bonus_support == BonusSupport.SELECT_TEXT}
+    missing_text = sorted(
+        offered_by_id[qid].name
+        for qid in select_text_ids
+        if not quality_text_map.get(qid, "").strip()
+    )
+    if missing_text:
+        raise ValueError(f"quality requires a free-text detail: {missing_text}")
+    orphaned_text = sorted(set(quality_text_map) - select_text_ids)
+    if orphaned_text:
+        raise ValueError(
+            f"free-text detail supplied for a quality that wasn't selected or doesn't use one: "
+            f"{orphaned_text}"
+        )
+    resolved_quality_text = {qid: quality_text_map[qid].strip() for qid in select_text_ids}
 
     mentor_spirit_selected = any(q.name == MENTOR_SPIRIT_QUALITY_NAME for q in selected)
     mentor_spirit_pick: MentorSpiritPick | None = None
@@ -256,6 +306,7 @@ def create_quality_selection(
         negative_karma=negative_karma,
         karma_cost=positive_karma - negative_karma,
         mentor_spirit=mentor_spirit_pick,
+        quality_text=MappingProxyType(resolved_quality_text),
     )
 
 
