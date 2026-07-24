@@ -134,6 +134,49 @@ Implementation Plan's WP20.
 - Localization content (structure only, per above).
 - Multi-user / hosted deployment, anything resembling ChummerHub.
 
+## Unmodeled real effects
+
+**A living registry, updated by whichever WP introduces or ships each row — do not let this drift
+out of sync with `src/`.** This is the project's one place to look up "what does this offered
+character aspect actually *not* do, mechanically" without re-deriving it from a worklog or the PDF.
+
+**The policy this registry exists to support (settled 2026-07-24, refining WP3/WP8's original
+"never partially apply" framing rather than replacing it):** every *computed, chargen-time* effect
+of an offered aspect — a karma cost, a dice-pool/Limit/attribute bonus, anything this engine
+actually derives a number from — must be modeled in full, or the aspect stays excluded. That part
+of the original rule is unchanged. What's now explicit: an aspect whose real SR5 effect is
+inherently an **in-play, GM-adjudicated, or otherwise out-of-this-engine's-scope** mechanic (a
+combat-test dice-pool modifier, a Notoriety/reputation consequence, a background-check/arrest risk,
+a subsystem like the Matrix or toxin/pathogen resistance this engine has zero representation of at
+all) is fine to offer anyway — karma cost charged/credited in full, every *computable* part of it
+applied — as long as the unmodeled part is recorded here, not silently dropped and not conflated
+with "this aspect does nothing." The earlier, stricter reading (exclude anything with *any*
+unmodeled effect, regardless of magnitude) is retired as of this ruling; WP22's own "significance"
+judgment calls that led to excluding SINner/Prejudiced/etc. specifically (as opposed to offering
+them with a documented gap) no longer apply going forward — see WP55's own entry in the
+Implementation Plan for the first WP built under the new policy.
+
+| Aspect | Kind | What's modeled | What's not (and why) | Source |
+|---|---|---|---|---|
+| Gearhead | Quality (Positive) | Karma cost only | Vehicle/drone Speed/Handling/dice-pool bonus during vehicle or chase combat (p. 74) — no vehicle/combat subsystem exists | WP22 |
+| Guts | Quality (Positive) | Karma cost only | +2 dice pool resisting fear/intimidation tests, including magically induced (p. 74) — no test-resolution system exists | WP22 |
+| Juryrigger | Quality (Positive) | Karma cost only | +2 dice pool for Mechanical Tests when juryrigging temporary repairs (p. 75) — no repair/test subsystem exists | WP22 |
+| Natural Hardening | Quality (Positive) | Karma cost only | 1 point of natural biofeedback filtering vs. Matrix biofeedback damage (p. 76) — no Matrix rules exist | WP22 |
+| Low-Light Vision | Quality (Positive); also metatype-granted (Elf, Ork) | Karma cost only (purchasable); free grant only (metatype-granted) | Negates low-light vision penalties on visual Perception (p. 444/446) — no lighting-condition Perception system exists | WP22 (purchasable), WP23 (metatype grant) |
+| Thermographic Vision | Quality (Positive); also metatype-granted (Dwarf, Troll) | Karma cost only (purchasable); free grant only (metatype-granted) | Negates darkness/heat-pattern vision penalties (p. 446) — same, no lighting-condition Perception system | WP22 (purchasable), WP23 (metatype grant) |
+| Simsense Vertigo | Quality (Negative) | Karma credit only | -2 dice pool to all AR/VR/simsense tests (p. 83) — no Matrix/AR test system exists | WP22 |
+| Unsteady Hands | Quality (Negative) | Karma credit only | -2 dice pool for Agility-based tests, re-triggerable via an Agility+Body(4) test after a stressful encounter (p. 87) — no in-play test-resolution system exists | WP22 |
+| Resistance to Pathogens/Toxins | Quality (Positive); metatype-granted only (Dwarf), not player-purchasable | Free grant only | +1 dice pool to Resistance Tests vs. pathogens/toxins, or both at the 8-Karma level (p. 79) — no toxin/pathogen resistance subsystem exists (the same bucket Allergy's 8 SR5 variants are already excluded for) | WP23 |
+
+*(Once WP55 ships, this table gains 9 more rows: SINner ×4 (all four carry unmodeled
+background-check/arrest consequences, p. 84-85; SINner (Criminal) additionally carries an
+unmodeled Notoriety point), Code of Honor (p. 79, in-play Karma-loss/Public-Awareness
+consequences), Codeblock (p. 80, a -2 dice pool modifier on a chosen Matrix action), Social Stress
+(p. 85, a glitch-threshold shift on Leadership/Etiquette tests), and Natural Immunity
+(Natural)/(Synthetic) (p. 76, full immunity to one chosen disease or toxin). WP55's own worklog is
+responsible for adding them here, not this sentence — remove this parenthetical once that WP
+lands.)*
+
 ## Architecture & major design decisions
 
 ### Stack
