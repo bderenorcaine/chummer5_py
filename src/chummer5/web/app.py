@@ -224,6 +224,7 @@ from chummer5.engine.derived import (
     physical_limit,
     social_limit,
     stun_condition_monitor,
+    unmodeled_effect_notes,
 )
 from chummer5.engine.foci import (
     CHARGEN_FORCE_CAP_MULTIPLIER,
@@ -2735,6 +2736,11 @@ def _character_sheet_context(
             if character.knowledge_selection is not None
             else []
         ),
+        # WP56: a collapsible disclosure of every currently-held aspect's unmodeled real effect
+        # (Project Overview's "Unmodeled real effects" table) -- () for a character with none (e.g.
+        # a plain Human with no NO_EFFECT/SELECT_TEXT qualities), which `_character_sheet.html`
+        # renders by hiding the section entirely (see this WP's own worklog for that choice).
+        "unmodeled_effect_rows": unmodeled_effect_notes(character),
         "sheet_error": error,
         "sheet_info": info,
     }

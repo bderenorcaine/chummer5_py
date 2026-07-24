@@ -1841,7 +1841,7 @@ isn't being computed, not just discover it by reading this document.
   end to end for the first time across WP28/WP52/this WP's combined fixes — the real cross-phase
   regression case this WP exists to close out.
 
-- [ ] **WP56 — Character sheet: unmodeled-effects disclosure section (aspect-kind-agnostic from the
+- [x] **WP56 — Character sheet: unmodeled-effects disclosure section (aspect-kind-agnostic from the
   start).**
   Goal: give Project Overview's "Unmodeled real effects" registry a player-facing home — a
   collapsible section on the character sheet listing, for whichever unmodeled-effect aspects the

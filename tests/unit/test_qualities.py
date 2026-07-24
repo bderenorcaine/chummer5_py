@@ -133,6 +133,56 @@ def test_quality_with_no_forbidden_block_has_empty_forbidden_names() -> None:
     assert catlike.forbidden_names == ()
 
 
+# --- WP56: unmodeled_effect_note --------------------------------------------------------------
+
+
+def test_no_effect_and_select_text_qualities_carry_an_unmodeled_effect_note() -> None:
+    # All 8 NO_EFFECT (WP22) + 9 SELECT_TEXT (WP55) qualities are individually verified to have
+    # exactly one real, unmodeled SR5 effect each -- every one of them must carry a note.
+    qualities = load_qualities()
+    by_name = {q.name: q for q in qualities}
+    for name in (
+        "Gearhead",
+        "Guts",
+        "Juryrigger",
+        "Natural Hardening",
+        "Low-Light Vision",
+        "Thermographic Vision",
+        "Simsense Vertigo",
+        "Unsteady Hands",
+        "SINner (National)",
+        "SINner (Corporate Limited)",
+        "SINner (Criminal)",
+        "SINner (Corporate)",
+        "Code of Honor",
+        "Codeblock",
+        "Social Stress",
+        "Natural Immunity (Natural)",
+        "Natural Immunity (Synthetic)",
+    ):
+        quality = by_name[name]
+        assert quality.unmodeled_effect_note, f"{name} should carry a WP56 disclosure note"
+
+
+def test_resistance_to_pathogens_carries_a_note_despite_being_not_yet_supported() -> None:
+    # WP23: metatype-granted, never player-purchasable, and NOT_YET_SUPPORTED -- but still has a
+    # real unmodeled effect (a Resistance Test dice-pool bonus), so it needs the note too. Confirms
+    # the note is independent of bonus_support/offerability (see module docstring).
+    qualities = load_qualities()
+    resistance = next(q for q in qualities if q.name == "Resistance to Pathogens/Toxins")
+    assert resistance.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    assert resistance.unmodeled_effect_note
+    assert "toxin/pathogen" in resistance.unmodeled_effect_note
+
+
+def test_flat_bonus_quality_has_no_unmodeled_effect_note() -> None:
+    # Catlike's skill bonus is fully modeled -- nothing to disclose.
+    qualities = load_qualities()
+    catlike = next(q for q in qualities if q.name == "Catlike")
+    assert catlike.bonus_support == BonusSupport.FLAT_BONUS
+    assert catlike.unmodeled_effect_note is None
+
+
 def test_supported_vs_unsupported_counts_are_visible() -> None:
     # WP22 widens FLAT_BONUS from 3 (Catlike, Double-Jointed, Natural Athlete) to 6 by adding
     # the Indomitable trio (Mental/Physical/Social), and introduces NO_EFFECT for 8

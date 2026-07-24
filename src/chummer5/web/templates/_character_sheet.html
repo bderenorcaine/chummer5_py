@@ -244,6 +244,17 @@
     Karma remaining: {{ character.karma_remaining }} (spent: {{ character.karma_spent }}).
   </p>
 
+  {% if unmodeled_effect_rows %}
+  <details>
+    <summary>Unmodeled real effects ({{ unmodeled_effect_rows | length }})</summary>
+    <ul>
+      {% for name, note in unmodeled_effect_rows %}
+      <li><strong>{{ name }}</strong>: {{ note }}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
   <h3>Save</h3>
   <p><a href="/character/save">Download save (.json)</a></p>
   {% else %}

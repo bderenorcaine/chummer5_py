@@ -1,5 +1,10 @@
 """Derived stats: initiative, the three Limits, and the two condition monitors.
 
+**WP56** adds one function outside that original scope, `unmodeled_effect_notes` -- not a rules
+formula, but the same "pure function of a finalized `Character`, meant for the character sheet"
+shape as everything else here, so it lives alongside them rather than in its own module. See that
+function's own docstring.
+
 The headless-MVP milestone (per the Implementation Plan): pure functions of a finalized
 `Character` (WP6's attribute allocation, composed with WP5's Improvement engine) that need nothing
 beyond `Character.attribute_value()`. Checked directly against `legacy/Chummer/Backend/Characters/
@@ -201,3 +206,69 @@ def drain_resistance(character: Character) -> int | None:
         return None
     total = character.attribute_value(attr_a) + character.attribute_value(attr_b)
     return total + character.improvements.resolve(ImprovementType.DRAIN_RESISTANCE, _GLOBAL_TARGET)
+
+
+def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
+    """WP56: `(aspect name, note)` pairs for every named, catalog-backed aspect `character`
+    currently holds whose catalog entry carries an `unmodeled_effect_note` (Project Overview's
+    "Unmodeled real effects" table -- see `chummer5.data.qualities`'s own WP56 docstring paragraph
+    for why that markdown table isn't read at runtime; each catalog module instead mirrors its own
+    rows into a field on its own dataclass, populated at load/classification time). Deduplicated by
+    name (a metatype-granted and player-purchased instance of the same quality -- e.g. an Elf who
+    also buys nothing new, or any character with both a metatype grant and a matching purchase --
+    contributes one entry, not two) and returned in encounter order, not sorted -- the template
+    doesn't need a stable ordering guarantee beyond "consistent within one render".
+
+    **Aspect-kind-agnostic by construction, not by enumerating every kind's own dataclass here**:
+    every aspect below is read through a plain `getattr(item, "unmodeled_effect_note", None)`, not
+    an `isinstance`/kind check, so a future WP adding this field to `Power`/`Cyberware`/`Bioware`/
+    `Focus`/`LifestyleTier`/etc.'s own catalog dataclass (mirroring `Quality`'s WP56 field exactly)
+    needs to touch only that catalog module -- this function's own walk already covers every
+    selection `Character` holds a name-bearing catalog object in, and doesn't care whether any given
+    kind's catalog has started populating the field yet. Today only `Quality` does, so only
+    quality-sourced notes actually surface -- see this function's own tests for the "walks
+    cyberware/bioware/powers/foci without crashing, contributes nothing" case that pins this down.
+    """
+    notes: dict[str, str] = {}
+
+    def add(name: str, note: object) -> None:
+        if isinstance(note, str) and name not in notes:
+            notes[name] = note
+
+    for quality in character.metatype_qualities:
+        add(quality.name, getattr(quality, "unmodeled_effect_note", None))
+    if character.quality_selection is not None:
+        for quality in character.quality_selection.qualities:
+            add(quality.name, getattr(quality, "unmodeled_effect_note", None))
+        mentor_spirit = character.quality_selection.mentor_spirit
+        if mentor_spirit is not None:
+            add(
+                mentor_spirit.archetype.name,
+                getattr(mentor_spirit.archetype, "unmodeled_effect_note", None),
+            )
+    if character.power_selection is not None:
+        for power_pick in character.power_selection.picks:
+            add(power_pick.power.name, getattr(power_pick.power, "unmodeled_effect_note", None))
+    if character.cyberware_selection is not None:
+        for cyberware_item in character.cyberware_selection.items:
+            add(cyberware_item.name, getattr(cyberware_item, "unmodeled_effect_note", None))
+    if character.bioware_selection is not None:
+        for bioware_item in character.bioware_selection.items:
+            add(bioware_item.name, getattr(bioware_item, "unmodeled_effect_note", None))
+    if character.foci_selection is not None:
+        for focus_pick in character.foci_selection.picks:
+            add(focus_pick.focus.name, getattr(focus_pick.focus, "unmodeled_effect_note", None))
+    if character.lifestyle_selection is not None:
+        tier = character.lifestyle_selection.tier
+        add(tier.name, getattr(tier, "unmodeled_effect_note", None))
+    if character.resources_selection is not None:
+        for gear_item in character.resources_selection.gear:
+            add(gear_item.name, getattr(gear_item, "unmodeled_effect_note", None))
+    if character.spell_selection is not None:
+        for spell in character.spell_selection.spells:
+            add(spell.name, getattr(spell, "unmodeled_effect_note", None))
+    if character.bound_spirit_selection is not None:
+        for spirit in character.bound_spirit_selection.spirits:
+            add(spirit.spirit_type, getattr(spirit.spirit_type, "unmodeled_effect_note", None))
+
+    return tuple(notes.items())

@@ -10,10 +10,19 @@ from __future__ import annotations
 from dataclasses import replace
 from decimal import Decimal
 
+from chummer5.data.bioware import load_bioware
+from chummer5.data.cyberware import load_cyberware
+from chummer5.data.foci import load_foci
+from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
+from chummer5.data.powers import load_powers
 from chummer5.data.priorities import load_priorities
+from chummer5.data.qualities import load_qualities
+from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.engine.bioware import BiowareSelection
 from chummer5.engine.character import Character, create_character, metatype_choices
+from chummer5.engine.cyberware import CyberwareSelection
 from chummer5.engine.derived import (
     BASE_ESSENCE,
     drain_resistance,
@@ -25,12 +34,24 @@ from chummer5.engine.derived import (
     physical_limit,
     social_limit,
     stun_condition_monitor,
+    unmodeled_effect_notes,
 )
+from chummer5.engine.foci import FociSelection, FocusPick
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
+from chummer5.engine.lifestyle import LifestyleSelection
+from chummer5.engine.magic import PowerPick, PowerSelection, SpellSelection
+from chummer5.engine.qualities import (
+    QualitySelection,
+    create_quality_selection,
+    resolve_metatype_qualities,
+)
+from chummer5.engine.resources import ResourcesSelection, StarterGearItem
+from chummer5.engine.spirits import BoundSpirit, BoundSpiritSelection
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 TRADITIONS = load_traditions()
+QUALITIES = load_qualities()
 HERMETIC = next(t for t in TRADITIONS if t.name == "Hermetic")
 SHAMANIC = next(t for t in TRADITIONS if t.name == "Shamanic")
 
@@ -233,3 +254,129 @@ def test_drain_resistance_sums_improvements() -> None:
     character = replace(_character(BOD=3, WIL=2), magic_type="Adept")  # base 7, per above
     _add(character, ImprovementType.DRAIN_RESISTANCE, 2)
     assert drain_resistance(character) == 9
+
+
+# --- WP56: unmodeled_effect_notes -----------------------------------------------------------------
+
+
+def _metatype_choice(name: str, heritage_letter: str = "D") -> object:
+    heritage = PRIORITIES.heritage[heritage_letter]
+    return next(c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == name)
+
+
+def _mundane_character(metatype_name: str) -> Character:
+    return create_character(
+        metatype_choice=_metatype_choice(metatype_name),
+        heritage_letter="D",
+        attributes_letter="A",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+
+
+def test_unmodeled_effect_notes_empty_for_plain_human() -> None:
+    # Human is granted no metatype qualities (see chummer5.engine.qualities' own WP23 test) and has
+    # committed no quality selection at all -- nothing to disclose.
+    character = _mundane_character("Human")
+    assert unmodeled_effect_notes(character) == ()
+
+
+def test_unmodeled_effect_notes_surfaces_metatype_granted_quality() -> None:
+    # Elf is auto-granted Low-Light Vision (WP23) -- NO_EFFECT, so it carries a WP56 note.
+    character = _mundane_character("Elf")
+    metatype_qualities = resolve_metatype_qualities(character.metatype, QUALITIES)
+    character = replace(character, metatype_qualities=metatype_qualities)
+    rows = dict(unmodeled_effect_notes(character))
+    assert "Low-Light Vision" in rows
+    assert "lighting-condition Perception" in rows["Low-Light Vision"]
+
+
+def test_unmodeled_effect_notes_surfaces_purchased_no_effect_quality() -> None:
+    guts = next(q for q in QUALITIES if q.name == "Guts")
+    character = _mundane_character("Human")
+    selection = create_quality_selection([guts.id], QUALITIES)
+    character = replace(character, quality_selection=selection)
+    rows = dict(unmodeled_effect_notes(character))
+    assert "Guts" in rows
+    assert "fear/intimidation" in rows["Guts"]
+
+
+def test_unmodeled_effect_notes_excludes_flat_bonus_quality() -> None:
+    # Catlike is FLAT_BONUS (a real, computed skill bonus) -- it has no unmodeled effect to note.
+    catlike = next(q for q in QUALITIES if q.name == "Catlike")
+    character = _mundane_character("Human")
+    selection = create_quality_selection([catlike.id], QUALITIES)
+    character = replace(character, quality_selection=selection)
+    assert unmodeled_effect_notes(character) == ()
+
+
+def test_unmodeled_effect_notes_dedups_metatype_grant_against_matching_purchase() -> None:
+    # A metatype-granted and (hypothetically) player-selected instance of the identical quality
+    # must contribute exactly one entry, not two -- built directly against QualitySelection rather
+    # than through create_quality_selection, since the real offerable-catalog path already prevents
+    # re-purchasing a granted quality (chummer5.engine.qualities' own WP23 exclusion) and this test
+    # is specifically about unmodeled_effect_notes's own dedup, not that separate rule.
+    low_light = next(q for q in QUALITIES if q.name == "Low-Light Vision")
+    character = _mundane_character("Elf")
+    character = replace(
+        character,
+        metatype_qualities=(low_light,),
+        quality_selection=QualitySelection(
+            qualities=(low_light,), positive_karma=0, negative_karma=0, karma_cost=0
+        ),
+    )
+    rows = unmodeled_effect_notes(character)
+    assert rows == (("Low-Light Vision", low_light.unmodeled_effect_note),)
+
+
+def test_unmodeled_effect_notes_walks_other_selection_kinds_without_crashing() -> None:
+    # None of Power/Cyberware/Bioware/Focus/LifestyleTier/StarterGearItem/Spell/BoundSpirit's own
+    # catalog dataclasses populate `unmodeled_effect_note` yet (WP56 only wires up Quality) -- this
+    # pins down that the generic getattr-based walk tolerates that (no crash, no false entries)
+    # rather than assuming every kind it visits already has the field.
+    cyberware = next(iter(load_cyberware()))
+    bioware = next(iter(load_bioware()))
+    power = next(iter(load_powers()))
+    focus = next(iter(load_foci()))
+    lifestyle_tier = next(iter(load_lifestyles()))
+    spell = next(iter(load_spells()))
+
+    character = _mundane_character("Human")
+    character = replace(
+        character,
+        cyberware_selection=CyberwareSelection(
+            items=(cyberware,), nuyen_budget=0, nuyen_spent=0, essence_spent=Decimal(0)
+        ),
+        bioware_selection=BiowareSelection(
+            items=(bioware,), nuyen_budget=0, nuyen_spent=0, essence_spent=Decimal(0)
+        ),
+        power_selection=PowerSelection(
+            picks=(PowerPick(power=power, rating=1),),
+            power_points_spent=Decimal(0),
+            power_point_budget=0,
+        ),
+        foci_selection=FociSelection(
+            picks=(FocusPick(focus=focus, force=1),),
+            nuyen_cost=0,
+            karma_cost=0,
+            nuyen_budget=0,
+            karma_budget=0,
+        ),
+        lifestyle_selection=LifestyleSelection(tier=lifestyle_tier, months=1, total_cost=0),
+        resources_selection=ResourcesSelection(
+            resources_letter="A",
+            nuyen_budget=0,
+            gear=(StarterGearItem(name="Synthetic Gear", cost=0),),
+            nuyen_spent=0,
+            nuyen_remaining=0,
+        ),
+        spell_selection=SpellSelection(
+            spells=(spell,), budget=0, karma_spell_count=0, karma_cost=0
+        ),
+        bound_spirit_selection=BoundSpiritSelection(
+            spirits=(BoundSpirit(spirit_type="Spirit of Man", force=1, services=1),),
+            karma_cost=0,
+            karma_budget=0,
+        ),
+    )
+    assert unmodeled_effect_notes(character) == ()

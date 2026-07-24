@@ -42,6 +42,16 @@ one of the 31 SR5 qualities that carry a `<forbidden>` block at all — confirme
 exists), so a future WP offering e.g. Insomnia (Basic)/(Full) or Distinctive Style/Blandness (WP22's
 own "deliberately deferred" pair) gets mutual-exclusion enforcement for free rather than needing to
 extend this parser too.
+
+**`Quality.unmodeled_effect_note` (WP56)** mirrors Project Overview's "Unmodeled real effects"
+table by name — the specific, real SR5 effect a `NO_EFFECT`/`SELECT_TEXT` quality (or, for
+Resistance to Pathogens/Toxins, a `NOT_YET_SUPPORTED` one WP23 still grants for free to Dwarf) has
+that this engine's scope doesn't compute anything for. This is a hand-kept mirror of that markdown
+table, not something read from it at runtime (see `chummer5.engine.derived.unmodeled_effect_notes`'s
+own docstring for why runtime code can't read a `.md` file as data) — name-gated
+(`_UNMODELED_EFFECT_NOTES`) the same way `_VERIFIED_NO_EFFECT_NAMES`/`_VERIFIED_SELECT_TEXT_NAMES`
+already are, and independent of `bonus_support`: a quality's offerability/grant status and whether
+it carries a disclosure note are two separate questions.
 """
 
 from __future__ import annotations
@@ -131,6 +141,85 @@ _VERIFIED_SELECT_TEXT_NAMES = frozenset(
     }
 )
 
+# WP56: Project Overview's "Unmodeled real effects" table, transcribed here as the runtime source
+# `_parse_quality` reads (the markdown table itself is a hand-kept mirror, not read at runtime --
+# see module docstring). Every quality named here already has a WP22/WP23/WP55-verified citation for
+# exactly this unmodeled effect; this dict does not itself decide what's inert vs. not, it only
+# carries the player-facing text for qualities `_classify_bonus`/`resolve_metatype_qualities`
+# already treat as inert-except-for-this-one-real-effect.
+_UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
+    "Gearhead": (
+        "Vehicle/drone Speed/Handling/dice-pool bonus during vehicle or chase combat (p. 74) -- "
+        "no vehicle/combat subsystem exists."
+    ),
+    "Guts": (
+        "+2 dice pool resisting fear/intimidation tests, including magically induced (p. 74) -- "
+        "no test-resolution system exists."
+    ),
+    "Juryrigger": (
+        "+2 dice pool for Mechanical Tests when juryrigging temporary repairs (p. 75) -- no "
+        "repair/test subsystem exists."
+    ),
+    "Natural Hardening": (
+        "1 point of natural biofeedback filtering vs. Matrix biofeedback damage (p. 76) -- no "
+        "Matrix rules exist."
+    ),
+    "Low-Light Vision": (
+        "Negates low-light vision penalties on visual Perception (p. 444/446) -- no "
+        "lighting-condition Perception system exists."
+    ),
+    "Thermographic Vision": (
+        "Negates darkness/heat-pattern vision penalties (p. 446) -- no lighting-condition "
+        "Perception system exists."
+    ),
+    "Simsense Vertigo": (
+        "-2 dice pool to all AR/VR/simsense tests (p. 83) -- no Matrix/AR test system exists."
+    ),
+    "Unsteady Hands": (
+        "-2 dice pool for Agility-based tests, re-triggerable via an Agility+Body(4) test after a "
+        "stressful encounter (p. 87) -- no in-play test-resolution system exists."
+    ),
+    "Resistance to Pathogens/Toxins": (
+        "+1 dice pool to Resistance Tests vs. pathogens/toxins, or both at the 8-Karma level "
+        "(p. 79) -- no toxin/pathogen resistance subsystem exists."
+    ),
+    "SINner (National)": (
+        "Background-check/arrest consequences described across a full page (p. 84) -- no "
+        "background-check/arrest-risk subsystem exists."
+    ),
+    "SINner (Corporate Limited)": (
+        "Background-check/arrest consequences described across a full page (p. 84) -- no "
+        "background-check/arrest-risk subsystem exists."
+    ),
+    "SINner (Criminal)": (
+        "Background-check/arrest consequences (p. 84-85), plus an unmodeled Notoriety point -- no "
+        "background-check/arrest-risk or Notoriety/reputation subsystem exists."
+    ),
+    "SINner (Corporate)": (
+        "Background-check/arrest consequences (p. 85), the single largest-magnitude Negative "
+        "quality in the SR5 core catalog -- no background-check/arrest-risk subsystem exists."
+    ),
+    "Code of Honor": (
+        "In-play Karma-loss/Public-Awareness consequences for violating the code (p. 79) -- no "
+        "in-play consequence-tracking subsystem exists."
+    ),
+    "Codeblock": (
+        "-2 dice pool modifier on the chosen Matrix action (p. 80) -- no Matrix rules exist."
+    ),
+    "Social Stress": (
+        "Reduces the number of 1s required to glitch a Leadership/Etiquette test by 1 (p. 85) -- "
+        "no test-resolution/glitch system exists."
+    ),
+    "Natural Immunity (Natural)": (
+        "Full immunity to one chosen disease or toxin (p. 76) -- no toxin/pathogen resistance "
+        "subsystem exists."
+    ),
+    "Natural Immunity (Synthetic)": (
+        "Full immunity to one chosen disease or toxin, at the higher (synthetic) tier (p. 76) -- "
+        "no toxin/pathogen resistance subsystem exists."
+    ),
+}
+
 
 class BonusSupport(Enum):
     """Whether/how a quality's `<bonus>` node was parsed. See module docstring for the 4 values."""
@@ -172,6 +261,11 @@ class Quality:
     # <forbidden><oneof><quality>...) -- () if the quality carries no <forbidden> block at all. See
     # module docstring for why this is parsed generally, not just for this WP's own 9 qualities.
     forbidden_names: tuple[str, ...] = ()
+    # WP56: this quality's real, unmodeled SR5 effect (Project Overview's "Unmodeled real effects"
+    # table, mirrored via _UNMODELED_EFFECT_NOTES), or None for a quality with no such gap (every
+    # FLAT_BONUS quality, and every NOT_YET_SUPPORTED one not individually verified inert-but-for-
+    # one-real-effect the way Resistance to Pathogens/Toxins is).
+    unmodeled_effect_note: str | None = None
 
 
 def _is_flat_skill_bonus(elem: ET.Element) -> bool:
@@ -263,6 +357,7 @@ def _parse_quality(elem: ET.Element) -> Quality:
         flat_bonuses=flat_bonuses,
         raw_bonus=raw_bonus,
         forbidden_names=_parse_forbidden_names(elem),
+        unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(elem.findtext("name", "")),
     )
 
 

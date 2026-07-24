@@ -224,3 +224,61 @@ def test_nav_links_to_the_character_sheet_from_every_page() -> None:
     response = client.get("/")
 
     assert 'href="/character/sheet"' in response.text
+
+
+# --- WP56: unmodeled-effects disclosure section --------------------------------------------------
+
+
+def _confirm_elf(client: TestClient) -> None:
+    client.get("/")
+    heritage = PRIORITIES.heritage["A"]
+    elf_choice = next(c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Elf")
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "talent_letter": "E",
+            "metatype_id": elf_choice.metatype.id,
+        },
+    )
+    assert response.status_code == 200
+
+
+def test_unmodeled_effects_section_hidden_for_plain_human() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.get("/character/sheet")
+
+    assert "Unmodeled real effects" not in response.text
+
+
+def test_unmodeled_effects_section_shows_elf_metatype_grant() -> None:
+    client = TestClient(create_app())
+    _confirm_elf(client)
+
+    response = client.get("/character/sheet")
+
+    assert "Unmodeled real effects (1)" in response.text
+    assert "Low-Light Vision" in response.text
+    assert "lighting-condition Perception" in response.text
+
+
+def test_unmodeled_effects_section_shows_purchased_no_effect_quality_without_duplication() -> None:
+    from chummer5.web.app import MVP_QUALITIES
+
+    client = TestClient(create_app())
+    _confirm_elf(client)
+    guts = next(q for q in MVP_QUALITIES if q.name == "Guts")
+
+    client.post("/ui/qualities", data={"quality_id": guts.id})
+    response = client.get("/character/sheet")
+
+    # Two distinct aspects (Low-Light Vision from the metatype, Guts from the purchase) -- not
+    # more, confirming re-viewing the metatype grant alongside a purchase doesn't double-count.
+    assert "Unmodeled real effects (2)" in response.text
+    assert "Guts" in response.text
+    assert "fear/intimidation" in response.text
