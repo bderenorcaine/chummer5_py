@@ -209,7 +209,9 @@ def test_spell_selection_within_budget_shows_on_the_sheet() -> None:
         assert spell.name in sheet.text
 
 
-def test_spell_selection_over_budget_is_rejected() -> None:
+def test_spell_selection_beyond_free_budget_is_karma_funded() -> None:
+    # WP54: letter B Magician grants a free budget of 7 spells (Magic 4, known cap 8); picking 8
+    # spends 5 Karma on the 1 spell beyond the free budget, rather than being rejected outright.
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="B")
     client.post(
@@ -224,7 +226,31 @@ def test_spell_selection_over_budget_is_rejected() -> None:
 
     response = client.post("/ui/spells", data={"spell_id": [s.id for s in SPELLS[:8]]})
 
-    assert "exceeding the budget of 7" in response.text
+    assert response.status_code == 200
+    assert "Spells chosen: 8 / 7" in response.text
+    assert "Karma cost for spells beyond the free budget: 5" in response.text
+
+    sheet = client.get("/character/sheet")
+    assert "Spell karma cost: 5." in sheet.text
+
+
+def test_spell_selection_exceeding_the_magic_rating_x2_known_cap_is_rejected() -> None:
+    # letter B Magician: Magic 4, known cap 8 -- 9 spells exceeds it regardless of Karma available.
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="B")
+    client.post(
+        "/ui/talent",
+        data={
+            "talent_letter": "B",
+            "talent_codename": "Magician",
+            "tradition_id": HERMETIC.id,
+            "granted_skill_id": [SPELLCASTING.id, COUNTERSPELLING.id],
+        },
+    )
+
+    response = client.post("/ui/spells", data={"spell_id": [s.id for s in SPELLS[:9]]})
+
+    assert "Magic Rating x2 cap of 8" in response.text
 
 
 def test_power_selection_flat_bonus_raises_physical_limit() -> None:

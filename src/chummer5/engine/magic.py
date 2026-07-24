@@ -293,33 +293,65 @@ def apply_magic_skill_grant_improvements(
         )
 
 
+# WP54: core rulebook p.98, "Additional Purchases & Restrictions" table -- "Spells -- Karma Cost
+# (at character creation): 5 Karma per spell -- Restriction: Maximum number of spells/rituals/
+# preparations known at Character Creation equals Magic Rating x 2." Re-extracted directly via
+# `pdftotext -layout` (see spec/rulebooks/learnings.md's WP54 entry), not trusted from the
+# Implementation Plan's own secondhand transcription.
+KARMA_PER_SPELL = 5
+
+
 @dataclass(frozen=True)
 class SpellSelection:
-    """A validated set of spells picked against a Magician's Talent-option spell budget (WP26).
+    """A validated set of spells picked against a Magician's Talent-option spell budget (WP26),
+    widened by WP54 to allow leftover Karma to buy spells beyond that free budget.
 
     `budget` is carried alongside `spells` (rather than left for a caller to re-derive) so a render
     can show "N of budget spells chosen" without re-looking-up the Talent option. There is no
     equivalent `apply_*_improvements` function for spells, unlike qualities/the Talent skill grant
     -- per the module docstring, a spell has no chargen-time computed effect to apply; it is purely
     a roster entry.
+
+    **WP54**: `karma_spell_count`/`karma_cost` -- how many of `spells` are Karma-funded (beyond the
+    free `budget`) and their total Karma cost (`karma_spell_count * KARMA_PER_SPELL`). Which
+    *specific* spells count as "free" vs. "Karma-funded" is never tracked -- every spell is
+    mechanically identical once known, so only the *count* beyond `budget` matters for cost/cap
+    purposes (mirrors `create_karma_attribute_points`'s own "the selection is a validated total,
+    not a per-item ledger of which points came from which pool" shape).
     """
 
     spells: tuple[Spell, ...]
     budget: int
+    karma_spell_count: int
+    karma_cost: int
 
 
 def create_spell_selection(
-    spell_ids: Iterable[str], catalog: Iterable[Spell], budget: int
+    spell_ids: Iterable[str],
+    catalog: Iterable[Spell],
+    budget: int,
+    magic_rating: int,
+    karma_budget: int,
 ) -> SpellSelection:
-    """Build a `SpellSelection`, validating against `catalog` and `budget`.
+    """Build a `SpellSelection`, validating against `catalog`, `budget`, the "Magic Rating x 2"
+    known-spells cap, and `karma_budget` together.
 
     Validates: every id resolves against `catalog` (the SR5-scoped spell list --
     `chummer5.data.spells.load_spells()`); no spell is picked more than once; the total picked
-    doesn't exceed `budget`. `budget` is the caller's responsibility to resolve correctly (a
-    Magician's chosen Talent option's `spells` field -- see `chummer5.data.priorities.TalentOption
-    .spells` -- or 0 for Adept/Mundane, which never have one); this function has no `magic_type`
-    parameter of its own; passing `budget=0` already rejects any pick for a character with no spell
-    grant at all, so there's nothing else for it to check.
+    doesn't exceed `magic_rating * 2` (the rulebook's own combined free-plus-Karma-funded cap, p.98
+    -- see `KARMA_PER_SPELL`'s own citation); and the Karma cost of whatever's picked beyond
+    `budget` (`max(0, len(spell_ids) - budget) * KARMA_PER_SPELL`) doesn't exceed `karma_budget`.
+
+    `budget`/`magic_rating`/`karma_budget` are all the caller's responsibility to resolve correctly
+    -- `budget` a Magician's chosen Talent option's `spells` field (see
+    `chummer5.data.priorities.TalentOption.spells`) or 0 for Adept/Mundane, which never have one;
+    `magic_rating` the character's *finished* Magic rating (`character.attribute_value("MAG")`,
+    post-Essence-loss); `karma_budget` typically `character.karma_remaining` plus this selection's
+    own currently-committed `karma_cost`, mirroring every other Karma-spending `create_*` function's
+    "exclude this section's own prior commitment" idiom. This function has no `magic_type`
+    parameter of its own -- passing `budget=0, magic_rating=0` (the Adept/Mundane case) already
+    rejects any pick via the Magic-Rating-x-2 cap (which is 0), so there's nothing else to check for
+    that case specifically.
     """
     ids = list(spell_ids)
     by_id = {s.id: s for s in catalog}
@@ -332,10 +364,26 @@ def create_spell_selection(
     if duplicates:
         raise ValueError(f"spell selected more than once: {duplicates}")
 
-    if len(ids) > budget:
-        raise ValueError(f"{len(ids)} spells selected, exceeding the budget of {budget}")
+    max_known = magic_rating * 2
+    if len(ids) > max_known:
+        raise ValueError(
+            f"{len(ids)} spells known, exceeding the Magic Rating x2 cap of {max_known}"
+        )
 
-    return SpellSelection(spells=tuple(by_id[sid] for sid in ids), budget=budget)
+    karma_spell_count = max(0, len(ids) - budget)
+    karma_cost = karma_spell_count * KARMA_PER_SPELL
+    if karma_cost > karma_budget:
+        raise ValueError(
+            f"{karma_cost} Karma spent on {karma_spell_count} spell(s) beyond the free budget of "
+            f"{budget}, exceeding the Karma budget of {karma_budget}"
+        )
+
+    return SpellSelection(
+        spells=tuple(by_id[sid] for sid in ids),
+        budget=budget,
+        karma_spell_count=karma_spell_count,
+        karma_cost=karma_cost,
+    )
 
 
 # -- Adept powers (WP27) ---------------------------------------------------------------------

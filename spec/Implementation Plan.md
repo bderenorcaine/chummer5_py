@@ -1739,7 +1739,7 @@ isn't being computed, not just discover it by reading this document.
   exercise the group-breaking case specifically — flag as hand-verified if no fixture is found during
   implementation, per this phase's own honesty standard.
 
-- [ ] **WP54 — Karma-funded extra spells/complex forms.**
+- [x] **WP54 — Karma-funded extra spells/complex forms.**
   Goal: let a Magician/Technomancer-equivalent... **note: Technomancer stays out of scope per this
   project's 2026-07-21 ruling, so this WP is Magician-only** — spend leftover Karma (5 Karma/spell, per
   the Additional Purchases table) on spells beyond a Talent option's free grant, extending WP26's

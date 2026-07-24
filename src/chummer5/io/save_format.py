@@ -644,6 +644,15 @@ def build_character(
     knowledge_points` are resolved right after `karma_attribute_selection` (both are Step Seven
     spends against the identical Karma ledger) and before Bound Spirits -- see the inline comment
     at that call site for the exact evaluation-order reasoning.
+
+    **WP54**: `spell_selection` moves from the Magic-selection block (where WP26/WP28 originally
+    placed it, before the main `replace()` above) to right after `karma_knowledge_selection` --
+    Karma-funded extra spells need `character.karma_remaining` to already reflect every earlier
+    Step Seven spend, which only holds once `character` carries `quality_selection`/`contact_
+    selection`/`karma_attribute_selection`/`karma_skill_selection`/`karma_knowledge_selection`, all
+    attached by that point. `spell_budget`/`spell_magic_rating` are still resolved in the earlier
+    Magic-selection block (0 for a non-Magician save either way) since neither depends on the Karma
+    ledger.
     """
     heritage = priorities.heritage[save.heritage_letter]
     choice = next(
@@ -796,12 +805,17 @@ def build_character(
 
     # Spell/power budgets are each the matched Talent option's own field -- 0 for whichever of the
     # two doesn't apply to `magic_selection.magic_type`, which is exactly what lets
-    # `create_spell_selection`/`create_power_selection` reject a mismatched save's picks (e.g. an
-    # Adept save somehow carrying `spell_ids`) via their own existing budget check rather than a
-    # special case here. Power Points use `total_magic_rating` (the *finished* Magic rating,
-    # including any Special Attribute Points spent), not the raw Talent-granted `magic_rating`
-    # alone, per the rulebook's own "Power Points equal to their Magic attribute" (p.278).
+    # `create_power_selection` reject a mismatched save's picks via its own existing budget check
+    # rather than a special case here. Power Points use `total_magic_rating` (the *finished* Magic
+    # rating, including any Special Attribute Points spent), not the raw Talent-granted
+    # `magic_rating` alone, per the rulebook's own "Power Points equal to their Magic attribute"
+    # (p.278). WP54: `spell_magic_rating` mirrors the same "0 unless Magician" gating as
+    # `spell_budget` itself -- an Adept's own nonzero `total_magic_rating` must NOT reach `create_
+    # spell_selection`'s "Magic Rating x2" cap computation, since a non-mystic Adept never casts
+    # spells at all regardless of Magic rating (see chummer5.engine.spirits' own WP46 citation for
+    # the same rule applied to conjuring) -- passing 0 for both keeps that cap at 0 too.
     spell_budget = 0
+    spell_magic_rating = 0
     power_point_budget = 0
     if magic_selection.magic_type == "Magician":
         magician_option = next(
@@ -810,10 +824,10 @@ def build_character(
             if o.codename == "Magician"
         )
         spell_budget = magician_option.spells or 0
+        spell_magic_rating = total_magic_rating
     elif magic_selection.magic_type == "Adept":
         power_point_budget = total_magic_rating
 
-    spell_selection = create_spell_selection(save.spell_ids, spells, budget=spell_budget)
     power_selection = create_power_selection(
         save.power_picks, powers, power_point_budget=power_point_budget
     )
@@ -831,7 +845,6 @@ def build_character(
         magic_rating=magic_selection.magic_rating,
         tradition=magic_selection.tradition,
         magic_granted_skill_ids=magic_selection.granted_skill_ids,
-        spell_selection=spell_selection,
         power_selection=power_selection,
         magic_attribute_points=magic_attribute_points,
         cyberware_selection=cyberware_selection,
@@ -871,6 +884,15 @@ def build_character(
         character, save.karma_knowledge_points, character.karma_remaining
     )
     character = replace(character, karma_knowledge_selection=karma_knowledge_selection)
+
+    # WP54: resolved next, right after karma_knowledge_selection -- character.karma_remaining now
+    # also reflects quality/contact/karma_attribute/karma_skill/karma_knowledge costs, exactly the
+    # budget a Karma-funded extra spell should be checked against (the same "next Step Seven spend
+    # sees the prior ones' cost already reflected" evaluation order WP52/WP53 established).
+    spell_selection = create_spell_selection(
+        save.spell_ids, spells, spell_budget, spell_magic_rating, character.karma_remaining
+    )
+    character = replace(character, spell_selection=spell_selection)
 
     # WP46: resolved next, against the now-fully-populated `character` -- create_bound_spirit_
     # selection reads character.attribute_value("CHA")/("MAG"), both of which depend on the

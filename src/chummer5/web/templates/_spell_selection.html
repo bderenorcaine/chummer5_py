@@ -5,8 +5,18 @@
   {% if spell_error %}
   <p class="error">{{ spell_error }}</p>
   {% endif %}
+  {% if spell_budget_warning %}
+  <p class="error">{{ spell_budget_warning }}</p>
+  {% endif %}
 
-  <p>Spells chosen: {{ spells_selected }} / {{ spell_budget }} ({{ spells_remaining }} remaining).</p>
+  <p>
+    Spells chosen: {{ spells_selected }} / {{ spell_budget }} free ({{ spells_remaining }}
+    remaining free); known cap (Magic Rating x2): {{ spell_max_known }}.
+  </p>
+  <p>
+    Karma cost for spells beyond the free budget: {{ spell_karma_cost }}.
+    Karma remaining for spells: {{ spell_karma_remaining }} / {{ spell_karma_budget }}.
+  </p>
 
   <form
     hx-post="/ui/spells"

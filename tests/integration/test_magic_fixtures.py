@@ -179,8 +179,13 @@ def test_miko_spell_selection_resolves_her_sr5_spells_and_flags_the_rest() -> No
     assert magician_option.spells == 10
 
     spell_ids = [next(s.id for s in SPELLS if s.name == name) for name in sr5_names]
-    selection = create_spell_selection(spell_ids, SPELLS, budget=magician_option.spells)
+    selection = create_spell_selection(
+        spell_ids, SPELLS, budget=magician_option.spells, magic_rating=6, karma_budget=0
+    )
     assert {s.name for s in selection.spells} == sr5_names
+    # WP54: all 6 fit inside the free 10-spell budget, so nothing here is Karma-funded.
+    assert selection.karma_spell_count == 0
+    assert selection.karma_cost == 0
 
 
 def test_wesson_adept_powers_hand_verified_against_the_raw_fixture_and_catalog() -> None:

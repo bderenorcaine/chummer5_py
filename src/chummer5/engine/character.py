@@ -331,6 +331,12 @@ class Character:
     engine computes a Knowledge/Language "dice pool" for `karma_knowledge_selection` to feed --
     it's a pure roster-rating increase, the same reason `KnowledgeSelection` itself isn't read
     piecemeal by any formula. `karma_spent` gains matching terms for both.
+
+    **WP54** adds no new field -- it widens `spell_selection` itself (`SpellSelection.karma_
+    spell_count`/`.karma_cost`, see `chummer5.engine.magic`'s own WP54 paragraph) so a Magician can
+    spend leftover Karma on spells beyond the Talent-granted free budget, up to the rulebook's
+    "Magic Rating x 2" known-spells cap. `karma_spent` gains a matching `spell_selection.karma_cost`
+    term, the same "one more selection joins the sum" pattern WP52/WP53 already established.
     """
 
     metatype: Metatype
@@ -397,6 +403,7 @@ class Character:
                 if self.karma_knowledge_selection is not None
                 else 0
             )
+            + (self.spell_selection.karma_cost if self.spell_selection is not None else 0)
         )
 
     @property

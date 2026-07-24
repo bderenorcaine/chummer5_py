@@ -260,44 +260,77 @@ HEAL_ID = next(s.id for s in SPELLS if s.name == "Heal")
 
 
 def test_spell_selection_within_budget() -> None:
-    selection = create_spell_selection([MANABOLT_ID, STUNBOLT_ID], SPELLS, budget=10)
+    selection = create_spell_selection(
+        [MANABOLT_ID, STUNBOLT_ID], SPELLS, budget=10, magic_rating=6, karma_budget=0
+    )
     assert selection == SpellSelection(
         spells=tuple(s for s in SPELLS if s.id in {MANABOLT_ID, STUNBOLT_ID}),
         budget=10,
+        karma_spell_count=0,
+        karma_cost=0,
     )
 
 
 def test_spell_selection_allows_partial_spend() -> None:
     # Mirrors every other create_* function's "doesn't require the full budget to be spent" rule.
-    selection = create_spell_selection([MANABOLT_ID], SPELLS, budget=10)
+    selection = create_spell_selection(
+        [MANABOLT_ID], SPELLS, budget=10, magic_rating=6, karma_budget=0
+    )
     assert len(selection.spells) == 1
 
 
 def test_spell_selection_rejects_unknown_id() -> None:
     with pytest.raises(ValueError, match="not an SR5-scoped spell id"):
-        create_spell_selection(["not-a-real-id"], SPELLS, budget=10)
+        create_spell_selection(["not-a-real-id"], SPELLS, budget=10, magic_rating=6, karma_budget=0)
 
 
 def test_spell_selection_rejects_duplicates() -> None:
     with pytest.raises(ValueError, match="selected more than once"):
-        create_spell_selection([MANABOLT_ID, MANABOLT_ID], SPELLS, budget=10)
+        create_spell_selection(
+            [MANABOLT_ID, MANABOLT_ID], SPELLS, budget=10, magic_rating=6, karma_budget=0
+        )
 
 
-def test_spell_selection_rejects_exceeding_budget() -> None:
-    with pytest.raises(ValueError, match="exceeding the budget of 2"):
-        create_spell_selection([MANABOLT_ID, STUNBOLT_ID, HEAL_ID], SPELLS, budget=2)
+# -- WP54: Karma-funded extra spells, beyond the free budget, up to the Magic Rating x2 cap ------
 
 
-def test_spell_selection_zero_budget_rejects_any_pick() -> None:
-    # Adept/Mundane characters have no spell grant at all -- a caller passing budget=0 for either
-    # already gets the right rejection with no magic_type check needed inside this function.
-    with pytest.raises(ValueError, match="exceeding the budget of 0"):
-        create_spell_selection([MANABOLT_ID], SPELLS, budget=0)
+def test_spell_selection_beyond_free_budget_is_karma_funded() -> None:
+    # 3 spells picked against a free budget of 2: 1 spell is Karma-funded at 5 Karma (KARMA_PER_
+    # SPELL), well within both the Magic 6 x2 = 12 known cap and a 5-Karma budget.
+    selection = create_spell_selection(
+        [MANABOLT_ID, STUNBOLT_ID, HEAL_ID], SPELLS, budget=2, magic_rating=6, karma_budget=5
+    )
+    assert selection.karma_spell_count == 1
+    assert selection.karma_cost == 5
+    assert len(selection.spells) == 3
+
+
+def test_spell_selection_rejects_exceeding_the_magic_rating_x2_known_cap() -> None:
+    # Magic 2 -> known cap 4; 5 spells picked, even with an enormous Karma budget, still rejected.
+    five_ids = [s.id for s in SPELLS[:5]]
+    with pytest.raises(ValueError, match="Magic Rating x2 cap of 4"):
+        create_spell_selection(five_ids, SPELLS, budget=2, magic_rating=2, karma_budget=10**6)
+
+
+def test_spell_selection_rejects_exceeding_the_karma_budget() -> None:
+    # 1 spell beyond the free budget of 2 costs 5 Karma, exceeding a 4-Karma budget.
+    with pytest.raises(ValueError, match="exceeding the Karma budget of 4"):
+        create_spell_selection(
+            [MANABOLT_ID, STUNBOLT_ID, HEAL_ID], SPELLS, budget=2, magic_rating=6, karma_budget=4
+        )
+
+
+def test_spell_selection_zero_budget_and_zero_magic_rating_rejects_any_pick() -> None:
+    # Adept/Mundane characters have no spell grant and no Magic Rating x2 cap headroom at all -- a
+    # caller passing budget=0, magic_rating=0 for either already gets the right rejection (via the
+    # known-spells cap, now 0) with no magic_type check needed inside this function.
+    with pytest.raises(ValueError, match="Magic Rating x2 cap of 0"):
+        create_spell_selection([MANABOLT_ID], SPELLS, budget=0, magic_rating=0, karma_budget=10**6)
 
 
 def test_spell_selection_empty_pick_with_zero_budget_is_fine() -> None:
-    selection = create_spell_selection([], SPELLS, budget=0)
-    assert selection == SpellSelection(spells=(), budget=0)
+    selection = create_spell_selection([], SPELLS, budget=0, magic_rating=0, karma_budget=0)
+    assert selection == SpellSelection(spells=(), budget=0, karma_spell_count=0, karma_cost=0)
 
 
 # -- create_power_selection (WP27) -----------------------------------------------------------
