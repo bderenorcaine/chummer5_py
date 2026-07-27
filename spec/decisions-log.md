@@ -343,3 +343,35 @@ Awakened status to use at all, so a strictly Mundane character could always buy 
 alongside WP61's main widening — the exclusion is now `Skill.category not in
 (MAGICAL_SKILL_CATEGORIES | {"Resonance Active"})`. See `spec/worklogs/WP61.md` for the full trace
 of how the category-grouping work made this visible.
+
+## 2026-07-27 — Second manual-testing pass: five bugs verified (Phase U), five QoL requests recorded (Phase V)
+
+A second hands-on browser-testing pass over the shipped chargen UI (first since Phase T) reported
+five defects and five feature requests. All five defects were verified against the current
+templates/routes before any WP was written; scoped into Phase U (WP64-66) and Phase V (WP67-71).
+
+**On "the accordion lets more than one section open at once — was this intended?":** *partly.* The
+one-section-at-a-time behavior is server-driven (`ChargenSession.open_section`); native client-side
+exclusivity via a shared `<details name>` was **deliberately removed after WP61** because it raced
+with htmx's `outerHTML` swap and collapsed the section a player had just used (documented in
+`chummer5.web.session.ChargenSession`'s "Post-WP61 fix" docstring). Consequence: manually clicking
+several `<summary>` bars open — with no server round-trip — leaves them all open. So it is not a
+regression, but it is a real gap for anyone who expects click-to-open exclusivity. **Ruled 2026-07-27: restore
+exclusivity** — WP64 does this via a client-side toggle listener that closes sibling sections and
+survives the next htmx swap, *not* by re-adding a shared `<details name>` (which would bring back the
+WP61 race).
+
+**Bug root causes (all verified, not just reported):** the skill sub-category re-expanding
+(`_skill_allocation.html:87-91` renders `<details open>` from server-derived "has active rows",
+overriding a manual collapse on every swap) and the text-input focus loss (`hx-trigger="change,
+input delay:400ms"` + `hx-swap="outerHTML"` rebuilds the focused field mid-typing) share the same
+root as the accordion: an `outerHTML` section swap discards client-only DOM state — WP64/WP65 fix
+these. The specialization-pool display shows only the specialized value because `dice_pool` folds
+the +2 `SPECIALIZATION_BONUS` into the single rendered number (WP65 splits it into `X (Y)`). The
+missing gear (fake SINs, AR glasses/goggles/contacts, earbuds, headphones) is the WP21 flat-cost
+filter excluding every `Rating * N`-priced entry — a documented MVP cut, not a regression; WP66 adds
+Rating-priced gear support (the one non-trivial fix, since it introduces a per-item rating
+dimension). **Ruled 2026-07-27: cap the offered rating** so each Rating-priced item's computed
+`<avail>` stays ≤ 12 (Fake SIN `(Rating*3)F` → max offered rating 4), making WP66 the first place
+the gear catalog enforces the 2026-07-21 Availability ≤ 12 line — scoped to the new Rating-priced
+items only, not a retroactive re-filter of WP21's flat-cost catalog.
