@@ -11,8 +11,19 @@ from fastapi.testclient import TestClient
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.skills import load_skills
-from chummer5.engine.character import create_character, metatype_choices
-from chummer5.engine.skills import create_skill_allocation, dice_pool, skill_rating
+from chummer5.engine.character import (
+    ATTRIBUTE_KARMA_PER_RATING,
+    STARTING_KARMA,
+    create_character,
+    karma_advancement_cost,
+    metatype_choices,
+)
+from chummer5.engine.skills import (
+    KARMA_SKILL_PER_RATING,
+    create_skill_allocation,
+    dice_pool,
+    skill_rating,
+)
 from chummer5.web.app import MUNDANE_SKILL_GROUPS, MUNDANE_SKILLS, create_app
 
 METATYPES = load_metatypes()
@@ -453,6 +464,44 @@ def test_submitting_karma_skill_points_over_budget_is_rejected() -> None:
 
     assert response.status_code == 200
     assert "exceeds the Karma budget" in response.text
+
+
+def test_full_page_reload_shows_each_sections_own_karma_numbers_not_knowledges() -> None:
+    """WP60 regression. `_chargen_body_context` merges `_attribute_allocation_context`'s,
+    `_skill_allocation_context`'s, and `_knowledge_selection_context`'s dicts together to build the
+    full-page `GET /` context; all three used to return the identically-named generic
+    `karma_budget`/`karma_remaining` keys, so whichever was merged last (Knowledge) silently
+    overwrote the other two -- both sections displayed Knowledge's own (nothing-spent-there) numbers
+    on any full-page render, even though each POST route's own isolated response was correct.
+    """
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    character = create_character(human_choice, "A", "B", PRIORITIES, {})
+    edg_start = character.attribute_range("EDG").minimum  # 2 for Human
+    edg_cost = karma_advancement_cost(edg_start, 1, ATTRIBUTE_KARMA_PER_RATING)  # (2+1)*5 = 15
+    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
+    skill_cost = karma_advancement_cost(0, 1, KARMA_SKILL_PER_RATING)  # (0+1)*2 = 2
+
+    client.post("/ui/attributes", data={"karma_attr_EDG": "1"})
+    client.post("/ui/skills", data={f"karma_skill_{skill.id}": "1"})
+
+    response = client.get("/")
+
+    both_spent_remaining = STARTING_KARMA - edg_cost - skill_cost
+    attribute_budget = STARTING_KARMA - skill_cost  # excludes only Attributes' own commitment
+    skill_budget = STARTING_KARMA - edg_cost  # excludes only Skills' own commitment
+    assert attribute_budget != skill_budget  # sanity: the two sections' own budgets really differ
+
+    assert (
+        f"Karma remaining for attribute increases: {both_spent_remaining} / {attribute_budget}"
+        in response.text
+    )
+    assert f"Karma remaining for skills: {both_spent_remaining} / {skill_budget}" in response.text
 
 
 def test_character_sheet_shows_karma_funded_specialization() -> None:

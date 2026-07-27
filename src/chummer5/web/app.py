@@ -140,11 +140,15 @@ together via the same `POST /ui/attributes` form) -- Step Seven's leftover-Karma
 increases (`chummer5.engine.character.create_karma_attribute_points`), reusing the same table
 `_attribute_allocation.html` already renders rather than a separate section, since both spends
 land on the same `attribute_value(code)`. `_attribute_allocation_context` gains a `karma_points`
-parameter mirroring `attribute_points`'s own "echo whatever should appear in the form" shape, and a
-`karma_budget`/`karma_remaining` pair (computed the same "add back this section's own current
-commitment" way `_spirit_selection_context`/`_foci_selection_context` already do, per WP51's own
-idiom) so the template can show "N of budget Karma remaining" the same way the priority-point
-columns already show remaining points.
+parameter mirroring `attribute_points`'s own "echo whatever should appear in the form" shape, and
+an `attribute_karma_budget`/`attribute_karma_remaining` pair (computed the same "add back this
+section's own current commitment" way `_spirit_selection_context`/`_foci_selection_context` already
+do, per WP51's own idiom) so the template can show "N of budget Karma remaining" the same way the
+priority-point columns already show remaining points. **WP60**: this pair was originally the
+generic `karma_budget`/`karma_remaining` -- prefixed after discovering `_skill_allocation_context`/
+`_knowledge_selection_context` used the identical generic names, which meant
+`_chargen_body_context`'s dict-spread merge silently let whichever was merged last win for all
+three templates at once. See `spec/worklogs/WP60.md`.
 
 Run locally: `uv run uvicorn chummer5.web.app:app --reload` (or `python -m uvicorn ...` — same
 `uv run python -m X` workaround as `pytest`/`ruff`/`mypy`, see Project Overview.md's Development
@@ -923,8 +927,13 @@ def _attribute_allocation_context(
         "primary_remaining": primary_budget - primary_spent,
         "special_budget": character.special_attribute_points,
         "special_remaining": character.special_attribute_points - special_spent,
-        "karma_budget": karma_budget,
-        "karma_remaining": karma_budget - karma_preview_cost,
+        # WP60: prefixed (not the generic "karma_budget"/"karma_remaining" this key used through
+        # WP59) -- `_chargen_body_context` merges this dict together with `_skill_allocation_
+        # context`'s and `_knowledge_selection_context`'s own, and all three used to return the
+        # identical generic key, so whichever was merged last (Knowledge) silently clobbered the
+        # other two's numbers on every full-page render. See spec/worklogs/WP60.md.
+        "attribute_karma_budget": karma_budget,
+        "attribute_karma_remaining": karma_budget - karma_preview_cost,
         "attribute_error": error,
         "attribute_budget_warning": budget_warning,
     }
@@ -1045,8 +1054,9 @@ def _skill_allocation_context(
         "groups_budget": budget.skill_groups,
         "groups_remaining": budget.skill_groups - sum(allocation.group_points.values()),
         "max_skill_rating": MAX_SKILL_RATING_CREATE,
-        "karma_budget": karma_budget,
-        "karma_remaining": (
+        # WP60: prefixed -- see the identical comment in `_attribute_allocation_context`.
+        "skill_karma_budget": karma_budget,
+        "skill_karma_remaining": (
             karma_budget - preview_karma_selection.karma_cost
             if preview_karma_selection is not None
             else karma_budget
@@ -1150,8 +1160,9 @@ def _knowledge_selection_context(
         "native_language_limit": native_language_limit(character),
         "max_skill_rating": MAX_SKILL_RATING_CREATE,
         "knowledge_budget_warning": budget_warning,
-        "karma_budget": karma_budget,
-        "karma_remaining": (
+        # WP60: prefixed -- see the identical comment in `_attribute_allocation_context`.
+        "knowledge_karma_budget": karma_budget,
+        "knowledge_karma_remaining": (
             karma_budget - preview_karma_knowledge.karma_cost
             if preview_karma_knowledge is not None
             else karma_budget
