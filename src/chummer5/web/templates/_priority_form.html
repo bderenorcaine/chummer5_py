@@ -1,5 +1,6 @@
 <div id="priority-section">
-  <h2>Priority &amp; metatype selection</h2>
+  <details name="chargen-section" {% if open_section == "priority-section" %}open{% endif %}>
+  <summary>Priority &amp; metatype selection{% if error or priority_stale_selections %} ⚠{% endif %}</summary>
   <p>
     Assign each of Heritage, Talent, Attributes, Skills, and Resources a different priority
     letter (A-E). Talent's own archetype (Mundane/Magician/Adept) is chosen in the Talent section
@@ -125,4 +126,5 @@
     </ul>
   </div>
   {% endif %}
+  </details>
 </div>

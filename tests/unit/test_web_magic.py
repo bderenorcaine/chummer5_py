@@ -106,7 +106,7 @@ def test_talent_defaults_to_mundane_at_letter_e_and_hides_spell_and_power_sectio
     assert "Not yet confirmed" in response.text
     assert 'value="Mundane"' in response.text
     assert "Adept Powers" not in response.text
-    assert "<h2>Spells</h2>" not in response.text
+    assert "<summary>Spells" not in response.text
 
     sheet = client.get("/character/sheet")
     assert "Type: Magician" not in sheet.text
@@ -182,6 +182,73 @@ def test_confirming_adept_sets_magic_rating_and_power_points() -> None:
     # Adept Drain Resistance is fixed BOD + WIL = 1 + 1, independent of tradition.
     assert "Drain Resistance: 2" in sheet.text
     assert "<td>Pistols</td><td>4</td>" in _compact(sheet.text)
+
+
+def test_magician_can_spend_regular_skill_points_on_a_magical_active_skill() -> None:
+    """WP61: WP29 left the buy UI (`/ui/skills`) Mundane-only -- a Magician's Talent free grant
+    could raise Spellcasting via an Improvement, but nothing let a player spend *additional*
+    regular Skill points on it (or any other Magical Active skill) at all. Ritual Spellcasting gets
+    no free-grant Improvement at letter B (only Spellcasting/Counterspelling do), so raising it here
+    proves the buy UI itself now offers Magical Active skills, not just the free grant showing
+    through.
+    """
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="B")
+    client.post(
+        "/ui/talent",
+        data={
+            "talent_letter": "B",
+            "talent_codename": "Magician",
+            "tradition_id": HERMETIC.id,
+            "granted_skill_id": [SPELLCASTING.id, COUNTERSPELLING.id],
+        },
+    )
+    ritual_spellcasting = next(s for s in SKILLS if s.name == "Ritual Spellcasting")
+
+    response = client.post("/ui/skills", data={f"skill_{ritual_spellcasting.id}": "3"})
+
+    assert response.status_code == 200
+    assert "<td>Ritual Spellcasting</td>" in _compact(response.text)
+    sheet = client.get("/character/sheet")
+    assert "<td>Ritual Spellcasting</td><td>3</td>" in _compact(sheet.text)
+
+
+def test_mundane_characters_skill_picker_still_excludes_magical_active_skills() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="E")  # letter E: Mundane
+
+    response = client.get("/")
+
+    assert "Ritual Spellcasting" not in response.text
+    assert "Spellcasting" not in response.text
+    # WP61 correction: Assensing is Magical Active despite an INT (not MAG) linked attribute --
+    # requires being Awakened to use at all, so a Mundane character must not see it either.
+    assert "Assensing" not in response.text
+
+
+def test_magician_can_spend_regular_skill_points_on_a_non_mag_linked_magical_active_skill() -> None:
+    """WP61 correction: Assensing is categorized Magical Active but linked to INT, not MAG -- the
+    original attribute-only filter (`attribute not in ("MAG", "RES")`) let *any* character,
+    including Mundane, already buy it, a real latent gap fixed alongside this WP's own widening.
+    Confirms a magic-active character can still buy it now that the filter is category-based.
+    """
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="B")
+    client.post(
+        "/ui/talent",
+        data={
+            "talent_letter": "B",
+            "talent_codename": "Magician",
+            "tradition_id": HERMETIC.id,
+            "granted_skill_id": [SPELLCASTING.id, COUNTERSPELLING.id],
+        },
+    )
+    assensing = next(s for s in SKILLS if s.name == "Assensing")
+
+    response = client.post("/ui/skills", data={f"skill_{assensing.id}": "2"})
+
+    assert response.status_code == 200
+    assert "<td>Assensing</td>" in _compact(response.text)
 
 
 def test_spell_selection_within_budget_shows_on_the_sheet() -> None:

@@ -1,6 +1,7 @@
 <div id="talent-selection">
   {% if character %}
-  <h2>Talent</h2>
+  <details name="chargen-section" {% if open_section == "talent-selection" %}open{% endif %}>
+  <summary>Talent{% if talent_error or talent_budget_warning %} ⚠{% endif %}</summary>
   <p>
     Talent priority {{ talent_letter }} — {{ talent_letter_name }}.
     {% if character.magic_type %}
@@ -46,6 +47,7 @@
 
     <button type="submit">Confirm Talent</button>
   </form>
+  </details>
   {% else %}
   <p>Confirm a metatype and priorities above before selecting Talent.</p>
   {% endif %}

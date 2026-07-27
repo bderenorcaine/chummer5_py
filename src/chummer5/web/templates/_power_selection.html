@@ -1,6 +1,7 @@
 <div id="power-selection">
   {% if character and character.magic_type == "Adept" %}
-  <h2>Adept Powers</h2>
+  <details name="chargen-section" {% if open_section == "power-selection" %}open{% endif %}>
+  <summary>Adept Powers{% if power_error %} ⚠{% endif %}</summary>
 
   {% if power_error %}
   <p class="error">{{ power_error }}</p>
@@ -58,5 +59,6 @@
     </table>
     <button type="submit">Update powers</button>
   </form>
+  </details>
   {% endif %}
 </div>

@@ -1,6 +1,7 @@
 <div id="knowledge-skills">
   {% if character %}
-  <h2>Knowledge &amp; Language Skills</h2>
+  <details name="chargen-section" {% if open_section == "knowledge-skills" %}open{% endif %}>
+  <summary>Knowledge &amp; Language Skills{% if knowledge_error or knowledge_budget_warning %} ⚠{% endif %}</summary>
 
   {% if knowledge_error %}
   <p class="error">{{ knowledge_error }}</p>
@@ -128,6 +129,7 @@
     </table>
     <button type="submit">Update knowledge &amp; language skills</button>
   </form>
+  </details>
   {% else %}
   <p>Confirm a metatype and priorities above before adding knowledge/language skills.</p>
   {% endif %}

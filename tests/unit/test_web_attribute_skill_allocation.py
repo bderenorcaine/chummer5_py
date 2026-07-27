@@ -82,6 +82,12 @@ def test_index_after_confirmation_shows_allocation_forms_with_full_budget() -> N
     # MUNDANE_SKILLS comment) -- Spellcasting (Sorcery group, MAG-linked) must not appear.
     assert "Spellcasting" not in response.text
     assert "Alchemy" not in response.text
+    # WP61 correction: Assensing/Astral Combat/Arcana are Magical/Pseudo-Magical Active despite
+    # being linked to INT/WIL/LOG, not MAG -- a Mundane character must not see them either, even
+    # though the old attribute-only filter let them through.
+    assert "Assensing" not in response.text
+    assert "Astral Combat" not in response.text
+    assert "Arcana" not in response.text
 
 
 def test_submitting_valid_attribute_points_matches_engine_output() -> None:

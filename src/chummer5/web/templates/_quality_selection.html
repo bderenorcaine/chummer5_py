@@ -1,6 +1,7 @@
 <div id="quality-selection">
   {% if character %}
-  <h2>Qualities</h2>
+  <details name="chargen-section" {% if open_section == "quality-selection" %}open{% endif %}>
+  <summary>Qualities{% if quality_error %} ⚠{% endif %}</summary>
 
   {% if quality_error %}
   <p class="error">{{ quality_error }}</p>
@@ -110,6 +111,7 @@
 
     <button type="submit">Update qualities</button>
   </form>
+  </details>
   {% else %}
   <p>Confirm a metatype and priorities above before selecting qualities.</p>
   {% endif %}

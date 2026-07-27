@@ -183,7 +183,7 @@ from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import Power, load_powers
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import BonusSupport, load_qualities
-from chummer5.data.skills import load_skills
+from chummer5.data.skills import Skill, load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.bioware import (
@@ -255,6 +255,7 @@ from chummer5.engine.lifestyle import (
 from chummer5.engine.magic import (
     KARMA_PER_SPELL,
     MAGIC_SKILL_GRANT_SOURCE_ID,
+    MAGICAL_SKILL_CATEGORIES,
     MagicSelection,
     PowerSelection,
     apply_magic_skill_grant_improvements,
@@ -380,28 +381,65 @@ MAX_BOUND_SPIRIT_ROWS = 10
 MAX_KNOWLEDGE_ROWS = 12
 MAX_LANGUAGE_ROWS = 4
 
-# MVP's regular Skills-priority point-buy UI stays mundane-only even after WP29 -- a Mundane
-# character's MAG/RES are always 0 and can never be raised in chargen (RES/Resonance stays out of
-# scope permanently, per the Project Overview), and the 12 skills linked to those attributes
-# (Alchemy, Summoning, Compiling, ...) would show a permanently-crippled dice pool (rating + 0, and
-# none of them allow defaulting) if offered here for a Mundane build -- excluded from the
-# allocation UI for the same "excluded, not silently broken" reason WP2/WP3 exclude non-SR5
-# metatypes/qualities from their catalogs. This is a UI-layer curation, not an engine change:
-# `create_skill_allocation` itself is still generic and would accept points on these skills if
-# submitted directly (e.g. via a hand-crafted request). **WP29 note**: a Magician's Talent
-# free-skill grant can still raise a Magical Active skill's rating above 0 via a pure Improvement,
-# entirely independent of this buy UI (see `chummer5.engine.magic
-# .apply_magic_skill_grant_improvements`'s own docstring) -- widening `MUNDANE_SKILLS` itself so a
-# Magician/Adept could spend *additional* Skills-priority points on Magical Active skills beyond
-# that grant is a real, deliberately deferred follow-on (see this WP's worklog), not something this
-# constant's exclusion silently breaks.
-_MAGIC_ATTRIBUTES = ("MAG", "RES")
+# MVP's regular Skills-priority point-buy UI stays mundane-only for a Mundane character -- Magical
+# Active/Pseudo-Magical Active skills require being Awakened at all (not just a nonzero MAG dice
+# pool term), and Resonance Active skills require being Emerged (RES stays out of scope permanently,
+# per the Project Overview) -- excluded from the allocation UI for the same "excluded, not silently
+# broken" reason WP2/WP3 exclude non-SR5 metatypes/qualities from their catalogs. This is a UI-layer
+# curation, not an engine change: `create_skill_allocation` itself is still generic and would accept
+# points on these skills if submitted directly (e.g. via a hand-crafted request).
+#
+# **WP61 correction**: this was originally `s.attribute not in ("MAG", "RES")` -- a plausible-
+# looking but wrong proxy. Confirmed against the loaded catalog while building WP61's category
+# grouping (which made the mistake visible by giving Mundane characters their own "Magical Active"
+# category header): 3 of the 12 Magical/Pseudo-Magical/Resonance-categorized skills (Assensing/INT,
+# Astral Combat/WIL, Arcana/LOG) use a *non*-MAG/RES linked attribute for their dice pool despite
+# requiring Awakened status to use at all -- the attribute-based filter let a Mundane character buy
+# all three, a real (if narrow) latent gap since WP2 first drew this line, surfaced and fixed here
+# rather than left for a future WP now that the category data needed to fix it correctly
+# (`Skill.category`) is already in hand for the grouping work below.
+_NON_MUNDANE_SKILL_CATEGORIES = MAGICAL_SKILL_CATEGORIES | {"Resonance Active"}
 MUNDANE_SKILLS = tuple(
-    sorted((s for s in SKILLS if s.attribute not in _MAGIC_ATTRIBUTES), key=lambda s: s.name)
+    sorted(
+        (s for s in SKILLS if s.category not in _NON_MUNDANE_SKILL_CATEGORIES),
+        key=lambda s: s.name,
+    )
 )
 MUNDANE_SKILL_GROUPS = tuple(
     sorted({s.skill_group for s in MUNDANE_SKILLS if s.skill_group is not None})
 )
+# WP29 note (resolved by WP61): a Magician's Talent free-skill grant could always raise a Magical
+# Active skill's rating above 0 via a pure Improvement, entirely independent of this buy UI (see
+# `chummer5.engine.magic.apply_magic_skill_grant_improvements`'s own docstring) -- but nothing let a
+# player spend *additional* regular Skill points or leftover Karma on Magical Active skills beyond
+# that grant, flagged there as a real, deliberately deferred gap pending a decision on which subset
+# to offer.
+#
+# WP61: resolved by reusing `MAGICAL_SKILL_CATEGORIES` (the exact category filter already verified
+# against the legacy `GetMagicalSkillList()` for the free-grant itself, WP25) rather than any
+# narrower per-tradition/per-magic-type subset -- SR5 doesn't restrict regular skill-point spend by
+# magic type or tradition, only the free grant is restricted, and an Adept's MAG > 0 makes these
+# skills just as functional (not "permanently crippled") as they are for a Magician. Applies
+# identically to both. `_offered_skills`/`_offered_skill_groups` are the character-scoped
+# equivalents of `MUNDANE_SKILLS`/`MUNDANE_SKILL_GROUPS` every buy-UI call site now uses instead --
+# both return the exact Mundane-only sets unchanged when `character.magic_type is None`.
+_MAGICAL_SKILLS = tuple(
+    sorted((s for s in SKILLS if s.category in MAGICAL_SKILL_CATEGORIES), key=lambda s: s.name)
+)
+
+
+def _offered_skills(character: Character | None) -> tuple[Skill, ...]:
+    if character is None or character.magic_type is None:
+        return MUNDANE_SKILLS
+    return tuple(sorted(MUNDANE_SKILLS + _MAGICAL_SKILLS, key=lambda s: s.name))
+
+
+def _offered_skill_groups(character: Character | None) -> tuple[str, ...]:
+    if character is None or character.magic_type is None:
+        return MUNDANE_SKILL_GROUPS
+    return tuple(
+        sorted({s.skill_group for s in _offered_skills(character) if s.skill_group is not None})
+    )
 # WP29: the character sheet's read-only skill list needs every skill (so a Magician's granted
 # Magical Active skill shows up there too, see `_character_sheet_context`), sorted the same way
 # `MUNDANE_SKILLS` already is.
@@ -1003,6 +1041,10 @@ def _skill_allocation_context(
         else 0
     )
     budget = skill_point_budget(skills_letter, PRIORITIES)
+    # WP61: sorted by (category, name), not just name, so `itertools.groupby` below needs no
+    # re-sorting -- mirrors `_resources_context`'s own `gear_groups` comment about
+    # `STARTER_GEAR_CATALOG` already being pre-sorted the same way.
+    offered_by_category = sorted(_offered_skills(character), key=lambda s: (s.category, s.name))
     skill_rows = [
         {
             "skill": skill,
@@ -1013,7 +1055,17 @@ def _skill_allocation_context(
             "rating": skill_rating(display, allocation, skill),
             "pool": dice_pool(display, allocation, skill),
         }
-        for skill in MUNDANE_SKILLS
+        for skill in offered_by_category
+    ]
+    # WP61: grouped into collapsible categories for the template, same shape/pattern as
+    # `_resources_context`'s `gear_groups` (`<details>` open only if it has an active row). Zips
+    # the typed `offered_by_category` skills alongside `skill_rows`'s own dicts rather than keying
+    # off `row["skill"].category` directly -- `skill_rows`'s values are typed `object`, not `Skill`.
+    skill_row_groups = [
+        {"category": category, "rows": [row for _, row in pairs]}
+        for category, pairs in itertools.groupby(
+            zip(offered_by_category, skill_rows, strict=True), key=lambda pair: pair[0].category
+        )
     ]
     group_rows = [
         {
@@ -1021,7 +1073,7 @@ def _skill_allocation_context(
             "points": allocation.group_points.get(group, 0),
             "karma_points": karma_group_points.get(group, 0),
         }
-        for group in MUNDANE_SKILL_GROUPS
+        for group in _offered_skill_groups(character)
     ]
     budget_warning: str | None = None
     if error is None:
@@ -1045,6 +1097,7 @@ def _skill_allocation_context(
     return {
         "character": display,
         "skill_rows": skill_rows,
+        "skill_row_groups": skill_row_groups,
         "group_rows": group_rows,
         "skills_budget": budget.skills,
         "skills_remaining": (
@@ -3241,6 +3294,11 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     )
     priority_ctx = {**priority_ctx, "priority_stale_selections": stale}
     return {
+        # WP61: read by every section template's own `<details {% if open_section == "..." %}>`
+        # -- shared via this one merged dict rather than threaded through all 14 context-builder
+        # signatures, since `{% include %}` (used throughout `_chargen_body.html`) already shares
+        # the including template's context with what it includes.
+        "open_section": session.open_section,
         **priority_ctx,
         **talent_ctx,
         **attribute_ctx,
@@ -3356,6 +3414,7 @@ def create_app() -> FastAPI:
         metatype_id: str = Form(...),
     ) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "priority-section"  # WP61
         submitted_letters = (
             heritage_letter,
             attributes_letter,
@@ -3477,6 +3536,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/attributes", response_class=HTMLResponse)
     async def submit_attributes(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "attribute-allocation"  # WP61
         if session.character is None:
             context = _attribute_allocation_context(None, {})
         else:
@@ -3603,6 +3663,7 @@ def create_app() -> FastAPI:
                 context = _attribute_allocation_context(
                     character, attribute_points, magic_points, karma_points
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_attribute_allocation.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3611,6 +3672,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/talent", response_class=HTMLResponse)
     async def submit_talent(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "talent-selection"  # WP61
         if session.character is None:
             context = _talent_selection_context(None, session.talent_letter, "Mundane", None, ())
         else:
@@ -3647,6 +3709,7 @@ def create_app() -> FastAPI:
                     tradition_id,
                     selection.granted_skill_ids,
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_talent_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3655,23 +3718,30 @@ def create_app() -> FastAPI:
     @app.post("/ui/skills", response_class=HTMLResponse)
     async def submit_skills(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "skill-allocation"  # WP61
         if session.character is None:
             context = _skill_allocation_context(None, session.skills_letter, {}, {})
         else:
             form = await request.form()
-            skill_points = _parse_points(form, (s.id for s in MUNDANE_SKILLS), "skill_")
-            group_points = _parse_points(form, MUNDANE_SKILL_GROUPS, "group_")
-            specializations = _parse_specializations(form, (s.id for s in MUNDANE_SKILLS), "spec_")
+            previous = session.character
+            # WP61: character-scoped, not the module-level `MUNDANE_SKILLS`/`MUNDANE_SKILL_GROUPS`
+            # -- a magic-active character's submitted Magical Active skill points would otherwise
+            # be silently dropped by the parser even though the display side (`_skill_allocation_
+            # context`) already widens to offer them. See that helper's own docstring/comment.
+            offered_skills = _offered_skills(previous)
+            offered_groups = _offered_skill_groups(previous)
+            skill_points = _parse_points(form, (s.id for s in offered_skills), "skill_")
+            group_points = _parse_points(form, offered_groups, "group_")
+            specializations = _parse_specializations(form, (s.id for s in offered_skills), "spec_")
             # WP53: Karma-funded points/specializations, submitted in the same form (mirrors
             # WP52's karma_attr_{code} precedent).
             karma_skill_points = _parse_points(
-                form, (s.id for s in MUNDANE_SKILLS), "karma_skill_"
+                form, (s.id for s in offered_skills), "karma_skill_"
             )
-            karma_group_points = _parse_points(form, MUNDANE_SKILL_GROUPS, "karma_group_")
+            karma_group_points = _parse_points(form, offered_groups, "karma_group_")
             karma_specializations = _parse_specializations(
-                form, (s.id for s in MUNDANE_SKILLS), "karma_spec_"
+                form, (s.id for s in offered_skills), "karma_spec_"
             )
-            previous = session.character
             try:
                 allocation = create_skill_allocation(
                     session.skills_letter,
@@ -3727,6 +3797,7 @@ def create_app() -> FastAPI:
                     karma_group_points,
                     karma_specializations,
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_skill_allocation.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3735,6 +3806,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/knowledge", response_class=HTMLResponse)
     async def submit_knowledge(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "knowledge-skills"  # WP61
         if session.character is None:
             context = _knowledge_selection_context(None, (), ())
         else:
@@ -3774,6 +3846,7 @@ def create_app() -> FastAPI:
                 context = _knowledge_selection_context(
                     session.character, knowledge_skills, languages, karma_points
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_knowledge_skills.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3782,6 +3855,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/spells", response_class=HTMLResponse)
     async def submit_spells(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "spell-selection"  # WP61
         if session.character is None or session.character.magic_type != "Magician":
             context = _spell_selection_context(session.character, session.talent_letter, ())
         else:
@@ -3821,6 +3895,7 @@ def create_app() -> FastAPI:
                 context = _spell_selection_context(
                     session.character, session.talent_letter, spell_ids
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_spell_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3829,6 +3904,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/powers", response_class=HTMLResponse)
     async def submit_powers(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "power-selection"  # WP61
         if session.character is None or session.character.magic_type != "Adept":
             context = _power_selection_context(session.character, ())
         else:
@@ -3841,6 +3917,7 @@ def create_app() -> FastAPI:
             else:
                 session.character = _replace_committed_powers(session.character, selection)
                 context = _power_selection_context(session.character, picks)
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_power_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3849,6 +3926,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/spirits", response_class=HTMLResponse)
     async def submit_spirits(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "spirit-selection"  # WP61
         if session.character is None or session.character.magic_type != "Magician":
             context = _spirit_selection_context(session.character, ())
         else:
@@ -3871,6 +3949,7 @@ def create_app() -> FastAPI:
             else:
                 session.character = replace(character, bound_spirit_selection=selection)
                 context = _spirit_selection_context(session.character, picks)
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_spirit_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3879,6 +3958,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/qualities", response_class=HTMLResponse)
     async def submit_qualities(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "quality-selection"  # WP61
         if session.character is None:
             context = _quality_selection_context(None, ())
         else:
@@ -3934,6 +4014,7 @@ def create_app() -> FastAPI:
                 context = _quality_selection_context(
                     session.character, quality_ids, quality_text=quality_text
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_quality_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3942,6 +4023,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/contacts", response_class=HTMLResponse)
     async def submit_contacts(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "contacts"  # WP61
         if session.character is None:
             context = _contacts_context(None, ())
         else:
@@ -3954,6 +4036,7 @@ def create_app() -> FastAPI:
             else:
                 session.character = replace(session.character, contact_selection=selection)
                 context = _contacts_context(session.character, contacts)
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_contacts.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -3962,6 +4045,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/resources", response_class=HTMLResponse)
     async def submit_resources(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "resources"  # WP61
         if session.character is None:
             context = _resources_context(None, session.resources_letter, (), 0, 0, 0, 0)
         else:
@@ -4010,6 +4094,7 @@ def create_app() -> FastAPI:
                     bioware_cost,
                     karma_converted,
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_resources.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -4018,6 +4103,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/lifestyle", response_class=HTMLResponse)
     async def submit_lifestyle(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "lifestyle"  # WP61
         if session.character is None:
             context = _lifestyle_context(
                 None,
@@ -4088,6 +4174,7 @@ def create_app() -> FastAPI:
                     bioware_cost,
                     karma_converted,
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_lifestyle.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -4096,6 +4183,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/cyberware", response_class=HTMLResponse)
     async def submit_cyberware(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "cyberware"  # WP61
         if session.character is None:
             context = _cyberware_context(None, session.resources_letter, (), (), 0, 0, 0)
         else:
@@ -4172,6 +4260,7 @@ def create_app() -> FastAPI:
                     karma_converted,
                     foci_cost,
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_cyberware.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
@@ -4180,6 +4269,7 @@ def create_app() -> FastAPI:
     @app.post("/ui/foci", response_class=HTMLResponse)
     async def submit_foci(request: Request) -> HTMLResponse:
         session, new_cookie = resolve_session(request)
+        session.open_section = "foci-selection"  # WP61
         if session.character is None or session.character.magic_type is None:
             context = _foci_selection_context(
                 session.character, session.resources_letter, (), 0, 0, 0, 0
@@ -4259,6 +4349,7 @@ def create_app() -> FastAPI:
                     bioware_cost,
                     karma_converted,
                 )
+        context["open_section"] = session.open_section  # WP61
         response = templates.TemplateResponse(request, "_foci_selection.html", context)
         if new_cookie is not None:
             response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

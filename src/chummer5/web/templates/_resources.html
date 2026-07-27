@@ -1,6 +1,7 @@
 <div id="resources">
   {% if character %}
-  <h2>Resources</h2>
+  <details name="chargen-section" {% if open_section == "resources" %}open{% endif %}>
+  <summary>Resources{% if resources_error or resources_budget_warning %} ⚠{% endif %}</summary>
 
   {% if resources_error %}
   <p class="error">{{ resources_error }}</p>
@@ -66,6 +67,7 @@
     {% endfor %}
     <button type="submit">Update gear</button>
   </form>
+  </details>
   {% else %}
   <p>Confirm a metatype and priorities above before spending starting nuyen.</p>
   {% endif %}

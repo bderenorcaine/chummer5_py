@@ -117,6 +117,14 @@ class ChargenSession:
     priority-letter-budgeted, and a contact's Connection/Loyalty aren't validated against
     metatype/priorities at all -- only the *free* contact-point budget (`CHA * 3`) depends on the
     character, and that's recomputed fresh from the current `Character` on every render.
+
+    **WP61**: `open_section` is the same kind of genuine pre-`Character`-independent UI scratch
+    state as the priority letters above -- which of the 14 `_chargen_body.html` sections currently
+    renders its `<details>` open, in the one-section-at-a-time accordion. Defaults to
+    `"priority-section"` (the first real step) for a fresh session; every section's own successful
+    `POST` sets it to that section's own id before rendering, so the section a player just used
+    stays open on the next full-page render. Not folded into `Character` -- it isn't part of the
+    character being built, only of how the page is currently laid out.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER
@@ -127,6 +135,7 @@ class ChargenSession:
     build_method: str = PRIORITY_BUILD_METHOD
     metatype_id: str | None = None
     character: Character | None = None
+    open_section: str = "priority-section"
 
 
 class SessionStore:

@@ -1,6 +1,7 @@
 <div id="spell-selection">
   {% if character and character.magic_type == "Magician" %}
-  <h2>Spells</h2>
+  <details name="chargen-section" {% if open_section == "spell-selection" %}open{% endif %}>
+  <summary>Spells{% if spell_error or spell_budget_warning %} ⚠{% endif %}</summary>
 
   {% if spell_error %}
   <p class="error">{{ spell_error }}</p>
@@ -59,5 +60,6 @@
     </table>
     <button type="submit">Update spells</button>
   </form>
+  </details>
   {% endif %}
 </div>

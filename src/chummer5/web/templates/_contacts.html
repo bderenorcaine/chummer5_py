@@ -1,6 +1,7 @@
 <div id="contacts">
   {% if character %}
-  <h2>Contacts</h2>
+  <details name="chargen-section" {% if open_section == "contacts" %}open{% endif %}>
+  <summary>Contacts{% if contact_error %} ⚠{% endif %}</summary>
 
   {% if contact_error %}
   <p class="error">{{ contact_error }}</p>
@@ -65,6 +66,7 @@
     </table>
     <button type="submit">Update contacts</button>
   </form>
+  </details>
   {% else %}
   <p>Confirm a metatype and priorities above before adding contacts.</p>
   {% endif %}

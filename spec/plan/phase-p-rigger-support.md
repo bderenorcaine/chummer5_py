@@ -40,7 +40,7 @@ item itself, but nothing needs to *change* them via installed programs/mods).
   current scope.
 
 No WP numbers are assigned yet; the next work package after this research pass lands should continue
-from WP60 (WP55-56 were claimed by Phase O's own SINner/unmodeled-effects-disclosure WPs; WP57-59
+from WP62 (WP55-56 were claimed by Phase O's own SINner/unmodeled-effects-disclosure WPs; WP57-59
 were claimed by Phases Q/R/S — the spec reorganization, architecture-cleanup audit, and
-fixture-strategy research pass added 2026-07-24, after Phase P's own research-intro section was
-written).
+fixture-strategy research pass; WP60-61 were claimed by Phase T's UI bugfixes/QoL work — all added
+2026-07-24, after Phase P's own research-intro section was written).

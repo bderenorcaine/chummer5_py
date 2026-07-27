@@ -1,6 +1,7 @@
 <div id="foci-selection">
   {% if character and character.magic_type %}
-  <h2>Foci</h2>
+  <details name="chargen-section" {% if open_section == "foci-selection" %}open{% endif %}>
+  <summary>Foci{% if foci_error or foci_budget_warning %} ⚠{% endif %}</summary>
 
   {% if foci_error %}
   <p class="error">{{ foci_error }}</p>
@@ -62,5 +63,6 @@
 
     <button type="submit">Update foci</button>
   </form>
+  </details>
   {% endif %}
 </div>

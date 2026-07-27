@@ -32,7 +32,7 @@ Phase Q/R/S claimed WP57-59.
   Acceptance: `pytest`/`ruff`/`mypy` all green; new regression test fails on the pre-fix code and
   passes after. See [WP60.md](../worklogs/WP60.md) for the full reproduction trace.
 
-- [ ] **WP61 — Widen the Skills-priority buy UI to Magical Active skills for magic-active
+- [x] **WP61 — Widen the Skills-priority buy UI to Magical Active skills for magic-active
   characters; collapsible skill categories + a name filter; a whole-page one-section-open-at-a-time
   accordion.**
   Goal: fix a real, previously-documented-but-deferred gap (a Magician/Adept can't spend regular
@@ -51,6 +51,16 @@ Phase Q/R/S claimed WP57-59.
     spend regular Skill points and leftover Karma on any skill in that category set, not just their
     free grant. `create_skill_allocation`/`create_karma_skill_selection` needed no engine changes —
     the restriction was purely `web/app.py`'s own UI curation, already generic underneath.
+  - **A second, previously-undiscovered bug surfaced and fixed alongside the above**:
+    `MUNDANE_SKILLS`'s original exclusion (`s.attribute not in ("MAG", "RES")`) was attribute-based,
+    not category-based — a plausible-looking but wrong proxy. 3 of the 12 Magical/Pseudo-Magical
+    Active skills (Assensing/INT, Astral Combat/WIL, Arcana/LOG) use a non-MAG linked attribute for
+    their dice pool despite requiring Awakened status to use at all, so the old filter let *any*
+    character, including Mundane, already buy them — made visible by this WP's own category
+    grouping (a Mundane character's picker showed its own "Magical Active" header). Fixed by
+    switching the exclusion to `Skill.category not in (MAGICAL_SKILL_CATEGORIES | {"Resonance
+    Active"})`, shrinking `MUNDANE_SKILLS` from 64 to 61 entries (the 3 corrected skills plus the
+    already-excluded 12) — a real, if narrow, latent gap since WP2 first drew this line.
   - **QoL 1**: skill rows grouped into collapsible `<details>`/`<summary>` categories, mirroring
     `_resources.html`'s existing gear-category grouping exactly (`itertools.groupby` on
     `skill.category`, open-by-default only when a category has an active row). A small client-side

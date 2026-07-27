@@ -1,6 +1,7 @@
 <div id="spirit-selection">
   {% if character and character.magic_type == "Magician" %}
-  <h2>Bound Spirits</h2>
+  <details name="chargen-section" {% if open_section == "spirit-selection" %}open{% endif %}>
+  <summary>Bound Spirits{% if spirit_error or spirit_budget_warning %} ⚠{% endif %}</summary>
 
   {% if spirit_error %}
   <p class="error">{{ spirit_error }}</p>
@@ -53,5 +54,6 @@
     </table>
     <button type="submit">Update bound spirits</button>
   </form>
+  </details>
   {% endif %}
 </div>

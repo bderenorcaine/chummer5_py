@@ -309,3 +309,37 @@ Codeblock/Social Stress/Natural Immunity specifically, rather than offering them
 gap — no longer reflects this project's policy. All 9 are now offered in full, karma charged/
 credited correctly, with every unmodeled consequence recorded in the table above rather than used as
 a reason to withhold the quality.
+
+### 2026-07-25 — WP60/WP61 (Phase T): first real hands-on browser testing since the UI shipped
+surfaced two bugs and one previously-undiscovered latent gap
+
+Raised directly from manual browser use, not a design-discussion scoping session like every entry
+above — worth recording anyway since two of the three findings weren't obvious from the code alone.
+
+**Bug 1 (WP60)**: the Attributes and Skills sections' "Karma remaining" numbers went wrong on any
+full-page reload after a Karma-funded spend — reported as a qualities-triggered recompute bug, but
+actually a Python dict-key collision: `_attribute_allocation_context`/`_skill_allocation_context`/
+`_knowledge_selection_context` all returned the identically-named generic `"karma_budget"`/
+`"karma_remaining"` keys, and `_chargen_body_context`'s dict-spread merge let whichever was applied
+last (Knowledge) silently clobber the other two for the whole merged page render. Underlying
+`Character`/session state was correct throughout — confirmed by direct `TestClient` +
+`app.state.sessions` introspection before touching any code. Fixed by prefixing all three (matching
+`_spell_selection_context`/`_spirit_selection_context`/`_foci_selection_context`'s existing
+convention). See `spec/worklogs/WP60.md`.
+
+**Bug 2 (WP61)**: a Magician/Adept couldn't spend regular Skill-priority points or leftover Karma on
+Spellcasting or any other Magical Active skill — only their Talent free-grant ever raised one, a gap
+WP29 (2026-07-19) had already found and deliberately deferred pending a decision on which subset of
+Magical Active skills to offer. Resolved by reusing `chummer5.engine.magic
+.MAGICAL_SKILL_CATEGORIES` (the exact category filter WP25 already verified for the free-grant
+itself) rather than commissioning new rules research — SR5 doesn't restrict regular skill-point
+spend by magic type or tradition, only the free grant is restricted.
+
+**Previously-undiscovered latent gap, surfaced (not caused) by WP61's own skill-category grouping**:
+`MUNDANE_SKILLS`'s exclusion had been attribute-based (`attribute not in ("MAG", "RES")`) since WP2,
+not category-based — a plausible but wrong proxy. 3 of the 12 Magical/Pseudo-Magical Active skills
+(Assensing/INT, Astral Combat/WIL, Arcana/LOG) use a non-MAG linked attribute despite requiring
+Awakened status to use at all, so a strictly Mundane character could always buy all three. Fixed
+alongside WP61's main widening — the exclusion is now `Skill.category not in
+(MAGICAL_SKILL_CATEGORIES | {"Resonance Active"})`. See `spec/worklogs/WP61.md` for the full trace
+of how the category-grouping work made this visible.

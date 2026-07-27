@@ -1,6 +1,7 @@
 <div id="lifestyle">
   {% if character %}
-  <h2>Lifestyle</h2>
+  <details name="chargen-section" {% if open_section == "lifestyle" %}open{% endif %}>
+  <summary>Lifestyle{% if lifestyle_error or lifestyle_budget_warning %} ⚠{% endif %}</summary>
 
   {% if lifestyle_error %}
   <p class="error">{{ lifestyle_error }}</p>
@@ -42,6 +43,7 @@
     </label>
     <button type="submit">Update lifestyle</button>
   </form>
+  </details>
   {% else %}
   <p>Confirm a metatype and priorities above before selecting a Lifestyle.</p>
   {% endif %}

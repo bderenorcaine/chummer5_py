@@ -48,7 +48,9 @@ OFFERED_TALENT_CODENAMES = ("Mundane", "Magician", "Adept")
 # from `SelectMetatypePriority.cs`'s `GetMagicalSkillList()`, confirmed verbatim as
 # `skills/skill[category = "Magical Active" or category = "Pseudo-Magical Active"]` -- a plain
 # filter over `Skill.category`. See Implementation Plan's Phase I intro.
-_MAGICAL_SKILL_CATEGORIES = frozenset({"Magical Active", "Pseudo-Magical Active"})
+# WP61: also reused (not re-derived) by `chummer5.web.app` to widen the Skills-priority *buy* UI
+# for a magic-active character -- public (no leading underscore) for that cross-module reuse.
+MAGICAL_SKILL_CATEGORIES = frozenset({"Magical Active", "Pseudo-Magical Active"})
 
 
 def _xpath_grant_eligible(skill: Skill) -> bool:
@@ -106,7 +108,7 @@ def magic_skill_grant_eligible_skills(
     if talent_option.skill_type is None:
         return ()
     if talent_option.skill_type == "magic":
-        return tuple(s for s in skills if s.category in _MAGICAL_SKILL_CATEGORIES)
+        return tuple(s for s in skills if s.category in MAGICAL_SKILL_CATEGORIES)
     if talent_option.skill_type == "xpath":
         return tuple(s for s in skills if _xpath_grant_eligible(s))
     raise ValueError(f"unrecognized Talent skill_type: {talent_option.skill_type!r}")

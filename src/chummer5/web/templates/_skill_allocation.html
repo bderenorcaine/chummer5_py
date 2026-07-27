@@ -1,6 +1,7 @@
 <div id="skill-allocation">
   {% if character %}
-  <h2>Skills</h2>
+  <details name="chargen-section" {% if open_section == "skill-allocation" %}open{% endif %}>
+  <summary>Skills{% if skill_error or skill_budget_warning %} ⚠{% endif %}</summary>
 
   {% if skill_error %}
   <p class="error">{{ skill_error }}</p>
@@ -14,6 +15,11 @@
     Skill group points remaining: {{ groups_remaining }} / {{ groups_budget }}.
     Karma remaining for skills: {{ skill_karma_remaining }} / {{ skill_karma_budget }}.
   </p>
+
+  <label>
+    Filter skills
+    <input type="text" id="skill-filter" placeholder="e.g. Automatics" />
+  </label>
 
   <form
     hx-post="/ui/skills"
@@ -75,68 +81,101 @@
       group from this point forward (its other members keep their current rating, but can no
       longer be raised together as a group).
     </p>
-    <table>
-      <thead>
-        <tr>
-          <th>Skill</th>
-          <th>Attribute</th>
-          <th>Group</th>
-          <th>Points</th>
-          <th>Karma pts</th>
-          <th>Rating</th>
-          <th>Specialization</th>
-          <th>Karma spec</th>
-          <th>Pool</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in skill_rows %}
-        <tr>
-          <td>{{ row.skill.name }}</td>
-          <td>{{ row.skill.attribute }}</td>
-          <td>{{ row.skill.skill_group or "—" }}</td>
-          <td>
-            <input
-              type="number"
-              name="skill_{{ row.skill.id }}"
-              value="{{ row.points }}"
-              min="0"
-              max="{{ max_skill_rating }}"
-            />
-          </td>
-          <td>
-            <input
-              type="number"
-              name="karma_skill_{{ row.skill.id }}"
-              value="{{ row.karma_points }}"
-              min="0"
-              max="{{ max_skill_rating }}"
-            />
-          </td>
-          <td>{{ row.rating }}</td>
-          <td>
-            <input
-              type="text"
-              name="spec_{{ row.skill.id }}"
-              value="{{ row.specialization }}"
-              placeholder="e.g. Axes"
-            />
-          </td>
-          <td>
-            <input
-              type="text"
-              name="karma_spec_{{ row.skill.id }}"
-              value="{{ row.karma_specialization }}"
-              placeholder="e.g. Axes"
-            />
-          </td>
-          <td>{{ row.pool }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+
+    <div id="skill-tables">
+      {% for group in skill_row_groups %}
+      <details
+        {% if group.rows | selectattr("points", "gt", 0) | list
+           or group.rows | selectattr("karma_points", "gt", 0) | list
+           or group.rows | selectattr("specialization") | list
+           or group.rows | selectattr("karma_specialization") | list %}open{% endif %}
+      >
+        <summary>{{ group.category }}</summary>
+        <table>
+          <thead>
+            <tr>
+              <th>Skill</th>
+              <th>Attribute</th>
+              <th>Group</th>
+              <th>Points</th>
+              <th>Karma pts</th>
+              <th>Rating</th>
+              <th>Specialization</th>
+              <th>Karma spec</th>
+              <th>Pool</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in group.rows %}
+            <tr data-skill-name="{{ row.skill.name | lower }}">
+              <td>{{ row.skill.name }}</td>
+              <td>{{ row.skill.attribute }}</td>
+              <td>{{ row.skill.skill_group or "—" }}</td>
+              <td>
+                <input
+                  type="number"
+                  name="skill_{{ row.skill.id }}"
+                  value="{{ row.points }}"
+                  min="0"
+                  max="{{ max_skill_rating }}"
+                />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  name="karma_skill_{{ row.skill.id }}"
+                  value="{{ row.karma_points }}"
+                  min="0"
+                  max="{{ max_skill_rating }}"
+                />
+              </td>
+              <td>{{ row.rating }}</td>
+              <td>
+                <input
+                  type="text"
+                  name="spec_{{ row.skill.id }}"
+                  value="{{ row.specialization }}"
+                  placeholder="e.g. Axes"
+                />
+              </td>
+              <td>
+                <input
+                  type="text"
+                  name="karma_spec_{{ row.skill.id }}"
+                  value="{{ row.karma_specialization }}"
+                  placeholder="e.g. Axes"
+                />
+              </td>
+              <td>{{ row.pool }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+      {% endfor %}
+    </div>
     <button type="submit">Update skills</button>
   </form>
+  <script>
+    (function () {
+      var filterInput = document.getElementById("skill-filter");
+      if (!filterInput) return;
+      filterInput.addEventListener("input", function () {
+        var query = filterInput.value.trim().toLowerCase();
+        document.querySelectorAll("#skill-tables details").forEach(function (details) {
+          var anyVisible = false;
+          details.querySelectorAll("tr[data-skill-name]").forEach(function (row) {
+            var matches = !query || row.dataset.skillName.includes(query);
+            row.hidden = !matches;
+            if (matches) anyVisible = true;
+          });
+          details.hidden = !anyVisible;
+          if (query && anyVisible) details.open = true;
+        });
+      });
+    })();
+  </script>
+  </details>
   {% else %}
   <p>Confirm a metatype and priorities above before allocating skill points.</p>
   {% endif %}

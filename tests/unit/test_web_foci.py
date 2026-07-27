@@ -102,7 +102,7 @@ def test_foci_section_hidden_for_mundane() -> None:
 
     response = client.get("/")
 
-    assert "Foci</h2>" not in response.text
+    assert "<summary>Foci" not in response.text
 
 
 def test_foci_section_shown_for_magician() -> None:
@@ -111,7 +111,7 @@ def test_foci_section_shown_for_magician() -> None:
 
     response = client.get("/")
 
-    assert "Foci</h2>" in response.text
+    assert "<summary>Foci" in response.text
     assert ALCHEMICAL.name in response.text
 
 
@@ -123,7 +123,7 @@ def test_foci_section_shown_for_adept_too() -> None:
 
     response = client.get("/")
 
-    assert "Foci</h2>" in response.text
+    assert "<summary>Foci" in response.text
 
 
 def test_bonding_a_focus_within_budget_shows_on_the_sheet() -> None:
