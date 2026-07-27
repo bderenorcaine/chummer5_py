@@ -1,6 +1,6 @@
 <div id="spirit-selection">
   {% if character and character.magic_type == "Magician" %}
-  <details name="chargen-section" {% if open_section == "spirit-selection" %}open{% endif %}>
+  <details {% if open_section == "spirit-selection" %}open{% endif %}>
   <summary>Bound Spirits{% if spirit_error or spirit_budget_warning %} ⚠{% endif %}</summary>
 
   {% if spirit_error %}

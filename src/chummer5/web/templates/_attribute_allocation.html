@@ -1,6 +1,6 @@
 <div id="attribute-allocation">
   {% if character %}
-  <details name="chargen-section" {% if open_section == "attribute-allocation" %}open{% endif %}>
+  <details {% if open_section == "attribute-allocation" %}open{% endif %}>
   <summary>Attributes{% if attribute_error or attribute_budget_warning %} ⚠{% endif %}</summary>
 
   {% if attribute_error %}

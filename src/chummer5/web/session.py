@@ -127,6 +127,22 @@ class ChargenSession:
     `POST` sets it to that section's own id before rendering, so the section a player just used
     stays open on the next full-page render. Not folded into `Character` -- it isn't part of the
     character being built, only of how the page is currently laid out.
+
+    **Post-WP61 fix**: each section's `<details>` originally also carried a shared
+    `name="chargen-section"` attribute, opting into the browser's *native* exclusive-accordion
+    grouping (only one `<details>` sharing a `name` can be open at once) on top of the
+    `open_section`-driven server state above. That combination raced with htmx's own `outerHTML`
+    swap: htmx inserts the freshly-rendered (already-`open`) `<details>` *before* removing the old
+    one, so for an instant two same-`name` elements are both open, and the browser's exclusivity
+    logic reacts by closing the newly-inserted one -- collapsing the very section a player just
+    interacted with (e.g. every click of an attribute's +/- spinner) rather than the stale one being
+    replaced. Since exactly one section being open is already fully server-driven (only the section
+    matching `open_section` ever renders with `open`), the native grouping bought nothing for the
+    request/response path and only broke it; the `name` attribute was removed from every section's
+    `<details>` rather than worked around. The one behavior change: manually clicking open a
+    *different* section's `<summary>` (no server round trip involved) no longer auto-closes the
+    previously open one client-side -- it does once either section's own form next submits and
+    re-renders with the current `open_section`.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER

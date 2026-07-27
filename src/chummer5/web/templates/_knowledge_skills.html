@@ -1,6 +1,6 @@
 <div id="knowledge-skills">
   {% if character %}
-  <details name="chargen-section" {% if open_section == "knowledge-skills" %}open{% endif %}>
+  <details {% if open_section == "knowledge-skills" %}open{% endif %}>
   <summary>Knowledge &amp; Language Skills{% if knowledge_error or knowledge_budget_warning %} ⚠{% endif %}</summary>
 
   {% if knowledge_error %}

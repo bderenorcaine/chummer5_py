@@ -1,6 +1,6 @@
 <div id="power-selection">
   {% if character and character.magic_type == "Adept" %}
-  <details name="chargen-section" {% if open_section == "power-selection" %}open{% endif %}>
+  <details {% if open_section == "power-selection" %}open{% endif %}>
   <summary>Adept Powers{% if power_error %} ⚠{% endif %}</summary>
 
   {% if power_error %}

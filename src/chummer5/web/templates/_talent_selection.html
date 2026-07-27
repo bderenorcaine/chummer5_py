@@ -1,6 +1,6 @@
 <div id="talent-selection">
   {% if character %}
-  <details name="chargen-section" {% if open_section == "talent-selection" %}open{% endif %}>
+  <details {% if open_section == "talent-selection" %}open{% endif %}>
   <summary>Talent{% if talent_error or talent_budget_warning %} ⚠{% endif %}</summary>
   <p>
     Talent priority {{ talent_letter }} — {{ talent_letter_name }}.

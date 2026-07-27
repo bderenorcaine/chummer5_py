@@ -1,6 +1,6 @@
 <div id="skill-allocation">
   {% if character %}
-  <details name="chargen-section" {% if open_section == "skill-allocation" %}open{% endif %}>
+  <details {% if open_section == "skill-allocation" %}open{% endif %}>
   <summary>Skills{% if skill_error or skill_budget_warning %} ⚠{% endif %}</summary>
 
   {% if skill_error %}

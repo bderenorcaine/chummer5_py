@@ -1,6 +1,6 @@
 <div id="quality-selection">
   {% if character %}
-  <details name="chargen-section" {% if open_section == "quality-selection" %}open{% endif %}>
+  <details {% if open_section == "quality-selection" %}open{% endif %}>
   <summary>Qualities{% if quality_error %} ⚠{% endif %}</summary>
 
   {% if quality_error %}

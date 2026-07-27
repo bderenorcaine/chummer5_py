@@ -1,5 +1,5 @@
 <div id="priority-section">
-  <details name="chargen-section" {% if open_section == "priority-section" %}open{% endif %}>
+  <details {% if open_section == "priority-section" %}open{% endif %}>
   <summary>Priority &amp; metatype selection{% if error or priority_stale_selections %} ⚠{% endif %}</summary>
   <p>
     Assign each of Heritage, Talent, Attributes, Skills, and Resources a different priority

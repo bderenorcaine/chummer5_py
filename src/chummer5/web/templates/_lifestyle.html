@@ -1,6 +1,6 @@
 <div id="lifestyle">
   {% if character %}
-  <details name="chargen-section" {% if open_section == "lifestyle" %}open{% endif %}>
+  <details {% if open_section == "lifestyle" %}open{% endif %}>
   <summary>Lifestyle{% if lifestyle_error or lifestyle_budget_warning %} ⚠{% endif %}</summary>
 
   {% if lifestyle_error %}

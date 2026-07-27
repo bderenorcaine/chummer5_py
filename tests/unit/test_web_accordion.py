@@ -1,11 +1,22 @@
 """WP61: whole-page one-section-open-at-a-time accordion, bundled into the same WP as the
 Magical-Active-skill-picker fix and skill-category grouping per an explicit follow-up request.
 
-All 14 `_chargen_body.html` sections share `<details name="chargen-section">` -- native browser
-mutual exclusion, no JS. `ChargenSession.open_section` tracks which one currently renders open;
-every section's own successful `POST` sets it to that section's own id. A collapsed section with an
-active error/budget-warning shows a visible marker (`⚠`) on its `<summary>` so a WP19-style
-"no longer fits" diagnostic isn't hidden just because that section happens to be collapsed.
+All 14 `_chargen_body.html` sections are `<details>` elements; `ChargenSession.open_section`
+tracks which one currently renders open (only that section's template conditionally emits the
+`open` attribute), and every section's own successful `POST` sets it to that section's own id. A
+collapsed section with an active error/budget-warning shows a visible marker (`⚠`) on its
+`<summary>` so a WP19-style "no longer fits" diagnostic isn't hidden just because that section
+happens to be collapsed.
+
+**Post-WP61 fix**: the sections' `<details>` originally also shared `name="chargen-section"`,
+opting into the browser's native exclusive-accordion grouping on top of the `open_section`-driven
+server state above. That combination raced with htmx's `outerHTML` swap (see
+`chummer5.web.session.ChargenSession`'s own "Post-WP61 fix" docstring note for the mechanics) and
+collapsed the very section a player just interacted with -- e.g. every click of an attribute's
++/- spinner. The `name` attribute was removed from every section's `<details>` rather than worked
+around, since exactly-one-open is already fully enforced server-side; this module's assertions
+were updated from the old `name="chargen-section"`-qualified strings to plain `'<details open>'`
+accordingly.
 """
 
 from fastapi.testclient import TestClient
@@ -44,8 +55,8 @@ def test_fresh_session_shows_only_the_priority_section_open() -> None:
 
     response = client.get("/")
 
-    assert response.text.count('<details name="chargen-section"') == 1
-    assert '<details name="chargen-section" open>' in response.text
+    assert response.text.count('<details ') == 1
+    assert '<details open>' in response.text
 
 
 def test_confirming_priorities_and_attributes_moves_the_open_section() -> None:
@@ -55,21 +66,21 @@ def test_confirming_priorities_and_attributes_moves_the_open_section() -> None:
     response = client.get("/")
     priority_idx = response.text.find('id="priority-section"')
     priority_segment = response.text[priority_idx : priority_idx + 200]
-    assert '<details name="chargen-section" open>' in priority_segment
+    assert '<details open>' in priority_segment
 
     client.post("/ui/attributes", data={"attr_BOD": "2"})
     response2 = client.get("/")
 
     priority_idx2 = response2.text.find('id="priority-section"')
     priority_segment2 = response2.text[priority_idx2 : priority_idx2 + 200]
-    assert '<details name="chargen-section" open>' not in priority_segment2
+    assert '<details open>' not in priority_segment2
 
     attribute_idx = response2.text.find('id="attribute-allocation"')
     attribute_segment = response2.text[attribute_idx : attribute_idx + 200]
-    assert '<details name="chargen-section" open>' in attribute_segment
+    assert '<details open>' in attribute_segment
 
     # Exactly one section open at a time across the whole page.
-    assert response2.text.count('<details name="chargen-section" open>') == 1
+    assert response2.text.count('<details open>') == 1
 
 
 def test_submitting_a_sections_own_form_reopens_it_even_on_a_validation_error() -> None:
@@ -86,7 +97,7 @@ def test_submitting_a_sections_own_form_reopens_it_even_on_a_validation_error() 
     index = client.get("/")
     skill_idx = index.text.find('id="skill-allocation"')
     skill_segment = index.text[skill_idx : skill_idx + 200]
-    assert '<details name="chargen-section" open>' in skill_segment
+    assert '<details open>' in skill_segment
     assert budget >= 0  # sanity: PRIORITIES loaded correctly for this session
 
 
@@ -118,5 +129,5 @@ def test_collapsed_section_with_an_active_warning_shows_a_marker_on_its_summary(
 
     attribute_idx = response.text.find('id="attribute-allocation"')
     attribute_segment = response.text[attribute_idx : attribute_idx + 200]
-    assert '<details name="chargen-section" >' in attribute_segment  # collapsed, not open
+    assert '<details >' in attribute_segment  # collapsed, not open
     assert "<summary>Attributes ⚠</summary>" in attribute_segment

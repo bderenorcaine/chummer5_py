@@ -1,6 +1,6 @@
 <div id="cyberware">
   {% if character %}
-  <details name="chargen-section" {% if open_section == "cyberware" %}open{% endif %}>
+  <details {% if open_section == "cyberware" %}open{% endif %}>
   <summary>Cyberware &amp; Bioware{% if cyberware_error or cyberware_budget_warning %} ⚠{% endif %}</summary>
 
   {% if cyberware_error %}
