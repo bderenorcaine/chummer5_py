@@ -1,10 +1,20 @@
 """Attributes chargen step: `POST /ui/attributes` (WP15, widened by WP29/WP52).
 
 **WP62**: split out of the former `chummer5.web.app` -- see `spec/plan/phase-r-architecture-
-cleanup.md`'s WP58 audit for the target shape this module is part of. Still the one route rebuilding
-via `create_character()` fresh rather than `dataclasses.replace`-ing the previous `Character` in
-place (see `chummer5.web.routes.priorities.submit_priorities` for the WP19 shape this route hasn't
-adopted yet) -- WP63 is the follow-up that unifies it, per that phase file's Finding 2.
+cleanup.md`'s WP58 audit for the target shape this module is part of.
+
+**WP63**: `submit_attributes` now builds its new `Character` via `dataclasses.replace(previous,
+...)`, the same shape `chummer5.web.routes.priorities.submit_priorities` has used since WP19,
+instead of a fresh `create_character()` call. `create_character` is still called, but only to
+*validate* the submitted `attribute_points` (it raises `ValueError` on an invalid spend, discarded
+otherwise) -- its returned `Character` is no longer what gets built on. Since `replace()` carries
+every untouched field (and, crucially, the already-populated `improvements` index) forward *by
+reference*, every carried-forward selection's Improvements -- quality, Talent/tradition/power,
+cyberware, bioware, Foci -- simply survive an attribute edit with no relink call needed for any of
+them; only `_relink_metatype_qualities` (harmless either way; metatype is unchanged on this route)
+and `_relink_contact_selection` (CHA can genuinely change here) still run, mirroring
+`submit_priorities` exactly. See `spec/plan/phase-r-architecture-cleanup.md`'s Finding 2 for the
+"repeated relink-call accretion" bug class this retires.
 """
 
 from __future__ import annotations
@@ -33,10 +43,7 @@ from chummer5.engine.magic import create_magic_attribute_points
 from chummer5.web.catalogs import PRIORITIES, templates
 from chummer5.web.forms import parse_points
 from chummer5.web.routes.contacts import _relink_contact_selection
-from chummer5.web.routes.cyberware import _relink_bioware_selection, _relink_cyberware_selection
-from chummer5.web.routes.foci import _relink_foci_selection
-from chummer5.web.routes.qualities import _relink_metatype_qualities, _relink_quality_improvements
-from chummer5.web.routes.talent import _relink_magic_selection
+from chummer5.web.routes.qualities import _relink_metatype_qualities
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -241,7 +248,11 @@ async def submit_attributes(request: Request) -> HTMLResponse:
             else 0
         )
         try:
-            character = create_character(
+            # WP63: `create_character` is called only to *validate* the submitted
+            # `attribute_points` (raises `ValueError` on an invalid spend) -- its returned,
+            # fresh-and-empty `Character` is discarded rather than built on; see `character`
+            # below, which is `previous` with `attribute_points` swapped in instead.
+            create_character(
                 choice,
                 session.heritage_letter,
                 session.attributes_letter,
@@ -257,6 +268,9 @@ async def submit_attributes(request: Request) -> HTMLResponse:
                     previous.special_attribute_points,
                     attribute_points.get("EDG", 0),
                 )
+            character = replace(
+                previous, attribute_points=MappingProxyType(dict(attribute_points))
+            )
             karma_attribute_selection = create_karma_attribute_points(
                 character, karma_points, karma_budget
             )
@@ -269,61 +283,25 @@ async def submit_attributes(request: Request) -> HTMLResponse:
                 error=str(exc),
             )
         else:
-            # See the identical comment in submit_priorities -- a fresh Character means fresh
-            # skill_allocation/quality_selection/contact_selection/resources_selection/
-            # lifestyle_selection (all `None`) and a fresh, empty ImprovementIndex. Unlike
-            # submit_priorities, an attribute-point edit alone doesn't invalidate skill, gear,
-            # or lifestyle spend (none depend on attribute points), so all three carry forward
-            # by plain reference.
-            character = _relink_quality_improvements(character, previous.quality_selection)
-            # WP23: metatype is unchanged here, but the fresh `create_character()` call above
-            # still needs metatype_qualities' Improvements re-landed onto its new, empty index.
+            # WP63: `character` is `previous` with `attribute_points` swapped in via
+            # `dataclasses.replace` -- every other field (skill_allocation, quality_selection,
+            # contact_selection, resources_selection, lifestyle_selection, cyberware_selection,
+            # bioware_selection, foci_selection, bound_spirit_selection, knowledge_selection,
+            # karma_skill_selection, karma_knowledge_selection, magic_type/tradition/spell_
+            # selection/power_selection, and -- crucially -- the already-populated `improvements`
+            # index) carries forward *by reference*, with nothing to re-land. Only two things
+            # still need an explicit recompute, mirroring `submit_priorities` (WP19) exactly:
             character = _relink_metatype_qualities(character)
-            character = _relink_contact_selection(character, previous.contact_selection)
-            # WP29: same reasoning -- Talent/tradition/free-skill-grant Improvements, and the
-            # Adept power selection's own Improvements, need re-landing on this fresh index too,
-            # or a Magician/Adept would silently reset to Mundane on the next attribute edit.
-            # `magic_points` is *not* carried from `previous` here -- it's this same request's
-            # own freshly-validated submission (the Attributes form is where MAG points are
-            # spent, echoing whatever was already committed unless just edited).
-            character = _relink_magic_selection(character, session.talent_letter, previous)
-            # WP34: cyberware's Essence/bonus Improvements need the same re-landing as
-            # quality/metatype/Talent above -- a fresh `create_character()` call always starts
-            # `cyberware_selection` at `None` and `improvements` empty (see `_relink_cyberware_
-            # selection`'s own docstring).
-            character = _relink_cyberware_selection(character, previous.cyberware_selection)
-            # WP45: bioware's Essence/bonus Improvements need the identical re-landing.
-            character = _relink_bioware_selection(character, previous.bioware_selection)
-            # WP47: Foci's FLAT_BONUS skill Improvements need the identical re-landing.
-            character = _relink_foci_selection(character, previous.foci_selection)
+            # metatype is unchanged on this route, so this is a harmless no-op today (see its own
+            # docstring: safe/idempotent to call unconditionally regardless) -- kept for the same
+            # reason submit_priorities keeps it, not because attribute edits ever change metatype.
+            character = _relink_contact_selection(character, character.contact_selection)
+            # CHA can genuinely change here (an EDG/CHA attribute-point reallocation), which
+            # ContactSelection.free_points/karma_cost derive from.
             character = replace(
                 character,
-                skill_allocation=previous.skill_allocation,
-                resources_selection=previous.resources_selection,
-                lifestyle_selection=previous.lifestyle_selection,
                 magic_attribute_points=magic_points,
                 karma_attribute_selection=karma_attribute_selection,
-                # WP46: carried forward by plain reference, same as lifestyle_selection above --
-                # a bound spirit has no Improvement to re-land (see chummer5.engine.spirits'
-                # module docstring), so there's no relink helper needed, just a plain carry.
-                # `_spirit_selection_context`'s own WP19-style re-validation is what surfaces a
-                # "no longer fits" warning if this attribute edit shrank CHA/MAG below what was
-                # already committed.
-                bound_spirit_selection=previous.bound_spirit_selection,
-                # WP49: same plain-carry treatment -- Knowledge/Language has no Improvement of
-                # its own to re-land either (it only *consumes* Bilingual's
-                # NATIVE_LANGUAGE_LIMIT, already re-landed by `_relink_quality_improvements`
-                # above). `_knowledge_selection_context`'s own WP19-style re-validation surfaces
-                # a "no longer fits" warning if this attribute edit shrank INT/LOG below what
-                # was already spent.
-                knowledge_selection=previous.knowledge_selection,
-                # WP53: same plain-carry treatment -- neither Karma-funded selection has an
-                # Improvement of its own to re-land (a Karma-funded skill/specialization is a
-                # pure rating increase, not an Improvement -- see chummer5.engine.skills' own
-                # WP53 paragraph), and neither depends on an attribute value, only on
-                # skill_allocation/knowledge_selection, both already carried forward above.
-                karma_skill_selection=previous.karma_skill_selection,
-                karma_knowledge_selection=previous.karma_knowledge_selection,
             )
             session.character = character
             context = _attribute_allocation_context(

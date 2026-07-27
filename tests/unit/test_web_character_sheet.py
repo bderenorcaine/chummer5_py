@@ -138,14 +138,16 @@ def _first_mundane_skill_id() -> str:
 
 
 def test_a_loaded_qualitys_bonus_survives_a_later_attribute_edit() -> None:
-    """WP16 found that `create_character` always rebuilds a fresh, empty `ImprovementIndex`, so
-    every route that rebuilds `session.character` for an already-in-progress session must re-apply
-    any committed quality's Improvements onto it (`_relink_quality_improvements`), or the bonus
-    silently vanishes on the next attribute edit. `_apply_built_character_to_session` (this WP's
-    load/import entry point) sets `session.quality_selection` from the loaded save, so the existing
-    relink call in `submit_attributes` should already cover a *loaded* quality the same way it
-    covers one picked directly through the UI -- this proves that composition end to end rather
-    than just asserting it by inspection.
+    """WP16 found that `create_character` always rebuilds a fresh, empty `ImprovementIndex`, which
+    once meant every route that rebuilt `session.character` this way for an already-in-progress
+    session had to re-apply any committed quality's Improvements onto it or the bonus would
+    silently vanish on the next attribute edit. Post-WP63, `submit_attributes` no longer rebuilds
+    via `create_character()` at all -- it `dataclasses.replace`s the previous `Character` in
+    place, which carries the already-populated `ImprovementIndex` forward by reference, so there is
+    nothing left to re-apply. `_apply_built_character_to_session` (this WP's load/import entry
+    point) sets `session.quality_selection` from the loaded save, so this proves a *loaded*
+    quality's bonus survives an attribute edit the same way one picked directly through the UI
+    does -- composition end to end, not just by inspection.
     """
     from chummer5.data.qualities import load_qualities
 

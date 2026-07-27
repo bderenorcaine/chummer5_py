@@ -33,53 +33,18 @@ from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 router = APIRouter()
 
 
-def _relink_quality_improvements(
-    character: Character, quality_selection: QualitySelection | None
-) -> Character:
-    """Re-apply a carried-forward quality selection's bonuses onto a freshly built `Character`,
-    and re-attach the selection itself (WP18 folded `quality_selection` onto `Character` -- a
-    fresh `create_character()` call always starts it, like `improvements`, empty/`None`).
-
-    `create_character` always returns a `Character` with a brand-new, empty `ImprovementIndex`
-    (see its own docstring) -- every route that builds a new `Character` this way for an
-    already-in-progress session has to re-land this selection's bonuses onto it, or a
-    previously-picked quality's skill bonus would silently vanish the next time an attribute is
-    edited. Safe to call unconditionally: returns `character` unchanged if nothing has ever been
-    committed.
-
-    **WP48**: also re-applies `quality_selection.mentor_spirit`'s `MENTOR_SPIRIT`-sourced
-    Improvements when present, for the identical reason -- a fresh `create_character()` call's
-    empty index has nothing to remove, so this is always a pure add, never a double-application.
-
-    **WP19 note**: still load-bearing for `submit_attributes` (unchanged this WP -- still rebuilds
-    via `create_character()`), but no longer called from `submit_priorities`, which WP19 switched
-    to `dataclasses.replace`-ing the *previous* `Character` in place. `replace` carries
-    `improvements` forward *by reference*, already populated -- calling this function there would
-    re-apply the same quality's bonus a second time (`apply_quality_improvements` only ever adds;
-    see `_replace_committed_qualities`'s docstring for the same failure mode described from the
-    other direction).
-    """
-    if quality_selection is None:
-        return character
-    apply_quality_improvements(character, quality_selection.qualities)
-    if quality_selection.mentor_spirit is not None:
-        apply_mentor_spirit_improvements(character, quality_selection.mentor_spirit)
-    return replace(character, quality_selection=quality_selection)
-
-
 def _relink_metatype_qualities(character: Character) -> Character:
     """(Re)populate `character.metatype_qualities` from `character.metatype`, keeping its
     Improvements in sync (WP23).
 
-    Unlike `_relink_quality_improvements` (a player's selection, only ever carried forward
-    unchanged), what belongs here can genuinely change out from under `character.metatype_qualities`
-    -- `submit_priorities` can swap the metatype itself. So this always removes whatever
-    `ImprovementSource.METATYPE` Improvements `character.metatype_qualities` currently names (a
-    no-op on the always-fresh, empty index `submit_attributes` builds, since a fresh `Character`'s
-    `metatype_qualities` defaults to `()`) before resolving `character.metatype`'s *current* free
-    qualities and re-applying -- correct whether metatype changed, stayed the same, or this is the
-    first time it's ever been resolved. Safe to call unconditionally after any (re)construction of
-    `character`.
+    What belongs here can genuinely change out from under `character.metatype_qualities` --
+    `submit_priorities` can swap the metatype itself. So this always removes whatever
+    `ImprovementSource.METATYPE` Improvements `character.metatype_qualities` currently names before
+    resolving `character.metatype`'s *current* free qualities and re-applying -- correct whether
+    metatype changed, stayed the same, or this is the first time it's ever been resolved. Safe to
+    call unconditionally after any (re)construction of `character` (both `submit_priorities` and,
+    since WP63, `submit_attributes` call it on every submission regardless of whether metatype
+    could actually have changed on that route).
     """
     for quality in character.metatype_qualities:
         character.improvements.remove_source(ImprovementSource.METATYPE, quality.id)

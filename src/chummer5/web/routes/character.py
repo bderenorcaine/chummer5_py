@@ -696,9 +696,7 @@ def _apply_built_character_to_session(
     `built` (not a re-`create_character` call) is used for `session.character` directly --
     `build_character` already ran `apply_quality_improvements` on it (see
     `chummer5.io.save_format`), so it arrives with the right `ImprovementIndex` already populated,
-    unlike `create_character`'s always-empty one (see
-    `chummer5.web.routes.qualities._relink_quality_improvements`'s docstring for why that matters
-    elsewhere).
+    unlike `create_character`'s always-empty one.
 
     **WP29**: `session.talent_letter` is set from `save.talent_letter` (WP28's field, unused by
     this function until now -- WP24-WP28 all left this hardcoded to `DEFAULT_TALENT_LETTER` since

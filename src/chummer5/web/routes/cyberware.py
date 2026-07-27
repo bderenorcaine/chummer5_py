@@ -49,22 +49,6 @@ _CYBERWARE_BY_CATEGORY = tuple(sorted(CYBERWARE, key=lambda item: (item.category
 _BIOWARE_BY_CATEGORY = tuple(sorted(BIOWARE, key=lambda item: (item.category, item.name)))
 
 
-def _relink_cyberware_selection(
-    character: Character, cyberware_selection: CyberwareSelection | None
-) -> Character:
-    """Re-apply a carried-forward cyberware selection's Essence/bonus Improvements onto a freshly
-    built `Character`, and re-attach the selection itself -- mirrors
-    `chummer5.web.routes.qualities._relink_quality_improvements`'s identical shape (a fresh
-    `create_character()` call always starts `cyberware_selection` at `None` and `improvements`
-    empty; see that function's own docstring). Load-bearing only for `submit_attributes`, the one
-    route still rebuilding via `create_character()` fresh.
-    """
-    if cyberware_selection is None:
-        return character
-    apply_cyberware_improvements(character, cyberware_selection)
-    return replace(character, cyberware_selection=cyberware_selection)
-
-
 def _replace_committed_cyberware(character: Character, selection: CyberwareSelection) -> Character:
     """Swap whatever `CYBERWARE`-sourced Improvements `character.improvements` currently holds for
     `selection`'s, and re-attach `selection` as `character.cyberware_selection` -- mirrors
@@ -80,20 +64,6 @@ def _replace_committed_cyberware(character: Character, selection: CyberwareSelec
             character.improvements.remove_source(ImprovementSource.CYBERWARE, item_id)
     apply_cyberware_improvements(character, selection)
     return replace(character, cyberware_selection=selection)
-
-
-def _relink_bioware_selection(
-    character: Character, bioware_selection: BiowareSelection | None
-) -> Character:
-    """Re-apply a carried-forward bioware selection's Essence/bonus Improvements onto a freshly
-    built `Character`, and re-attach the selection itself -- mirrors `_relink_cyberware_selection`'s
-    identical shape. Load-bearing only for `submit_attributes`, the one route still rebuilding via
-    `create_character()` fresh.
-    """
-    if bioware_selection is None:
-        return character
-    apply_bioware_improvements(character, bioware_selection)
-    return replace(character, bioware_selection=bioware_selection)
 
 
 def _replace_committed_bioware(character: Character, selection: BiowareSelection) -> Character:

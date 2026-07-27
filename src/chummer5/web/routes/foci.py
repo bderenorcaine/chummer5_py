@@ -37,18 +37,6 @@ router = APIRouter()
 _FOCI_BY_CATEGORY = tuple(sorted(FOCI, key=lambda item: (item.focus_category, item.name)))
 
 
-def _relink_foci_selection(character: Character, foci_selection: FociSelection | None) -> Character:
-    """Re-apply a carried-forward Foci selection's `FLAT_BONUS` skill Improvements onto a freshly
-    built `Character`, and re-attach the selection itself -- mirrors
-    `chummer5.web.routes.cyberware._relink_bioware_selection`'s identical shape. Load-bearing only
-    for `submit_attributes`, the one route still rebuilding via `create_character()` fresh.
-    """
-    if foci_selection is None:
-        return character
-    apply_foci_improvements(character, foci_selection)
-    return replace(character, foci_selection=foci_selection)
-
-
 def _replace_committed_foci(character: Character, selection: FociSelection) -> Character:
     """Swap whatever `FOCUS`-sourced Improvements `character.improvements` currently holds for
     `selection`'s, and re-attach `selection` as `character.foci_selection` -- mirrors

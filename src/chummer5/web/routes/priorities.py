@@ -495,9 +495,9 @@ def submit_priorities(
                 # carries every untouched field forward *by reference* -- attribute_points,
                 # skill_allocation, resources_selection, quality_selection, and (crucially)
                 # `improvements`, which already has that quality's bonuses applied -- so
-                # unlike the old `create_character()`-fresh design, there is no empty
-                # `ImprovementIndex` to re-populate here, and calling
-                # `_relink_quality_improvements` here would double the bonus
+                # unlike a `create_character()`-fresh rebuild, there is no empty
+                # `ImprovementIndex` to re-populate here, and re-applying a quality's bonus onto
+                # this already-populated index would double it
                 # (`apply_quality_improvements` only ever adds). `Character` has no
                 # `__post_init__` validation, so carrying forward a spend that no longer fits
                 # the new Attributes/Skills/Resources budget or the new metatype's attribute

@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase R — Post-MVP: Architecture cleanup (research-intro; WP59 onward pending its own audit)
+### Phase R — Post-MVP: Architecture cleanup (audited via WP58; WP62-63 done)
 
 **Why now.** Raised in the same 2026-07-24 session as Phase Q, after 56 WPs of incremental,
 mostly-additive design. This project's own discipline holds up well under a quick audit — a repo-wide
@@ -178,7 +178,7 @@ is untouched by this list):
   style) confirming no route regressed; `web/app.py`'s own line count drops to a small fraction of
   today's 4,499.
 
-- [ ] **WP63 — Unify `submit_attributes` onto the `dataclasses.replace()` shape.**
+- [x] **WP63 — Unify `submit_attributes` onto the `dataclasses.replace()` shape.**
   Goal: give `submit_attributes` the same WP19 treatment `submit_priorities` already has, retiring
   the relink-call accretion Finding 2 documents.
   Deliverables:

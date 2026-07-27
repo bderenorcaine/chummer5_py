@@ -45,8 +45,9 @@ def _spell_selection_context(
     pattern: when `error` is unset and a `spell_selection` is already committed, re-runs `create_
     spell_selection` against the character's *current* state purely to derive `spell_budget_
     warning`. A committed spell_selection is carried forward unchanged by `submit_attributes`
-    (`_relink_magic_selection`), so an attribute-form edit that lowers Special-Attribute-Point-
-    funded MAG (shrinking the Magic-Rating-x2 known cap) or spends more Karma elsewhere (shrinking
+    (a plain `dataclasses.replace`-carried field, since WP63), so an attribute-form edit that
+    lowers Special-Attribute-Point-funded MAG (shrinking the Magic-Rating-x2 known cap) or spends
+    more Karma elsewhere (shrinking
     `karma_remaining`) can each make a previously-valid spell_selection no longer fit -- surfaced
     here rather than silently left inconsistent, the same "surface, don't silently reset" rule
     WP19 established generally.

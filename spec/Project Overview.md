@@ -257,10 +257,10 @@ anything else about the character, not always a fresh `create_character()` call.
 convenience. `replace()` copies every untouched field *by reference*, so a `Character`'s
 already-populated `ImprovementIndex` and already-committed selections simply survive a `replace()`
 call with nothing to re-link — the "re-apply a quality's Improvement onto a freshly-rebuilt, empty
-index" workaround this design needed before WP18/WP19 is now only necessary where a route still
-deliberately calls `create_character()` fresh (currently just attribute-point edits — a real,
-intentional asymmetry with metatype/priority edits, left for a future WP to unify if it's ever worth
-it, not an oversight). Second: `Character` has no `__post_init__` validation — every invariant
+index" workaround this design needed before WP18/WP19 (and, for attribute-point edits specifically,
+before WP63 — see Phase R's own file) is no longer needed anywhere: every chargen-mutating route
+now uses `replace()`, none rebuilds via a fresh `create_character()` call. Second: `Character` has
+no `__post_init__` validation — every invariant
 (attribute points fit their budget, values fit the metatype's range) is enforced only by
 `create_character`'s own checks at construction time — so `replace()`-ing old, now-out-of-budget
 values onto a newly reconfirmed metatype/priority selection simply succeeds rather than raising.

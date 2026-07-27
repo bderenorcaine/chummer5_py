@@ -30,7 +30,7 @@ from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import metatype_choices
 from chummer5.engine.magic import mvp_power_catalog
-from chummer5.web.app import CYBERWARE, create_app
+from chummer5.web.app import BIOWARE, CYBERWARE, create_app
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
@@ -53,6 +53,11 @@ SOME_SPELLS = SPELLS[:3]
 # `_confirm_human`'s own letter-assignment shape) with a single purchase, unlike every other
 # WP34/test_web_cyberware.py item at this Essence cost (all cost 20,000¥+).
 SUBMACHINE_GUN = next(c for c in CYBERWARE if c.name == "Submachine Gun")
+# WP63: a real FLAT_BONUS item of each kind (cyberware Essence 1 + bioware Essence 0.3), used by
+# the combined magic+cyberware+bioware attribute-edit regression test below -- needs Resources A
+# (450,000¥), well beyond letter B's own Resources-E budget above.
+SYNTHETIC_FULL_ARM = next(c for c in CYBERWARE if c.name == "Synthetic Full Arm")
+ENHANCED_ARTICULATION = next(b for b in BIOWARE if b.name == "Enhanced Articulation")
 
 
 def _compact(html: str) -> str:
@@ -388,10 +393,16 @@ def test_power_selection_over_budget_is_rejected() -> None:
 
 
 def test_attribute_resubmission_preserves_the_carried_forward_magic_selection() -> None:
-    """The relink WP29 adds to `submit_attributes` (`_relink_magic_selection`) -- without it, a
-    Magician/Adept's entire Talent selection would silently reset to Mundane on the very next
-    attribute edit, since `submit_attributes` still rebuilds via `create_character()` fresh
-    (WP19 left it that way; see that WP's own worklog).
+    """A Magician/Adept's entire Talent selection (and Adept power selection) must survive an
+    attribute edit, not silently reset to Mundane. Through WP62, `submit_attributes` rebuilt via a
+    fresh `create_character()` call and needed a dedicated relink helper to re-land these
+    Improvements onto the new, empty `ImprovementIndex` that call always produced. Since WP63,
+    `submit_attributes` instead `dataclasses.replace`s the previous `Character` in place (the same
+    shape `submit_priorities` has used since WP19), which carries the already-populated
+    `ImprovementIndex` (and `magic_type`/`tradition`/`power_selection` themselves) forward by
+    reference -- there is no relink call for magic left in the route at all, so this bug class is
+    now structurally impossible for this selection specifically. See the test below for the same
+    claim proven jointly with cyberware and bioware.
     """
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="B")
@@ -413,6 +424,66 @@ def test_attribute_resubmission_preserves_the_carried_forward_magic_selection() 
     assert "<td>Pistols</td><td>4</td>" in _compact(sheet.text)
     # BOD rose from the attribute edit (1 -> 3), and physical_limit still reflects the carried
     # forward Improved Potential (Physical) power's +1 on top of the new BOD-derived total.
+    assert "<tr><td>BOD</td><td>3</td></tr>" in _compact(sheet.text)
+
+
+def test_attribute_resubmission_preserves_magic_cyberware_and_bioware_together() -> None:
+    """WP63's own acceptance bar: an Adept's power selection, a cyberware purchase, and a bioware
+    purchase, all committed together, then an attribute edit -- every one of those three
+    selections' Improvements must survive, with no per-selection relink call for any of them
+    existing in `submit_attributes` at all (see that route's own WP63 docstring paragraph).
+    Resources needs letter A here (450,000¥), not letter B's own Resources-E (6,000¥) `_confirm_
+    human` would otherwise assign -- Synthetic Full Arm + Enhanced Articulation cost 44,000¥
+    together, well past what letter E affords.
+    """
+    client = TestClient(create_app())
+    client.get("/")
+    heritage = PRIORITIES.heritage["E"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "E",
+            "talent_letter": "B",
+            "attributes_letter": "C",
+            "skills_letter": "D",
+            "resources_letter": "A",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+    client.post(
+        "/ui/talent",
+        data={"talent_letter": "B", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
+    )
+    client.post("/ui/powers", data={f"power_rating_{IMPROVED_POTENTIAL_PHYSICAL.id}": "1"})
+    client.post(
+        "/ui/cyberware",
+        data={
+            f"cyberware_{SYNTHETIC_FULL_ARM.id}": "1",  # Essence 1, +1 physical CM
+            f"bioware_{ENHANCED_ARTICULATION.id}": "1",  # Essence 0.3, +1 physical limit
+        },
+    )
+
+    response = client.post("/ui/attributes", data={"attr_BOD": "2"})
+
+    assert response.status_code == 200
+    client.post("/ui/skills", data={})  # see the identical comment in the Magician test above
+    sheet = client.get("/character/sheet")
+    assert "Type: Adept" in sheet.text
+    # Magic 6 (letter B's Adept option) reduced by 2 -- ceil(1.3) Essence lost to the arm
+    # (Essence 1) + Enhanced Articulation (Essence 0.3) -- proving the Talent/power selection
+    # survived *and* the essence-driven Magic reduction still sees the surviving cyberware/
+    # bioware Essence cost.
+    assert "Magic rating: 4 (reduced from 6 by Essence loss)" in sheet.text
+    assert "<td>Pistols</td><td>4</td>" in _compact(sheet.text)
+    assert "Synthetic Full Arm × 1" in sheet.text
+    assert "Enhanced Articulation × 1" in sheet.text
+    assert "Essence: 4.7 / 6." in sheet.text  # 6 - 1 - 0.3
+    # BOD rose from the attribute edit (1 -> 3); physical_limit = ceil((2*STR+BOD+REA)/3) + Σ
+    # improvements = ceil((2+3+1)/3) + 1 (power) + 1 (bioware) = 2 + 2 = 4.
+    assert "<th>Physical limit</th><td>4</td>" in _compact(sheet.text)
     assert "<tr><td>BOD</td><td>3</td></tr>" in _compact(sheet.text)
 
 

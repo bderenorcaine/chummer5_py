@@ -19,7 +19,6 @@ from chummer5.engine.magic import (
     MAGIC_SKILL_GRANT_SOURCE_ID,
     MagicSelection,
     apply_magic_skill_grant_improvements,
-    apply_power_improvements,
     create_magic_selection,
     magic_skill_grant_eligible_skills,
     offered_talent_options,
@@ -107,55 +106,6 @@ def _talent_selection_context(
         "talent_error": error,
         "talent_budget_warning": budget_warning,
     }
-
-
-def _relink_magic_selection(
-    character: Character, talent_letter: str, previous: Character
-) -> Character:
-    """Re-apply a carried-forward Talent selection's free-skill-grant Improvements (and a carried-
-    forward Adept power selection's Improvements) onto a freshly built `Character`, and re-attach
-    `magic_type`/`magic_rating`/`tradition`/`magic_granted_skill_ids`/`spell_selection`/
-    `power_selection` themselves.
-
-    Mirrors `chummer5.web.routes.qualities._relink_quality_improvements`/
-    `_relink_metatype_qualities`: `create_character()` always starts every one of those fields at
-    its Mundane/unset default and a brand-new, empty `ImprovementIndex` (see that function's
-    docstring) -- `submit_attributes` is the one route that still rebuilds this way (WP19 left it
-    that way; see its own worklog), so without this helper a Magician/Adept's entire Talent
-    selection would silently reset to Mundane on the very next attribute-point edit.
-
-    Re-derives the Talent selection via `create_magic_selection` (using `talent_letter` -- the
-    session's *current* one, not necessarily whatever letter was in effect when `previous` was
-    built) rather than trusting `previous`'s own snapshot, the same "recompute, don't just
-    re-attach" reasoning `chummer5.web.routes.contacts._relink_contact_selection` already uses --
-    `Character` has no field for the free-skill grant's *rating* (only the granted skill *ids*), so
-    the rating has to be re-resolved from the matched Talent option regardless. Safe to call
-    unconditionally: a no-op if `previous.magic_type is None` (still Mundane, nothing to carry).
-    """
-    if previous.magic_type is None:
-        return character
-    selection = create_magic_selection(
-        talent_letter,
-        previous.magic_type,
-        previous.tradition.id if previous.tradition is not None else None,
-        previous.magic_granted_skill_ids,
-        PRIORITIES,
-        TRADITIONS,
-        SKILLS,
-    )
-    apply_magic_skill_grant_improvements(character, selection, SKILLS)
-    character = replace(
-        character,
-        magic_type=selection.magic_type,
-        magic_rating=selection.magic_rating,
-        tradition=selection.tradition,
-        magic_granted_skill_ids=selection.granted_skill_ids,
-        spell_selection=previous.spell_selection,
-        power_selection=previous.power_selection,
-    )
-    if previous.power_selection is not None:
-        apply_power_improvements(character, previous.power_selection)
-    return character
 
 
 def _replace_committed_talent(character: Character, selection: MagicSelection) -> Character:
