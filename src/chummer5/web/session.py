@@ -17,6 +17,8 @@ from __future__ import annotations
 import secrets
 from dataclasses import dataclass
 
+from fastapi import Request
+
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
 from chummer5.engine.character import Character
 
@@ -152,3 +154,30 @@ class SessionStore:
 
     def get(self, session_id: str) -> ChargenSession | None:
         return self._sessions.get(session_id)
+
+
+def resolve_session(request: Request) -> tuple[ChargenSession, str | None]:
+    """Look up this request's session by cookie, creating one if absent.
+
+    Returns the session plus a new cookie value to set on the *actual* response the caller ends
+    up returning -- not `None`, `Depends`-injected `Response`. FastAPI only merges an injected
+    `Response`'s headers into the final response when the endpoint returns a plain value; every
+    route in `chummer5.web.routes` returns a `TemplateResponse` (already a `Response`) directly,
+    and FastAPI substitutes that wholesale rather than merging headers onto it (confirmed by
+    reading `fastapi/routing.py`'s request handler) -- so the cookie has to be set on the object
+    that's actually returned.
+
+    **WP62**: moved here from a `create_app()`-local closure -- it only ever read `request.app
+    .state.sessions` and `SESSION_COOKIE_NAME`, both already module-level/request-derived, so the
+    closure captured nothing `create_app()`-local and could move verbatim. Living in
+    `chummer5.web.session` (rather than `chummer5.web.catalogs`) keeps every route module's import
+    of it alongside `ChargenSession`/`SessionStore`/`SESSION_COOKIE_NAME`, which it's built
+    directly out of.
+    """
+    store: SessionStore = request.app.state.sessions
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    session = store.get(session_id) if session_id else None
+    if session is not None:
+        return session, None
+    new_session_id, session = store.create()
+    return session, new_session_id

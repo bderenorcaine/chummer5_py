@@ -159,7 +159,7 @@ abstraction" standard argues against this split, not for it. `io/save_format.py`
 **Resulting cleanup WP list** (numbers continue from WP61, the last one claimed — Phase S's own WP59
 is untouched by this list):
 
-- [ ] **WP62 — Split `web/app.py` into per-chargen-step route modules.**
+- [x] **WP62 — Split `web/app.py` into per-chargen-step route modules.**
   Goal: execute the target shape decided above — no behavior change, pure move/re-organization.
   Deliverables:
   - `web/catalogs.py`, `web/forms.py`, `web/routes/{14 step modules + character.py}` per the shape
