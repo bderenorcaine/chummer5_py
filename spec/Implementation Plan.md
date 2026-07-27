@@ -116,9 +116,10 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | O | Karma-buying (chargen-time leftover-Karma spend) | done (WP51-56) | [phase-o-karma-buying.md](plan/phase-o-karma-buying.md) |
 | P | Rigger support | research-intro only, no WPs assigned | [phase-p-rigger-support.md](plan/phase-p-rigger-support.md) |
 | Q | Spec reorganization (phase-cut point) | done (WP57) | [phase-q-docs-reorg.md](plan/phase-q-docs-reorg.md) |
-| R | Architecture cleanup / refactoring | research-intro, WP58 not started | [phase-r-architecture-cleanup.md](plan/phase-r-architecture-cleanup.md) |
+| R | Architecture cleanup / refactoring | audited (WP58); WP62-63 scoped, not started | [phase-r-architecture-cleanup.md](plan/phase-r-architecture-cleanup.md) |
 | S | Test fixture expansion | research-intro, WP59 not started | [phase-s-test-fixtures.md](plan/phase-s-test-fixtures.md) |
 | T | UI bugfixes & skill-picker QoL | done (WP60-61) | [phase-t-ui-bugfixes.md](plan/phase-t-ui-bugfixes.md) |
 
-Next unclaimed WP number: **WP62** (see Phase P's own file for why WP57-59 were claimed; Phase T
-claimed WP60-61 on 2026-07-24).
+Next unclaimed WP number: **WP64** (see Phase P's own file for why WP57-59 were claimed; Phase T
+claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27 — see that
+phase's file for their scope).
