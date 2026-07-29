@@ -77,8 +77,15 @@ This is the WP5/WP30 synthetic-*primitive* pattern extended to a whole character
 `.chum5` registry, not in place of it: the 11 legacy files stay the ground truth for
 build-method-agnostic derived-stat formulas.
 
-WP72 landed the harness + one reference fixture (`REFERENCE_MUNDANE_FIXTURE`, a full mundane Human
-Priority build). WP73-76 each **add their own input field to `SyntheticCharacter` and the matching
+The fixtures double as **playable Shadowrun characters** — legal, fully-spent priority builds with a
+name and concept (WP72's is Renata "Cheshire" Vance, a human infiltrator/cat-burglar), not degenerate
+test artifacts. This costs nothing in rigour: a fully-spent budget hits the engine's validators at
+their exact limits, and a coherent character touches more interaction paths. Only the mechanically
+derived numbers are asserted; a fixture's loadout/contacts/lifestyle prose is flavour, not
+engine-checked.
+
+WP72 landed the harness + one reference fixture (`REFERENCE_MUNDANE_FIXTURE`). WP73-76 each **add
+their own input field to `SyntheticCharacter` and the matching
 `build_synthetic()` wiring together** (cyberware/bioware, magician+cyberware, leftover-Karma,
 Sum-to-Ten) — the dataclass deliberately declares only what a fixture already exercises, not
 speculative shapes. Tests live in `tests/integration/test_synthetic_fixtures.py`.

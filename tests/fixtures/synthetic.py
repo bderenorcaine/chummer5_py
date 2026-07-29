@@ -106,6 +106,10 @@ class SyntheticCharacter:
     - `group_points`: `{skill group name: points spent on that group}`.
     - `specializations`: `{skill name: specialization text}` (each costs 1 skill point, per WP50).
     - `qualities`: catalog names of the selected qualities (positive and negative alike).
+    - `quality_text`: `{quality name: free-text detail}` for the selected qualities that *require*
+      one (a `BonusSupport.SELECT_TEXT` quality — e.g. SINner's SIN description, WP55). Must be
+      present for exactly those and absent for every other quality, mirroring
+      `create_quality_selection`'s own both-directions check.
 
     `expected` maps a metric key (see `resolve_metric`) to its hand-derived target value;
     `citations` maps each of those keys to the source the value was derived from (a `priorities.xml`
@@ -128,6 +132,7 @@ class SyntheticCharacter:
     group_points: Mapping[str, int] = field(default_factory=dict)
     specializations: Mapping[str, str] = field(default_factory=dict)
     qualities: tuple[str, ...] = ()
+    quality_text: Mapping[str, str] = field(default_factory=dict)
 
 
 def _skill_by_name(name: str) -> Skill:
@@ -199,7 +204,14 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
             if quality is None:
                 raise KeyError(f"synthetic fixture names an unknown quality: {quality_name!r}")
             quality_ids.append(quality.id)
-        selection = create_quality_selection(quality_ids, _QUALITIES)
+        # quality_text is authored name-keyed for legibility; the engine keys it by quality id.
+        quality_text = {}
+        for quality_name, text in fixture.quality_text.items():
+            quality = _QUALITIES_BY_NAME.get(quality_name)
+            if quality is None:
+                raise KeyError(f"synthetic fixture names an unknown quality: {quality_name!r}")
+            quality_text[quality.id] = text
+        selection = create_quality_selection(quality_ids, _QUALITIES, quality_text=quality_text)
         # apply_quality_improvements mutates the character's (already-linked) ImprovementIndex in
         # place — the same order test_character_fixtures.py uses (create_character, then apply).
         apply_quality_improvements(character, selection.qualities)
