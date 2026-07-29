@@ -364,6 +364,21 @@ def test_buying_starter_gear_matches_engine_output() -> None:
     assert f"{budget - meta_link.cost} / {budget}" in response.text
 
 
+def test_gear_picker_offers_a_name_category_filter() -> None:
+    # WP71: the gear picker renders a client-side filter input plus the per-row data attributes the
+    # JS keys off (name + category). TestClient can't run JS, so pin the server contract instead.
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'id="gear-filter"' in response.text
+    meta_link = next(item for item in STARTER_GEAR_CATALOG if item.name == "Meta Link")
+    assert f'data-gear-name="{meta_link.name.lower()}"' in response.text
+    assert f'data-gear-category="{(meta_link.category or "Other").lower()}"' in response.text
+
+
 def test_buying_two_of_a_repeatable_gear_item() -> None:
     client = TestClient(create_app())
     _confirm_human(client)

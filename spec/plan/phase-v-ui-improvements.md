@@ -47,7 +47,7 @@ they can be picked up in any order. Numbered from WP67, after Phase U claims WP6
   chargen binding-cost formula against the rulebook before implementing.
   Depends on: `chummer5.engine.spirits` (Phase M / WP46).
 
-- [ ] **WP71 — Gear picker: name/category filter.**
+- [x] **WP71 — Gear picker: name/category filter.**
   Goal: the starter-gear picker (`_resources.html`) has collapsible categories but no filter; add a
   by-name (and optionally by-category) text filter like the skill picker's.
   Notes: reuse WP61's exact vanilla-JS filter pattern (`data-*` attribute per row + one `input`

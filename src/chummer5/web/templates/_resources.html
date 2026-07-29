@@ -16,6 +16,11 @@
     Karma conversion{% endif %}).
   </p>
 
+  <label>
+    Filter gear
+    <input type="text" id="gear-filter" placeholder="e.g. Medkit or Electronics" />
+  </label>
+
   <form
     hx-post="/ui/resources"
     hx-target="#resources"
@@ -33,6 +38,7 @@
       />
     </label>
 
+    <div id="gear-tables">
     {% for group in gear_groups %}
     <details data-details-key="gear:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
       <summary>{{ group.category }}</summary>
@@ -48,7 +54,7 @@
         </thead>
         <tbody>
           {% for row in group.rows %}
-          <tr>
+          <tr data-gear-name="{{ row.item.name | lower }}" data-gear-category="{{ group.category | lower }}">
             <td>{{ row.item.name }}</td>
             <td>
               {% if row.is_rating %}{{ row.unit_cost }}/rating{% else %}{{ row.item.cost }}{% endif %}
@@ -77,8 +83,32 @@
       </table>
     </details>
     {% endfor %}
+    </div>
     <button type="submit">Update gear</button>
   </form>
+  <script>
+    (function () {
+      var filterInput = document.getElementById("gear-filter");
+      if (!filterInput) return;
+      function applyFilter() {
+        var query = filterInput.value.trim().toLowerCase();
+        document.querySelectorAll("#gear-tables details").forEach(function (details) {
+          var anyVisible = false;
+          details.querySelectorAll("tr[data-gear-name]").forEach(function (row) {
+            var matches =
+              !query ||
+              row.dataset.gearName.includes(query) ||
+              row.dataset.gearCategory.includes(query);
+            row.hidden = !matches;
+            if (matches) anyVisible = true;
+          });
+          details.hidden = !anyVisible;
+          if (query && anyVisible) details.open = true;
+        });
+      }
+      filterInput.addEventListener("input", applyFilter);
+    })();
+  </script>
   </details>
   {% else %}
   <p>Confirm a metatype and priorities above before spending starting nuyen.</p>
