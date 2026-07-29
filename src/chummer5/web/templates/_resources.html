@@ -20,7 +20,7 @@
     hx-post="/ui/resources"
     hx-target="#resources"
     hx-swap="outerHTML"
-    hx-trigger="change, input delay:400ms"
+    hx-trigger="change, input[event.target.type=='number'] delay:400ms"
   >
     <label>
       Convert Karma to nuyen (2,000¥ each, up to {{ max_karma_to_nuyen }})

@@ -336,9 +336,12 @@ def test_submitting_a_specialization_matches_engine_output() -> None:
     allocation = create_skill_allocation(
         "C", PRIORITIES, SKILLS, {skill.id: 3}, {}, {skill.id: "Longbow"}
     )
-    expected_pool = dice_pool(character, allocation, skill)
+    # WP65: a specialized skill's Pool renders as "X (Y)" -- base pool then the +2 specialized pool.
+    base_pool = dice_pool(character, allocation, skill, specialized=False)
+    spec_pool = dice_pool(character, allocation, skill, specialized=True)
+    assert spec_pool == base_pool + 2
     assert 'value="Longbow"' in response.text
-    assert f"<td>{expected_pool}</td>" in response.text
+    assert f"<td>{base_pool} ({spec_pool})</td>" in response.text
 
     # The specialization's 1 point is counted against the remaining budget too.
     budget = PRIORITIES.skills["C"].skills
@@ -381,6 +384,43 @@ def test_character_sheet_shows_the_specialization_name() -> None:
     response = client.get("/character/sheet")
 
     assert response.status_code == 200
+
+
+def test_section_forms_scope_input_trigger_to_number_inputs() -> None:
+    """WP65: text inputs must submit on `change` (blur) only, not on the `input delay:400ms` that
+    the number spinners want -- otherwise the outerHTML swap rebuilds a text field mid-typing and
+    drops focus. The trigger scopes `input` to number inputs via an htmx event filter."""
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post("/ui/skills", data={})
+
+    assert "change, input[event.target.type=='number'] delay:400ms" in response.text
+    assert "change, input delay:400ms" not in response.text
+
+
+def test_skill_allocation_context_exposes_base_and_specialized_pool() -> None:
+    """WP65: a specialized row carries both `pool` (base, un-specialized) and `pool_specialized`
+    (= base + 2); a plain row carries `pool` only, with `pool_specialized` None."""
+    from chummer5.web.routes.skills import _skill_allocation_context
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    character = create_character(human_choice, "A", "B", PRIORITIES, {})
+    ungrouped = next(s for s in MUNDANE_SKILLS if s.skill_group is None and not s.exotic)
+
+    context = _skill_allocation_context(
+        character, "C", {ungrouped.id: 3}, {}, {ungrouped.id: "Longbow"}
+    )
+    rows = {row["skill"].id: row for row in context["skill_rows"]}
+
+    specialized = rows[ungrouped.id]
+    assert specialized["pool_specialized"] == specialized["pool"] + 2
+
+    plain = next(row for sid, row in rows.items() if sid != ungrouped.id)
+    assert plain["pool_specialized"] is None
 
 
 # WP53: Karma-funded skill/skill-group increases and specializations, including group-breaking.
@@ -436,8 +476,9 @@ def test_submitting_karma_specialization_breaks_a_purchased_group() -> None:
     character = create_character(human_choice, "A", "B", PRIORITIES, {})
     allocation = create_skill_allocation("C", PRIORITIES, SKILLS, {}, {"Firearms": 2})
     unspecialized_pool = dice_pool(character, allocation, longarms)
-    # Automatics is now individually specialized (+2), Longarms stays plain group-rated.
-    assert f"<td>{unspecialized_pool + 2}</td>" in response.text
+    # Automatics is now individually specialized -- WP65 renders it "X (X+2)"; Longarms stays plain
+    # group-rated (single value, no parenthetical).
+    assert f"<td>{unspecialized_pool} ({unspecialized_pool + 2})</td>" in response.text
     assert f"<td>{unspecialized_pool}</td>" in response.text
 
 

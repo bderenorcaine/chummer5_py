@@ -62,8 +62,9 @@ def _skill_allocation_context(
     docstring for why this needs to be re-derived fresh on every render rather than decided once at
     submission time.
 
-    **WP50**: `skill_rows["pool"]` relies on `dice_pool`'s own default (whether `skill.id` is in
-    `allocation.specializations`) rather than passing `specialized=` explicitly here.
+    **WP50/WP65**: `skill_rows["pool"]` is the *un-specialized* pool (`specialized=False`);
+    `skill_rows["pool_specialized"]` is the +2 pool, populated only for skills that actually carry a
+    specialization (priority-point or Karma-funded), so the template can render "X (Y)".
 
     **WP53**: `karma_skill_points`/`karma_group_points`/`karma_specializations` -- submitted
     together with the priority-point fields above in the same `POST /ui/skills` form, mirroring
@@ -107,6 +108,13 @@ def _skill_allocation_context(
     # re-sorting -- mirrors `chummer5.web.routes.resources._resources_context`'s own `gear_groups`
     # comment about `STARTER_GEAR_CATALOG` already being pre-sorted the same way.
     offered_by_category = sorted(offered_skills(character), key=lambda s: (s.category, s.name))
+    # WP65: a specialized skill's Pool is shown as "X (Y)" -- X the base (un-specialized) pool and
+    # Y the +2-specialization pool -- rather than the single specialized value WP50 rendered (which
+    # hid the base). `pool` is now the un-specialized pool explicitly (not `dice_pool`'s auto-detect
+    # default), and `pool_specialized` carries the specialized value only when the skill actually
+    # has a specialization (priority-point or Karma-funded); the template omits the parenthetical
+    # otherwise. See `chummer5.engine.skills.dice_pool`'s `specialized=` override (WP50).
+    preview_karma = display.karma_skill_selection
     skill_rows = [
         {
             "skill": skill,
@@ -115,7 +123,15 @@ def _skill_allocation_context(
             "karma_points": karma_skill_points.get(skill.id, 0),
             "karma_specialization": karma_specializations.get(skill.id, ""),
             "rating": skill_rating(display, allocation, skill),
-            "pool": dice_pool(display, allocation, skill),
+            "pool": dice_pool(display, allocation, skill, specialized=False),
+            "pool_specialized": (
+                dice_pool(display, allocation, skill, specialized=True)
+                if (
+                    skill.id in allocation.specializations
+                    or (preview_karma is not None and skill.id in preview_karma.specializations)
+                )
+                else None
+            ),
         }
         for skill in offered_by_category
     ]

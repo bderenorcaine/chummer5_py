@@ -24,7 +24,7 @@
     hx-post="/ui/foci"
     hx-target="#foci-selection"
     hx-swap="outerHTML"
-    hx-trigger="change, input delay:400ms"
+    hx-trigger="change, input[event.target.type=='number'] delay:400ms"
   >
     {% for group in foci_groups %}
     <details data-details-key="focus:{{ group.category }}" {% if group.rows | selectattr("force", "gt", 0) | list %}open{% endif %}>

@@ -21,7 +21,7 @@
     hx-post="/ui/cyberware"
     hx-target="#cyberware"
     hx-swap="outerHTML"
-    hx-trigger="change, input delay:400ms"
+    hx-trigger="change, input[event.target.type=='number'] delay:400ms"
   >
     <h3>Cyberware</h3>
     {% for group in cyberware_groups %}

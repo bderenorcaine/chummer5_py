@@ -59,7 +59,7 @@ sub-accordion and to text inputs.
   practical (the open-state logic that's currently server-side is unit-testable; the pure-JS part is
   manual-walkthrough-verified, matching WP61's own precedent).
 
-- [ ] **WP65 — Two small skill/input display fixes: specialization pool shown as "X (Y)", and
+- [x] **WP65 — Two small skill/input display fixes: specialization pool shown as "X (Y)", and
   text-input focus no longer lost mid-typing.**
   Goal: bundle two unrelated-but-small reported defects into one summary WP.
   Verified root causes:
