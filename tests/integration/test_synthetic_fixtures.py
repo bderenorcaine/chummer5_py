@@ -8,16 +8,25 @@ metric required to carry a citation (`assert_fixture` enforces both).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
 from tests.fixtures.synthetic import assert_fixture, build_synthetic, resolve_metric
 from tests.fixtures.synthetic_fixtures import (
     COMBAT_MAGE_FIXTURE,
+    DECKER_FIXTURE,
     REFERENCE_MUNDANE_FIXTURE,
     SHAMAN_FACE_FIXTURE,
     STREET_SAMURAI_FIXTURE,
     SYNTHETIC_FIXTURES,
+)
+
+from chummer5.engine.build_method import (
+    PRIORITY_BUILD_METHOD,
+    SUM_TO_TEN_BUILD_METHOD,
+    SUM_TO_TEN_TARGET,
+    sum_to_ten_total,
 )
 
 
@@ -124,6 +133,49 @@ def test_shaman_face_spends_leftover_karma_breaking_a_group_and_buying_a_spell()
     # The whole 25-Karma pool (widened to 42 by net-negative qualities) is spent to the point.
     assert character.karma_spent == 25
     assert character.karma_remaining == 0
+
+
+def test_decker_is_a_sum_to_ten_build_illegal_under_priority() -> None:
+    """The WP76 decker is the first synthetic fixture built with the **Sum-to-Ten**
+    letter-assignment rule instead of Priority's bijection — the interaction (G7) no `.chum5`
+    fixture exercises through this engine (33 of the 34 legacy fixtures are `SumtoTen`-built, but
+    WP4 only reads their finished values; none is ever validated or rebuilt here). Pins down both
+    halves of what "a different build method" means: the five letters total exactly
+    `SUM_TO_TEN_TARGET`, and the *same* five letters are rejected outright under
+    `PRIORITY_BUILD_METHOD` because two of them repeat.
+    """
+    letters = (
+        DECKER_FIXTURE.heritage_letter,
+        DECKER_FIXTURE.attributes_letter,
+        DECKER_FIXTURE.skills_letter,
+        DECKER_FIXTURE.resources_letter,
+        "E",  # Talent, left unset (mundane) — worth 0 Sum-to-Ten points
+    )
+    assert DECKER_FIXTURE.build_method == SUM_TO_TEN_BUILD_METHOD
+    assert sum_to_ten_total(letters) == SUM_TO_TEN_TARGET
+    # Repeats are exactly what Priority forbids and Sum-to-Ten allows.
+    assert len(set(letters)) < len(letters)
+    with pytest.raises(ValueError):
+        build_synthetic(replace(DECKER_FIXTURE, build_method=PRIORITY_BUILD_METHOD))
+
+    # The layered cyberware and the Step Seven spend still land on top of the Sum-to-Ten budgets.
+    character = build_synthetic(DECKER_FIXTURE)
+    assert character.metatype.name == "Dwarf"
+    assert character.cyberware_selection is not None
+    assert resolve_metric(character, "essence") == Decimal("5.3")
+    # A Karma specialization on a skill whose group was never group-bought breaks nothing — the
+    # complement of WP75's group-breaking case.
+    assert character.karma_skill_selection is not None
+    assert character.karma_skill_selection.broken_groups == frozenset()
+    assert resolve_metric(character, "pool:Hacking") == 14  # 6 + LOG 6 + 2 spec
+
+
+def test_unsupported_build_method_raises() -> None:
+    """An unrecognised `build_method` is rejected rather than silently falling back to either real
+    rule — mirroring `submit_priorities`, which itemises it as its own error.
+    """
+    with pytest.raises(ValueError, match="unsupported build method"):
+        build_synthetic(replace(DECKER_FIXTURE, build_method="Karma"))
 
 
 def test_unrecognised_metric_key_raises() -> None:

@@ -81,7 +81,8 @@ The fixtures double as **playable Shadowrun characters** — legal, fully-spent 
 name and concept, not degenerate test artifacts, and authored as **one coherent runner team** (see
 `phase-s-test-fixtures.md` §5): WP72's Renata "Cheshire" Vance (human infiltrator), WP73's Dražen
 "Rebar" Kovač (Ork street samurai), WP74's Sabine "Cinder" Aumann (Human Hermetic combat mage),
-WP75's Yseult "Wren" Marchetti (Elf Shamanic face), and the WP76 Decker to come. This
+WP75's Yseult "Wren" Marchetti (Elf Shamanic face), and WP76's Bakari "Nullsec" Osei (Dwarf decker,
+and the set's one Sum-to-Ten build). This
 costs nothing in rigour: a fully-spent budget hits the engine's validators at their exact limits, and
 a coherent character touches more interaction paths. Only the mechanically derived numbers are
 asserted; a fixture's loadout/contacts/lifestyle prose is flavour, not engine-checked.
@@ -103,7 +104,12 @@ Essence loss reduces Magic, carrying a bonded focus and a mentor spirit) via `CO
 `karma_attribute:karma_cost`/`karma_skill:karma_cost`/`karma_skill:broken_groups` metric keys,
 closing gaps G4/G5 (a Karma-funded skill raise that breaks a purchased skill group, a Karma-funded
 specialization, a Karma-raised skill group, and a spell beyond the free Talent budget) via
-`SHAMAN_FACE_FIXTURE`. WP76 (Sum-to-Ten) is still pending. Tests live in
+`SHAMAN_FACE_FIXTURE`. **WP76 (landed)** adds the `build_method` field, which selects which
+letter-assignment rule `build_synthetic()` validates the five priority letters against — Priority's
+bijection or Sum-to-Ten's repeats-allowed/total-exactly-10 rule — closing gap G7 via
+`DECKER_FIXTURE`, whose `B/B/C/C/E` spread is legal Sum-to-Ten and *illegal* Priority. It needed no
+new metric key: `Character` carries no build-method field (that's session/save state), so the letter
+assignment is asserted by construction plus the explicit Priority-rejection test. Tests live in
 `tests/integration/test_synthetic_fixtures.py`.
 
 ### Files
@@ -118,5 +124,6 @@ specialization, a Karma-raised skill group, and a spell beyond the free Talent b
   `assert_fixture()` (WP72).
 - `synthetic_fixtures.py` — the hand-authored `SyntheticCharacter` literals and `SYNTHETIC_FIXTURES`
   tuple (WP72's `REFERENCE_MUNDANE_FIXTURE`, WP73's `STREET_SAMURAI_FIXTURE`, WP74's
-  `COMBAT_MAGE_FIXTURE`, WP75's `SHAMAN_FACE_FIXTURE`; WP76 appends its own here).
+  `COMBAT_MAGE_FIXTURE`, WP75's `SHAMAN_FACE_FIXTURE`, WP76's `DECKER_FIXTURE` — Phase S's full
+  five-fixture list, all landed).
 - This README.

@@ -55,7 +55,17 @@ field at a time rather than speculatively modelling shapes no fixture yet exerci
   skill spends left). Adds the `karma_attribute:karma_cost`/`karma_skill:karma_cost`/
   `karma_skill:broken_groups` metric keys; the Karma-funded-spell side needed no new field at all
   (a fixture simply declares more `spells` than its Talent option's free budget).
-- WP76 — Sum-to-Ten whole-character (G7)
+- WP76 — Sum-to-Ten whole-character (G7) — **landed**: adds the `build_method` field below, which
+  selects *which validity rule* `build_synthetic()` applies to the same five priority letters —
+  Priority's bijection (distinct A-E, the only rule WP72-75 knew) or Sum-to-Ten's repeats-allowed,
+  point-values-total-exactly-10 rule (`chummer5.engine.build_method.validate_sum_to_ten_total`).
+  That's the whole engine-visible difference between the two build methods: `Character` has no
+  `build_method` field at all (it's session/save-format state — see `chummer5.web.session`), and
+  every budget downstream of the letters is read from the same `priorities.xml` rows either way.
+  So no new metric key was needed: a Sum-to-Ten fixture's letter assignment is asserted *by
+  construction* — `build_synthetic()` raises unless the five letters total exactly 10 — and the
+  dedicated test in `tests/integration/test_synthetic_fixtures.py` additionally pins down that the
+  same letters are rejected under `PRIORITY_BUILD_METHOD`.
 
 Fixture authoring is name-keyed for legibility: `skill_points`/`group_points`/`specializations` and
 `qualities` are keyed by human-readable catalog name (Sneaking, Firearms, Catlike), not by the
@@ -81,6 +91,11 @@ from chummer5.data.skills import Skill, load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_selection
+from chummer5.engine.build_method import (
+    PRIORITY_BUILD_METHOD,
+    SUM_TO_TEN_BUILD_METHOD,
+    validate_sum_to_ten_total,
+)
 from chummer5.engine.character import (
     Character,
     create_character,
@@ -140,10 +155,12 @@ _FOCI_BY_NAME = {f.name: f for f in _FOCI}
 _MENTORS_BY_NAME = {m.name: m for m in _MENTORS}
 _TRADITIONS_BY_NAME = {t.name: t for t in _TRADITIONS}
 
-# The five Priority categories a full build assigns a distinct letter to. A mundane fixture leaves
-# `talent_letter` unset, so Talent defaults to E (mundane) and the other four take A-D (WP72/73); a
-# magic fixture (WP74) declares `talent_letter` explicitly (a real A-D magic letter), so all five
-# categories become a genuine permutation of A-E.
+# The five priority categories a full build assigns a letter to. Under the Priority build method
+# those letters are a bijection onto A-E: a mundane fixture leaves `talent_letter` unset, so Talent
+# defaults to E (mundane) and the other four take A-D (WP72/73); a magic fixture (WP74) declares
+# `talent_letter` explicitly (a real A-D magic letter), so all five become a genuine permutation of
+# A-E. Under Sum-to-Ten (WP76) letters may repeat instead, constrained only by their point values
+# totalling exactly 10 -- see `_validate_letters` below.
 _MVP_LETTERS = frozenset("ABCDE")
 
 
@@ -197,6 +214,12 @@ class SyntheticCharacter:
       of an already-group-purchased skill group *breaks* that group (see
       `create_karma_skill_selection`) — assert the resulting split via `karma_skill:broken_groups`
       plus the members' own `rating:*` keys.
+    - `build_method` (WP76): which letter-assignment rule the five priority letters are validated
+      against — `PRIORITY_BUILD_METHOD` (the default; five distinct letters) or
+      `SUM_TO_TEN_BUILD_METHOD` (repeats allowed, the five letters' point values must total exactly
+      `SUM_TO_TEN_TARGET`). Nothing downstream of that check differs: both methods read the same
+      `priorities.xml` budgets off the same letters, and `Character` carries no build-method field
+      of its own.
     - `foci` (WP74): `(focus name, Force)` pairs to bond. Resolved *after* cyberware too, so the
       count cap (<= Magic) and total-Force cap (<= Magic x 2) read the Essence-reduced Magic rating;
       nuyen is drawn from whatever the Resources pool has left after cyberware/bioware, Karma from
@@ -219,6 +242,7 @@ class SyntheticCharacter:
     attribute_points: Mapping[str, int]
     expected: Mapping[str, object]
     citations: Mapping[str, str]
+    build_method: str = PRIORITY_BUILD_METHOD
     skill_points: Mapping[str, int] = field(default_factory=dict)
     group_points: Mapping[str, int] = field(default_factory=dict)
     specializations: Mapping[str, str] = field(default_factory=dict)
@@ -267,6 +291,34 @@ def _focus_by_name(name: str) -> Focus:
     return item
 
 
+def _validate_letters(build_method: str, letters: tuple[str, ...]) -> None:
+    """Validate a fixture's five priority letters under its build method (WP76).
+
+    Mirrors `chummer5.web.routes.priorities.submit_priorities`, which is the *only* place the real
+    app enforces letter-assignment shape either (`create_character` never validated it — it just
+    reads budgets off whatever letters it's handed), so a fixture is held to the same rule a player
+    submission is:
+    - `PRIORITY_BUILD_METHOD`: five distinct letters, one each of A-E (the Priority Table, p.65).
+    - `SUM_TO_TEN_BUILD_METHOD`: repeats allowed; the five letters' point values must total exactly
+      `SUM_TO_TEN_TARGET` (10) — exact equality, not a ceiling, per
+      `chummer5.engine.build_method`'s own docstring. Note this is legacy-Chummer/errata content,
+      not a core-rulebook mechanic (WP44 confirmed zero PDF hits for "sum to ten").
+
+    An unrecognised build method raises rather than falling back to either real rule, the same way
+    the route itself itemises it as an error instead of guessing.
+    """
+    for letter in letters:
+        if letter not in _MVP_LETTERS:
+            raise ValueError(f"not a priority letter A-E: {letter!r}")
+    if build_method == PRIORITY_BUILD_METHOD:
+        if len(set(letters)) != len(letters):
+            raise ValueError(f"Priority letters must be distinct across categories, got {letters}")
+    elif build_method == SUM_TO_TEN_BUILD_METHOD:
+        validate_sum_to_ten_total(letters)
+    else:
+        raise ValueError(f"unsupported build method: {build_method!r}")
+
+
 def build_synthetic(fixture: SyntheticCharacter) -> Character:
     """Run a `SyntheticCharacter` through the real engine, returning the finalized `Character`.
 
@@ -275,26 +327,23 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
     so a fixture exercises the same code paths a real build does, not a test-only shortcut. The
     returned `Character` carries `skill_allocation`/`quality_selection` and its populated
     `ImprovementIndex`; `resolve_metric` reads every asserted value off it.
+
+    The five priority letters are validated first, under the fixture's own `build_method`
+    (`_validate_letters`) — the one check no engine function downstream performs.
     """
-    # All five Priority categories take a distinct letter. A mundane build leaves `talent_letter`
-    # unset, so Talent defaults to E (mundane) and the other four take A-D (WP72/73); a magic build
-    # (WP74) declares a real A-D Talent letter, making all five a genuine permutation of A-E. A
-    # Priority build can't reuse a letter across categories (see the Priority Table, p.65).
     if fixture.magic_type is not None and fixture.talent_letter is None:
         raise ValueError("a magic build must declare talent_letter (its fifth Priority slot)")
     talent_letter = fixture.talent_letter or "E"
-    letters = (
-        fixture.heritage_letter,
-        fixture.attributes_letter,
-        fixture.skills_letter,
-        fixture.resources_letter,
-        talent_letter,
+    _validate_letters(
+        fixture.build_method,
+        (
+            fixture.heritage_letter,
+            fixture.attributes_letter,
+            fixture.skills_letter,
+            fixture.resources_letter,
+            talent_letter,
+        ),
     )
-    for letter in letters:
-        if letter not in _MVP_LETTERS:
-            raise ValueError(f"not a Priority letter A-E: {letter!r}")
-    if len(set(letters)) != len(letters):
-        raise ValueError(f"Priority letters must be distinct across categories, got {letters}")
 
     heritage = _PRIORITIES.heritage[fixture.heritage_letter]
     choice = next(

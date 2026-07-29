@@ -220,13 +220,37 @@ Plan index's tail note). Each WP below closes named gaps from §2 and follows th
   +2 pools (one skill-point-funded, one Karma-funded) and the full derived-stat set. No PDF pass
   needed: every formula was already extracted in `learnings/phase-o.md` (WP51-54). See
   `spec/worklogs/WP75.md`.
-- [ ] **WP76 — Sum-to-Ten whole-character fixture.** Closes G7. A Sum-to-Ten build (the sibling build
+- [x] **WP76 — Sum-to-Ten whole-character fixture.** Closes G7. A Sum-to-Ten build (the sibling build
   method WP44 landed but no fixture exercises end-to-end) combined with a cyberware or magic layer,
   asserting the Sum-to-Ten letter-assignment validation plus the layered subsystem's derived values.
   Depends on: WP72; Phase L (WP44).
   **Team role (see §5): the Decker** — the Matrix specialist (the one role Cheshire explicitly can't
   cover — she has Simsense Vertigo). Take the "cyberware layer" option (datajack + cerebral booster),
   which doubles as a decker's own augmentation, over Cracking/Electronics skills and high LOG.
+  Landed as `DECKER_FIXTURE` — Bakari "Nullsec" Osei, a Dwarf decker built **Sum-to-Ten** with
+  Heritage B / Skills B / Attributes C / Resources C / Talent E = 3+3+2+2+0 = exactly 10. Two
+  repeated letters, so the same assignment is *illegal* under the Priority bijection every other
+  fixture uses — the test asserts that rejection directly, which is the whole engine-visible content
+  of the build-method difference (`Character` has no `build_method` field; both methods read the same
+  `priorities.xml` rows, so the harness needed a `build_method` input field but no new metric key).
+  Carries a 4-item implanted rig (Cyberdeck, Datajack, Image Link, Sound Link — Essence 6 − 0.7 =
+  5.3) as the layered subsystem, plus two boundary cases the set lacked: the Negative-quality cap hit
+  by a *single* quality (SINner (Corporate) 25, the catalog's largest) and a Dwarf REA deliberately
+  held at 4 because Dwarf is the only SR5-core metatype whose REA maximum is 5, not 6. Its Step Seven
+  spend (WIL 4→5 for 25, a Hacking specialization for 7 = the full 32-Karma pool) also covers the
+  *complement* of WP75's group-breaking case: a Karma specialization on a skill whose group was never
+  group-bought breaks nothing. *Note the team-role blurb's "cerebral booster" is illustrative only —
+  Cerebral Booster is rating-scaled bioware, hence outside WP45's flat catalog, the same mismatch
+  WP73's "wired reflexes" blurb hit.* No PDF/decisions entry needed: Sum-to-Ten's point table and
+  exact-equality target are legacy-C#-sourced (WP44, `learnings.md`) and every other figure is
+  `priorities.xml`/`metatypes.xml`/`cyberware.xml` data or an already-extracted
+  `learnings/phase-d.md`/`phase-o.md` formula. See `spec/worklogs/WP76.md`.
+
+**Phase S's fixture list is complete with WP76** — the harness (WP72) plus all five gap-closing
+fixtures (WP73-76 covering G1-G7) have landed. Two mechanics remain without *whole-character*
+coverage, both deliberate and both unit-tested: WP53's Knowledge/Language Karma spend (no synthetic
+fixture declares a Knowledge roster, so the harness has no `karma_knowledge_points` field) and WP43's
+Karma-to-Nuyen conversion. Phase K's two-level cyberware nesting stays blocked on Phase K itself.
 
 ## 5. Team roster — the fixtures mesh as one shadowrunning team
 
@@ -238,13 +262,15 @@ magician; a Sum-to-Ten cyberware build is a Decker) — while making the set leg
 as a table-ready party. A future reader who wants "a team" has one; a WP author who wants "the fixture
 that tests X" still has that too.
 
-| Fixture | Runner | Metatype (suggested) | Role | Covers |
+All five are now authored, so the "Metatype" column below records what each fixture actually took.
+
+| Fixture | Runner | Metatype | Role | Covers |
 |---|---|---|---|---|
 | WP72 | Renata "Cheshire" Vance | Human | Infiltrator / B&E | Stealth, locks, legwork (Perception), backup pistols |
-| WP73 | *(the Street Samurai)* | Ork / Troll | Muscle | Frontline combat, soak, physical intimidation |
-| WP74 | *(the Combat Mage)* | Elf / Human | Artillery / Astral | Combat spells, astral recon, magical defense, healing |
+| WP73 | Dražen "Rebar" Kovač | Ork | Muscle | Frontline combat, soak, physical intimidation |
+| WP74 | Sabine "Cinder" Aumann | Human | Artillery / Astral | Combat spells, astral recon, magical defense, healing |
 | WP75 | Yseult "Wren" Marchetti | Elf | Face / secondary magic | Negotiation/Con/Etiquette, manipulation spells |
-| WP76 | *(the Decker)* | Dwarf / Human | Matrix | Hacking, Matrix overwatch, data search, electronic B&E |
+| WP76 | Bakari "Nullsec" Osei | Dwarf | Matrix | Hacking, Matrix overwatch, data search, electronic B&E |
 
 **Role coverage check.** Combat: Sam (primary) + Mage (spells) + Cheshire (backup pistols 12-dice).
 Stealth/infiltration: Cheshire. Matrix: Decker (fills Cheshire's deliberate gap — she has Simsense
@@ -256,6 +282,6 @@ to exercise; not a hole to plug until Phase P lands.
 
 **Complementary attribute/skill spread (not just roles).** Cheshire is AGI/INT-heavy and CHA-2 (no
 Face) and LOG-3 (no decker) *on purpose* — those gaps are exactly what the Face and Decker fill, so
-the fixtures were designed against each other, not in isolation. When authoring WP73-76, sanity-check
-the new runner against this table so the team stays balanced (e.g. don't also make the Decker a
-climber, or the Sam a second face).
+the fixtures were designed against each other, not in isolation. Each of WP73-76 was sanity-checked
+against this table as it was authored so the team stayed balanced (e.g. the Decker is AGI 2 / CHA 2,
+not a second climber or a second face); any *future* fixture WP should do the same.

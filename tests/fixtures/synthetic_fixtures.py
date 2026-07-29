@@ -2,11 +2,11 @@
 
 Each fixture is a `SyntheticCharacter` (see `synthetic.py`) whose `expected` values are hand-derived
 from the rulebook / `priorities.xml` / legacy C#, with an inline `citations` entry for every one.
-WP72 lands the substrate plus the single reference fixture below; WP73-76 append their
+WP72 landed the substrate plus the reference fixture below; WP73-76 appended their
 interaction-covering fixtures here (cyberware/bioware, magician+cyberware, leftover-Karma,
-Sum-to-Ten) as they extend the harness.
+Sum-to-Ten) as they extended the harness.
 
-The fixtures double as **playable Shadowrun characters** — legal, fully-spent priority builds with
+The fixtures double as **playable Shadowrun characters** — legal, fully-spent builds with
 a name and concept, not degenerate test artifacts — so a reader can pick one up as a real runner.
 More than that, the set is authored as **one coherent runner team** (see `phase-s-test-fixtures.md`
 §5 for the full roster): WP72's Cheshire is the Infiltrator; WP73-76 fill the Street Samurai, Combat
@@ -53,6 +53,12 @@ All figures below are cross-checked as follows:
   group-purchased member with Karma breaks that group) and the combined `Magic Rating x 2`
   known-spells cap. All already extracted in `spec/rulebooks/learnings/phase-o.md` (WP51-54) — no
   new PDF pass.
+- Sum-to-Ten (WP76, `chummer5.engine.build_method`): the per-letter point values
+  (`SUM_TO_TEN_POINT_VALUES`, A=4..E=0) and the exact-equality target (`SUM_TO_TEN_TARGET` = 10),
+  both sourced from `SelectMetatypePriority.cs`'s own hardcoded table and `!=` check rather than the
+  rulebook — Sum-to-Ten is legacy-Chummer/errata content with **zero** core-rulebook hits (WP44's
+  research, `learnings.md`). Everything downstream of the letters is the same `priorities.xml` data
+  the Priority fixtures above read.
 """
 
 from __future__ import annotations
@@ -60,6 +66,8 @@ from __future__ import annotations
 from decimal import Decimal
 
 from tests.fixtures.synthetic import SyntheticCharacter
+
+from chummer5.engine.build_method import SUM_TO_TEN_BUILD_METHOD
 
 # ==================================================================================================
 # WP72 reference fixture — Renata "Cheshire" Vance, human infiltrator / cat burglar.
@@ -987,10 +995,278 @@ SHAMAN_FACE_FIXTURE = SyntheticCharacter(
 )
 
 
-# Every synthetic fixture, for the parametrized regression test. WP76 appends its fixture here.
+# ==================================================================================================
+# WP76 fixture — Bakari "Nullsec" Osei, Dwarf decker (Sum-to-Ten build method + a cyberware layer)
+# ==================================================================================================
+#
+# Closes coverage gap G7 (the Sum-to-Ten build method — WP44's sibling letter-assignment rule —
+# combined with a cyberware layer) — see phase-s-test-fixtures.md §2. `.chum5`-corpus-wise this gap
+# looks *covered* and isn't: 33 of the 34 legacy fixtures are `SumtoTen`-built, but WP4 only ever
+# reads their finished values, so not one of them ever runs a set of letters through this project's
+# own Sum-to-Ten validation, and none is built through this engine at all. Every synthetic fixture
+# before this one is a Priority build, so `chummer5.engine.build_method`'s validation had only unit
+# tests (`tests/unit/test_build_method.py`) and the web route behind it — no whole character.
+#
+# The Sum-to-Ten letters below are what make that concrete: **Heritage B / Skills B / Attributes C /
+# Resources C / Talent E**, i.e. 3 + 3 + 2 + 2 + 0 = exactly 10 (SUM_TO_TEN_POINT_VALUES,
+# SUM_TO_TEN_TARGET). Two letters appear twice, so this assignment is *illegal* under the Priority
+# bijection every other fixture uses — `tests/integration/test_synthetic_fixtures.py` asserts that
+# rejection directly, which is the actual content of "this is a different build method" (nothing
+# downstream of the letters differs: both methods read the same `priorities.xml` rows).
+#
+# CONCEPT (flavor; not engine-modeled except where an assertion below says so)
+# ------------------------------------------------------------------------------------------------
+# Team role: the Decker (see phase-s-test-fixtures.md §5) — the Matrix. They open the *other* kind
+# of door: cameras looped, alarms muted, paydata copied while Cheshire is still on the roof. This is
+# the one role Cheshire structurally cannot cover (Simsense Vertigo), and the reason her LOG 3 and
+# Rebar's LOG 2 aren't holes in the team. Deliberately no climber, no talker, no gunfighter: AGI 2,
+# CHA 2, and a pistol they carry rather than use.
+#
+# A Dwarf ex-Renraku systems auditor who found the audit trail led upstairs, copied it, and left.
+# Slow on their feet and immovable everywhere else: they run hot-sim with a naturally hardened
+# nervous system (Natural Hardening), think in structured layers (Indomitable (Mental)), and don't
+# get shaken out of a host once they're inside. They still hold a *full* corporate SIN in Renraku's
+# files — the heaviest Negative quality in the SR5 catalog, and the reason they will never fly under
+# a real name again. Dwarf grants Thermographic Vision and Resistance to Pathogens/Toxins free
+# (metatypes.xml — not karma-charged, not asserted here; see the "Unmodeled real effects" registry).
+#
+#   Handle: Nullsec     Metatype: Dwarf (mundane)     Pronouns: they/them
+#   Loadout (Resources C, 140,000¥ — 8,000 on the implanted rig below; the ~132,000 remainder is
+#     described-not-modeled flavor: a proper hand-held cyberdeck with a real Attribute array and a
+#     program library, a Middle lifestyle with its own hardline, an armor jacket, a light pistol).
+#     The implanted deck is the *backup* — the one they can't be separated from. Contacts: a
+#     hardware fixer who sells them grey-market chips and a decker friend still inside Renraku.
+#
+# BUILD (all engine-modeled and asserted)
+# ------------------------------------------------------------------------------------------------
+# Sum-to-Ten (Talent E, mundane): Heritage B (3) + Skills B (3) + Attributes C (2) + Resources C (2)
+#   + Talent E (0) = 10.  Under Priority this spread is simply unavailable: B and C each used twice
+#   buys Skills B *and* Heritage B (Dwarf with 4 special-attribute points) *and* Resources C
+#   (140,000¥) at the price of a merely-adequate Attributes C — a trade Priority's one-letter-each
+#   rule can't express at all. Sum-to-Ten's whole point, and why a decker (who needs skills, nuyen,
+#   and only a couple of high attributes) is a natural fit for it.
+#
+# Attributes — Attributes C = 16 primary points, ALL spent; EDG from Heritage B/Dwarf's 4 special
+#   points, ALL spent. Dwarf minimums: BOD 3, STR 3, WIL 2, all others 1 (EDG 1). LOG 6 is their one
+#   attribute at its natural maximum — legal per Step Two.
+#     BOD +0=3, AGI +1=2, REA +3=4, STR +0=3, CHA +1=2, INT +4=5, LOG +5=6, WIL +2=4   (sum 16)
+#     EDG +4=5 (from 4 special points)
+#   REA stops at 4 on purpose: Dwarf is the only SR5-core metatype whose REA maximum is **5**, not
+#   6 (metatypes.xml), so REA 5 would be a *second* attribute at its natural maximum, making the
+#   build illegal — and it would block the WIL Karma raise below, which re-checks that same rule.
+#
+# Skills — Skills B = 36 skill + 5 group points, ALL spent.
+#   Group (5): Electronics 5 → Computer/Hardware/Software all at 5 (the whole group budget in one
+#     group — the Matrix generalist half of a decker).
+#   Individual (36): Hacking 6 (the Cracking group is deliberately *not* group-bought, so its
+#     members can be bought individually at uneven ratings — strict skill groups forbid mixing),
+#     Cybercombat 5, Electronic Warfare 4, Perception 4, Sneaking 3, Pistols 3, Etiquette 3, Con 3,
+#     First Aid 2, Gymnastics 2, Palming 1.  (6+5+4+4+3+3+3+3+2+2+1 = 36.)
+#
+# Cyberware — an internal AR/VR rig, Essence 0.7, 8,000¥: Cyberdeck (0.4 ess — the implanted deck
+#   itself; its Matrix Attributes are NOT modeled, no Matrix subsystem exists), Datajack (0.1),
+#   Image Link (0.1), Sound Link (0.1). Essence 6 − 0.7 = 5.3 (mundane, so no Essence→Magic
+#   interaction — that's WP74's job; here Essence only feeds the Social Limit's ceil(ESS) term).
+#   *(Phase S's own WP76 blurb suggested "datajack + cerebral booster"; Cerebral Booster is
+#   rating-scaled bioware and therefore outside WP45's flat-cost catalog, the same illustrative-only
+#   mismatch WP73's "wired reflexes + muscle toner" blurb hit. Flat equivalents used instead.)*
+#
+# Qualities — Positive 18 of the 25 cap (Natural Hardening 10 + Indomitable (Mental) 8); Negative 25
+#   of the 25 cap in a **single** quality (SINner (Corporate) 25 — the largest Negative in the SR5
+#   core catalog, and the first fixture to hit the Negative cap with one entry rather than a pair).
+#   Net quality Karma 18 − 25 = **−7**, i.e. a credit: the Step Seven pool is 25 + 7 = 32.
+#
+# Step Seven — leftover Karma, all 32 spent (karma_spent 25, karma_remaining 0):
+#     - WIL 4 → 5:                    25 Karma (new rating 5 x 5). Re-checks the natural-maximum
+#         rule (LOG 6 is the only one there; Dwarf WIL maxes at 7, so 5 is well clear).
+#     - Hacking specialization "Devices": 7 Karma (flat). Hacking is a Cracking member, but Cracking
+#         was never group-bought, so this specialization breaks **nothing** — `broken_groups` is
+#         empty, the complement of WP75's group-breaking case and the reason both are asserted.
+# ==================================================================================================
+
+DECKER_FIXTURE = SyntheticCharacter(
+    name='Bakari "Nullsec" Osei — Dwarf decker (WP76 Sum-to-Ten + cyberware)',
+    metatype="Dwarf",
+    build_method=SUM_TO_TEN_BUILD_METHOD,
+    heritage_letter="B",
+    attributes_letter="C",
+    skills_letter="B",
+    resources_letter="C",
+    attribute_points={
+        "BOD": 0,
+        "AGI": 1,
+        "REA": 3,
+        "STR": 0,
+        "CHA": 1,
+        "INT": 4,
+        "LOG": 5,
+        "WIL": 2,
+        "EDG": 4,
+    },
+    skill_points={
+        "Hacking": 6,
+        "Cybercombat": 5,
+        "Electronic Warfare": 4,
+        "Perception": 4,
+        "Sneaking": 3,
+        "Pistols": 3,
+        "Etiquette": 3,
+        "Con": 3,
+        "First Aid": 2,
+        "Gymnastics": 2,
+        "Palming": 1,
+    },
+    group_points={"Electronics": 5},
+    qualities=("Natural Hardening", "Indomitable (Mental)", "SINner (Corporate)"),
+    quality_text={"SINner (Corporate)": "Renraku full corporate SIN — ex-systems auditor, on file"},
+    cyberware=("Cyberdeck", "Datajack", "Image Link", "Sound Link"),
+    karma_attribute_points={"WIL": 1},
+    karma_specializations={"Hacking": "Devices"},
+    expected={
+        # Attribute totals: Dwarf metatype minimum + points spent (WIL also + its Karma point).
+        "attr:BOD": 3,
+        "attr:AGI": 2,
+        "attr:REA": 4,
+        "attr:STR": 3,
+        "attr:CHA": 2,
+        "attr:INT": 5,
+        "attr:LOG": 6,
+        "attr:WIL": 5,  # 2 min + 2 priority + 1 Karma
+        "attr:EDG": 5,
+        # Skill ratings — the group-bought Electronics trio vs. the individually-bought Cracking
+        # members at uneven ratings (the two halves strict skill groups keep apart).
+        "rating:Computer": 5,
+        "rating:Hardware": 5,
+        "rating:Software": 5,
+        "rating:Hacking": 6,
+        "rating:Cybercombat": 5,
+        "rating:Electronic Warfare": 4,
+        # Dice pools: rating + linked attribute (+2 for the Karma-funded specialization).
+        "pool:Hacking": 14,  # 6 + LOG 6 + 2 ("Devices", Karma-funded)
+        "pool:Cybercombat": 11,  # 5 + LOG 6
+        "pool:Electronic Warfare": 10,  # 4 + LOG 6
+        "pool:Computer": 11,  # 5 + LOG 6
+        "pool:Hardware": 11,  # 5 + LOG 6
+        "pool:Software": 11,  # 5 + LOG 6
+        "pool:Perception": 9,  # 4 + INT 5
+        "pool:Sneaking": 5,  # 3 + AGI 2
+        "pool:Pistols": 5,  # 3 + AGI 2
+        "pool:Etiquette": 5,  # 3 + CHA 2
+        "pool:Con": 5,  # 3 + CHA 2
+        "pool:First Aid": 8,  # 2 + LOG 6
+        "pool:Gymnastics": 4,  # 2 + AGI 2
+        "pool:Palming": 3,  # 1 + AGI 2
+        # Cyberware: the implanted rig's own Essence/nuyen (no bioware on this build).
+        "cyberware:essence_spent": Decimal("0.7"),
+        "cyberware:nuyen_spent": 8000,
+        "essence": Decimal("5.3"),  # 6 - 0.7
+        # Step Seven: the WIL raise and the specialization, and the group that *didn't* break.
+        "karma_attribute:karma_cost": 25,  # WIL 4 -> 5
+        "karma_skill:karma_cost": 7,  # flat specialization cost
+        "karma_skill:broken_groups": frozenset(),
+        # Derived stats.
+        "initiative": 9,  # REA 4 + INT 5
+        "initiative_dice": 1,
+        "limit:physical": 5,  # ceil((STR*2+BOD+REA)/3) = ceil((6+3+4)/3) = ceil(13/3)
+        "limit:mental": 9,  # ceil((LOG*2+INT+WIL)/3)=ceil(22/3)=8, +1 Indomitable (Mental)
+        "limit:social": 5,  # ceil((CHA*2+WIL+ceil ESS 5.3->6)/3) = ceil((4+5+6)/3) = ceil(15/3)
+        "cm:physical": 10,  # 8 + ceil(BOD/2) = 8 + 2
+        "cm:stun": 11,  # 8 + ceil(WIL/2) = 8 + 3 (the Karma-raised WIL 5)
+        # Karma: qualities -7 (18 positive - 25 negative, the cap hit by one quality) + 25 + 7 = 25,
+        # i.e. the whole 32-Karma pool spent, nothing left.
+        "karma_spent": 25,
+        "karma_remaining": 0,
+    },
+    citations={
+        "attr:BOD": "priorities.xml Attributes C = 16 pts; metatypes.xml Dwarf BOD min 3 (+0)",
+        "attr:AGI": "priorities.xml Attributes C; Dwarf AGI min 1 (+1)",
+        "attr:REA": (
+            "priorities.xml Attributes C; Dwarf REA min 1 (+3); Dwarf REA maximum is 5, not 6 "
+            "(metatypes.xml), so 4 keeps LOG the only attribute at its natural maximum"
+        ),
+        "attr:STR": "priorities.xml Attributes C; Dwarf STR min 3 (+0)",
+        "attr:CHA": "priorities.xml Attributes C; Dwarf CHA min 1 (+1)",
+        "attr:INT": "priorities.xml Attributes C; Dwarf INT min 1 (+4)",
+        "attr:LOG": "priorities.xml Attributes C; Dwarf LOG min 1 (+5) = natural max 6",
+        "attr:WIL": (
+            "priorities.xml Attributes C; Dwarf WIL min 2 (+2) = 4, +1 Karma point "
+            "(character.py karma_attribute_selection); Dwarf WIL maximum 7"
+        ),
+        "attr:EDG": "priorities.xml Heritage B/Dwarf = 4 special pts; Dwarf EDG min 1 (+4)",
+        "rating:Computer": "Skills B group pts; Electronics group 5",
+        "rating:Hardware": "Skills B group pts; Electronics group 5 (proves the group)",
+        "rating:Software": "Skills B group pts; Electronics group 5 (proves the group)",
+        "rating:Hacking": (
+            "Skills B skill pts; 6 base = the chargen cap (Cracking group deliberately unbought, "
+            "so its members may take individual points — skills.py strict-skill-groups check)"
+        ),
+        "rating:Cybercombat": "Skills B skill pts; 5 base (Cracking group unbought)",
+        "rating:Electronic Warfare": "Skills B skill pts; 4 base (Cracking group unbought)",
+        "pool:Hacking": (
+            "learnings/phase-d.md (dice pool): rating 6 + LOG 6 + 2 Karma specialization "
+            "(KARMA_SPECIALIZATION_COST path, skills.py dice_pool)"
+        ),
+        "pool:Cybercombat": "learnings/phase-d.md: rating 5 + LOG 6",
+        "pool:Electronic Warfare": "learnings/phase-d.md: rating 4 + LOG 6",
+        "pool:Computer": "learnings/phase-d.md: rating 5 + LOG 6",
+        "pool:Hardware": "learnings/phase-d.md: rating 5 + LOG 6",
+        "pool:Software": "learnings/phase-d.md: rating 5 + LOG 6",
+        "pool:Perception": "learnings/phase-d.md: rating 4 + INT 5",
+        "pool:Sneaking": "learnings/phase-d.md: rating 3 + AGI 2",
+        "pool:Pistols": "learnings/phase-d.md: rating 3 + AGI 2",
+        "pool:Etiquette": "learnings/phase-d.md: rating 3 + CHA 2",
+        "pool:Con": "learnings/phase-d.md: rating 3 + CHA 2",
+        "pool:First Aid": "learnings/phase-d.md: rating 2 + LOG 6 (First Aid is LOG-linked)",
+        "pool:Gymnastics": "learnings/phase-d.md: rating 2 + AGI 2",
+        "pool:Palming": "learnings/phase-d.md: rating 1 + AGI 2",
+        "cyberware:essence_spent": (
+            "cyberware.xml <ess>: Cyberdeck 0.4 + Datajack 0.1 + Image Link 0.1 + Sound Link 0.1 "
+            "= 0.7 (engine/cyberware.py essence_spent)"
+        ),
+        "cyberware:nuyen_spent": (
+            "cyberware.xml <cost>: 5000 + 1000 + 1000 + 1000 = 8000 <= Resources C 140000"
+        ),
+        "essence": (
+            "derived.py essence = BASE_ESSENCE 6 - Sigma ESSENCE improvements (0.7 cyberware) = 5.3"
+        ),
+        "karma_attribute:karma_cost": (
+            "karma_advancement_cost(4, 1, ATTRIBUTE_KARMA_PER_RATING 5) = new rating 5 x 5 = 25 "
+            "(p.106-107 Karma Advancement Table for Attributes, learnings/phase-o.md WP51/WP52)"
+        ),
+        "karma_skill:karma_cost": (
+            "KARMA_SPECIALIZATION_COST 7, flat (p.106-107 Character Improvement Table, "
+            "learnings/phase-o.md WP53)"
+        ),
+        "karma_skill:broken_groups": (
+            "empty: a Karma specialization breaks a group only if that group is group-purchased "
+            "(skills.py create_karma_skill_selection); Cracking has 0 group points here"
+        ),
+        "initiative": "learnings/phase-d.md (Character.cs InitiativeValue): REA 4 + INT 5",
+        "initiative_dice": "learnings/phase-d.md: base 1 (no matrix/astral)",
+        "limit:physical": "learnings/phase-d.md LimitPhysical: ceil((6+3+4)/3)=ceil(13/3)=5",
+        "limit:mental": (
+            "learnings/phase-d.md LimitMental: ceil((12+5+5)/3)=ceil(22/3)=8, "
+            "+1 Indomitable (Mental) (qualities.xml FLAT_BONUS mental_limit)"
+        ),
+        "limit:social": (
+            "learnings/phase-d.md LimitSocial: ceil((CHA*2+WIL+ceil ESS)/3); ESS 5.3 rounds up to 6"
+        ),
+        "cm:physical": "learnings/phase-d.md (PhysicalCM): 8 + ceil(BOD/2)",
+        "cm:stun": "learnings/phase-d.md (StunCM): 8 + ceil(WIL/2), WIL 5 incl. the Karma point",
+        "karma_spent": (
+            "p.64 (25 Karma); qualities 18 - 25 = -7 (Negative cap 25 hit by SINner (Corporate) "
+            "alone) + attributes 25 + skills 7 = 25"
+        ),
+        "karma_remaining": "STARTING_KARMA 25 - karma_spent 25 = 0 (fully spent)",
+    },
+)
+
+
+# Every synthetic fixture, for the parametrized regression test.
 SYNTHETIC_FIXTURES = (
     REFERENCE_MUNDANE_FIXTURE,
     STREET_SAMURAI_FIXTURE,
     COMBAT_MAGE_FIXTURE,
     SHAMAN_FACE_FIXTURE,
+    DECKER_FIXTURE,
 )
