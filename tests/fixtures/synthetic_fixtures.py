@@ -6,8 +6,13 @@ WP72 lands the substrate plus the single reference fixture below; WP73-76 append
 interaction-covering fixtures here (cyberware/bioware, magician+cyberware, leftover-Karma,
 Sum-to-Ten) as they extend the harness.
 
-The fixtures double as **playable Shadowrun characters** — legal, fully-spent priority builds with a
-name and concept, not degenerate test artifacts — so a reader can pick one up as a real runner.
+The fixtures double as **playable Shadowrun characters** — legal, fully-spent priority builds with
+a name and concept, not degenerate test artifacts — so a reader can pick one up as a real runner.
+More than that, the set is authored as **one coherent runner team** (see `phase-s-test-fixtures.md`
+§5 for the full roster): WP72's Cheshire is the Infiltrator; WP73-76 fill the Street Samurai, Combat
+Mage, Shaman Face, and Decker roles — each archetype chosen to fit the mechanic its WP already has
+to test, and to cover a gap the others leave (the Decker covers the Matrix, which Cheshire's
+Simsense Vertigo keeps her out of; the Face covers social, which her CHA 2 doesn't).
 That deliberately costs nothing in test rigour: a *fully*-spent budget exercises the engine's
 validators harder than a half-empty one, and a coherent character naturally touches more interaction
 paths (a skill boosted by a quality, a group rating capped by another quality's bonus, a Limit
@@ -38,6 +43,10 @@ from tests.fixtures.synthetic import SyntheticCharacter
 #
 # CONCEPT (flavor; not engine-modeled except where an assertion below says so)
 # ------------------------------------------------------------------------------------------------
+# Team role: the Infiltrator (see phase-s-test-fixtures.md §5) — she opens the door the rest of the
+# team walks through. Deliberately weak where teammates are strong: CHA 2 (the Shaman Face handles
+# talking) and no real Matrix game (the Decker handles that; she has Simsense Vertigo besides).
+#
 # A mundane human second-story artist: rooftops, ductwork, and locked vaults, in and out before
 # anyone knows she was there. Preternaturally graceful (Catlike), a natural climber and sprinter
 # (Natural Athlete), and just plain hard to put down when a job goes sideways — she trusts her luck

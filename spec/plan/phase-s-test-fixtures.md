@@ -161,16 +161,63 @@ Plan index's tail note). Each WP below closes named gaps from §2 and follows th
 - [ ] **WP73 — Priority-built cyberware + bioware Essence-stacking fixture.** Closes G1, G2. A mundane
   Priority build carrying ≥1 cyberware and ≥1 bioware item, asserting the shared-pool Essence total and
   the resulting Essence-derived stats. Depends on: WP72; Phase J (WP30-33), Phase L (WP45).
+  **Team role (see §5): the Street Samurai** — the muscle. Ork or Troll, combat-augmented (e.g. wired
+  reflexes cyber + muscle toner bio), which is exactly the cyberware+bioware Essence stacking this WP
+  must test anyway.
 - [ ] **WP74 — Priority-built magician + cyberware fixture (Essence→Magic loss), with foci/mentor.**
   Closes G3, and G6 to the extent a single magician build naturally carries a focus and a mentor
   spirit. A Priority magic build with enough cyberware to drop Essence below a whole point, asserting
   the reduced Magic rating and any focus/mentor-granted Improvements. Depends on: WP72; Phase I (WP25),
   Phase J (WP30), Phase M (WP47-48).
+  **Team role (see §5): the Combat Mage** — the artillery/astral. A **Hermetic** (Logic-based)
+  magician with a power focus + mentor spirit and just enough cyberware (e.g. cybereyes + datajack) to
+  drop below a whole Essence point, which is the Essence→Magic-loss interaction this WP must test.
 - [ ] **WP75 — Step-Seven leftover-Karma spend fixture.** Closes G4, G5. A completed Priority build that
   spends leftover Karma on an extra skill rank that breaks a skill group, a specialization, and an
   extra spell beyond the free Talent budget — asserting the Karma ledger and the resulting
   pool/spell-count changes against the WP52/WP53 cost formulas. Depends on: WP72; Phase O (WP52-53).
+  **Team role (see §5): the Face** — the social engine. Because the mechanic forces a magic user (it
+  spends leftover Karma on *an extra spell*), make this the team's **Shaman** (Charisma-based
+  magician): high social skills, so the leftover-Karma spend that breaks a skill group naturally lands
+  in the Influence/Acting group and the extra spell is a manipulation/illusion spell. Distinct from
+  WP74's Hermetic combat mage in both attribute base (CHA vs LOG) and role (social vs artillery), so
+  the two magic users don't overlap.
 - [ ] **WP76 — Sum-to-Ten whole-character fixture.** Closes G7. A Sum-to-Ten build (the sibling build
   method WP44 landed but no fixture exercises end-to-end) combined with a cyberware or magic layer,
   asserting the Sum-to-Ten letter-assignment validation plus the layered subsystem's derived values.
   Depends on: WP72; Phase L (WP44).
+  **Team role (see §5): the Decker** — the Matrix specialist (the one role Cheshire explicitly can't
+  cover — she has Simsense Vertigo). Take the "cyberware layer" option (datajack + cerebral booster),
+  which doubles as a decker's own augmentation, over Cracking/Electronics skills and high LOG.
+
+## 5. Team roster — the fixtures mesh as one shadowrunning team
+
+The five synthetic fixtures are deliberately authored as **one coherent runner team**, not five
+unrelated characters. This costs nothing in coverage — each character's archetype is chosen to *fit*
+the mechanic its WP already has to test (a cyberware+bioware build is naturally a Street Samurai; an
+Essence-losing magician is a Combat Mage; a leftover-Karma-on-a-spell build is a second, social
+magician; a Sum-to-Ten cyberware build is a Decker) — while making the set legible and fun to pick up
+as a table-ready party. A future reader who wants "a team" has one; a WP author who wants "the fixture
+that tests X" still has that too.
+
+| Fixture | Runner | Metatype (suggested) | Role | Covers |
+|---|---|---|---|---|
+| WP72 | Renata "Cheshire" Vance | Human | Infiltrator / B&E | Stealth, locks, legwork (Perception), backup pistols |
+| WP73 | *(the Street Samurai)* | Ork / Troll | Muscle | Frontline combat, soak, physical intimidation |
+| WP74 | *(the Combat Mage)* | Elf / Human | Artillery / Astral | Combat spells, astral recon, magical defense, healing |
+| WP75 | *(the Shaman Face)* | Elf / Human | Face / secondary magic | Negotiation/Con/Etiquette, manipulation spells |
+| WP76 | *(the Decker)* | Dwarf / Human | Matrix | Hacking, Matrix overwatch, data search, electronic B&E |
+
+**Role coverage check.** Combat: Sam (primary) + Mage (spells) + Cheshire (backup pistols 12-dice).
+Stealth/infiltration: Cheshire. Matrix: Decker (fills Cheshire's deliberate gap — she has Simsense
+Vertigo). Magic/astral/healing: Combat Mage + Shaman. Social/Face: Shaman-Face (fills Cheshire's
+CHA-2 gap). Legwork/Perception: Cheshire + Decker. Two magic users is normal for a Shadowrun team and
+they don't overlap (Hermetic artillery vs Shamanic Face). **Known gap: no Rigger** — deliberate,
+since rigger support (Phase P) isn't built, so there's no vehicle/drone subsystem for such a fixture
+to exercise; not a hole to plug until Phase P lands.
+
+**Complementary attribute/skill spread (not just roles).** Cheshire is AGI/INT-heavy and CHA-2 (no
+Face) and LOG-3 (no decker) *on purpose* — those gaps are exactly what the Face and Decker fill, so
+the fixtures were designed against each other, not in isolation. When authoring WP73-76, sanity-check
+the new runner against this table so the team stays balanced (e.g. don't also make the Decker a
+climber, or the Sam a second face).
