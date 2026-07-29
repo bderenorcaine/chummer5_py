@@ -26,7 +26,7 @@ they can be picked up in any order. Numbered from WP67, after Phase U claims WP6
   skills, if supported, get the same `X (Y)` treatment WP65 introduces for active skills.
   Depends on: lighter if done after WP65 (reuse the `X (Y)` spec-pool display helper).
 
-- [ ] **WP69 — Spell picker: group spells by category/type and filter for known/unknown.**
+- [x] **WP69 — Spell picker: group spells by category/type and filter for known/unknown.**
   Goal: the spell list (`_spell_selection.html`) is currently one flat table; make it (a) groupable
   by category/type (Combat, Detection, Health, Illusion, Manipulation — the `spell.category` already
   rendered per row) and (b) filterable to show only known (selected) or unknown (unselected) spells.

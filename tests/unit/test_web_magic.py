@@ -281,6 +281,36 @@ def test_spell_selection_within_budget_shows_on_the_sheet() -> None:
         assert spell.name in sheet.text
 
 
+def test_spell_picker_groups_by_category_and_offers_known_unknown_filter() -> None:
+    # WP69: spells are grouped into collapsible per-category <details>, and the picker offers a
+    # known/unknown filter. Both are client-side JS, so this pins the server contract the JS reads:
+    # the filter control renders, each row carries its selected state as data-spell-selected, and
+    # each spell category becomes its own <details data-details-key="spellcat:...">.
+    client = TestClient(create_app())
+    _confirm_human(client, talent_letter="B")
+    client.post(
+        "/ui/talent",
+        data={
+            "talent_letter": "B",
+            "talent_codename": "Magician",
+            "tradition_id": HERMETIC.id,
+            "granted_skill_id": [SPELLCASTING.id, COUNTERSPELLING.id],
+        },
+    )
+
+    response = client.post("/ui/spells", data={"spell_id": [SOME_SPELLS[0].id]})
+
+    assert response.status_code == 200
+    assert 'id="spell-known-filter"' in response.text
+    # The one chosen spell is a "known" row, the rest are "unknown".
+    assert 'data-spell-selected="true"' in response.text
+    assert 'data-spell-selected="false"' in response.text
+    # Every SR5-core spell category present in the catalog gets its own collapsible group.
+    categories = {spell.category for spell in SPELLS}
+    for category in categories:
+        assert f'data-details-key="spellcat:{category}"' in response.text
+
+
 def test_spell_selection_beyond_free_budget_is_karma_funded() -> None:
     # WP54: letter B Magician grants a free budget of 7 spells (Magic 4, known cap 8); picking 8
     # spends 5 Karma on the 1 spell beyond the free budget, rather than being rejected outright.

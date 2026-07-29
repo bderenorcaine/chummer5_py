@@ -19,47 +19,88 @@
     Karma remaining for spells: {{ spell_karma_remaining }} / {{ spell_karma_budget }}.
   </p>
 
+  <label>
+    Show
+    <select id="spell-known-filter">
+      <option value="all">All spells</option>
+      <option value="known">Known only</option>
+      <option value="unknown">Unknown only</option>
+    </select>
+  </label>
+
   <form
     hx-post="/ui/spells"
     hx-target="#spell-selection"
     hx-swap="outerHTML"
     hx-trigger="change"
   >
-    <table>
-      <thead>
-        <tr>
-          <th>Select</th>
-          <th>Spell</th>
-          <th>Category</th>
-          <th>Type</th>
-          <th>Range</th>
-          <th>Duration</th>
-          <th>DV</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in spell_rows %}
-        <tr>
-          <td>
-            <input
-              type="checkbox"
-              name="spell_id"
-              value="{{ row.spell.id }}"
-              {% if row.selected %}checked{% endif %}
-            />
-          </td>
-          <td>{{ row.spell.name }}</td>
-          <td>{{ row.spell.category }}</td>
-          <td>{{ row.spell.type }}</td>
-          <td>{{ row.spell.range }}</td>
-          <td>{{ row.spell.duration }}</td>
-          <td>{{ row.spell.dv }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div id="spell-tables">
+      {% for category, rows in spell_rows | groupby("spell.category") %}
+      <details
+        data-details-key="spellcat:{{ category }}"
+        {% if rows | selectattr("selected") | list %}open{% endif %}
+      >
+        <summary>{{ category }}</summary>
+        <table>
+          <thead>
+            <tr>
+              <th>Select</th>
+              <th>Spell</th>
+              <th>Type</th>
+              <th>Range</th>
+              <th>Duration</th>
+              <th>DV</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr data-spell-selected="{{ 'true' if row.selected else 'false' }}">
+              <td>
+                <input
+                  type="checkbox"
+                  name="spell_id"
+                  value="{{ row.spell.id }}"
+                  {% if row.selected %}checked{% endif %}
+                />
+              </td>
+              <td>{{ row.spell.name }}</td>
+              <td>{{ row.spell.type }}</td>
+              <td>{{ row.spell.range }}</td>
+              <td>{{ row.spell.duration }}</td>
+              <td>{{ row.spell.dv }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+      {% endfor %}
+    </div>
     <button type="submit">Update spells</button>
   </form>
+  <script>
+    (function () {
+      var knownFilter = document.getElementById("spell-known-filter");
+      if (!knownFilter) return;
+      function applyFilter() {
+        var mode = knownFilter.value;
+        document.querySelectorAll("#spell-tables details").forEach(function (details) {
+          var anyVisible = false;
+          details.querySelectorAll("tr[data-spell-selected]").forEach(function (row) {
+            var selected = row.dataset.spellSelected === "true";
+            var matches =
+              mode === "all" ||
+              (mode === "known" && selected) ||
+              (mode === "unknown" && !selected);
+            row.hidden = !matches;
+            if (matches) anyVisible = true;
+          });
+          details.hidden = !anyVisible;
+          if (mode !== "all" && anyVisible) details.open = true;
+        });
+      }
+      knownFilter.addEventListener("change", applyFilter);
+    })();
+  </script>
   </details>
   {% endif %}
 </div>
