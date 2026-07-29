@@ -38,7 +38,14 @@ field at a time rather than speculatively modelling shapes no fixture yet exerci
   engine modules document (bioware sees cyberware's already-resolved Essence via
   `other_essence_spent`), plus the `cyberware:*`/`bioware:*` metric keys `resolve_metric` reads off
   the resulting selections.
-- WP74 — magician + cyberware Essence→Magic loss, foci/mentor (G3/G6)
+- WP74 — magician + cyberware Essence→Magic loss, foci/mentor (G3/G6) — **landed**: adds the
+  `magic_type`/`talent_letter`/`tradition`/`magic_granted_skills`/`spells`/`mentor_spirit`/`foci`
+  fields below, wired through `create_magic_selection` (a full Priority build now assigns Talent a
+  real A-D letter instead of the mundane-only forced E), `create_quality_selection`'s Mentor Spirit
+  path, `create_spell_selection`, and `create_foci_selection`. Cyberware is applied *before* spells
+  and foci so both see the Essence-reduced Magic rating (`attribute_value("MAG")`) their caps read,
+  the exact Essence→Magic interaction G3 exists to test. Adds the `magic:*`/`drain_resistance`/
+  `power_points`/`foci:*`/`spells:*` metric keys.
 - WP75 — Step-Seven leftover-Karma spend (G4/G5)
 - WP76 — Sum-to-Ten whole-character (G7)
 
@@ -57,10 +64,14 @@ from decimal import Decimal
 
 from chummer5.data.bioware import Bioware, load_bioware
 from chummer5.data.cyberware import Cyberware, load_cyberware
+from chummer5.data.foci import Focus, load_foci
+from chummer5.data.mentors import load_mentors
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import Skill, load_skills
+from chummer5.data.spells import load_spells
+from chummer5.data.traditions import load_traditions
 from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_selection
 from chummer5.engine.character import (
     Character,
@@ -69,6 +80,7 @@ from chummer5.engine.character import (
 )
 from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
 from chummer5.engine.derived import (
+    drain_resistance,
     essence,
     initiative_dice,
     initiative_value,
@@ -78,7 +90,15 @@ from chummer5.engine.derived import (
     social_limit,
     stun_condition_monitor,
 )
+from chummer5.engine.foci import apply_foci_improvements, create_foci_selection
+from chummer5.engine.magic import (
+    apply_magic_skill_grant_improvements,
+    create_magic_selection,
+    create_spell_selection,
+    offered_talent_options,
+)
 from chummer5.engine.qualities import (
+    apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
 )
@@ -92,15 +112,24 @@ _SKILLS = load_skills()
 _QUALITIES = load_qualities()
 _CYBERWARE = load_cyberware()
 _BIOWARE = load_bioware()
+_TRADITIONS = load_traditions()
+_SPELLS = load_spells()
+_MENTORS = load_mentors()
+_FOCI = load_foci()
 
 _SKILLS_BY_NAME = {s.name: s for s in _SKILLS}
 _QUALITIES_BY_NAME = {q.name: q for q in _QUALITIES}
 _CYBERWARE_BY_NAME = {c.name: c for c in _CYBERWARE}
 _BIOWARE_BY_NAME = {b.name: b for b in _BIOWARE}
+_SPELLS_BY_NAME = {s.name: s for s in _SPELLS}
+_FOCI_BY_NAME = {f.name: f for f in _FOCI}
+_MENTORS_BY_NAME = {m.name: m for m in _MENTORS}
+_TRADITIONS_BY_NAME = {t.name: t for t in _TRADITIONS}
 
-# The five Priority categories a full build assigns a distinct letter to. Talent is forced to E
-# (mundane) for every WP72-scope fixture — see the module docstring and the Project Overview's MVP
-# scope — so it isn't a declarable field yet; the other four are.
+# The five Priority categories a full build assigns a distinct letter to. A mundane fixture leaves
+# `talent_letter` unset, so Talent defaults to E (mundane) and the other four take A-D (WP72/73); a
+# magic fixture (WP74) declares `talent_letter` explicitly (a real A-D magic letter), so all five
+# categories become a genuine permutation of A-E.
 _MVP_LETTERS = frozenset("ABCDE")
 
 
@@ -129,6 +158,25 @@ class SyntheticCharacter:
       Essence cost unaware of bioware) then bioware second (aware of cyberware's Essence via
       `other_essence_spent`), the fixed shared-pool evaluation order both engine modules document,
       and both draw from the fixture's Resources-priority nuyen (bioware from what cyberware left).
+    - `magic_type` / `talent_letter` / `tradition` / `magic_granted_skills` (WP74): a magic build's
+      Talent selection. `magic_type` is `"Magician"`/`"Adept"` (`None` = mundane, the default);
+      `talent_letter` the Talent priority letter (a magic build's fifth priority slot — required
+      whenever `magic_type` is set, and it must not collide with the other four); `tradition` a
+      tradition *name* (`"Hermetic"`/`"Shamanic"`, Magician only); `magic_granted_skills` the
+      catalog names picked for the Talent free-skill grant (exactly the option's `skill_qty`, each
+      granted at the option's `skill_val` rating via an `ImprovementType.SKILL` improvement).
+    - `spells` (WP74): catalog names of a Magician's chosen spells. Resolved *after* cyberware, so
+      the "Magic Rating x 2" known-spells cap reads the Essence-reduced Magic rating.
+    - `mentor_spirit` (WP74): a Mentor Spirit archetype *name* (e.g. `"Mountain"`). Selecting one
+      requires `"Mentor Spirit"` among `qualities` and a magic-active `magic_type`; its General and
+      Magician/Adept `FLAT_BONUS` slots land as `ImprovementSource.MENTOR_SPIRIT` improvements. Only
+      single-General-option archetypes are supported (the General slot auto-resolves) — a two-option
+      archetype would need a choice field added here, the same "extend when a fixture needs it"
+      discipline WP73's cyberware/bioware fields followed.
+    - `foci` (WP74): `(focus name, Force)` pairs to bond. Resolved *after* cyberware too, so the
+      count cap (<= Magic) and total-Force cap (<= Magic x 2) read the Essence-reduced Magic rating;
+      nuyen is drawn from whatever the Resources pool has left after cyberware/bioware, Karma from
+      `character.karma_remaining`.
 
     `expected` maps a metric key (see `resolve_metric`) to its hand-derived target value;
     `citations` maps each of those keys to the source the value was derived from (a `priorities.xml`
@@ -154,6 +202,13 @@ class SyntheticCharacter:
     quality_text: Mapping[str, str] = field(default_factory=dict)
     cyberware: tuple[str, ...] = ()
     bioware: tuple[str, ...] = ()
+    magic_type: str | None = None
+    talent_letter: str | None = None
+    tradition: str | None = None
+    magic_granted_skills: tuple[str, ...] = ()
+    spells: tuple[str, ...] = ()
+    mentor_spirit: str | None = None
+    foci: tuple[tuple[str, int], ...] = ()
 
 
 def _skill_by_name(name: str) -> Skill:
@@ -177,6 +232,13 @@ def _bioware_by_name(name: str) -> Bioware:
     return item
 
 
+def _focus_by_name(name: str) -> Focus:
+    item = _FOCI_BY_NAME.get(name)
+    if item is None:
+        raise KeyError(f"synthetic fixture names an unknown focus: {name!r}")
+    return item
+
+
 def build_synthetic(fixture: SyntheticCharacter) -> Character:
     """Run a `SyntheticCharacter` through the real engine, returning the finalized `Character`.
 
@@ -186,14 +248,19 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
     returned `Character` carries `skill_allocation`/`quality_selection` and its populated
     `ImprovementIndex`; `resolve_metric` reads every asserted value off it.
     """
-    # A full build assigns Talent to E (mundane) and the other four categories a distinct letter.
-    # Validate the four declared letters are individually legal and jointly distinct — a mundane
+    # All five Priority categories take a distinct letter. A mundane build leaves `talent_letter`
+    # unset, so Talent defaults to E (mundane) and the other four take A-D (WP72/73); a magic build
+    # (WP74) declares a real A-D Talent letter, making all five a genuine permutation of A-E. A
     # Priority build can't reuse a letter across categories (see the Priority Table, p.65).
+    if fixture.magic_type is not None and fixture.talent_letter is None:
+        raise ValueError("a magic build must declare talent_letter (its fifth Priority slot)")
+    talent_letter = fixture.talent_letter or "E"
     letters = (
         fixture.heritage_letter,
         fixture.attributes_letter,
         fixture.skills_letter,
         fixture.resources_letter,
+        talent_letter,
     )
     for letter in letters:
         if letter not in _MVP_LETTERS:
@@ -219,6 +286,33 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
         priorities=_PRIORITIES,
         attribute_points=fixture.attribute_points,
     )
+
+    # Magic (WP74): resolve the Talent selection before qualities (a Mentor Spirit pick needs
+    # `magic_type`) and before cyberware/spells/foci (those read the eventual Magic rating). The
+    # free-skill grant's rating lands as an ImprovementType.SKILL improvement, exactly as the web
+    # layer does it.
+    if fixture.magic_type is not None:
+        tradition_id = (
+            _TRADITIONS_BY_NAME[fixture.tradition].id if fixture.tradition is not None else None
+        )
+        granted_ids = [_skill_by_name(n).id for n in fixture.magic_granted_skills]
+        magic_selection = create_magic_selection(
+            talent_letter,
+            fixture.magic_type,
+            tradition_id,
+            granted_ids,
+            _PRIORITIES,
+            _TRADITIONS,
+            _SKILLS,
+        )
+        character = replace(
+            character,
+            magic_type=magic_selection.magic_type,
+            magic_rating=magic_selection.magic_rating,
+            tradition=magic_selection.tradition,
+            magic_granted_skill_ids=magic_selection.granted_skill_ids,
+        )
+        apply_magic_skill_grant_improvements(character, magic_selection, _SKILLS)
 
     skill_points = {_skill_by_name(n).id: p for n, p in fixture.skill_points.items()}
     specializations = {_skill_by_name(n).id: text for n, text in fixture.specializations.items()}
@@ -246,10 +340,27 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
             if quality is None:
                 raise KeyError(f"synthetic fixture names an unknown quality: {quality_name!r}")
             quality_text[quality.id] = text
-        selection = create_quality_selection(quality_ids, _QUALITIES, quality_text=quality_text)
+        # WP74: a Mentor Spirit archetype pick (name-keyed, resolved to its id) rides on the quality
+        # selection. Its General slot auto-resolves (single-option archetypes only — see
+        # SyntheticCharacter's docstring); the Magician/Adept slot is auto-resolved from magic_type.
+        mentor_archetype_id = (
+            _MENTORS_BY_NAME[fixture.mentor_spirit].id
+            if fixture.mentor_spirit is not None
+            else None
+        )
+        selection = create_quality_selection(
+            quality_ids,
+            _QUALITIES,
+            magic_type=character.magic_type,
+            mentor_catalog=_MENTORS,
+            mentor_spirit_archetype_id=mentor_archetype_id,
+            quality_text=quality_text,
+        )
         # apply_quality_improvements mutates the character's (already-linked) ImprovementIndex in
         # place — the same order test_character_fixtures.py uses (create_character, then apply).
         apply_quality_improvements(character, selection.qualities)
+        if selection.mentor_spirit is not None:
+            apply_mentor_spirit_improvements(character, selection.mentor_spirit)
         character = replace(character, quality_selection=selection)
 
     if fixture.cyberware or fixture.bioware:
@@ -277,6 +388,50 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
         apply_bioware_improvements(character, bioware_selection)
         character = replace(character, bioware_selection=bioware_selection)
 
+    # Spells and Foci (WP74) come *after* cyberware/bioware so both read the Essence-reduced Magic
+    # rating (`attribute_value("MAG")`): the "Magic Rating x 2" spell cap and the foci count/Force
+    # caps all key off the finished MAG, so the Essence→Magic loss (G3) actually constrains them.
+    if fixture.spells:
+        # The free spell budget is the chosen Magician Talent option's own `spells` field (Adept has
+        # none). Resolve it from the offered options for this fixture's Talent letter.
+        magician_option = next(
+            (
+                o
+                for o in offered_talent_options(talent_letter, _PRIORITIES)
+                if o.codename == fixture.magic_type
+            ),
+            None,
+        )
+        spell_budget = (magician_option.spells or 0) if magician_option is not None else 0
+        spell_selection = create_spell_selection(
+            [_SPELLS_BY_NAME[n].id for n in fixture.spells],
+            _SPELLS,
+            budget=spell_budget,
+            magic_rating=character.attribute_value("MAG"),
+            karma_budget=character.karma_remaining,
+        )
+        character = replace(character, spell_selection=spell_selection)
+
+    if fixture.foci:
+        # Foci draw nuyen from whatever the Resources pool has left after cyberware/bioware, and
+        # Karma from the unified ledger (Phase O) — the same shared-pool accounting the web layer
+        # does. No bound spirits in any current fixture, so nothing precedes foci in the Karma
+        # order.
+        spent_nuyen = 0
+        if character.cyberware_selection is not None:
+            spent_nuyen += character.cyberware_selection.nuyen_spent
+        if character.bioware_selection is not None:
+            spent_nuyen += character.bioware_selection.nuyen_spent
+        foci_selection = create_foci_selection(
+            [(_focus_by_name(n).id, force) for n, force in fixture.foci],
+            character,
+            _FOCI,
+            nuyen_budget=_PRIORITIES.resources[fixture.resources_letter].nuyen - spent_nuyen,
+            karma_budget=character.karma_remaining,
+        )
+        apply_foci_improvements(character, foci_selection)
+        character = replace(character, foci_selection=foci_selection)
+
     return character
 
 
@@ -295,6 +450,14 @@ def resolve_metric(character: Character, key: str) -> object:
     - `cyberware:essence_spent` / `cyberware:nuyen_spent` (WP73) — this selection's own totals
     - `bioware:essence_spent` / `bioware:nuyen_spent` (WP73) — likewise, so the shared-pool split is
       asserted per-source, not only via the combined `essence`
+    - `magic:rating` (WP74) — the finished, Essence-reduced Magic rating (`attribute_value("MAG")`)
+    - `magic:rating_before_essence_loss` / `magic:essence_loss` (WP74) — the pre-loss rating and the
+      ceiling'd Essence-driven reduction, so the G3 interaction is asserted on both sides
+    - `drain_resistance` (WP74) — the Drain Resistance dice pool (Magician: tradition pair; else
+      None)
+    - `power_points` (WP74) — Adept Power Points (0 for a Magician, asserting the type distinction)
+    - `foci:nuyen_cost` / `foci:karma_cost` (WP74) — the bonded-foci spend
+    - `spells:count` / `spells:karma_cost` (WP74) — spells known and their leftover-Karma cost
     - `karma_spent` / `karma_remaining`
 
     A key naming a skill requires the fixture to have committed a `skill_allocation` (every WP72
@@ -323,6 +486,18 @@ def resolve_metric(character: Character, key: str) -> object:
     if key == "bioware:nuyen_spent":
         assert character.bioware_selection is not None
         return character.bioware_selection.nuyen_spent
+    if key == "foci:nuyen_cost":
+        assert character.foci_selection is not None
+        return character.foci_selection.nuyen_cost
+    if key == "foci:karma_cost":
+        assert character.foci_selection is not None
+        return character.foci_selection.karma_cost
+    if key == "spells:count":
+        assert character.spell_selection is not None
+        return len(character.spell_selection.spells)
+    if key == "spells:karma_cost":
+        assert character.spell_selection is not None
+        return character.spell_selection.karma_cost
 
     fixed = {
         "initiative": initiative_value,
@@ -333,6 +508,11 @@ def resolve_metric(character: Character, key: str) -> object:
         "cm:physical": physical_condition_monitor,
         "cm:stun": stun_condition_monitor,
         "essence": essence,
+        "drain_resistance": drain_resistance,
+        "magic:rating": lambda c: c.attribute_value("MAG"),
+        "magic:rating_before_essence_loss": lambda c: c.magic_rating_before_essence_loss,
+        "magic:essence_loss": lambda c: c.magic_essence_loss,
+        "power_points": lambda c: c.power_points,
         "karma_spent": lambda c: c.karma_spent,
         "karma_remaining": lambda c: c.karma_remaining,
     }

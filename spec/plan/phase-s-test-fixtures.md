@@ -174,7 +174,7 @@ Plan index's tail note). Each WP below closes named gaps from §2 and follows th
   excluded from the flat WP31/WP45 catalogs, so the fixture uses flat equivalents.* No PDF/decisions
   entry needed: every figure is `cyberware.xml`/`bioware.xml`/`priorities.xml` data or an already-
   extracted `learnings/phase-d.md` formula. See `spec/worklogs/WP73.md`.
-- [ ] **WP74 — Priority-built magician + cyberware fixture (Essence→Magic loss), with foci/mentor.**
+- [x] **WP74 — Priority-built magician + cyberware fixture (Essence→Magic loss), with foci/mentor.**
   Closes G3, and G6 to the extent a single magician build naturally carries a focus and a mentor
   spirit. A Priority magic build with enough cyberware to drop Essence below a whole point, asserting
   the reduced Magic rating and any focus/mentor-granted Improvements. Depends on: WP72; Phase I (WP25),
@@ -182,6 +182,19 @@ Plan index's tail note). Each WP below closes named gaps from §2 and follows th
   **Team role (see §5): the Combat Mage** — the artillery/astral. A **Hermetic** (Logic-based)
   magician with a power focus + mentor spirit and just enough cyberware (e.g. cybereyes + datajack) to
   drop below a whole Essence point, which is the Essence→Magic-loss interaction this WP must test.
+  Landed as `COMBAT_MAGE_FIXTURE` — Sabine "Cinder" Aumann, a Human Hermetic magician (Talent A /
+  Attributes B / Skills C / Resources D / Heritage E — a magic build now assigns Talent a real A-D
+  letter instead of the mundane-only forced E). Carries a datajack + a pair of cybereyes (Image Link
+  + Vision Magnification), Essence 6 − 0.3 = 5.7; that sub-1.0 loss reduces Magic 6 → **5** (p.278
+  "point or fraction thereof"), and the fixture asserts that reduced 5 flows into the spell cap, the
+  foci count/Force caps, and every MAG-linked dice pool — not just the headline rating. Mentor Spirit
+  (Mountain) grants +2 Survival (General) and +2 Counterspelling (Magician) as FLAT_BONUS
+  Improvements — the latter grant-5 + mentor-2 capping at the chargen 6 — and a Power Focus (Force 2,
+  cost-only, its bonus unmodeled) closes the foci half of G6. Drain Resistance (Hermetic LOG + WIL)
+  and `power_points = 0` (Magician ≠ Adept) are asserted too. No PDF/decisions entry needed: every
+  figure is `priorities.xml`/`cyberware.xml`/`foci.xml`/`mentors.xml`/`traditions.xml` data or an
+  already-extracted `learnings/phase-d.md`/`phase-i.md`/`phase-m.md` formula. See
+  `spec/worklogs/WP74.md`.
 - [ ] **WP75 — Step-Seven leftover-Karma spend fixture.** Closes G4, G5. A completed Priority build that
   spends leftover Karma on an extra skill rank that breaks a skill group, a specialization, and an
   extra spell beyond the free Talent budget — asserting the Karma ledger and the resulting
