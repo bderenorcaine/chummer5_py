@@ -34,10 +34,11 @@ from chummer5.engine.derived import (
     unmodeled_effect_notes,
 )
 from chummer5.engine.resources import (
-    STARTER_GEAR_CATALOG,
     ResourcesSelection,
+    StarterGearItem,
     create_contact_selection,
     karma_to_nuyen,
+    resources_gear_args,
     starting_nuyen,
 )
 from chummer5.engine.skills import dice_pool, skill_rating
@@ -76,7 +77,7 @@ router = APIRouter()
 
 def _resources_selection_for_display(
     letter: str,
-    gear_names: Iterable[str],
+    gear: Iterable[StarterGearItem],
     lifestyle_cost: int,
     cyberware_cost: int,
     bioware_cost: int,
@@ -115,8 +116,11 @@ def _resources_selection_for_display(
     **WP47**: `foci_cost` (the character's currently-selected `foci_selection.nuyen_cost`, or 0 if
     none yet) folds in the same way, extending the shared budget to five sections.
     """
-    by_name = {item.name: item for item in STARTER_GEAR_CATALOG}
-    selected = tuple(by_name[name] for name in gear_names if name in by_name)
+    # WP66: the committed purchased items are passed straight through -- each already carries its
+    # own final cost (a Rating-priced item's is `rating * cost_per_rating`, a flat item's is its
+    # catalog price), so reconstructing them from names via the catalog (which was the pre-WP66
+    # shape) would drop the chosen rating and mis-cost every rating item at 0.
+    selected = tuple(gear)
     budget = starting_nuyen(letter, PRIORITIES)
     spent = sum(item.cost for item in selected)
     return ResourcesSelection(
@@ -235,8 +239,8 @@ def _character_sheet_context(
         character.contact_selection.contacts if character.contact_selection is not None else ()
     )
     contact_selection = create_contact_selection(character, committed_contacts)
-    committed_gear_names = (
-        tuple(item.name for item in character.resources_selection.gear)
+    committed_gear = (
+        character.resources_selection.gear
         if character.resources_selection is not None
         else ()
     )
@@ -251,16 +255,18 @@ def _character_sheet_context(
     )
     resources_selection = _resources_selection_for_display(
         session.resources_letter,
-        committed_gear_names,
+        committed_gear,
         lifestyle_selection.total_cost if lifestyle_selection is not None else 0,
         cyberware_selection.nuyen_spent if cyberware_selection is not None else 0,
         bioware_selection.nuyen_spent if bioware_selection is not None else 0,
         committed_karma_converted,
         foci_selection.nuyen_cost if foci_selection is not None else 0,
     )
-    gear_counts: dict[str, int] = {}
+    # WP66: keyed by (name, rating) so two Rating-priced buys of the same item at different ratings
+    # don't collapse into one line; `rating` is None for flat items (a plain "name × qty" line).
+    gear_counts: dict[tuple[str, int | None], int] = {}
     for item in resources_selection.gear:
-        gear_counts[item.name] = gear_counts.get(item.name, 0) + 1
+        gear_counts[(item.name, item.rating)] = gear_counts.get((item.name, item.rating), 0) + 1
     # WP34: tallied the same way gear is, since duplicate cyberware purchases (a matched pair of
     # cyberlimbs) are legal -- see chummer5.engine.cyberware's own docstring.
     cyberware_counts: dict[str, int] = {}
@@ -301,7 +307,10 @@ def _character_sheet_context(
         "metatype_quality_names": metatype_quality_names,
         "contacts": contact_selection.contacts,
         "gear_rows": [
-            {"name": name, "quantity": quantity} for name, quantity in sorted(gear_counts.items())
+            {"name": name, "rating": rating, "quantity": quantity}
+            for (name, rating), quantity in sorted(
+                gear_counts.items(), key=lambda kv: (kv[0][0], kv[0][1] or 0)
+            )
         ],
         "lifestyle_tier_name": (
             lifestyle_selection.tier.name if lifestyle_selection is not None else None
@@ -538,10 +547,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     contacts = (
         character.contact_selection.contacts if character.contact_selection is not None else ()
     )
-    gear_names = (
-        tuple(item.name for item in character.resources_selection.gear)
+    # WP66: flat gear names and Rating-priced (name, rating) picks are persisted separately.
+    gear_names, rating_gear_picks = (
+        resources_gear_args(character.resources_selection)
         if character.resources_selection is not None
-        else ()
+        else ((), ())
     )
     lifestyle_selection = character.lifestyle_selection
     spell_ids = (
@@ -622,6 +632,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         contacts=contacts,
         resources_letter=session.resources_letter,
         gear_names=gear_names,
+        rating_gear_picks=rating_gear_picks,
         lifestyle_tier_name=(
             lifestyle_selection.tier.name
             if lifestyle_selection is not None

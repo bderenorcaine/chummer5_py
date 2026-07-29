@@ -190,7 +190,7 @@
   {% if gear_rows %}
   <ul>
     {% for row in gear_rows %}
-    <li>{{ row.name }} × {{ row.quantity }}</li>
+    <li>{{ row.name }}{% if row.rating %} (Rating {{ row.rating }}){% endif %} × {{ row.quantity }}</li>
     {% endfor %}
   </ul>
   {% else %}

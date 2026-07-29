@@ -21,7 +21,11 @@ from chummer5.engine.lifestyle import (
     MIN_LIFESTYLE_MONTHS,
     create_lifestyle_selection,
 )
-from chummer5.engine.resources import create_resources_selection, starting_nuyen
+from chummer5.engine.resources import (
+    create_resources_selection,
+    resources_gear_args,
+    starting_nuyen,
+)
 from chummer5.web.catalogs import (
     DEFAULT_LIFESTYLE_MONTHS,
     DEFAULT_LIFESTYLE_TIER_NAME,
@@ -151,10 +155,11 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
         tier_name = str(form.get("lifestyle_tier") or "")
         months = _parse_lifestyle_months(form)
         resources_selection = session.character.resources_selection
-        gear_names = (
-            tuple(item.name for item in resources_selection.gear)
+        # WP66: preserve each committed Rating-priced item's chosen rating across re-validation.
+        gear_names, rating_gear = (
+            resources_gear_args(resources_selection)
             if resources_selection is not None
-            else ()
+            else ((), ())
         )
         gear_cost = resources_selection.nuyen_spent if resources_selection is not None else 0
         karma_converted = (
@@ -172,6 +177,7 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
                 session.resources_letter,
                 PRIORITIES,
                 gear_names,
+                rating_gear=rating_gear,
                 lifestyle_cost=lifestyle_selection.total_cost,
                 cyberware_cost=cyberware_cost,
                 bioware_cost=bioware_cost,

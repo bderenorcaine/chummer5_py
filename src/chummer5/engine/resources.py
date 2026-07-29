@@ -48,10 +48,13 @@ cross-referenced against the core rulebook ("Making Connections", p. 98 — see
 hand-curated list of 5 flat-cost SR5-sourced items — WP21 replaced it with `build_starter_gear_
 catalog()`, built from `chummer5.data.gear`'s real loaders over the full SR5-core, flat-cost
 equipment set (411 items across gear/armor/weapons; see that module's docstring for exactly what
-"flat-cost" excludes and how a handful of real cross-file name collisions are resolved). Still not
-the *complete* gear catalog the Implementation Plan scopes out of MVP (no Rating-scaled items, no
-Availability-cap enforcement — see `build_starter_gear_catalog`'s own docstring and WP21's worklog),
-just a much larger flat-cost slice of it. `create_resources_selection` only validates that every
+"flat-cost" excludes and how a handful of real cross-file name collisions are resolved). **WP66**
+adds the Rating-priced gear this originally excluded (Fake SINs, AR glasses/goggles/contacts,
+earbuds/headphones, and the rest of the `Rating * N`-cost SR5 catalog) via
+`chummer5.data.gear.load_rating_gear`, each purchasable at a chosen rating (`cost = rating *
+cost_per_rating`) with its selectable range clamped to Availability<=12 -- see
+`build_starter_gear_catalog`'s own docstring for the cap and the Foci/Formulae exclusion.
+`create_resources_selection` only validates that every
 selected item is in the catalog and that the total cost doesn't exceed the Resources-letter nuyen
 budget — there's no equivalent "real characters exceed this" escape hatch here, since nuyen
 (unlike contact points) has no legacy provision for going over budget by paying with something
@@ -90,9 +93,19 @@ is Phase O's job once its ledger exists, per the Implementation Plan's own WP43 
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from chummer5.data.gear import Armor, Gear, Weapon, load_armor, load_gear, load_weapons
+from chummer5.data.gear import (
+    Armor,
+    Gear,
+    RatingGear,
+    Weapon,
+    load_armor,
+    load_gear,
+    load_rating_gear,
+    load_weapons,
+    parse_rating_availability,
+)
 from chummer5.data.priorities import PriorityTable
 from chummer5.engine.character import Character
 
@@ -121,6 +134,18 @@ KARMA_TO_NUYEN_RATE = 2000
 # Miko.chum5's own <nuyenmaxbp>10</nuyenmaxbp>. Hardcoded rather than modeled as a settings knob,
 # the same QUALITY_KARMA_LIMIT precedent chummer5.engine.qualities already established.
 MAX_KARMA_TO_NUYEN = 10
+
+# Project Overview's 2026-07-21 Availability ruling: new catalogs exclude items with Availability
+# > 12 rather than tracking an Availability budget. WP66 is the first place the gear catalog
+# enforces this -- scoped to the Rating-priced items it introduces (see build_starter_gear_catalog),
+# not retroactively to WP21's flat-cost catalog.
+MAX_AVAILABILITY = 12
+
+# WP66: the two Rating-priced gear.xml categories owned by the dedicated Foci bonding system
+# (chummer5.data.foci / chummer5.engine.foci), which models them with real Force/Karma-bonding
+# semantics. Offering them as plain rating-priced gear would duplicate and misrepresent them (a
+# focus must be bonded with Karma to function), so they are excluded from the starter-gear catalog.
+_FOCI_GEAR_CATEGORIES = frozenset({"Foci", "Formulae"})
 
 
 def karma_to_nuyen(karma_spent: int) -> int:
@@ -205,18 +230,51 @@ class StarterGearItem:
     only for hand-authored items in tests, never for anything `build_starter_gear_catalog` produces
     (every real `chummer5.data.gear` entry carries one). `armor_rating` is set only for armor items;
     gear/weapons have no analogous "rating" concept.
+
+    **WP66 (Rating-priced gear).** A `StarterGearItem` now plays two roles for rating-priced items:
+    - As a *catalog entry*, `cost_per_rating` (nuyen per rating point) and `max_rating` (the highest
+      selectable rating, already clamped to Availability<=12 by `build_starter_gear_catalog`) are
+      set, `rating` is None, and `cost` is 0 (the price isn't known until a rating is chosen).
+    - As a *purchased item* (inside a `ResourcesSelection.gear`), `rating` is the chosen rating and
+      `cost` is the computed `rating * cost_per_rating`; `cost_per_rating`/`max_rating` are carried
+      through so the value round-trips.
+    All three default to None, so a flat item (`cost_per_rating is None`) is unchanged and every
+    pre-WP66 caller keeps working.
     """
 
     name: str
     cost: int
     category: str | None = None
     armor_rating: int | None = None
+    cost_per_rating: int | None = None
+    max_rating: int | None = None
+    rating: int | None = None
+
+
+def _availability_capped_max_rating(rating_gear: RatingGear) -> int:
+    """The highest rating in `1..max_rating` whose computed `<avail>` stays <= MAX_AVAILABILITY, or
+    0 if the item is excluded entirely (a `+`-modifier/unparseable avail, or an avail already over
+    the cap at rating 1). Availability is monotonic non-decreasing in rating for every SR5 form, so
+    the first rating that breaks the cap ends the range.
+    """
+    parsed = parse_rating_availability(rating_gear.availability)
+    if parsed is None:
+        return 0
+    slope, intercept = parsed
+    offered = 0
+    for rating in range(1, rating_gear.max_rating + 1):
+        if slope * rating + intercept <= MAX_AVAILABILITY:
+            offered = rating
+        else:
+            break
+    return offered
 
 
 def build_starter_gear_catalog(
     gear: Iterable[Gear] = (),
     armor: Iterable[Armor] = (),
     weapons: Iterable[Weapon] = (),
+    rating_gear: Iterable[RatingGear] = (),
 ) -> tuple[StarterGearItem, ...]:
     """Build the purchasable starter-gear catalog from WP21's `chummer5.data.gear` loaders.
 
@@ -239,6 +297,22 @@ def build_starter_gear_catalog(
     standalone price once the two exclusions above have already run) and a no-op for the harmless
     ones (equal cost either way).
 
+    **WP66 (Rating-priced gear).** `rating_gear` (from `chummer5.data.gear.load_rating_gear`) adds
+    the `Rating * N`-cost items WP21 excluded. Three policy filters live here, not in the loader:
+    - **Foci/Formulae categories are dropped** -- they're owned by the dedicated Foci bonding system
+      (`chummer5.engine.foci`); offering them as plain gear would duplicate/misrepresent them.
+    - **Availability<=12** (`_availability_capped_max_rating`): each item's selectable rating range
+      is clamped to where its `<avail>` stays <= 12; an item over the cap even at rating 1 (e.g.
+      Plastic Explosive, flat `16F`) is dropped outright. This is the first place the gear catalog
+      enforces the 2026-07-21 Availability ruling at all.
+    - A rating-priced catalog entry carries `cost_per_rating`/`max_rating` with `cost = 0` (the
+      price isn't known until a rating is picked -- see `StarterGearItem`).
+
+    One flat/rating name collision exists (`Camera`: a 0-cost `Sensor Functions` component vs. the
+    real `Rating * 100` `Vision Devices` item). A rating-priced item displaces a same-named *0-cost*
+    flat entry -- the same "0 is never a real standalone price" tie-break the flat collision
+    handling already uses -- so the purchasable Camera wins.
+
     Sorted by `(category, name)` so the web layer can group rows by category directly off catalog
     order, without re-sorting itself.
     """
@@ -247,6 +321,13 @@ def build_starter_gear_catalog(
     def _consider(item: StarterGearItem) -> None:
         existing = by_name.get(item.name)
         if existing is None or item.cost > existing.cost:
+            by_name[item.name] = item
+
+    def _consider_rating(item: StarterGearItem) -> None:
+        # A rating-priced item is a real standalone price at rating>=1; it displaces a 0-cost flat
+        # component sharing its name (the Camera collision above), but a genuine flat price wins.
+        existing = by_name.get(item.name)
+        if existing is None or (existing.cost_per_rating is None and existing.cost == 0):
             by_name[item.name] = item
 
     for g in gear:
@@ -265,6 +346,21 @@ def build_starter_gear_catalog(
         if w.hidden:
             continue
         _consider(StarterGearItem(name=w.name, cost=w.cost, category=w.category))
+    for rg in rating_gear:
+        if rg.hidden or rg.category in _FOCI_GEAR_CATEGORIES:
+            continue
+        offered_max = _availability_capped_max_rating(rg)
+        if offered_max < 1:
+            continue
+        _consider_rating(
+            StarterGearItem(
+                name=rg.name,
+                cost=0,
+                category=rg.category,
+                cost_per_rating=rg.cost_per_rating,
+                max_rating=offered_max,
+            )
+        )
 
     return tuple(sorted(by_name.values(), key=lambda item: (item.category or "", item.name)))
 
@@ -274,7 +370,7 @@ def build_starter_gear_catalog(
 # armor items) and how the 5 real cross-file name collisions are resolved. Parsed once at import
 # time (Project Overview's "parsed once at startup" rule), not a hand-curated stand-in anymore.
 STARTER_GEAR_CATALOG: tuple[StarterGearItem, ...] = build_starter_gear_catalog(
-    load_gear(), load_armor(), load_weapons()
+    load_gear(), load_armor(), load_weapons(), load_rating_gear()
 )
 
 
@@ -332,12 +428,36 @@ def available_nuyen(letter: str, priorities: PriorityTable, karma_converted: int
     return starting_nuyen(letter, priorities) + karma_to_nuyen(karma_converted)
 
 
+def resources_gear_args(
+    selection: ResourcesSelection,
+) -> tuple[tuple[str, ...], tuple[tuple[str, int], ...]]:
+    """Split a committed selection's purchased items back into the `(gear_names, rating_gear)`
+    argument pair `create_resources_selection` takes (WP66).
+
+    Every carry-forward site (a priority reconfirm, a Lifestyle/cyberware edit re-validating the
+    shared budget) reconstructs the resources arguments from the already-committed
+    `character.resources_selection` rather than the raw form. Before rating-priced gear this was a
+    bare `tuple(item.name for item in selection.gear)`; that would collapse a rating item to a name
+    with no rating, losing the choice (and failing re-validation, since a rating item isn't a valid
+    flat `gear_names` entry). This helper preserves each rating item's chosen rating instead.
+    """
+    flat: list[str] = []
+    rated: list[tuple[str, int]] = []
+    for item in selection.gear:
+        if item.rating is not None:
+            rated.append((item.name, item.rating))
+        else:
+            flat.append(item.name)
+    return tuple(flat), tuple(rated)
+
+
 def create_resources_selection(
     letter: str,
     priorities: PriorityTable,
     gear_names: Iterable[str],
     catalog: Iterable[StarterGearItem] = STARTER_GEAR_CATALOG,
     *,
+    rating_gear: Iterable[tuple[str, int]] = (),
     lifestyle_cost: int = 0,
     cyberware_cost: int = 0,
     bioware_cost: int = 0,
@@ -350,10 +470,12 @@ def create_resources_selection(
 
     Validates: every name in `gear_names` is a `catalog` item's name (repeats allowed -- buying two
     Certified Credsticks is a normal purchase, unlike a quality or skill that can't be picked
-    twice); `karma_converted` is 0-10 (see `karma_to_nuyen`); `gear` cost plus `lifestyle_cost` plus
-    `cyberware_cost` plus `bioware_cost` plus `foci_cost` together don't exceed `letter`'s nuyen
-    budget plus the converted amount (WP20: a character's primary Lifestyle draws from this same
-    pool, confirmed against every one of the 11 curated mundane fixtures -- see
+    twice); every `(name, rating)` in `rating_gear` (WP66) names a Rating-priced catalog item and
+    has `1 <= rating <= max_rating` (its cost is `rating * cost_per_rating`, repeats allowed for
+    quantity); `karma_converted` is 0-10 (see `karma_to_nuyen`); `gear` cost plus `lifestyle_cost`
+    plus `cyberware_cost` plus `bioware_cost` plus `foci_cost` together don't exceed `letter`'s
+    nuyen budget plus the converted amount (WP20: a character's primary Lifestyle draws from this
+    same pool, confirmed against every one of the 11 curated mundane fixtures -- see
     `spec/rulebooks/learnings.md`'s WP20 entry; WP34: cyberware draws from it too, see
     `chummer5.engine.cyberware`'s own module docstring; WP45: bioware draws from it too, see
     `chummer5.engine.bioware`'s own module docstring; WP47: Foci draws from it too, see
@@ -370,7 +492,25 @@ def create_resources_selection(
     if unknown:
         raise ValueError(f"not a starter-gear catalog item: {unknown}")
 
-    selected = tuple(by_name[name] for name in names)
+    flat_selected = tuple(by_name[name] for name in names)
+
+    # WP66: rating-priced picks -- each (name, rating) becomes a purchased StarterGearItem carrying
+    # its chosen rating and the computed cost = rating * cost_per_rating. Repeats are allowed for
+    # quantity, exactly like flat gear_names.
+    rating_selected: list[StarterGearItem] = []
+    for name, rating in rating_gear:
+        item = by_name.get(name)
+        if item is None or item.cost_per_rating is None or item.max_rating is None:
+            raise ValueError(f"not a Rating-priced starter-gear catalog item: {name!r}")
+        if not 1 <= rating <= item.max_rating:
+            raise ValueError(
+                f"{name}: rating must be between 1 and {item.max_rating}, got {rating}"
+            )
+        rating_selected.append(
+            replace(item, cost=rating * item.cost_per_rating, rating=rating)
+        )
+
+    selected = flat_selected + tuple(rating_selected)
     budget = starting_nuyen(letter, priorities)
     available = budget + karma_to_nuyen(karma_converted)
     spent = sum(item.cost for item in selected)

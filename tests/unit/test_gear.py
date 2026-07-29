@@ -6,12 +6,23 @@ reasoning this file exercises.
 
 from __future__ import annotations
 
-from chummer5.data.gear import Armor, Gear, Weapon, load_armor, load_gear, load_weapons
+from chummer5.data.gear import (
+    Armor,
+    Gear,
+    RatingGear,
+    Weapon,
+    load_armor,
+    load_gear,
+    load_rating_gear,
+    load_weapons,
+    parse_rating_availability,
+)
 from chummer5.engine.resources import StarterGearItem, build_starter_gear_catalog
 
 GEAR = load_gear()
 ARMOR = load_armor()
 WEAPONS = load_weapons()
+RATING_GEAR = load_rating_gear()
 
 
 # --- Data loaders --------------------------------------------------------------------------------
@@ -176,3 +187,96 @@ def test_gear_dataclass_fields_are_accessible() -> None:
     weapon = next(w for w in WEAPONS if w.name == "Combat Knife")
     assert isinstance(weapon, Weapon)
     assert weapon.id
+
+
+# --- WP66: Rating-priced gear loader -------------------------------------------------------------
+
+
+def test_loads_the_confirmed_rating_priced_count() -> None:
+    # 120 SR5-sourced <gear> entries whose <cost> is a `Rating * N` formula -- the exact complement
+    # of load_gear's flat-cost filter over the same file (the "120 Rating-formula excluded" figure
+    # WP21's docstring already named).
+    assert len(RATING_GEAR) == 120
+    assert all(isinstance(g, RatingGear) for g in RATING_GEAR)
+    assert {g.source for g in RATING_GEAR} == {"SR5"}
+
+
+def test_rating_gear_carries_unit_cost_max_rating_and_avail() -> None:
+    by_name = {g.name: g for g in RATING_GEAR}
+    fake_sin = by_name["Fake SIN"]
+    assert fake_sin.cost_per_rating == 2500
+    assert fake_sin.max_rating == 6
+    assert fake_sin.availability == "(Rating * 3)F"
+
+
+def test_rating_gear_and_flat_gear_are_disjoint_over_the_same_file() -> None:
+    # A gear entry is either flat-cost (load_gear) or rating-priced (load_rating_gear), never both.
+    assert not ({g.name for g in RATING_GEAR} & {g.name for g in GEAR if g.cost != 0})
+
+
+def test_parse_rating_availability_forms() -> None:
+    # slope * rating + intercept; R/F suffix and surrounding parens ignored.
+    assert parse_rating_availability("0") == (0, 0)
+    assert parse_rating_availability("12F") == (0, 12)
+    assert parse_rating_availability("Rating") == (1, 0)
+    assert parse_rating_availability("(Rating)R") == (1, 0)
+    assert parse_rating_availability("Rating * 2") == (2, 0)
+    assert parse_rating_availability("(Rating * 3)F") == (3, 0)
+    assert parse_rating_availability("(Rating + 2)R") == (1, 2)
+
+
+def test_parse_rating_availability_rejects_modifiers() -> None:
+    # A leading `+` marks an accessory added to a parent's availability, not a standalone value.
+    assert parse_rating_availability("+Rating") is None
+    assert parse_rating_availability("+(Rating * 2)") is None
+
+
+# --- WP66: Rating-priced catalog builder ---------------------------------------------------------
+
+FULL_CATALOG = build_starter_gear_catalog(GEAR, ARMOR, WEAPONS, RATING_GEAR)
+FULL_BY_NAME = {item.name: item for item in FULL_CATALOG}
+
+
+def test_catalog_includes_rating_priced_items_with_capped_max_rating() -> None:
+    # Fake SIN's avail is (Rating * 3)F -> the offered range is clamped to rating 4 (=12F), even
+    # though its <rating> cap is 6.
+    fake_sin = FULL_BY_NAME["Fake SIN"]
+    assert fake_sin.cost_per_rating == 2500
+    assert fake_sin.max_rating == 4
+    assert fake_sin.cost == 0  # a catalog entry has no price until a rating is picked
+    assert fake_sin.rating is None
+
+
+def test_catalog_includes_the_reported_missing_items() -> None:
+    for name in ("Glasses", "Goggles", "Contacts", "Earbuds", "Headphones"):
+        assert name in FULL_BY_NAME
+        assert FULL_BY_NAME[name].cost_per_rating is not None
+
+
+def test_catalog_excludes_rating_priced_foci_and_formulae() -> None:
+    # The Rating(Force)-priced Foci/Formulae are owned by the dedicated Foci bonding system
+    # (chummer5.engine.foci), not offered as plain gear. (The flat-cost "Spell Formula, X" entries
+    # in the Formulae category are a different thing -- spell formulae, offered since WP21 -- so the
+    # exclusion is scoped to rating-priced items, not the whole category.)
+    assert all(
+        item.category not in {"Foci", "Formulae"}
+        for item in FULL_CATALOG
+        if item.cost_per_rating is not None
+    )
+    assert "Power Focus" not in FULL_BY_NAME
+    assert "Sustaining Focus, Combat" not in FULL_BY_NAME
+
+
+def test_catalog_excludes_items_over_availability_cap_at_every_rating() -> None:
+    # Plastic Explosive's avail is a flat 16F -- over 12 at every rating, so it's dropped entirely.
+    assert "Plastic Explosive" not in FULL_BY_NAME
+    # Foam Explosive is a flat 12F -- exactly on the cap, so it stays.
+    assert "Foam Explosive" in FULL_BY_NAME
+
+
+def test_rating_item_displaces_zero_cost_flat_namesake() -> None:
+    # "Camera" is both a 0-cost Sensor-Functions component (flat) and the real Rating*100 Vision
+    # Devices item -- the rating-priced one must win.
+    camera = FULL_BY_NAME["Camera"]
+    assert camera.cost_per_rating == 100
+    assert camera.category == "Vision Devices"

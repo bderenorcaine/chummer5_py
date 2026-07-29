@@ -21,6 +21,7 @@ from chummer5.engine.resources import (
     create_contact_selection,
     create_resources_selection,
     karma_to_nuyen,
+    resources_gear_args,
     starting_nuyen,
 )
 
@@ -190,6 +191,98 @@ def test_create_resources_selection_rejects_budget_overspend() -> None:
             priorities=PRIORITIES,
             gear_names=[item.name for item in STARTER_GEAR_CATALOG for _ in range(20)],
         )
+
+
+# --- WP66: Rating-priced gear purchases --------------------------------------------------------
+
+
+def test_rating_gear_cost_scales_with_chosen_rating() -> None:
+    selection = create_resources_selection(
+        letter="A",
+        priorities=PRIORITIES,
+        gear_names=[],
+        rating_gear=[("Fake SIN", 4)],
+    )
+    # Fake SIN unit cost is 2500/rating -> 4 * 2500 = 10000.
+    assert selection.nuyen_spent == 10000
+    (item,) = selection.gear
+    assert item.name == "Fake SIN"
+    assert item.rating == 4
+    assert item.cost == 10000
+
+
+def test_rating_gear_repeats_are_quantity() -> None:
+    selection = create_resources_selection(
+        letter="A",
+        priorities=PRIORITIES,
+        gear_names=[],
+        rating_gear=[("Glasses", 3), ("Glasses", 3)],
+    )
+    # Glasses unit cost 100/rating * rating 3 = 300, bought twice = 600.
+    assert selection.nuyen_spent == 600
+    assert len(selection.gear) == 2
+
+
+def test_rating_gear_rejects_over_max_rating() -> None:
+    # Fake SIN's offered max rating is 4 (avail cap), even though its <rating> is 6.
+    with pytest.raises(ValueError, match="rating must be between 1 and 4"):
+        create_resources_selection(
+            letter="A",
+            priorities=PRIORITIES,
+            gear_names=[],
+            rating_gear=[("Fake SIN", 5)],
+        )
+
+
+def test_rating_gear_rejects_zero_rating() -> None:
+    with pytest.raises(ValueError, match="rating must be between 1 and"):
+        create_resources_selection(
+            letter="A",
+            priorities=PRIORITIES,
+            gear_names=[],
+            rating_gear=[("Glasses", 0)],
+        )
+
+
+def test_rating_gear_rejects_flat_item_as_rating_priced() -> None:
+    with pytest.raises(ValueError, match="not a Rating-priced starter-gear catalog item"):
+        create_resources_selection(
+            letter="A",
+            priorities=PRIORITIES,
+            gear_names=[],
+            rating_gear=[("Meta Link", 2)],
+        )
+
+
+def test_rating_gear_counts_against_budget() -> None:
+    # Resources E budget is 6000; a rating-6 item at 5000/rating would be 30000 -> overspend.
+    with pytest.raises(ValueError, match="exceeds Resources priority"):
+        create_resources_selection(
+            letter="E",
+            priorities=PRIORITIES,
+            gear_names=[],
+            rating_gear=[("Activesoft", 6)],
+        )
+
+
+def test_resources_gear_args_round_trips_flat_and_rating() -> None:
+    selection = create_resources_selection(
+        letter="A",
+        priorities=PRIORITIES,
+        gear_names=["Meta Link"],
+        rating_gear=[("Fake SIN", 4), ("Glasses", 2)],
+    )
+    gear_names, rating_gear = resources_gear_args(selection)
+    assert gear_names == ("Meta Link",)
+    assert rating_gear == (("Fake SIN", 4), ("Glasses", 2))
+    # Feeding the split back in reproduces the same spend.
+    rebuilt = create_resources_selection(
+        letter="A",
+        priorities=PRIORITIES,
+        gear_names=gear_names,
+        rating_gear=rating_gear,
+    )
+    assert rebuilt.nuyen_spent == selection.nuyen_spent
 
 
 # --- Lifestyle (WP20): shared-budget wiring ----------------------------------------------------

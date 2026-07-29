@@ -31,7 +31,12 @@ from chummer5.engine.cyberware import (
 )
 from chummer5.engine.derived import BASE_ESSENCE
 from chummer5.engine.improvements import ImprovementSource
-from chummer5.engine.resources import available_nuyen, create_resources_selection, starting_nuyen
+from chummer5.engine.resources import (
+    available_nuyen,
+    create_resources_selection,
+    resources_gear_args,
+    starting_nuyen,
+)
 from chummer5.web.catalogs import BIOWARE, CYBERWARE, PRIORITIES, templates
 from chummer5.web.forms import display_karma_to_nuyen
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
@@ -247,10 +252,11 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
         item_ids = _parse_cyberware(form, CYBERWARE)
         bioware_item_ids = _parse_bioware(form, BIOWARE)
         resources_selection = session.character.resources_selection
-        gear_names = (
-            tuple(item.name for item in resources_selection.gear)
+        # WP66: preserve each committed Rating-priced item's chosen rating across re-validation.
+        gear_names, rating_gear = (
+            resources_gear_args(resources_selection)
             if resources_selection is not None
-            else ()
+            else ((), ())
         )
         gear_cost = resources_selection.nuyen_spent if resources_selection is not None else 0
         karma_converted = (
@@ -282,6 +288,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 session.resources_letter,
                 PRIORITIES,
                 gear_names,
+                rating_gear=rating_gear,
                 lifestyle_cost=lifestyle_cost,
                 cyberware_cost=selection.nuyen_spent,
                 bioware_cost=bioware_selection.nuyen_spent,

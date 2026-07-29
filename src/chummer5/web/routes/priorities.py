@@ -28,6 +28,7 @@ from chummer5.engine.build_method import (
 )
 from chummer5.engine.character import Character, metatype_choices
 from chummer5.engine.improvements import ImprovementIndex
+from chummer5.engine.resources import resources_gear_args
 from chummer5.web.catalogs import (
     DEFAULT_LIFESTYLE_MONTHS,
     DEFAULT_LIFESTYLE_TIER_NAME,
@@ -266,10 +267,12 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         else ()
     )
     contact_ctx = _contacts_context(character, contacts)
-    gear_names = (
-        tuple(item.name for item in character.resources_selection.gear)
+    # WP66: split committed gear back into flat names + Rating-priced (name, rating) picks so a
+    # priority reconfirm re-validates each rating item at its chosen rating, not as a bare name.
+    gear_names, rating_gear = (
+        resources_gear_args(character.resources_selection)
         if character is not None and character.resources_selection is not None
-        else ()
+        else ((), ())
     )
     lifestyle_selection = character.lifestyle_selection if character is not None else None
     lifestyle_tier_name = (
@@ -325,6 +328,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         bioware_cost,
         karma_converted,
         foci_cost,
+        rating_gear,
     )
     lifestyle_ctx = _lifestyle_context(
         character,

@@ -375,3 +375,42 @@ dimension). **Ruled 2026-07-27: cap the offered rating** so each Rating-priced i
 `<avail>` stays ≤ 12 (Fake SIN `(Rating*3)F` → max offered rating 4), making WP66 the first place
 the gear catalog enforces the 2026-07-21 Availability ≤ 12 line — scoped to the new Rating-priced
 items only, not a retroactive re-filter of WP21's flat-cost catalog.
+
+### 2026-07-29 — WP66: Rating-priced gear scope — Foci/Formulae excluded, availability cap parses the `<avail>` formula, one flat/rating name collision resolved
+
+Recorded while implementing WP66 (Rating-priced starter gear). Three sub-decisions, all made at the
+`chummer5.engine.resources.build_starter_gear_catalog` policy layer rather than the
+`chummer5.data.gear.load_rating_gear` loader (which stays a literal XML→dataclass translation):
+
+- **Foci and Formulae categories are excluded from the gear catalog.** Of the 120 SR5-sourced
+  `Rating * N` gear entries, 64 are the `Foci`/`Formulae` categories — the same items the dedicated
+  Foci bonding system (`chummer5.data.foci`/`chummer5.engine.foci`, WP47) already models with real
+  Force/Karma-bonding semantics and magic-gating. Offering them as plain rating-priced gear would
+  duplicate and misrepresent them (a focus must be bonded with Karma to function, and a mundane
+  character can't use one at all), so they're dropped. This is a deviation from the WP's literal
+  "load the rest of the catalog" wording, made deliberately. Note: the *flat-cost* `Spell Formula, X`
+  entries (also `Formulae` category, but a different thing — spell formulae, offered since WP21) are
+  untouched; the exclusion is scoped to rating-priced items only. Net offered after all filters: 51
+  Rating-priced items.
+
+- **The Availability ≤ 12 cap parses each item's `<avail>` formula into `slope*rating + intercept`**
+  (`chummer5.data.gear.parse_rating_availability`) and clamps the selectable rating range to the
+  highest rating that stays ≤ 12 (Fake SIN `(Rating*3)F` → offered max rating 4, even though its
+  `<rating>` is 6). An item over the cap even at rating 1 (Plastic Explosive, flat `16F`) is dropped
+  entirely. A leading `+` in `<avail>` marks an accessory added to a *parent's* availability (Vision
+  Enhancement, Audio Enhancement, etc.) — excluded, mirroring `load_gear`'s existing `+`-cost
+  accessory exclusion. This implements the 2026-07-27 ruling above and is the first place the gear
+  catalog enforces the project's 2026-07-21 Availability line at all; per that ruling it is **not**
+  retroactively applied to WP21's flat-cost catalog.
+
+- **One flat/rating name collision (`Camera`) is resolved in favor of the rating item.** `Camera`
+  exists as both a 0-cost `Sensor Functions` component (flat) and the real `Rating * 100` `Vision
+  Devices` item. The name-keyed catalog can't hold both; the rating-priced one wins, via the same
+  "0 is never a real standalone price" tie-break the existing flat-collision handling uses.
+
+Data-model shape: a Rating-priced purchase carries a chosen rating separately from flat gear — a new
+`ResourcesSelection.gear` item field (`rating`, `cost_per_rating`, `max_rating` on `StarterGearItem`)
+and a new `CharacterSave.rating_gear_picks` `(name, rating)` list, persisted alongside `gear_names`.
+Carry-forward sites (priority reconfirm, Lifestyle/cyberware re-validation, save building) use the
+new `resources_gear_args` helper to split a committed selection back into `(gear_names, rating_gear)`
+so a rating item's chosen rating survives re-validation instead of collapsing to a bare name.

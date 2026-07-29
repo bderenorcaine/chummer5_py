@@ -378,6 +378,57 @@ def test_buying_two_of_a_repeatable_gear_item() -> None:
     assert f"{budget - 2 * credstick.cost} / {budget}" in response.text
 
 
+def test_buying_rating_priced_gear_scales_cost_with_chosen_rating() -> None:
+    # WP66: Fake SIN is Rating-priced (2500/rating). Bought at rating 4 -> 10000 nuyen.
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/ui/resources", data={"gear_Fake SIN": "1", "rating_Fake SIN": "4"}
+    )
+
+    assert response.status_code == 200
+    budget = PRIORITIES.resources["D"].nuyen
+    assert f"{budget - 4 * 2500} / {budget}" in response.text
+
+
+def test_rating_priced_gear_shows_availability_capped_rating_selector() -> None:
+    # WP66: Fake SIN's <rating> is 6 but the (Rating*3)F availability cap clamps the offered range
+    # to rating 4 -- the dropdown must not offer 5 or 6.
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post("/ui/resources", data={})
+
+    assert 'name="rating_Fake SIN"' in response.text
+    # A rough check that the option range stops at 4: option value 5 for that select must not exist.
+    assert '<option value="5"' not in response.text.split('name="rating_Fake SIN"')[1].split(
+        "</select>"
+    )[0]
+
+
+def test_save_load_round_trips_rating_priced_gear() -> None:
+    # WP66: a Rating-priced purchase persists its chosen rating across save/load and shows it on
+    # the reloaded character sheet.
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post("/ui/resources", data={"gear_Fake SIN": "1", "rating_Fake SIN": "4"})
+
+    save_response = client.get("/character/save")
+    assert save_response.status_code == 200
+
+    fresh_client = TestClient(create_app())
+    fresh_client.get("/")
+    load_response = fresh_client.post(
+        "/character/load",
+        files={"save_file": ("character.json", save_response.content, "application/json")},
+    )
+
+    assert "Character loaded." in load_response.text
+    sheet = fresh_client.get("/character/sheet")
+    assert "Fake SIN (Rating 4) × 1" in sheet.text
+
+
 def test_overspending_the_nuyen_budget_is_rejected() -> None:
     client = TestClient(create_app())
     _confirm_human(client)

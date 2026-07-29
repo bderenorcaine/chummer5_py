@@ -93,7 +93,7 @@ sub-accordion and to text inputs.
   pool numbers (and a non-specialized one exposes a single value); manual walkthrough typing a
   multi-word specialization / contact name without losing focus mid-word.
 
-- [ ] **WP66 — Rating-priced gear: offer fake SINs, AR glasses/goggles/contacts, earbuds/headphones
+- [x] **WP66 — Rating-priced gear: offer fake SINs, AR glasses/goggles/contacts, earbuds/headphones
     and the rest of the Rating-cost SR5 catalog (reported: "gear list does not include fake SINs, AR
     glasses, or earbuds/headphones").**
   Goal: close a real, previously-documented content gap — the starter-gear catalog offers only

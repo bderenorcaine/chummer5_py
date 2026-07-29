@@ -67,6 +67,7 @@ def _sample_save() -> CharacterSave:
         ),
         resources_letter="B",
         gear_names=("Meta Link", "Combat Knife"),
+        rating_gear_picks=(("Fake SIN", 4), ("Glasses", 2)),
         lifestyle_tier_name="Low",
         lifestyle_months=1,
     )
@@ -112,6 +113,10 @@ def test_to_json_produces_the_documented_wire_shape() -> None:
         {"name": "GM Plot", "connection": 1, "loyalty": 1, "free": True},
     ]
     assert data["gear_names"] == ["Meta Link", "Combat Knife"]
+    assert data["rating_gear_picks"] == [
+        {"name": "Fake SIN", "rating": 4},
+        {"name": "Glasses", "rating": 2},
+    ]
     assert data["lifestyle_tier_name"] == "Low"
     assert data["lifestyle_months"] == 1
     assert data["specializations"] == {"skill-hacking": "Networks"}

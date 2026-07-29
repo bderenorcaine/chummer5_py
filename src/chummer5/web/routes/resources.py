@@ -41,6 +41,8 @@ def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str
     """
     names: list[str] = []
     for item in catalog:
+        if item.cost_per_rating is not None:
+            continue  # WP66: rating-priced items go through _parse_rating_gear instead
         raw = form.get(f"gear_{item.name}")
         try:
             quantity = int(str(raw)) if raw is not None else 0
@@ -48,6 +50,37 @@ def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str
             quantity = 0
         names.extend([item.name] * max(quantity, 0))
     return tuple(names)
+
+
+def _parse_rating_gear(
+    form: FormData, catalog: Iterable[StarterGearItem]
+) -> tuple[tuple[str, int], ...]:
+    """Expand each Rating-priced item's `(quantity, rating)` form fields into `create_resources_
+    selection`'s `rating_gear` argument -- a flat `(name, rating)` list, repeats = quantity (WP66).
+
+    Quantity is clamped to >=0 the same web-robustness way `_parse_gear` clamps it. A missing or
+    unparseable rating defaults to 1 (a valid rating); an explicitly out-of-range rating is passed
+    through unchanged, so `create_resources_selection`'s own 1..max_rating check is what rejects it,
+    not this parser -- mirroring `_parse_gear`'s "let the engine validate what it owns" split.
+    """
+    picks: list[tuple[str, int]] = []
+    for item in catalog:
+        if item.cost_per_rating is None:
+            continue
+        raw_qty = form.get(f"gear_{item.name}")
+        try:
+            quantity = int(str(raw_qty)) if raw_qty is not None else 0
+        except ValueError:
+            quantity = 0
+        if quantity <= 0:
+            continue
+        raw_rating = form.get(f"rating_{item.name}")
+        try:
+            rating = int(str(raw_rating)) if raw_rating is not None else 1
+        except ValueError:
+            rating = 1
+        picks.extend([(item.name, rating)] * quantity)
+    return tuple(picks)
 
 
 def _parse_karma_converted(form: FormData) -> int:
@@ -73,6 +106,7 @@ def _resources_context(
     bioware_cost: int,
     karma_converted: int = 0,
     foci_cost: int = 0,
+    rating_gear: tuple[tuple[str, int], ...] = (),
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -120,7 +154,36 @@ def _resources_context(
     counts: dict[str, int] = {}
     for name in gear_names:
         counts[name] = counts.get(name, 0) + 1
-    # WP21: ~330 items instead of 5 -- grouped by category (the catalog is already sorted by
+    # WP66: rating-priced picks tally quantity per name and carry the chosen rating (the UI submits
+    # one rating per item, so a name's pairs all share a rating -- last wins if they somehow don't).
+    rating_counts: dict[str, int] = {}
+    rating_by_name: dict[str, int] = {}
+    for name, rating in rating_gear:
+        rating_counts[name] = rating_counts.get(name, 0) + 1
+        rating_by_name[name] = rating
+
+    def _row(item: StarterGearItem) -> dict[str, Any]:
+        if item.cost_per_rating is not None:  # WP66 rating-priced row
+            quantity = rating_counts.get(item.name, 0)
+            rating = rating_by_name.get(item.name, 1)
+            unit = item.cost_per_rating
+            return {
+                "item": item,
+                "quantity": quantity,
+                "is_rating": True,
+                "rating": rating,
+                "max_rating": item.max_rating,
+                "unit_cost": unit,
+                "subtotal": quantity * rating * unit,
+            }
+        return {
+            "item": item,
+            "quantity": counts.get(item.name, 0),
+            "is_rating": False,
+            "subtotal": item.cost * counts.get(item.name, 0),
+        }
+
+    # WP21: ~380 items instead of 5 -- grouped by category (the catalog is already sorted by
     # (category, name), so a plain groupby needs no re-sorting) rather than one long flat table, per
     # the Implementation Plan's explicit instruction. `_character_sheet_context`'s own `gear_rows`
     # (a different context key, just the *purchased* items) is unaffected -- that list is always
@@ -128,14 +191,7 @@ def _resources_context(
     gear_groups: list[dict[str, Any]] = [
         {
             "category": category,
-            "rows": [
-                {
-                    "item": item,
-                    "quantity": counts.get(item.name, 0),
-                    "subtotal": item.cost * counts.get(item.name, 0),
-                }
-                for item in items
-            ],
+            "rows": [_row(item) for item in items],
         }
         for category, items in itertools.groupby(
             STARTER_GEAR_CATALOG, key=lambda item: item.category or "Other"
@@ -150,6 +206,7 @@ def _resources_context(
                 resources_letter,
                 PRIORITIES,
                 gear_names,
+                rating_gear=rating_gear,
                 lifestyle_cost=lifestyle_cost,
                 cyberware_cost=cyberware_cost,
                 bioware_cost=bioware_cost,
@@ -192,6 +249,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
     else:
         form = await request.form()
         gear_names = _parse_gear(form, STARTER_GEAR_CATALOG)
+        rating_gear = _parse_rating_gear(form, STARTER_GEAR_CATALOG)
         karma_converted = _parse_karma_converted(form)
         lifestyle_selection = session.character.lifestyle_selection
         lifestyle_cost = (
@@ -208,6 +266,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 session.resources_letter,
                 PRIORITIES,
                 gear_names,
+                rating_gear=rating_gear,
                 lifestyle_cost=lifestyle_cost,
                 cyberware_cost=cyberware_cost,
                 bioware_cost=bioware_cost,
@@ -222,6 +281,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 cyberware_cost,
                 bioware_cost,
                 karma_converted,
+                rating_gear=rating_gear,
                 error=str(exc),
             )
         else:
@@ -234,6 +294,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 cyberware_cost,
                 bioware_cost,
                 karma_converted,
+                rating_gear=rating_gear,
             )
     context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_resources.html", context)

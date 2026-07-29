@@ -275,6 +275,11 @@ BoundSpiritPickPair = tuple[str, int]
 # docstring. Named for the same readability reason as PowerPickTriple/BoundSpiritPickPair.
 FociPickPair = tuple[str, int]
 
+# One `(gear_name, rating)` pair for a Rating-priced starter-gear purchase (WP66), as
+# `create_resources_selection`'s `rating_gear` argument takes -- repeats allowed for quantity.
+# Named for the same readability reason as PowerPickTriple/FociPickPair.
+RatingGearPick = tuple[str, int]
+
 # One `(name, category, rating)` triple, as `chummer5.engine.knowledge.KnowledgeSkillPick` carries
 # -- see that class's own docstring. Named for the same readability reason as PowerPickTriple.
 KnowledgeSkillPickTriple = tuple[str, str, int]
@@ -371,6 +376,11 @@ class CharacterSave:
     # .quality_text). Defaults to {} -- "predates this field", the identical shape every other
     # optional selection field defaults to.
     quality_text: MappingProxyType[str, str] = MappingProxyType({})
+    # WP66: Rating-priced starter-gear purchases, as (gear_name, rating) pairs (repeats = quantity)
+    # -- kept separate from flat `gear_names` since a rating item's price depends on the chosen
+    # rating. Defaults to () -- "predates this field", the identical shape every other optional
+    # selection field defaults to.
+    rating_gear_picks: tuple[RatingGearPick, ...] = ()
 
 
 def create_character_save(
@@ -412,6 +422,7 @@ def create_character_save(
     karma_specializations: Mapping[str, str] = MappingProxyType({}),
     karma_knowledge_points: Mapping[str, int] = MappingProxyType({}),
     quality_text: Mapping[str, str] = MappingProxyType({}),
+    rating_gear_picks: Iterable[RatingGearPick] = (),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -459,6 +470,7 @@ def create_character_save(
         karma_specializations=MappingProxyType(dict(karma_specializations)),
         karma_knowledge_points=MappingProxyType(dict(karma_knowledge_points)),
         quality_text=MappingProxyType(dict(quality_text)),
+        rating_gear_picks=tuple(rating_gear_picks),
     )
 
 
@@ -524,6 +536,9 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "karma_specializations": dict(save.karma_specializations),
         "karma_knowledge_points": dict(save.karma_knowledge_points),
         "quality_text": dict(save.quality_text),
+        "rating_gear_picks": [
+            {"name": name, "rating": rating} for name, rating in save.rating_gear_picks
+        ],
     }
 
 
@@ -592,6 +607,9 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         karma_specializations=data.get("karma_specializations", {}),
         karma_knowledge_points=data.get("karma_knowledge_points", {}),
         quality_text=data.get("quality_text", {}),
+        rating_gear_picks=(
+            (p["name"], p["rating"]) for p in data.get("rating_gear_picks", ())
+        ),
     )
 
 
@@ -751,6 +769,7 @@ def build_character(
         save.resources_letter,
         priorities,
         gear_names=save.gear_names,
+        rating_gear=save.rating_gear_picks,
         lifestyle_cost=lifestyle_selection.total_cost,
         karma_converted=save.karma_converted,
     )
@@ -787,6 +806,7 @@ def build_character(
         save.resources_letter,
         priorities,
         gear_names=save.gear_names,
+        rating_gear=save.rating_gear_picks,
         lifestyle_cost=lifestyle_selection.total_cost,
         cyberware_cost=cyberware_selection.nuyen_spent,
         bioware_cost=bioware_selection.nuyen_spent,
@@ -951,6 +971,7 @@ def build_character(
         save.resources_letter,
         priorities,
         gear_names=save.gear_names,
+        rating_gear=save.rating_gear_picks,
         lifestyle_cost=lifestyle_selection.total_cost,
         cyberware_cost=cyberware_selection.nuyen_spent,
         bioware_cost=bioware_selection.nuyen_spent,

@@ -5,6 +5,18 @@ to items whose `<cost>` is a plain, non-negative integer literal -- what the Imp
 accessories, e.g. Card Reader/Biometric Reader, whose `<cost>` is *added to a parent item's* cost
 rather than being a standalone price).
 
+**Rating-priced gear (WP66).** `load_rating_gear` is the deliberate complement to `load_gear`'s
+flat-cost filter over the *same* `gear.xml`: the 120 SR5-sourced entries whose `<cost>` is a
+`Rating * N` formula (Fake SINs, AR glasses/goggles/contacts, earbuds/headphones, medkits, and the
+rest), previously excluded entirely by WP21. Their price scales with a Rating picked at purchase
+(`cost = chosen_rating * cost_per_rating`), and their `<avail>` often scales with Rating too --
+`parse_rating_availability` turns that into a `slope*rating + intercept` linear form so the engine's
+Availability<=12 cap (Project Overview's 2026-07-21 ruling) can clamp the offered rating range.
+This loader stays a literal XML->dataclass pass; the cap, the Foci/Formulae exclusion (those two
+categories are owned by the dedicated `chummer5.data.foci`/`chummer5.engine.foci` bonding system,
+not offered as plain gear), and the flat/rating name-collision resolution all live one layer up in
+`chummer5.engine.resources.build_starter_gear_catalog`.
+
 Confirmed counts (re-derived directly from the XML, matching the Implementation Plan's own
 research): 391 SR5-sourced `<gear>` entries, of which 266 are flat-cost (125 excluded: 120
 `Rating`-formula, 2 `FixedValues`, 1 `Variable`, 2 `+N` modifiers); 12 SR5-sourced `<armor>`
@@ -66,6 +78,20 @@ CORE_RULEBOOK_SOURCE = "SR5"
 # standalone item price -- see module docstring).
 _FLAT_COST_RE = re.compile(r"\d+")
 
+# A "rating-priced" <cost> is `Rating * N` (optionally without surrounding spaces, e.g.
+# `Rating*250`) -- the item's price scales with the Rating the player picks at purchase (WP66). N is
+# captured as the per-rating unit cost. See module docstring's Rating-priced section.
+_RATING_COST_RE = re.compile(r"Rating\s*\*\s*(\d+)")
+
+# An <avail> that scales with Rating is a linear `slope * Rating + intercept`. The trailing R/F
+# (Restricted/Forbidden) legality marker is stripped before parsing -- only the numeric magnitude
+# matters for WP66's Availability<=12 cap. A leading `+` marks a modifier added to a *parent* item's
+# availability (an accessory, not a standalone pick) -- excluded, mirroring load_gear's `+`-cost
+# accessory exclusion.
+_AVAIL_RESTRICTION_RE = re.compile(r"[RF]$")
+_AVAIL_TIMES_RE = re.compile(r"Rating\s*\*\s*(\d+)")
+_AVAIL_PLUS_RE = re.compile(r"Rating\s*\+\s*(\d+)")
+
 
 def _flat_cost(elem: ET.Element) -> int | None:
     text = elem.findtext("cost")
@@ -75,6 +101,46 @@ def _flat_cost(elem: ET.Element) -> int | None:
     if not _FLAT_COST_RE.fullmatch(text):
         return None
     return int(text)
+
+
+def _rating_cost(elem: ET.Element) -> int | None:
+    """The per-rating unit cost N of a `Rating * N` <cost>, or None if it isn't rating-priced."""
+    text = elem.findtext("cost")
+    if text is None:
+        return None
+    match = _RATING_COST_RE.fullmatch(text.strip())
+    return int(match.group(1)) if match else None
+
+
+def parse_rating_availability(avail: str) -> tuple[int, int] | None:
+    """Parse a Rating-scaled `<avail>` into `(slope, intercept)` so availability at a given rating
+    is `slope * rating + intercept`.
+
+    Returns None for a `+`-prefixed modifier (an accessory added to a parent item's availability,
+    not a standalone value -- excluded from the purchasable catalog, mirroring load_gear's `+`-cost
+    accessory exclusion) or for any form this parser doesn't recognize (excluded, fail-closed). The
+    trailing R/F legality marker is ignored -- only the magnitude matters for WP66's <=12 cap.
+
+    Handles every shape seen in SR5-sourced Rating-priced `gear.xml` entries: bare integers (`0`,
+    `8R`, `12F`), `Rating`/`(Rating)`/`(Rating)R`, `Rating * N`/`(Rating * N)F`, `(Rating + N)R`.
+    """
+    text = avail.strip()
+    if text.startswith("+"):
+        return None
+    text = _AVAIL_RESTRICTION_RE.sub("", text).strip()
+    if text.startswith("(") and text.endswith(")"):
+        text = text[1:-1].strip()
+    if text.isdigit():
+        return (0, int(text))
+    times = _AVAIL_TIMES_RE.fullmatch(text)
+    if times:
+        return (int(times.group(1)), 0)
+    plus = _AVAIL_PLUS_RE.fullmatch(text)
+    if plus:
+        return (1, int(plus.group(1)))
+    if text == "Rating":
+        return (1, 0)
+    return None
 
 
 @dataclass(frozen=True)
@@ -106,6 +172,27 @@ class Armor:
     cost: int
     armor_rating: int
     armor_stacks: bool
+    hidden: bool
+    source: str
+    page: int
+
+
+@dataclass(frozen=True)
+class RatingGear:
+    """One SR5-sourced `<gear>` entry whose `<cost>` is a `Rating * N` formula (WP66).
+
+    Unlike flat `Gear`, price isn't fixed: `cost_per_rating` is N, `max_rating` is the item's
+    `<rating>` cap, and the actual cost is `chosen_rating * cost_per_rating`. `availability` is the
+    raw `<avail>` string, parsed one layer up (`parse_rating_availability`) so the engine's
+    Availability<=12 cap can clamp the offered rating range.
+    """
+
+    id: str
+    name: str
+    category: str
+    cost_per_rating: int
+    max_rating: int
+    availability: str
     hidden: bool
     source: str
     page: int
@@ -144,6 +231,43 @@ def load_gear(xml_path: Path = DEFAULT_GEAR_PATH) -> tuple[Gear, ...]:
                 name=elem.findtext("name", ""),
                 category=elem.findtext("category", ""),
                 cost=cost,
+                hidden=elem.find("hide") is not None,
+                source=elem.findtext("source", ""),
+                page=int(elem.findtext("page", "0")),
+            )
+        )
+    return tuple(items)
+
+
+def load_rating_gear(xml_path: Path = DEFAULT_GEAR_PATH) -> tuple[RatingGear, ...]:
+    """Parse `gear.xml`, restricted to `source == "SR5"` and `Rating * N`-cost entries (WP66).
+
+    The complement of `load_gear`'s flat-cost filter over the same file: 120 SR5-sourced entries
+    across gear/audio/vision/etc. that `load_gear` drops because their price scales with Rating.
+    A literal per-entry translation like the other loaders -- the Availability<=12 cap, the
+    Foci/Formulae exclusion, and the flat/rating name-collision resolution all live one layer up in
+    `chummer5.engine.resources.build_starter_gear_catalog`, so this stays a plain XML->dataclass
+    pass with no cross-file knowledge.
+    """
+    root = ET.parse(xml_path).getroot()
+    gears_elem = root.find("gears")
+    if gears_elem is None:
+        return ()
+    items = []
+    for elem in gears_elem.findall("gear"):
+        if elem.findtext("source") != CORE_RULEBOOK_SOURCE:
+            continue
+        cost_per_rating = _rating_cost(elem)
+        if cost_per_rating is None:
+            continue
+        items.append(
+            RatingGear(
+                id=elem.findtext("id", ""),
+                name=elem.findtext("name", ""),
+                category=elem.findtext("category", ""),
+                cost_per_rating=cost_per_rating,
+                max_rating=int(elem.findtext("rating", "0") or "0"),
+                availability=elem.findtext("avail", "0").strip(),
                 hidden=elem.find("hide") is not None,
                 source=elem.findtext("source", ""),
                 page=int(elem.findtext("page", "0")),
