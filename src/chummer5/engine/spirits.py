@@ -1,11 +1,21 @@
 """Bound Spirits (Phase M, WP46): a Magician's chargen-time Karma spend binding spirits.
 
 Deliberately modeled as **roster entries plus a budget check only** -- no spirit stat block, no
-skills, no powers (optional or otherwise), per the Implementation Plan's Phase M intro. A bound
-spirit's Force is always exactly the caster's *current* Magic rating (not player-chosen); the only
-two things a player picks are which spirit type and how many services, which sets the Karma cost
-1:1 (core rulebook, "Additional Purchases & Restrictions" table, Step Seven, p. 98 -- see
-`spec/rulebooks/learnings.md`'s WP46 entry for the full citation).
+skills, no powers (optional or otherwise), per the Implementation Plan's Phase M intro. A player
+picks three things per spirit: which type, at what Force, and how many services.
+
+**Force is player-chosen, from 1 up to the caster's current Magic rating (WP70).** Through WP46-WP69
+this engine pinned Force to exactly the Magic rating (the Step Seven "Additional Purchases &
+Restrictions" table, p. 98, phrases the chargen shortcut as "Force = character's Magic rating"), so
+`force` was recomputed live rather than stored. WP70 relaxes that: a player may bind a spirit at any
+Force from 1 to Magic (the general summoning rule allows up to Magic x 2, p. 300 -- but the chargen
+table takes Magic as the reference, and WP70's scope is Force <= Magic). A pick's `force` of `None`
+still means "default to the current Magic rating", which is both the UI default and how a pre-WP70
+save (which never stored `force`) round-trips unchanged. **Crucially, the chargen Karma cost does
+*not* scale with Force**: the p. 98 table is a flat "1 Karma per service" regardless of the Force
+chosen (verified against the rulebook for WP70 -- see `spec/rulebooks/learnings.md`'s WP70 entry;
+`KARMA_PER_SERVICE` stays 1). The only two things Force affects here are which binds are legal
+(1 <= force <= Magic) and what's displayed/persisted, not the cost.
 
 **Magician-only, enforced via `character.tradition`, not a separate `magic_type` check.** Only
 Magicians have a tradition (Adepts don't cast or conjure at all -- confirmed directly against the
@@ -40,7 +50,9 @@ __all__ = [
 ]
 
 # Core rulebook, Step Seven's "Additional Purchases & Restrictions" table (p. 98): "1 Karma per
-# service (Force of spirit is equal to Character's Magic Attribute rating)."
+# service" -- a flat cost that does not scale with the spirit's Force (WP70 verified this against
+# the rulebook; the table's parenthetical "Force = character's Magic rating" describes the default
+# Force, not a cost multiplier).
 KARMA_PER_SERVICE = 1
 
 
@@ -52,8 +64,9 @@ def offered_spirit_types(tradition: Tradition) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class BoundSpirit:
-    """One bound spirit: which type, at what Force (always the caster's current Magic rating, per
-    the rulebook -- never player-chosen), and how many services it owes."""
+    """One bound spirit: which type, at what Force (player-chosen from 1 to the caster's Magic
+    rating, WP70 -- defaulting to Magic when the player doesn't narrow it), and how many services
+    it owes."""
 
     spirit_type: str
     force: int
@@ -70,12 +83,17 @@ class BoundSpiritSelection:
 
 
 def create_bound_spirit_selection(
-    picks: Iterable[tuple[str, int]],
+    picks: Iterable[tuple[str, int | None, int]],
     character: Character,
     karma_budget: int,
 ) -> BoundSpiritSelection:
-    """Build a `BoundSpiritSelection`, validating `picks` (`(spirit_type_name, services)` pairs)
-    together.
+    """Build a `BoundSpiritSelection`, validating `picks` (`(spirit_type_name, force, services)`
+    triples) together.
+
+    A pick's `force` of `None` means "use the character's current Magic rating" -- the UI default,
+    and how a pre-WP70 save (which never stored a Force) resolves. An explicit `force` must be
+    between 1 and the Magic rating inclusive (WP70; see module docstring for the Force cap's
+    rulebook basis).
 
     Validates: an empty `picks` is always fine, for any character (no Magician/tradition gate is
     applied until there's actually something to check -- mirrors `create_spell_selection`'s
@@ -83,11 +101,13 @@ def create_bound_spirit_selection(
     `picks` requires `character.tradition` to be set (Magician only -- see module docstring); the
     number of spirits doesn't exceed `character.attribute_value("CHA")` (rulebook: "Can only have a
     number of bound spirits equal to Charisma"); every `spirit_type` is one of `character.tradition
-    .spirits.offered_types`; every `services` is at least 1 (a spirit bound for 0 services isn't
-    actually bound to anything); and the summed `services * KARMA_PER_SERVICE` doesn't exceed
-    `karma_budget`. Does not require the full budget to be spent or every Charisma slot filled,
-    mirroring every other `create_*` function in this engine. Binding two spirits of the same type
-    is a real, legal SR5 purchase (they're distinct individual spirits), so `picks` allows repeats.
+    .spirits.offered_types`; every `force` is between 1 and the Magic rating; every `services` is at
+    least 1 (a spirit bound for 0 services isn't actually bound to anything); and the summed
+    `services * KARMA_PER_SERVICE` doesn't exceed `karma_budget` (the cost is a flat 1 Karma per
+    service -- it does *not* scale with Force, see module docstring). Does not require the full
+    budget to be spent or every Charisma slot filled, mirroring every other `create_*` function in
+    this engine. Binding two spirits of the same type is a real, legal SR5 purchase (they're
+    distinct individual spirits), so `picks` allows repeats.
     """
     entries = list(picks)
     if not entries:
@@ -105,21 +125,29 @@ def create_bound_spirit_selection(
         )
 
     offered = offered_spirit_types(character.tradition)
-    force = character.attribute_value("MAG")
+    magic_rating = character.attribute_value("MAG")
 
     spirits: list[BoundSpirit] = []
     total_cost = 0
-    for spirit_type, services in entries:
+    for spirit_type, force, services in entries:
         if spirit_type not in offered:
             raise ValueError(
                 f"{spirit_type!r} is not an offered spirit type for {character.tradition.name}: "
                 f"must be one of {offered}"
             )
+        resolved_force = magic_rating if force is None else force
+        if resolved_force < 1 or resolved_force > magic_rating:
+            raise ValueError(
+                f"{spirit_type!r}: Force must be between 1 and the Magic rating of {magic_rating}, "
+                f"got {resolved_force}"
+            )
         if services < 1:
             raise ValueError(
                 f"{spirit_type!r}: services must be at least 1, got {services}"
             )
-        spirits.append(BoundSpirit(spirit_type=spirit_type, force=force, services=services))
+        spirits.append(
+            BoundSpirit(spirit_type=spirit_type, force=resolved_force, services=services)
+        )
         total_cost += services * KARMA_PER_SERVICE
 
     if total_cost > karma_budget:

@@ -35,7 +35,7 @@ they can be picked up in any order. Numbered from WP67, after Phase U claims WP6
   `row.selected` (already in context). No engine change.
   Depends on: nothing (reuses WP61's grouping/filter pattern).
 
-- [ ] **WP70 — Bind spirits at a Force lower than the Magic rating.**
+- [x] **WP70 — Bind spirits at a Force lower than the Magic rating.**
   Goal: currently every bound spirit is fixed at Force = Magic rating (`_spirit_selection.html:14`:
   "each at Force {{ spirit_force }} (your current Magic rating)" — no Force input at all). SR5 lets a
   character bind a spirit at any Force from 1 up to (typically) twice Magic; at chargen the practical

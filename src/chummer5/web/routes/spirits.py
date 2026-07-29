@@ -22,16 +22,17 @@ from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 router = APIRouter()
 
 
-def _parse_bound_spirits(form: FormData, max_rows: int) -> tuple[tuple[str, int], ...]:
-    """Read up to `max_rows` bound-spirit rows off a submitted form into `(spirit_type, services)`
-    pairs -- mirrors `chummer5.web.routes.contacts._parse_contacts`'s identical fixed-row shape.
-    Any row whose spirit-type field is blank is skipped entirely; a malformed services value is
-    treated as 0 rather than dropping the row, the same "let the engine validate what it's already
-    responsible for" choice `_parse_contacts` makes for Connection/Loyalty
+def _parse_bound_spirits(form: FormData, max_rows: int) -> tuple[tuple[str, int | None, int], ...]:
+    """Read up to `max_rows` bound-spirit rows off a submitted form into `(spirit_type, force,
+    services)` triples -- mirrors `chummer5.web.routes.contacts._parse_contacts`'s identical
+    fixed-row shape. Any row whose spirit-type field is blank is skipped entirely; a malformed
+    services value is treated as 0 rather than dropping the row, the same "let the engine validate
+    what it's already responsible for" choice `_parse_contacts` makes for Connection/Loyalty
     (`create_bound_spirit_selection`'s own "services must be at least 1" check is what rejects a 0
-    here).
+    here). A blank or malformed Force field becomes `None` -- "default to the character's Magic
+    rating", the same meaning `create_bound_spirit_selection` gives a `None` Force (WP70).
     """
-    picks = []
+    picks: list[tuple[str, int | None, int]] = []
     for i in range(max_rows):
         spirit_type = str(form.get(f"spirit_type_{i}") or "").strip()
         if not spirit_type:
@@ -40,13 +41,19 @@ def _parse_bound_spirits(form: FormData, max_rows: int) -> tuple[tuple[str, int]
             services = int(str(form.get(f"spirit_services_{i}", "0")))
         except ValueError:
             services = 0
-        picks.append((spirit_type, services))
+        force_raw = str(form.get(f"spirit_force_{i}") or "").strip()
+        force: int | None
+        try:
+            force = int(force_raw) if force_raw else None
+        except ValueError:
+            force = None
+        picks.append((spirit_type, force, services))
     return tuple(picks)
 
 
 def _spirit_selection_context(
     character: Character | None,
-    picks: Iterable[tuple[str, int]],
+    picks: Iterable[tuple[str, int | None, int]],
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -83,20 +90,26 @@ def _spirit_selection_context(
         else 0
     )
     karma_budget = character.karma_remaining + own_committed_cost
+    magic_rating = character.attribute_value("MAG")
     entries = list(picks)
     rows = [
         {
             "index": i,
             "spirit_type": entries[i][0] if i < len(entries) else "",
-            "services": entries[i][1] if i < len(entries) else 0,
+            # A None Force ("default to Magic") is shown as the Magic rating in the form; the
+            # engine resolves the same default, so what's displayed matches what would be bound.
+            "force": (entries[i][1] if entries[i][1] is not None else magic_rating)
+            if i < len(entries)
+            else magic_rating,
+            "services": entries[i][2] if i < len(entries) else 0,
         }
         for i in range(MAX_BOUND_SPIRIT_ROWS)
     ]
-    karma_spent = sum(services for _, services in entries)
+    karma_spent = sum(services for _, _, services in entries)
     budget_warning: str | None = None
     if error is None and character.bound_spirit_selection is not None:
-        committed_picks = [
-            (spirit.spirit_type, spirit.services)
+        committed_picks: list[tuple[str, int | None, int]] = [
+            (spirit.spirit_type, spirit.force, spirit.services)
             for spirit in character.bound_spirit_selection.spirits
         ]
         try:

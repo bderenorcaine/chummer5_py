@@ -414,3 +414,26 @@ and a new `CharacterSave.rating_gear_picks` `(name, rating)` list, persisted alo
 Carry-forward sites (priority reconfirm, Lifestyle/cyberware re-validation, save building) use the
 new `resources_gear_args` helper to split a committed selection back into `(gear_names, rating_gear)`
 so a rating item's chosen rating survives re-validation instead of collapsing to a bare name.
+
+### 2026-07-29 — WP70: bound-spirit chargen cost is a flat 1 Karma/service, NOT Force-scaled (the WP note's own guess, corrected against the rulebook)
+
+WP70 (Phase V) lets a Magician bind a spirit at a Force below their Magic rating (previously pinned
+to exactly Magic and never stored). The WP's own note in `phase-v-ui-improvements.md` guessed the
+chargen binding cost "scales with Force (Force × Karma per service)" — and explicitly instructed
+verifying that against the rulebook before implementing. **Verified: the guess is wrong.** Step
+Seven's "Additional Purchases & Restrictions" table (core rulebook p. 98) gives a flat **1 Karma
+per service**; its parenthetical "Force = character's Magic rating" is the *default* Force, not a
+cost multiplier (full citation in `spec/rulebooks/learnings/phase-m.md`'s WP70 entry). So
+`chummer5.engine.spirits.KARMA_PER_SERVICE` stays `1`; WP70 changes only which binds are *legal*,
+never the per-service cost. Force cap at chargen is the Magic rating (`1 ≤ force ≤ Magic`) — the
+general Summoning rule's Magic × 2 cap (p. 300) is the looser, post-chargen number, the same
+"chargen number is the tighter one" pattern WP47 hit for Foci.
+
+Data-model/compat shape: each `CharacterSave.bound_spirit_picks` entry widens from a `(spirit_type,
+services)` pair to a `(spirit_type, force, services)` triple, where `force` is `int | None`. A
+persisted integer is the player's chosen Force; `None` — and, on read, the *absence* of a `"force"`
+key in a pre-WP70 save — means "default to the live Magic rating", exactly the pre-WP70 behavior.
+So every pre-WP70 save round-trips unchanged (WP46's "Force is never stored, always live Magic"
+design is preserved as the `None` default rather than removed). This retires the WP46 module-docstring
+claim that a bound spirit's Force "is always exactly the caster's current Magic rating (not
+player-chosen)".

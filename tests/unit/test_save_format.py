@@ -666,7 +666,7 @@ HERMETIC_ID = next(t.id for t in TRADITIONS if t.name == "Hermetic")
 
 
 def _magician_save(
-    bound_spirit_picks: tuple[tuple[str, int], ...] = (),
+    bound_spirit_picks: tuple[tuple[str, int | None, int], ...] = (),
     foci_picks: tuple[tuple[str, int], ...] = (),
     resources_letter: str = "C",
     quality_ids: tuple[str, ...] = (),
@@ -700,11 +700,21 @@ def _magician_save(
 
 
 def test_json_round_trip_preserves_bound_spirit_picks() -> None:
-    save = _magician_save((("Spirit of Fire", 3), ("Spirit of Air", 2)))
+    # WP70: a None Force ("default to Magic") round-trips as JSON null.
+    save = _magician_save((("Spirit of Fire", None, 3), ("Spirit of Air", None, 2)))
     assert from_json(to_json(save)) == save
     assert json.loads(to_json(save))["bound_spirit_picks"] == [
-        {"spirit_type": "Spirit of Fire", "services": 3},
-        {"spirit_type": "Spirit of Air", "services": 2},
+        {"spirit_type": "Spirit of Fire", "force": None, "services": 3},
+        {"spirit_type": "Spirit of Air", "force": None, "services": 2},
+    ]
+
+
+def test_json_round_trip_preserves_an_explicit_bound_spirit_force() -> None:
+    # WP70: a player-chosen Force below Magic is persisted as an integer, not re-derived on load.
+    save = _magician_save((("Spirit of Fire", 1, 3),))
+    assert from_json(to_json(save)) == save
+    assert json.loads(to_json(save))["bound_spirit_picks"] == [
+        {"spirit_type": "Spirit of Fire", "force": 1, "services": 3},
     ]
 
 
@@ -715,8 +725,19 @@ def test_from_json_defaults_bound_spirit_picks_for_a_pre_wp46_save() -> None:
     assert from_json(to_json(save)).bound_spirit_picks == ()
 
 
+def test_from_json_defaults_force_to_none_for_a_pre_wp70_save() -> None:
+    # WP70: a pre-WP70 save's spirit entries have no "force" key at all -- from_json fills None
+    # ("default to Magic"), preserving the old "Force = live Magic rating" behavior on load.
+    save = _magician_save((("Spirit of Fire", None, 3),))
+    data = json.loads(to_json(save))
+    for entry in data["bound_spirit_picks"]:
+        del entry["force"]
+    reloaded = from_json(json.dumps(data))
+    assert reloaded.bound_spirit_picks == (("Spirit of Fire", None, 3),)
+
+
 def test_build_character_applies_bound_spirit_selection() -> None:
-    save = _magician_save((("Spirit of Fire", 3),))
+    save = _magician_save((("Spirit of Fire", None, 3),))
     character = build_character(
         save,
         metatypes=METATYPES,
@@ -733,14 +754,34 @@ def test_build_character_applies_bound_spirit_selection() -> None:
     (spirit,) = character.bound_spirit_selection.spirits
     assert spirit.spirit_type == "Spirit of Fire"
     assert spirit.services == 3
-    # Force is never persisted -- always the live Magic rating at load time (see module docstring).
+    # A None Force resolves to the live Magic rating at load time (see module docstring).
     assert spirit.force == character.attribute_value("MAG") == 3
+
+
+def test_build_character_applies_an_explicit_bound_spirit_force() -> None:
+    # WP70: a persisted Force below Magic is honored on load, not re-derived to Magic.
+    save = _magician_save((("Spirit of Fire", 1, 3),))
+    character = build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+    )
+    assert character.bound_spirit_selection is not None
+    (spirit,) = character.bound_spirit_selection.spirits
+    assert spirit.force == 1
+    assert character.attribute_value("MAG") == 3
 
 
 def test_build_character_rejects_bound_spirits_exceeding_the_karma_budget() -> None:
     # STARTING_KARMA is 25 -- 26 services on one spirit alone already exceeds it, with nothing else
     # spent from qualities/contacts in this fixture.
-    save = _magician_save((("Spirit of Fire", 26),))
+    save = _magician_save((("Spirit of Fire", None, 26),))
     with pytest.raises(ValueError, match="exceeding the available budget"):
         build_character(
             save,
@@ -756,7 +797,7 @@ def test_build_character_rejects_bound_spirits_exceeding_the_karma_budget() -> N
 
 
 def test_build_character_rejects_a_spirit_type_not_offered_by_the_traditon() -> None:
-    save = _magician_save((("Spirit of Beasts", 1),))  # Hermetic never offers Beasts
+    save = _magician_save((("Spirit of Beasts", None, 1),))  # Hermetic never offers Beasts
     with pytest.raises(ValueError, match="not an offered spirit type"):
         build_character(
             save,
@@ -853,7 +894,7 @@ def test_build_character_shares_the_karma_pool_between_bound_spirits_and_foci() 
     # caught because create_foci_selection's own budget already accounts for Bound Spirits' cost
     # (see chummer5.engine.foci's module docstring's "fixed evaluation order" paragraph).
     save = _magician_save(
-        bound_spirit_picks=(("Spirit of Fire", 20),), foci_picks=((ALCHEMICAL_ID, 2),)
+        bound_spirit_picks=(("Spirit of Fire", None, 20),), foci_picks=((ALCHEMICAL_ID, 2),)
     )
     with pytest.raises(ValueError, match="exceeds the Karma budget"):
         _build_magician(save)

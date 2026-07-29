@@ -110,6 +110,44 @@ def test_binding_a_spirit_within_budget_shows_on_the_sheet() -> None:
     assert "(Force 4, 3 services owed)" in sheet.text
 
 
+def test_binding_at_an_explicit_force_below_magic_shows_on_the_sheet() -> None:
+    # WP70: a player-chosen Force below Magic is honored, and cost still 1 Karma per service.
+    client = TestClient(create_app())
+    _confirm_magician(client)
+
+    response = client.post(
+        "/ui/spirits",
+        data={
+            "spirit_type_0": "Spirit of Fire",
+            "spirit_force_0": "2",
+            "spirit_services_0": "3",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Karma spent: 3 / 25 (22 remaining)" in response.text
+
+    sheet = client.get("/character/sheet")
+    assert "(Force 2, 3 services owed)" in sheet.text
+
+
+def test_rejects_a_force_above_the_magic_rating() -> None:
+    # WP70: letter B's Magician option is Magic 4 -- Force 5 must be rejected.
+    client = TestClient(create_app())
+    _confirm_magician(client)
+
+    response = client.post(
+        "/ui/spirits",
+        data={
+            "spirit_type_0": "Spirit of Fire",
+            "spirit_force_0": "5",
+            "spirit_services_0": "1",
+        },
+    )
+
+    assert "Force must be between 1 and the Magic rating of 4" in response.text
+
+
 def test_rejects_a_spirit_type_not_offered_by_the_tradition() -> None:
     client = TestClient(create_app())
     _confirm_magician(client)
@@ -178,7 +216,11 @@ def test_save_load_round_trip_preserves_bound_spirits() -> None:
 
     save_response = client.get("/character/save")
     data = json.loads(save_response.text)
-    assert data["bound_spirit_picks"] == [{"spirit_type": "Spirit of Fire", "services": 3}]
+    # WP70: Force is persisted; with no Force submitted it resolves to the live Magic rating (4 at
+    # letter B's Magician option).
+    assert data["bound_spirit_picks"] == [
+        {"spirit_type": "Spirit of Fire", "force": 4, "services": 3}
+    ]
 
     fresh_client = TestClient(create_app())
     fresh_client.get("/")

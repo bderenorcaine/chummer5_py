@@ -11,7 +11,7 @@
   <p class="warning">{{ spirit_budget_warning }}</p>
   {% endif %}
 
-  <p>Up to {{ max_bound_spirits }} bound spirits (one per Charisma point), each at Force {{ spirit_force }} (your current Magic rating).</p>
+  <p>Up to {{ max_bound_spirits }} bound spirits (one per Charisma point). Force may be 1 to {{ spirit_force }} (your current Magic rating); cost is 1 Karma per service regardless of Force.</p>
   <p>Karma spent: {{ spirit_karma_spent }} / {{ spirit_karma_budget }} ({{ spirit_karma_remaining }} remaining).</p>
 
   <form
@@ -24,6 +24,7 @@
       <thead>
         <tr>
           <th>Spirit type</th>
+          <th>Force</th>
           <th>Services (Karma)</th>
         </tr>
       </thead>
@@ -39,6 +40,15 @@
               </option>
               {% endfor %}
             </select>
+          </td>
+          <td>
+            <input
+              type="number"
+              name="spirit_force_{{ row.index }}"
+              value="{{ row.force }}"
+              min="1"
+              max="{{ spirit_force }}"
+            />
           </td>
           <td>
             <input

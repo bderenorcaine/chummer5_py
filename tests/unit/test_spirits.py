@@ -82,14 +82,14 @@ def test_rejects_any_pick_without_a_tradition() -> None:
     mundane = _mundane_human()
     with pytest.raises(ValueError, match="require a Magician's tradition"):
         create_bound_spirit_selection(
-            [("Spirit of Fire", 1)], mundane, karma_budget=STARTING_KARMA
+            [("Spirit of Fire", None, 1)], mundane, karma_budget=STARTING_KARMA
         )
 
 
 def test_binds_a_single_spirit_within_budget() -> None:
     character = _magician(cha_points=0)
     selection = create_bound_spirit_selection(
-        [("Spirit of Fire", 3)], character, karma_budget=STARTING_KARMA
+        [("Spirit of Fire", None, 3)], character, karma_budget=STARTING_KARMA
     )
     assert selection.karma_cost == 3
     assert selection.karma_budget == STARTING_KARMA
@@ -100,20 +100,59 @@ def test_binds_a_single_spirit_within_budget() -> None:
     )
 
 
-def test_force_is_always_the_characters_current_magic_rating() -> None:
+def test_none_force_defaults_to_the_characters_current_magic_rating() -> None:
+    # WP70: a None Force means "default to Magic" -- the UI default and how a pre-WP70 save loads.
     character = _magician()
     assert character.attribute_value("MAG") == 3
     (spirit,) = create_bound_spirit_selection(
-        [("Spirit of Air", 1)], character, karma_budget=STARTING_KARMA
+        [("Spirit of Air", None, 1)], character, karma_budget=STARTING_KARMA
     ).spirits
     assert spirit.force == 3
+
+
+def test_binds_at_an_explicit_force_below_magic() -> None:
+    # WP70: Force is player-chosen from 1 up to Magic.
+    character = _magician()
+    assert character.attribute_value("MAG") == 3
+    (spirit,) = create_bound_spirit_selection(
+        [("Spirit of Air", 1, 2)], character, karma_budget=STARTING_KARMA
+    ).spirits
+    assert spirit.force == 1
+
+
+def test_cost_does_not_scale_with_force() -> None:
+    # WP70: the chargen cost is a flat 1 Karma per service regardless of Force (rulebook p. 98).
+    character = _magician()
+    low = create_bound_spirit_selection(
+        [("Spirit of Fire", 1, 2)], character, karma_budget=STARTING_KARMA
+    )
+    high = create_bound_spirit_selection(
+        [("Spirit of Fire", 3, 2)], character, karma_budget=STARTING_KARMA
+    )
+    assert low.karma_cost == high.karma_cost == 2
+
+
+def test_rejects_force_above_magic_rating() -> None:
+    character = _magician()  # Magic 3
+    with pytest.raises(ValueError, match="Force must be between 1 and the Magic rating of 3"):
+        create_bound_spirit_selection(
+            [("Spirit of Fire", 4, 1)], character, karma_budget=STARTING_KARMA
+        )
+
+
+def test_rejects_force_below_one() -> None:
+    character = _magician()
+    with pytest.raises(ValueError, match="Force must be between 1 and the Magic rating of 3"):
+        create_bound_spirit_selection(
+            [("Spirit of Fire", 0, 1)], character, karma_budget=STARTING_KARMA
+        )
 
 
 def test_allows_partial_spend() -> None:
     # Mirrors every other create_* function's "doesn't require the full budget to be spent" rule.
     character = _magician()
     selection = create_bound_spirit_selection(
-        [("Spirit of Fire", 1)], character, karma_budget=STARTING_KARMA
+        [("Spirit of Fire", None, 1)], character, karma_budget=STARTING_KARMA
     )
     assert selection.karma_cost == 1
 
@@ -122,19 +161,19 @@ def test_rejects_a_spirit_type_not_offered_by_the_characters_tradition() -> None
     character = _magician(tradition_name="Hermetic")
     with pytest.raises(ValueError, match="not an offered spirit type"):
         create_bound_spirit_selection(
-            [("Spirit of Beasts", 1)], character, karma_budget=STARTING_KARMA
+            [("Spirit of Beasts", None, 1)], character, karma_budget=STARTING_KARMA
         )
 
 
 def test_shamanic_offers_beasts_not_fire() -> None:
     character = _magician(tradition_name="Shamanic")
     selection = create_bound_spirit_selection(
-        [("Spirit of Beasts", 1)], character, karma_budget=STARTING_KARMA
+        [("Spirit of Beasts", None, 1)], character, karma_budget=STARTING_KARMA
     )
     assert selection.spirits[0].spirit_type == "Spirit of Beasts"
     with pytest.raises(ValueError, match="not an offered spirit type"):
         create_bound_spirit_selection(
-            [("Spirit of Fire", 1)], character, karma_budget=STARTING_KARMA
+            [("Spirit of Fire", None, 1)], character, karma_budget=STARTING_KARMA
         )
 
 
@@ -142,14 +181,16 @@ def test_rejects_services_below_one() -> None:
     character = _magician()
     with pytest.raises(ValueError, match="services must be at least 1"):
         create_bound_spirit_selection(
-            [("Spirit of Fire", 0)], character, karma_budget=STARTING_KARMA
+            [("Spirit of Fire", None, 0)], character, karma_budget=STARTING_KARMA
         )
 
 
 def test_allows_binding_two_spirits_of_the_same_type() -> None:
     character = _magician(cha_points=2)  # Human CHA min 1 + 2 points = 3, room for 2 spirits
     selection = create_bound_spirit_selection(
-        [("Spirit of Fire", 1), ("Spirit of Fire", 2)], character, karma_budget=STARTING_KARMA
+        [("Spirit of Fire", None, 1), ("Spirit of Fire", None, 2)],
+        character,
+        karma_budget=STARTING_KARMA,
     )
     assert len(selection.spirits) == 2
     assert selection.karma_cost == 3
@@ -159,17 +200,19 @@ def test_rejects_count_exceeding_charisma() -> None:
     character = _magician(cha_points=0)  # Human CHA min is 1
     with pytest.raises(ValueError, match="exceeding the Charisma limit of 1"):
         create_bound_spirit_selection(
-            [("Spirit of Fire", 1), ("Spirit of Air", 1)], character, karma_budget=STARTING_KARMA
+            [("Spirit of Fire", None, 1), ("Spirit of Air", None, 1)],
+            character,
+            karma_budget=STARTING_KARMA,
         )
 
 
 def test_rejects_total_karma_exceeding_budget() -> None:
     character = _magician()
     with pytest.raises(ValueError, match="exceeding the available budget of 2"):
-        create_bound_spirit_selection([("Spirit of Fire", 3)], character, karma_budget=2)
+        create_bound_spirit_selection([("Spirit of Fire", None, 3)], character, karma_budget=2)
 
 
 def test_zero_budget_rejects_any_nonzero_pick() -> None:
     character = _magician()
     with pytest.raises(ValueError, match="exceeding the available budget of 0"):
-        create_bound_spirit_selection([("Spirit of Fire", 1)], character, karma_budget=0)
+        create_bound_spirit_selection([("Spirit of Fire", None, 1)], character, karma_budget=0)

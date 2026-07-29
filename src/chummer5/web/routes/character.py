@@ -397,7 +397,7 @@ def _character_sheet_context(
             [
                 {
                     "spirit_type": spirit.spirit_type,
-                    "force": character.attribute_value("MAG"),
+                    "force": spirit.force,
                     "services": spirit.services,
                 }
                 for spirit in character.bound_spirit_selection.spirits
@@ -513,9 +513,10 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     (0 for an as-yet-uncommitted Resources section), the same "selection lives on the committed
     object, not the session" shape `gear_names` immediately above already has.
 
-    **WP46**: `bound_spirit_picks` reads straight off `character.bound_spirit_selection.spirits` as
-    `(spirit_type, services)` pairs, `()` for an as-yet-uncommitted selection -- `force` is never
-    included (see `chummer5.engine.spirits`'s module docstring for why).
+    **WP46/WP70**: `bound_spirit_picks` reads straight off `character.bound_spirit_selection
+    .spirits` as `(spirit_type, force, services)` triples, `()` when uncommitted -- since
+    WP70 made Force player-chosen, `spirit.force` (the resolved value) is now persisted, like a
+    focus's own chosen Force is (see `chummer5.engine.spirits`'s module docstring).
 
     **WP47**: `foci_picks` reads straight off `character.foci_selection.picks` as `(focus_id,
     force)` pairs, `()` for an as-yet-uncommitted selection -- unlike Bound Spirits' Force, a
@@ -584,7 +585,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     )
     bound_spirit_picks = (
         tuple(
-            (spirit.spirit_type, spirit.services)
+            (spirit.spirit_type, spirit.force, spirit.services)
             for spirit in character.bound_spirit_selection.spirits
         )
         if character.bound_spirit_selection is not None

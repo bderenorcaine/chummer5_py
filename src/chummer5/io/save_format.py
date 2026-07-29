@@ -89,13 +89,18 @@ validates it against `chummer5.engine.bioware.create_bioware_selection`, resolve
 nuyen budget left over once gear/Lifestyle/cyberware are resolved, and cyberware's own
 `essence_spent` as bioware's `other_essence_spent`, so the shared Essence floor accounts for both.
 
-**WP46** adds `bound_spirit_picks` -- a Magician's bound spirits, as `(spirit_type, services)`
-pairs (the same "selection, not derived value" shape every prior field has -- `force` is never
-stored, since it's always exactly the *live* Magic rating at load time, recomputed by `build_
-character` the same way it would be for a freshly-committed selection; see `chummer5.engine
-.spirits`'s module docstring for why storing a snapshot `force` would just be redundant,
-staleness-prone data). Defaults to `()` ("predates this field"), so every save written before this
-WP round-trips unchanged.
+**WP46** adds `bound_spirit_picks` -- a Magician's bound spirits, the same "selection, not derived
+value" shape every prior field has. Defaults to `()` ("predates this field"), so every save written
+before this WP round-trips unchanged.
+
+**WP70** widens each `bound_spirit_picks` entry from a `(spirit_type, services)` pair to a
+`(spirit_type, force, services)` triple, now that Force is player-chosen (WP46-WP69 pinned it to the
+live Magic rating and never stored it). `force` is persisted as `int | None`: a stored integer is
+the player's chosen Force, while `None` -- and, on read, the total absence of a `"force"` key in a
+pre-WP70 save -- means "default to the character's Magic rating", which is exactly the pre-WP70
+behavior. So a pre-WP70 save (whose spirit entries have no `"force"` field) still round-trips
+unchanged: `_from_dict` fills `force=None`, and `build_character` resolves it back to the live Magic
+rating via `create_bound_spirit_selection`.
 
 **WP47** adds `foci_picks` -- a magic-active character's bonded foci, as `(focus_id, force)` pairs
 (the same "selection, not derived value" shape `power_picks` already has -- `chummer5.data.foci
@@ -267,12 +272,14 @@ DEFAULT_TALENT_CODENAME = "Mundane"
 # readable name instead of an inline tuple annotation repeated at every use site.
 PowerPickTriple = tuple[str, int, str | None]
 
-# One `(spirit_type_name, services)` pair, as `create_bound_spirit_selection` already takes -- see
-# that function's own docstring. Named for the same readability reason as PowerPickTriple.
-BoundSpiritPickPair = tuple[str, int]
+# One `(spirit_type_name, force, services)` triple, as `create_bound_spirit_selection` already
+# takes -- see that function's own docstring. `force` is `int | None` (None = "default to the
+# character's Magic rating", which is how a pre-WP70 save without a stored Force resolves). Named
+# for the same readability reason as PowerPickTriple.
+BoundSpiritPickTriple = tuple[str, int | None, int]
 
 # One `(focus_id, force)` pair, as `create_foci_selection` already takes -- see that function's own
-# docstring. Named for the same readability reason as PowerPickTriple/BoundSpiritPickPair.
+# docstring. Named for the same readability reason as PowerPickTriple/BoundSpiritPickTriple.
 FociPickPair = tuple[str, int]
 
 # One `(gear_name, rating)` pair for a Rating-priced starter-gear purchase (WP66), as
@@ -337,7 +344,7 @@ class CharacterSave:
     # WP46: a Magician's bound spirits, as (spirit_type, services) pairs -- see module docstring for
     # why `force` is never persisted. Defaults to () -- "predates this field", the identical shape
     # every other optional selection field defaults to.
-    bound_spirit_picks: tuple[BoundSpiritPickPair, ...] = ()
+    bound_spirit_picks: tuple[BoundSpiritPickTriple, ...] = ()
     # WP47: a magic-active character's bonded foci, as (focus_id, force) pairs. Defaults to () --
     # "predates this field", the identical shape every other optional selection field defaults to.
     foci_picks: tuple[FociPickPair, ...] = ()
@@ -408,7 +415,7 @@ def create_character_save(
     cyberware_item_ids: Iterable[str] = (),
     bioware_item_ids: Iterable[str] = (),
     karma_converted: int = 0,
-    bound_spirit_picks: Iterable[BoundSpiritPickPair] = (),
+    bound_spirit_picks: Iterable[BoundSpiritPickTriple] = (),
     foci_picks: Iterable[FociPickPair] = (),
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
@@ -512,8 +519,8 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "bioware_item_ids": list(save.bioware_item_ids),
         "karma_converted": save.karma_converted,
         "bound_spirit_picks": [
-            {"spirit_type": spirit_type, "services": services}
-            for spirit_type, services in save.bound_spirit_picks
+            {"spirit_type": spirit_type, "force": force, "services": services}
+            for spirit_type, force, services in save.bound_spirit_picks
         ],
         "foci_picks": [
             {"focus_id": focus_id, "force": force} for focus_id, force in save.foci_picks
@@ -588,7 +595,8 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         bioware_item_ids=data.get("bioware_item_ids", ()),
         karma_converted=data.get("karma_converted", 0),
         bound_spirit_picks=(
-            (p["spirit_type"], p["services"]) for p in data.get("bound_spirit_picks", ())
+            (p["spirit_type"], p.get("force"), p["services"])
+            for p in data.get("bound_spirit_picks", ())
         ),
         foci_picks=((p["focus_id"], p["force"]) for p in data.get("foci_picks", ())),
         mentor_spirit_archetype_id=data.get("mentor_spirit_archetype_id"),

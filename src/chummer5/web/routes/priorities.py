@@ -195,7 +195,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     power_ctx = _power_selection_context(character, power_picks)
     spirit_picks = (
         tuple(
-            (spirit.spirit_type, spirit.services)
+            (spirit.spirit_type, spirit.force, spirit.services)
             for spirit in character.bound_spirit_selection.spirits
         )
         if character is not None and character.bound_spirit_selection is not None
