@@ -34,7 +34,7 @@
     </label>
 
     {% for group in gear_groups %}
-    <details {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
+    <details data-details-key="gear:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
       <summary>{{ group.category }}</summary>
       <table>
         <thead>

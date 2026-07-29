@@ -131,3 +131,23 @@ def test_collapsed_section_with_an_active_warning_shows_a_marker_on_its_summary(
     attribute_segment = response.text[attribute_idx : attribute_idx + 200]
     assert '<details >' in attribute_segment  # collapsed, not open
     assert "<summary>Attributes ⚠</summary>" in attribute_segment
+
+
+def test_details_open_state_persistence_mechanism_is_wired() -> None:
+    """WP64: the client-side open-state-persistence + exclusivity script is a pure-JS mechanism
+    (manual-walkthrough-verified per the WP), so this only guards its wiring: the shared script is
+    present on the page, and every skill sub-category <details> carries the stable
+    ``data-details-key`` the script keys its store on. The exact restore behavior is covered by the
+    manual walkthrough recorded in the WP64 worklog.
+    """
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.get("/")
+
+    # The shared persistence/exclusivity listener ships on every page (in base.html).
+    assert "htmx:afterSwap" in response.text
+    assert 'data-details-key="section:"' not in response.text  # keys are never empty
+
+    # Skill sub-categories carry stable keys so a manually collapsed category survives a swap.
+    assert 'data-details-key="skillcat:' in response.text

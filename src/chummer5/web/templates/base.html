@@ -13,5 +13,79 @@
       <a href="/character/sheet">Character sheet</a>
     </nav>
     {% block content %}{% endblock %}
+    <script>
+      // WP64: persist <details> open/closed state across htmx section swaps, and enforce
+      // client-side one-section-at-a-time exclusivity for the top-level chargen accordion.
+      //
+      // Each chargen section submits with hx-swap="outerHTML" on its own <div>, so htmx rebuilds
+      // that subtree from freshly server-rendered HTML on every change -- discarding any open/closed
+      // state the player set by hand (a manually collapsed skill category, a second section opened
+      // client-side). This listener records each <details>'s open state under a stable key and
+      // restores the player's choice after each swap. The server-side `ChargenSession.open_section`
+      // default is left untouched: it renders the initial open state on a genuine full-page load,
+      // which this store simply seeds itself from (no client state to restore on a fresh page).
+      (function () {
+        var openState = {};
+
+        // A top-level section <details> is the direct child of a `<div id>` that is itself a direct
+        // child of #chargen-body (see _chargen_body.html). Those get exclusivity, and their stable
+        // key is the section div's id. Every other <details> (skill/gear/cyberware/foci
+        // sub-categories) carries an explicit data-details-key instead.
+        function sectionDiv(d) {
+          var parent = d.parentElement;
+          if (parent && parent.parentElement && parent.parentElement.id === "chargen-body") {
+            return parent;
+          }
+          return null;
+        }
+
+        function keyOf(d) {
+          var explicit = d.getAttribute("data-details-key");
+          if (explicit) return explicit;
+          var section = sectionDiv(d);
+          return section ? "section:" + section.id : null;
+        }
+
+        function record(d) {
+          var key = keyOf(d);
+          if (key) openState[key] = d.open;
+        }
+
+        function restoreAll() {
+          document.querySelectorAll("#chargen-body details").forEach(function (d) {
+            var key = keyOf(d);
+            if (key == null) return;
+            if (key in openState) {
+              d.open = openState[key];
+            } else {
+              openState[key] = d.open; // first sighting: seed from the server-rendered default
+            }
+          });
+        }
+
+        // `toggle` doesn't bubble, so listen in the capture phase to catch every <details>.
+        document.addEventListener(
+          "toggle",
+          function (e) {
+            var d = e.target;
+            if (!(d instanceof HTMLDetailsElement)) return;
+            record(d);
+            // Exclusivity: opening a top-level section collapses its sibling sections.
+            if (d.open && sectionDiv(d)) {
+              document.querySelectorAll("#chargen-body details").forEach(function (other) {
+                if (other !== d && sectionDiv(other) && other.open) {
+                  other.open = false;
+                  record(other);
+                }
+              });
+            }
+          },
+          true
+        );
+
+        document.addEventListener("htmx:afterSwap", restoreAll);
+        document.addEventListener("DOMContentLoaded", restoreAll);
+      })();
+    </script>
   </body>
 </html>

@@ -25,7 +25,7 @@
   >
     <h3>Cyberware</h3>
     {% for group in cyberware_groups %}
-    <details {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
+    <details data-details-key="cyberware:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
       <summary>{{ group.category }}</summary>
       <table>
         <thead>
@@ -61,7 +61,7 @@
 
     <h3>Bioware</h3>
     {% for group in bioware_groups %}
-    <details {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
+    <details data-details-key="bioware:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
       <summary>{{ group.category }}</summary>
       <table>
         <thead>

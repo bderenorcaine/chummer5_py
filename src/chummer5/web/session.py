@@ -143,6 +143,16 @@ class ChargenSession:
     *different* section's `<summary>` (no server round trip involved) no longer auto-closes the
     previously open one client-side -- it does once either section's own form next submits and
     re-renders with the current `open_section`.
+
+    **WP64**: that residual behavior change is now fixed the intended way -- not by re-adding the
+    racing `name=` grouping, but with a small shared vanilla-JS listener in `base.html` that (a)
+    records each `<details>`'s open state under a stable key and restores the player's choice after
+    every htmx swap, and (b) closes sibling top-level sections client-side when one is opened, so
+    exactly-one-open holds even between server round trips. `open_section` still governs the initial
+    open state on a genuine full-page load (nothing client-side to restore then); the JS seeds its
+    store from whatever the server rendered. The same mechanism fixes the sub-accordion defect
+    (a manually collapsed skill category snapping back open when an unrelated skill change swapped
+    the section) -- sub-category `<details>` carry an explicit `data-details-key` the store keys on.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER

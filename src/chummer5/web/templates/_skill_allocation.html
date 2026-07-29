@@ -85,6 +85,7 @@
     <div id="skill-tables">
       {% for group in skill_row_groups %}
       <details
+        data-details-key="skillcat:{{ group.category }}"
         {% if group.rows | selectattr("points", "gt", 0) | list
            or group.rows | selectattr("karma_points", "gt", 0) | list
            or group.rows | selectattr("specialization") | list

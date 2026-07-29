@@ -27,7 +27,7 @@
     hx-trigger="change, input delay:400ms"
   >
     {% for group in foci_groups %}
-    <details {% if group.rows | selectattr("force", "gt", 0) | list %}open{% endif %}>
+    <details data-details-key="focus:{{ group.category }}" {% if group.rows | selectattr("force", "gt", 0) | list %}open{% endif %}>
       <summary>{{ group.category }}</summary>
       <table>
         <thead>

@@ -15,7 +15,7 @@ grouping. This is the same class of problem `chummer5.web.session.ChargenSession
 docstring already documents for the top-level accordion; these WPs extend that reasoning to the
 sub-accordion and to text inputs.
 
-- [ ] **WP64 — Persist `<details>` open/closed state across htmx section swaps (reported bugs:
+- [x] **WP64 — Persist `<details>` open/closed state across htmx section swaps (reported bugs:
   "accordion lets more than one section open at once" and "changing a skill rating re-expands
   collapsed skill categories").**
   Goal: make both levels of `<details>` — the 14 top-level chargen sections and the per-category
