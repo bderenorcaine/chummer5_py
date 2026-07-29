@@ -16,7 +16,7 @@ they can be picked up in any order. Numbered from WP67, after Phase U claims WP6
   client-side, no server round-trip, consistent with WP61's filter design.
   Depends on: nothing.
 
-- [ ] **WP68 — Knowledge/Language skills: display a dice pool, like active skills.**
+- [x] **WP68 — Knowledge/Language skills: display a dice pool, like active skills.**
   Goal: the knowledge/language picker (`_knowledge_skills.html`) shows Name/Category/Rating but no
   dice **Pool**; add one column mirroring the active-skills picker.
   Notes: pool = rating + linked attribute (the linked attribute is the category's — Academic/

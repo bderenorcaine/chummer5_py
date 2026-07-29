@@ -112,6 +112,33 @@ def test_submitting_valid_knowledge_and_language_matches_engine_output() -> None
     assert 'value="English"' in response.text
 
 
+def test_pool_column_renders_dice_pools_for_knowledge_and_language() -> None:
+    # WP68. Human A/B/C/D: INT 1, LOG 1 unspent. Street knowledge links to INT (pool = 1 + rating);
+    # every language links to INT too; a native language shows "N", not a number.
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/ui/knowledge",
+        data={
+            "knowledge_name_0": "Corporations",
+            "knowledge_category_0": "Street",
+            "knowledge_rating_0": "2",
+            "language_name_0": "Japanese",
+            "language_rating_0": "1",
+            "language_name_1": "English",
+            "language_rating_1": "0",
+            "language_native_1": "on",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "<th>Pool</th>" in response.text
+    assert "<td>3</td>" in response.text  # Street knowledge: INT 1 + rating 2
+    assert "<td>2</td>" in response.text  # Japanese: INT 1 + rating 1
+    assert "<td>N</td>" in response.text  # native English: fluency "N", no numeric pool
+
+
 def test_submitting_over_budget_knowledge_is_rejected_and_state_unchanged() -> None:
     client = TestClient(create_app())
     _confirm_human(client)  # 4-point budget

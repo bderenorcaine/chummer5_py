@@ -40,6 +40,7 @@
           <th>Category</th>
           <th>Rating</th>
           <th>Karma pts</th>
+          <th>Pool</th>
         </tr>
       </thead>
       <tbody>
@@ -76,6 +77,7 @@
               max="{{ max_skill_rating }}"
             />
           </td>
+          <td>{% if row.pool is not none %}{{ row.pool }}{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -90,6 +92,7 @@
           <th>Rating</th>
           <th>Native (free)</th>
           <th>Karma pts</th>
+          <th>Pool</th>
         </tr>
       </thead>
       <tbody>
@@ -123,6 +126,7 @@
               max="{{ max_skill_rating }}"
             />
           </td>
+          <td>{% if row.native %}N{% elif row.pool is not none %}{{ row.pool }}{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>

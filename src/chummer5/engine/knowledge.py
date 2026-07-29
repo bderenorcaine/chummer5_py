@@ -71,7 +71,11 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from chummer5.data.knowledge import KNOWLEDGE_CATEGORY_NAMES
+from chummer5.data.knowledge import (
+    KNOWLEDGE_CATEGORY_NAMES,
+    LANGUAGE_LINKED_ATTRIBUTE,
+    knowledge_category,
+)
 from chummer5.engine.character import Character, karma_advancement_cost
 from chummer5.engine.improvements import ImprovementType
 from chummer5.engine.skills import MAX_SKILL_RATING_CREATE
@@ -141,6 +145,28 @@ def free_knowledge_points(character: Character) -> int:
     return (
         character.attribute_value("INT") + character.attribute_value("LOG")
     ) * FREE_POINTS_PER_INT_LOG
+
+
+def knowledge_dice_pool(character: Character, category: str, rating: int) -> int:
+    """Dice pool for a Knowledge skill: `rating + linked attribute` (WP68), where the linked
+    attribute (LOG for Academic/Professional, INT for Interest/Street) comes from `category` --
+    core rulebook p. 89, "KNOWLEDGE CATEGORY EXAMPLES". Mirrors `chummer5.engine.skills.dice_pool`'s
+    unconditional `rating + attribute` core; Knowledge/Language skills carry none of that function's
+    specialization/defaulting/group-rating machinery, so this stays a plain sum. Uses the augmented
+    `attribute_value` for parity with active skills, though (per this module's own docstring)
+    nothing in scope augments INT/LOG.
+    """
+    linked = knowledge_category(category).linked_attribute
+    return character.attribute_value(linked) + rating
+
+
+def language_dice_pool(character: Character, rating: int) -> int:
+    """Dice pool for a Language skill: `rating + Intuition` (WP68) -- every Language skill links to
+    INT (core rulebook p. 89, `chummer5.data.knowledge.LANGUAGE_LINKED_ATTRIBUTE`). A native
+    language has no numeric rating (fluency "N"), so it has no meaningful dice pool -- callers
+    should not invoke this for a native pick.
+    """
+    return character.attribute_value(LANGUAGE_LINKED_ATTRIBUTE) + rating
 
 
 def create_knowledge_selection(

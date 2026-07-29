@@ -15,7 +15,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from starlette.datastructures import FormData
 
-from chummer5.data.knowledge import KNOWLEDGE_CATEGORIES, SUGGESTED_LANGUAGES
+from chummer5.data.knowledge import (
+    KNOWLEDGE_CATEGORIES,
+    KNOWLEDGE_CATEGORY_NAMES,
+    SUGGESTED_LANGUAGES,
+)
 from chummer5.engine.character import Character
 from chummer5.engine.knowledge import (
     KarmaKnowledgeSelection,
@@ -25,6 +29,8 @@ from chummer5.engine.knowledge import (
     create_karma_knowledge_selection,
     create_knowledge_selection,
     free_knowledge_points,
+    knowledge_dice_pool,
+    language_dice_pool,
     native_language_limit,
 )
 from chummer5.engine.skills import MAX_SKILL_RATING_CREATE
@@ -101,6 +107,81 @@ def _parse_karma_points_by_name(
     return points
 
 
+def _knowledge_row(
+    character: Character,
+    knowledge_skills: tuple[KnowledgeSkillPick, ...],
+    karma_points: Mapping[str, int],
+    i: int,
+) -> dict[str, Any]:
+    """One echoed Knowledge-skill row for `_knowledge_skills.html`, incl. its dice `pool` (WP68).
+    `pool` is `None` -- rendered blank -- for a padding row past the submitted picks, a not-yet-
+    named/rated row, or a row whose `category` isn't one of the 4 real Knowledge categories (its
+    linked attribute is unknown until a valid category is chosen); otherwise it's
+    `rating + karma pts + linked attribute`, mirroring the active-skills picker's Karma-inclusive
+    pool.
+    """
+    if i >= len(knowledge_skills):
+        return {
+            "index": i,
+            "name": "",
+            "category": "",
+            "rating": "",
+            "karma_points": 0,
+            "pool": None,
+        }
+    pick = knowledge_skills[i]
+    karma = karma_points.get(pick.name, 0)
+    pool = (
+        knowledge_dice_pool(character, pick.category, pick.rating + karma)
+        if pick.category in KNOWLEDGE_CATEGORY_NAMES and pick.rating >= 1
+        else None
+    )
+    return {
+        "index": i,
+        "name": pick.name,
+        "category": pick.category,
+        "rating": pick.rating,
+        "karma_points": karma,
+        "pool": pool,
+    }
+
+
+def _language_row(
+    character: Character,
+    languages: tuple[LanguageSkillPick, ...],
+    karma_points: Mapping[str, int],
+    i: int,
+) -> dict[str, Any]:
+    """One echoed Language-skill row for `_knowledge_skills.html`, incl. its dice `pool` (WP68). A
+    native pick has fluency "N" rather than a numeric rating, so `pool` stays `None` and the
+    template renders "N"; a rated pick's `pool` is `rating + karma pts + INT`.
+    """
+    if i >= len(languages):
+        return {
+            "index": i,
+            "name": "",
+            "rating": "",
+            "native": False,
+            "karma_points": 0,
+            "pool": None,
+        }
+    pick = languages[i]
+    karma = karma_points.get(pick.name, 0)
+    pool = (
+        language_dice_pool(character, pick.rating + karma)
+        if not pick.native and pick.rating >= 1
+        else None
+    )
+    return {
+        "index": i,
+        "name": pick.name,
+        "rating": pick.rating,
+        "native": pick.native,
+        "karma_points": karma,
+        "pool": pool,
+    }
+
+
 def _knowledge_selection_context(
     character: Character | None,
     knowledge_skills: tuple[KnowledgeSkillPick, ...],
@@ -127,26 +208,11 @@ def _knowledge_selection_context(
     if character is None:
         return {"character": None, "knowledge_error": error}
     knowledge_rows = [
-        {
-            "index": i,
-            "name": knowledge_skills[i].name if i < len(knowledge_skills) else "",
-            "category": knowledge_skills[i].category if i < len(knowledge_skills) else "",
-            "rating": knowledge_skills[i].rating if i < len(knowledge_skills) else "",
-            "karma_points": (
-                karma_points.get(knowledge_skills[i].name, 0) if i < len(knowledge_skills) else 0
-            ),
-        }
+        _knowledge_row(character, knowledge_skills, karma_points, i)
         for i in range(MAX_KNOWLEDGE_ROWS)
     ]
     language_rows = [
-        {
-            "index": i,
-            "name": languages[i].name if i < len(languages) else "",
-            "rating": languages[i].rating if i < len(languages) else "",
-            "native": languages[i].native if i < len(languages) else False,
-            "karma_points": karma_points.get(languages[i].name, 0) if i < len(languages) else 0,
-        }
-        for i in range(MAX_LANGUAGE_ROWS)
+        _language_row(character, languages, karma_points, i) for i in range(MAX_LANGUAGE_ROWS)
     ]
     free_points = free_knowledge_points(character)
     points_spent = sum(k.rating for k in knowledge_skills) + sum(

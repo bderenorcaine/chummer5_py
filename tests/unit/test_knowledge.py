@@ -19,6 +19,8 @@ from chummer5.engine.knowledge import (
     create_karma_knowledge_selection,
     create_knowledge_selection,
     free_knowledge_points,
+    knowledge_dice_pool,
+    language_dice_pool,
     native_language_limit,
 )
 from chummer5.engine.qualities import apply_quality_improvements
@@ -53,6 +55,22 @@ def test_free_knowledge_points_is_int_plus_log_times_two() -> None:
     assert character.attribute_value("INT") == 4
     assert character.attribute_value("LOG") == 3
     assert free_knowledge_points(character) == 14
+
+
+def test_knowledge_dice_pool_is_rating_plus_categorys_linked_attribute() -> None:
+    # WP68. INT 4, LOG 3 (see test_free_knowledge_points_is_int_plus_log_times_two).
+    character = _human_with_int_log(3, 2)
+    # Academic/Professional link to LOG (3); Interest/Street link to INT (4).
+    assert knowledge_dice_pool(character, "Academic", 2) == 3 + 2
+    assert knowledge_dice_pool(character, "Professional", 1) == 3 + 1
+    assert knowledge_dice_pool(character, "Interest", 2) == 4 + 2
+    assert knowledge_dice_pool(character, "Street", 3) == 4 + 3
+
+
+def test_language_dice_pool_is_rating_plus_intuition() -> None:
+    # WP68. Language skills always link to INT (4 here).
+    character = _human_with_int_log(3, 2)
+    assert language_dice_pool(character, 2) == 4 + 2
 
 
 def test_native_language_limit_is_one_without_bilingual() -> None:
@@ -209,9 +227,7 @@ def test_karma_knowledge_points_raises_a_knowledge_skill_rating() -> None:
     character = _character_with_knowledge_selection(
         knowledge=(KnowledgeSkillPick(name="Corporations", category="Street", rating=2),)
     )
-    selection = create_karma_knowledge_selection(
-        character, {"Corporations": 1}, karma_budget=100
-    )
+    selection = create_karma_knowledge_selection(character, {"Corporations": 1}, karma_budget=100)
     # KARMA ADVANCEMENT TABLE FOR SKILLS, Knowledge Skills row: 2->3 costs new_rating x 1 = 3.
     assert KARMA_KNOWLEDGE_PER_RATING == 1
     assert selection.karma_cost == 3
