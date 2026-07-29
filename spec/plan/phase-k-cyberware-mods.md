@@ -2,6 +2,11 @@
 
 ### Phase K — Post-MVP: Cyberware modifications (Capacity, subsystems, conditional bonuses)
 
+**Taken off hold 2026-07-29** at the user's direction, with WP36 landing that day. The hold below is
+kept as written for the record; WP37-42 remain as scoped, and the phase intro's own catalog survey
+should still be re-confirmed per WP by whoever picks the next one up — WP36 did exactly that for the
+formula-shape half of it and found the count slightly off (see WP36's landed note).
+
 **On hold, deliberately, as of 2026-07-21 — scoped now, started later.** Raised by a user question
 after WP33 shipped: cyberlimbs, cybereyes, and cyberears can be upgraded with plugin-type subitems
 in real SR5 (e.g. a cybereye taking a "Vision Enhancement" plugin), a mechanic WP31/32/33
@@ -60,7 +65,7 @@ more useful order. WP40-41 wire real content through the now-complete primitive 
 last and deliberately excluded from this phase's own scope until WP36-41 are solid — this
 conversation's own request not to build placeholder UI that gets thrown away applies here directly.
 
-- [ ] **WP36 — Cyberware rating-formula resolver.**
+- [x] **WP36 — Cyberware rating-formula resolver.**
   Goal: a small, tested, whitelisted evaluator for the rating-scaled cost/Essence/Capacity formula
   shapes `cyberware.xml` actually uses — proven against synthetic formula strings before any real
   catalog data touches it (mirrors WP5/WP30's "prove the mechanism in isolation first" precedent).
@@ -84,7 +89,35 @@ conversation's own request not to build placeholder UI that gets thrown away app
   Acceptance: unit tests for every distinct shape confirmed present, each hand-checked against a
   real rulebook-table value (e.g. Vision Enhancement Rating 2 → Capacity cost 2, Essence 0.1, nuyen
   cost 8000; Cybereyes Basic System Rating 3 → nuyen cost 10000, Essence 0.4 — both already
-  transcribed from the p. 453 table in this session's research, see learnings.md).
+  transcribed from the p. 453 table in this session's research, see learnings.md — WP36 re-verified
+  the page: those numbers are printed on p. **454**, since a Chummer `<page>` tag names where an
+  item's narrative section starts, not the table its numbers live in).
+
+  **Landed 2026-07-29** as `chummer5.data.cyberware_formula` (a new module, not a private helper inside
+  `chummer5.data.cyberware` — see its docstring for all six "decide & document" calls in one place),
+  with 35 tests in `tests/unit/test_cyberware_formula.py`. Public API:
+  `parse_cyberware_formula(text) -> CyberwareFormula | None` (parse once, resolve many — WP37 can use
+  the `None` as its inclusion filter) plus `resolve_cyberware_formula(text, *, rating,
+  min_rating=None) -> Decimal` (raises `UnsupportedCyberwareFormulaError`). What the next WPs need to
+  know:
+  - **The shape survey came out at 8 resolvable shapes, not this intro's 6.** Re-derived over all 87
+    SR5 entries and all three fields (this intro's pass looked at the 27 WP31-excluded entries and
+    mostly at `<cost>`): the two extras are a bare `Rating` (only ever seen bracketed, `[Rating]`) and
+    `(Rating * A) + B` — the `<ess>` **shared** by Cybereyes Basic System and Cyberears, which this
+    intro folded into those items' "two one-off named formulas" when only their `<cost>` is genuinely
+    one-off. Everything else in the intro's survey held up exactly, including the `<capacity>` shape
+    list and the 29-parent split (that half is WP37's to re-confirm).
+  - **Brackets are the caller's to strip, by decision.** `[2]`/`[Rating]`/`[Rating * 1]`/`[*]` are all
+    rejected by the resolver, so WP37 owns bracket handling — that's where budget-vs-cost semantics
+    belong, and it makes "resolved a plugin's Capacity cost as a parent's budget" impossible to do
+    silently.
+  - **`[*]` confirmed as a pure WP37/38 `bundled_free` flag**, not a resolver concern (p. 454's
+    eyeware-table footnote, verified this WP).
+  - **`{AGIMinimum}+1`/`{AGIMaximum}` bound placeholders and `<avail>` are out of scope** — the
+    resolver takes already-resolved `rating`/`min_rating` ints. `min_rating` deliberately has no `0`
+    default: omitting it for Customized Strength/Agility raises rather than silently overcharging.
+  - The one-off formulas are keyed by verbatim formula text, not item name, so no item identity needs
+    threading through WP37/38 call sites.
 
 - [ ] **WP37 — Cyberware Capacity/subsystem data loader.**
   Goal: widen `chummer5.data.cyberware` to capture parent Capacity budgets, subsystem-category

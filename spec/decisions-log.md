@@ -459,3 +459,29 @@ plus a hand-derived, rulebook-cited `expected` table — **never a fake `.chum5`
 hand-computed derived values only impersonates legacy ground truth. Full reasoning, the seven-gap
 coverage inventory (G1-G7), and the resulting WP list (WP72-76) live in
 `spec/plan/phase-s-test-fixtures.md`'s "WP59 findings" section; retrospective in `spec/worklogs/WP59.md`.
+
+### 2026-07-29 — Phase K taken off hold; its formula-shape survey corrected (8 shapes, not 6), and a PDF page-offset finding that affects every future rulebook citation
+
+Phase K ("Cyberware modifications") was parked on hold on 2026-07-21, scoped but deliberately unstarted.
+**Off hold as of this date**, at the user's direction; WP36 (the rating-formula resolver) landed the same
+day. Nothing about the phase's scope or sequencing changed — WP37-42 stand exactly as scoped.
+
+Two corrections came out of WP36's mandated re-confirmation pass, both worth recording because they
+apply beyond the WP that found them:
+
+- **The Phase K intro's "6 distinct formula shapes" is 8.** That survey was an exploratory pass over the
+  27 entries WP31 excluded, weighted toward `<cost>`; re-derived over all 87 SR5 entries and all three
+  formula-bearing fields it becomes 8. The additions are a bare `Rating` (only ever seen bracketed, in
+  `<capacity>`) and `(Rating * A) + B` — the `<ess>` **shared** by Cybereyes Basic System and Cyberears,
+  which the intro had folded into those two items' "one-off named formulas" when in fact only their
+  `<cost>` is one-off. The rest of the intro's survey (the `<capacity>` shape list, the 29-parent split)
+  held up; the parent/plugin half is still WP37's to re-confirm.
+- **`spec/rulebooks/Shadowrun_Fifth_Edition_Core_Rulebook.pdf`: physical page = printed book page + 2,
+  and a Chummer `<page>` tag names an item's *narrative section* start, not the table its numbers are
+  printed in.** Both verified by reading each page's own printed folio out of its footer. Concretely,
+  every Eyeware/Earware item carries `<page>453</page>` while the Eyeware/Earware *tables* are on
+  p. 454 (PDF p. 456) — p. 453 holds the Headware table and the eyeware narrative. This retroactively
+  corrects the "p. 453 (Eyeware/Earware tables)" citation in `learnings/phase-k.md`'s pre-Phase-K entry
+  (the quoted mechanic there is unaffected — only the page number for the tables). Future WPs citing
+  this PDF should derive the offset from a footer rather than trusting an XML `<page>` tag or the
+  `-f N` page number.
