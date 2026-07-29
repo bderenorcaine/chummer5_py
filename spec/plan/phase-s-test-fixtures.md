@@ -150,7 +150,7 @@ but now executable and regression-guarded instead of prose-only.
 Next unclaimed WP number is **WP72** (WP60-71 already claimed by Phases T/R/U/V — see the Implementation
 Plan index's tail note). Each WP below closes named gaps from §2 and follows the §3 format.
 
-- [ ] **WP72 — Synthetic whole-character fixture harness + one reference fixture.** Infrastructure
+- [x] **WP72 — Synthetic whole-character fixture harness + one reference fixture.** Infrastructure
   first, mirroring how WP4 established the `.chum5` harness before any test consumed it. Deliver the
   `SyntheticCharacter` dataclass, `build_synthetic()` helper, and the expected/citations convention
   under `tests/fixtures/` (+ a README section), proven end-to-end by **one** reference fixture: a full

@@ -57,6 +57,32 @@ Pistols — the latter a correction to the Implementation Plan's own claim that 
 none). Neither fixture's actual tradition (Shinto/Christian Theurgy, both non-`SR5`-sourced) is one
 of this phase's 2 offered traditions (Hermetic/Shamanic) — expected, not a gap; see the phase intro.
 
+## Synthetic whole-character fixtures (Phase S / WP72)
+
+The `.chum5` corpus above is a fixed snapshot — only `Yeti-#ffffff2` is a mundane Priority build, so
+every *interaction between subsystems* (a Priority build bearing cyberware, a magician losing Essence
+to it, a Step-Seven leftover-Karma spend) has no real fixture. WP59 confirmed the corpus can't grow
+(the legacy test harness only round-trips existing saves, never emits a computed character) and that
+hand-authoring fake `.chum5` files is strictly worse than an honest synthetic fixture — see
+`spec/worklogs/WP59.md`.
+
+`synthetic.py` + `synthetic_fixtures.py` are the alternative: a `SyntheticCharacter` input literal
+(priorities, metatype, name-keyed attribute/skill/group/specialization/quality picks) fed through the
+**real** engine by `build_synthetic()`, paired with a hand-derived `expected` table whose every entry
+carries an inline `citations` source (`priorities.xml`, a `learnings/phase-*.md` formula, a legacy C#
+getter). `assert_fixture()` builds each fixture and asserts every `expected` metric both computes to
+its target *and* carries a citation — a magic number with no cited source is itself a test failure.
+This is the WP5/WP30 synthetic-*primitive* pattern extended to a whole character exercising an
+*interaction* — the axis the `.chum5` corpus structurally can't cover. It sits **beside** the
+`.chum5` registry, not in place of it: the 11 legacy files stay the ground truth for
+build-method-agnostic derived-stat formulas.
+
+WP72 landed the harness + one reference fixture (`REFERENCE_MUNDANE_FIXTURE`, a full mundane Human
+Priority build). WP73-76 each **add their own input field to `SyntheticCharacter` and the matching
+`build_synthetic()` wiring together** (cyberware/bioware, magician+cyberware, leftover-Karma,
+Sum-to-Ten) — the dataclass deliberately declares only what a fixture already exercises, not
+speculative shapes. Tests live in `tests/integration/test_synthetic_fixtures.py`.
+
 ### Files
 
 - `mundane_chum5.py` — `MUNDANE_FIXTURES` (the 11 names), `PRIORITY_BUILD_FIXTURE` (Yeti),
@@ -65,4 +91,8 @@ of this phase's 2 offered traditions (Hermetic/Shamanic) — expected, not a gap
   mundane 11). Importable as `tests.fixtures.mundane_chum5` (a PEP 420 namespace package — no
   `__init__.py` needed; `pytest`'s `python -m pytest` invocation, already this project's documented
   workaround for the workspace-path mismatch, puts the repo root on `sys.path`).
+- `synthetic.py` — the `SyntheticCharacter` dataclass, `build_synthetic()`, `resolve_metric()`, and
+  `assert_fixture()` (WP72).
+- `synthetic_fixtures.py` — the hand-authored `SyntheticCharacter` literals and `SYNTHETIC_FIXTURES`
+  tuple (WP72's `REFERENCE_MUNDANE_FIXTURE`; WP73-76 append theirs here).
 - This README.
