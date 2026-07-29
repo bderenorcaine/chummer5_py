@@ -437,3 +437,25 @@ So every pre-WP70 save round-trips unchanged (WP46's "Force is never stored, alw
 design is preserved as the `None` default rather than removed). This retires the WP46 module-docstring
 claim that a bound spirit's Force "is always exactly the caster's current Magic rating (not
 player-chosen)".
+
+### 2026-07-29 — WP59 (Phase S): legacy-engine-generated fixtures ruled out permanently; new fixtures are native synthetic, not fake `.chum5`
+
+WP59's fixture-strategy research pass settled the question Phase S was created to answer. Two findings,
+the second decisive on its own:
+- **No usable .NET/Mono toolchain, and `Chummer.Tests` targets `net48` + WinForms and project-references
+  the entire WinForms Chummer app** — unbuildable on Linux by the .NET SDK, a long shot under Mono
+  (which isn't installed or in the apt repos anyway). Corrects the Phase S intro's claim that the csproj
+  is "pre-SDK-style `packages.config`": it's actually `<Project Sdk="Microsoft.NET.Sdk">`, but that
+  doesn't change the verdict.
+- **Toolchain-independent blocker:** `ChummerTest.cs` only *loads and round-trips* the existing
+  `TestFiles/*.chum5`; no test path takes a synthetic chargen definition and *emits* a computed
+  character. So even a working build could not generate a new golden fixture for a hand-designed
+  character — that needs the interactive WinForms chargen forms or fresh C# harness code.
+
+**Ruled:** legacy-engine-generated fixtures are off the table permanently (not "deferred until a
+toolchain exists" — the round-trip-only finding is toolchain-independent). New fixtures are hand-authored
+in a **native synthetic format** — a `SyntheticCharacter` input literal driven through the real engine
+plus a hand-derived, rulebook-cited `expected` table — **never a fake `.chum5`**, since a `.chum5` with
+hand-computed derived values only impersonates legacy ground truth. Full reasoning, the seven-gap
+coverage inventory (G1-G7), and the resulting WP list (WP72-76) live in
+`spec/plan/phase-s-test-fixtures.md`'s "WP59 findings" section; retrospective in `spec/worklogs/WP59.md`.
