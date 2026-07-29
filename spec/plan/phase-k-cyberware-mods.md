@@ -119,7 +119,7 @@ conversation's own request not to build placeholder UI that gets thrown away app
   - The one-off formulas are keyed by verbatim formula text, not item name, so no item identity needs
     threading through WP37/38 call sites.
 
-- [ ] **WP37 — Cyberware Capacity/subsystem data loader.**
+- [x] **WP37 — Cyberware Capacity/subsystem data loader.**
   Goal: widen `chummer5.data.cyberware` to capture parent Capacity budgets, subsystem-category
   eligibility, and plugin Capacity cost — data layer only, no purchase logic yet (mirrors WP31's own
   sequencing relative to WP32).
@@ -145,6 +145,45 @@ conversation's own request not to build placeholder UI that gets thrown away app
   `cyberware.xml` values; an explicit test that WP31's original `load_cyberware()` (60 flat items,
   existing field set, existing call sites) is completely unchanged — this WP must be additive to
   WP31/32/33, not a breaking change to already-shipped behavior.
+
+  **Landed 2026-07-29** as `chummer5.data.cyberware_subsystems` (a new module, following WP36's own
+  precedent — see its docstring for every decision below in one place), with 19 tests in
+  `tests/unit/test_cyberware_subsystems.py`. Public API: `load_cyberware_entries() ->
+  tuple[CyberwareEntry, ...]`, **all 87 SR5 rows** (not just the 27 WP31 excludes — a single wider
+  catalog beats two partial ones). `chummer5.data.cyberware.load_cyberware()` is byte-for-byte
+  unchanged; the only edit to that module is `_classify_bonus` → public `classify_bonus`, which the
+  new loader reuses verbatim rather than re-implementing. What WP38-42 need to know:
+  - **A sibling type, `CyberwareEntry`, not a widened `Cyberware`** — forced, not preferred:
+    `Cyberware.cost` is an `int` and a rating-scaled row has no single value for it. Cost, Essence,
+    Capacity budget and Capacity cost are all `CyberwareFormula` (WP36), **parsed at load, resolved
+    per purchase** (the other question WP37's entry left open). An unrecognized formula raises
+    `UnsupportedCyberwareFormulaError` at load — data drift fails loudly, no row is silently dropped.
+  - **The intro's parent split is exact**: 29 parents = 16 Cyberlimb + 2 Cybereyes/Cyberears + 11
+    Cyber Implant Weapon. Also now pinned: 50 plugins (bracketed `<capacity>`), 19 standalone-only
+    rows, and the 11 weapons are the only rows that are *both*.
+  - **The Cyber Implant Weapon → Accessory two-level case should be cut explicitly in WP38.** No
+    fixture exercises it (every depth-2/3 chain in all 34 `.chum5` files is a Chrome Flesh modular-
+    limb chain, out of SR5 scope), and the data gives a weapon no budget to spend: its `<capacity>`
+    is bracketed, which per legacy `CapacityRemaining` means a budget of zero. Its 3 accessories
+    instead carry `<addtoparentcapacity>`/`<addtoparentess>` — a fold-into-the-parent mechanic, a
+    different thing. Both flags are captured (`adds_to_parent_capacity`/`adds_to_parent_essence`) so
+    WP38 can decide from data.
+  - **Bundled-free is two signals, and the pre-Phase-K reading of it was incomplete.** `[*]`
+    (`bundled_free`) means "costs no Capacity as a plugin"; a parent's `<subsystems>` list
+    (`bundled_subsystem_names`) means "these come with it automatically" — and there are **3** of
+    those, not 2: the third is **Control Rig → Datajack**, which carries neither `[*]` nor
+    `<allowsubsystems>` and *is* real fixture content (`Mittens Chargen.chum5`). See
+    `spec/rulebooks/learnings/phase-k.md`'s WP37 entry.
+  - **`requires_parent` (9 rows, from `<requireparent>`) is the answer to half of WP38's
+    Essence-vs-Capacity dual-costing question**: Ocular Drone, Armor, Customized/Enhanced
+    Strength/Agility, Cyber Holster, Cyberarm Slide, Large Smuggling Compartment have no standalone
+    mode at all, so no choice exists for them.
+  - `{AGIMaximum}`/`{AGIMinimum}+1` bounds are kept **raw alongside** parsed ints (`raw_max_rating`
+    / `max_rating`, both `None` when attribute-derived; `has_resolvable_rating_bounds` is false for
+    exactly Customized Agility and Customized Strength) — WP38 resolves them against a character.
+  - Deliberately **not** captured, listed in the module docstring: `<limbslot>`/`<blocksmounts>`/
+    `<limit>` (limb-count mechanic), `<allowgear>` (25 rows can hold gear children), `<selectside>`,
+    `<pairbonus>`/`<pairinclude>`, `<required>`/`<forbidden>`, `<addweapon>`, `<avail>`.
 
 - [ ] **WP38 — Purchase tree & Capacity budget validation.**
   Goal: let a cyberware purchase actually nest — a limb with plugins installed into it, validated

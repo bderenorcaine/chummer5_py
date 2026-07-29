@@ -162,7 +162,7 @@ def _is_flat_physical_cm_bonus(elem: ET.Element) -> bool:
     return {child.tag for child in elem} == {"physical"} and physical.text is not None
 
 
-def _classify_bonus(
+def classify_bonus(
     bonus_elem: ET.Element | None,
 ) -> tuple[BonusSupport, tuple[CyberwareFlatBonus, ...]]:
     """Classify a `<bonus>` node, extracting flat bonuses when every remaining child is a flat
@@ -172,6 +172,11 @@ def _classify_bonus(
     `chummer5.data.qualities._classify_bonus`'s "never partially classify" rule for the bonus
     itself, independent of WP31's own "still load NOT_YET_SUPPORTED items" catalog-inclusion
     choice -- see module docstring).
+
+    Public (unlike `chummer5.data.qualities`/`powers`/`mentors`' identically-named private
+    classifiers) because WP37's `chummer5.data.cyberware_subsystems` reads the *same* rows out of
+    the *same* file and so shares this grammar verbatim -- see that module's docstring for why it
+    reuses this rather than re-implementing it the way `chummer5.data.bioware` had to.
     """
     if bonus_elem is None or len(bonus_elem) == 0:
         return BonusSupport.NO_EFFECT, ()
@@ -196,7 +201,7 @@ def _classify_bonus(
 
 def _parse_cyberware(elem: ET.Element) -> Cyberware:
     bonus_elem = elem.find("bonus")
-    support, flat_bonuses = _classify_bonus(bonus_elem)
+    support, flat_bonuses = classify_bonus(bonus_elem)
     raw_bonus = (
         ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
     )

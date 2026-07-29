@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep '\\\\.cs$')",
+      "Bash(git mv *)",
+      "Bash(awk '{print $1}')"
+    ]
+  }
+}
