@@ -80,8 +80,8 @@ build-method-agnostic derived-stat formulas.
 The fixtures double as **playable Shadowrun characters** — legal, fully-spent priority builds with a
 name and concept, not degenerate test artifacts, and authored as **one coherent runner team** (see
 `phase-s-test-fixtures.md` §5): WP72's Renata "Cheshire" Vance (human infiltrator), WP73's Dražen
-"Rebar" Kovač (Ork street samurai), WP74's Sabine "Cinder" Aumann (Human Hermetic combat mage), and
-the WP75-76 Shaman Face / Decker to come. This
+"Rebar" Kovač (Ork street samurai), WP74's Sabine "Cinder" Aumann (Human Hermetic combat mage),
+WP75's Yseult "Wren" Marchetti (Elf Shamanic face), and the WP76 Decker to come. This
 costs nothing in rigour: a fully-spent budget hits the engine's validators at their exact limits, and
 a coherent character touches more interaction paths. Only the mechanically derived numbers are
 asserted; a fixture's loadout/contacts/lifestyle prose is flavour, not engine-checked.
@@ -97,7 +97,13 @@ cyberware + bioware Essence costs stacking against the one shared pool) via `STR
 A-D letter instead of the mundane-only forced E — plus the `magic:*`/`drain_resistance`/
 `power_points`/`foci:*`/`spells:*` metric keys, closing gaps G3/G6 (a magician whose cyberware
 Essence loss reduces Magic, carrying a bonded focus and a mentor spirit) via `COMBAT_MAGE_FIXTURE`.
-WP75-76 (leftover-Karma, Sum-to-Ten) are still pending. Tests live in
+**WP75 (landed)** adds the Step Seven leftover-Karma input fields (`karma_attribute_points`/
+`karma_skill_points`/`karma_group_points`/`karma_specializations`, resolved in
+`save_format.build_character`'s own attributes→skills→spells order) plus the
+`karma_attribute:karma_cost`/`karma_skill:karma_cost`/`karma_skill:broken_groups` metric keys,
+closing gaps G4/G5 (a Karma-funded skill raise that breaks a purchased skill group, a Karma-funded
+specialization, a Karma-raised skill group, and a spell beyond the free Talent budget) via
+`SHAMAN_FACE_FIXTURE`. WP76 (Sum-to-Ten) is still pending. Tests live in
 `tests/integration/test_synthetic_fixtures.py`.
 
 ### Files
@@ -112,5 +118,5 @@ WP75-76 (leftover-Karma, Sum-to-Ten) are still pending. Tests live in
   `assert_fixture()` (WP72).
 - `synthetic_fixtures.py` — the hand-authored `SyntheticCharacter` literals and `SYNTHETIC_FIXTURES`
   tuple (WP72's `REFERENCE_MUNDANE_FIXTURE`, WP73's `STREET_SAMURAI_FIXTURE`, WP74's
-  `COMBAT_MAGE_FIXTURE`; WP75-76 append theirs here).
+  `COMBAT_MAGE_FIXTURE`, WP75's `SHAMAN_FACE_FIXTURE`; WP76 appends its own here).
 - This README.

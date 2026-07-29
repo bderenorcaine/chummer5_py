@@ -15,6 +15,7 @@ from tests.fixtures.synthetic import assert_fixture, build_synthetic, resolve_me
 from tests.fixtures.synthetic_fixtures import (
     COMBAT_MAGE_FIXTURE,
     REFERENCE_MUNDANE_FIXTURE,
+    SHAMAN_FACE_FIXTURE,
     STREET_SAMURAI_FIXTURE,
     SYNTHETIC_FIXTURES,
 )
@@ -87,6 +88,42 @@ def test_combat_mage_essence_loss_reduces_magic_and_carries_foci_and_mentor() ->
     assert resolve_metric(character, "rating:Counterspelling") == 6  # grant 5 + mentor 2, capped
     # The bonded Power Focus committed its nuyen/Karma cost.
     assert character.foci_selection.karma_cost == 12
+
+
+def test_shaman_face_spends_leftover_karma_breaking_a_group_and_buying_a_spell() -> None:
+    """The WP75 shaman face spends every point of her Step Seven leftover Karma — on an attribute,
+    on an individual skill raise that *breaks* a purchased skill group, on a Karma-funded
+    specialization, on raising a second group as a group, and on a spell beyond her free Talent
+    budget — the interactions (G4/G5) no `.chum5` fixture exercises at all (`learnings/phase-o.md`'s
+    WP53/WP54 entries both record "no fixture ... hand-verified"). A smoke check that
+    `build_synthetic` drives the real Step Seven selection functions in the documented
+    attributes→skills→spells order, and that the group-breaking split reaches the affected ratings
+    rather than only the Karma ledger.
+    """
+    character = build_synthetic(SHAMAN_FACE_FIXTURE)
+    assert character.metatype.name == "Elf"
+    assert character.magic_type == "Magician"
+    assert character.karma_attribute_selection is not None
+    assert character.karma_skill_selection is not None
+    assert character.spell_selection is not None
+
+    # G4: only Influence broke, and only Negotiation left it — its siblings keep the group rating.
+    assert character.karma_skill_selection.broken_groups == frozenset({"Influence"})
+    assert resolve_metric(character, "rating:Negotiation") == 5
+    assert resolve_metric(character, "rating:Etiquette") == 4
+    # The Karma-funded specialization reaches the dice pool (+2), on top of the broken-out rating.
+    assert resolve_metric(character, "pool:Negotiation") == 15  # 5 + CHA 8 + 2 spec
+    # Conjuring was raised *as a group* with Karma instead — 1 priority point + 1 Karma point.
+    assert resolve_metric(character, "rating:Binding") == 2
+
+    # G5: the 6th spell is Karma-funded, at exactly the Magic 3 x 2 known-spells cap.
+    assert len(character.spell_selection.spells) == 6
+    assert character.spell_selection.budget == 5
+    assert character.spell_selection.karma_spell_count == 1
+
+    # The whole 25-Karma pool (widened to 42 by net-negative qualities) is spent to the point.
+    assert character.karma_spent == 25
+    assert character.karma_remaining == 0
 
 
 def test_unrecognised_metric_key_raises() -> None:

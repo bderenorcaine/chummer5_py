@@ -46,7 +46,15 @@ field at a time rather than speculatively modelling shapes no fixture yet exerci
   and foci so both see the Essence-reduced Magic rating (`attribute_value("MAG")`) their caps read,
   the exact Essence→Magic interaction G3 exists to test. Adds the `magic:*`/`drain_resistance`/
   `power_points`/`foci:*`/`spells:*` metric keys.
-- WP75 — Step-Seven leftover-Karma spend (G4/G5)
+- WP75 — Step-Seven leftover-Karma spend (G4/G5) — **landed**: adds the `karma_attribute_points`/
+  `karma_skill_points`/`karma_group_points`/`karma_specializations` fields below, wired through
+  `create_karma_attribute_points` and `create_karma_skill_selection` in that order, *before* the
+  spell block — the same Step Seven evaluation order `chummer5.io.save_format.build_character`
+  documents (each spend's `karma_budget` is `character.karma_remaining`, so it already reflects
+  every earlier-committed spend, and a Karma-funded spell is checked against what the attribute/
+  skill spends left). Adds the `karma_attribute:karma_cost`/`karma_skill:karma_cost`/
+  `karma_skill:broken_groups` metric keys; the Karma-funded-spell side needed no new field at all
+  (a fixture simply declares more `spells` than its Talent option's free budget).
 - WP76 — Sum-to-Ten whole-character (G7)
 
 Fixture authoring is name-keyed for legibility: `skill_points`/`group_points`/`specializations` and
@@ -76,6 +84,7 @@ from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_s
 from chummer5.engine.character import (
     Character,
     create_character,
+    create_karma_attribute_points,
     metatype_choices,
 )
 from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
@@ -102,7 +111,12 @@ from chummer5.engine.qualities import (
     apply_quality_improvements,
     create_quality_selection,
 )
-from chummer5.engine.skills import create_skill_allocation, dice_pool, skill_rating
+from chummer5.engine.skills import (
+    create_karma_skill_selection,
+    create_skill_allocation,
+    dice_pool,
+    skill_rating,
+)
 
 # Loaded once — the harness is a test dependency, so a module-level cache is fine (the same shape
 # `tests/integration/test_character_fixtures.py` already uses for these loaders).
@@ -173,6 +187,16 @@ class SyntheticCharacter:
       single-General-option archetypes are supported (the General slot auto-resolves) — a two-option
       archetype would need a choice field added here, the same "extend when a fixture needs it"
       discipline WP73's cyberware/bioware fields followed.
+    - `karma_attribute_points` / `karma_skill_points` / `karma_group_points` /
+      `karma_specializations` (WP75): Step Seven's leftover-Karma spend, each mirroring its
+      priority-budget-funded sibling field's own shape (`attribute_points`, `skill_points`,
+      `group_points`, `specializations`) and meaning *additional* points bought with Karma on top of
+      whatever the priority budget already funded. `karma_attribute_points` is keyed by attribute
+      code (EDG included; MAG/RES are never Karma-allocatable — see `KarmaAttributeSelection`);
+      the three skill-side maps are name-keyed like their siblings. Raising or specializing a member
+      of an already-group-purchased skill group *breaks* that group (see
+      `create_karma_skill_selection`) — assert the resulting split via `karma_skill:broken_groups`
+      plus the members' own `rating:*` keys.
     - `foci` (WP74): `(focus name, Force)` pairs to bond. Resolved *after* cyberware too, so the
       count cap (<= Magic) and total-Force cap (<= Magic x 2) read the Essence-reduced Magic rating;
       nuyen is drawn from whatever the Resources pool has left after cyberware/bioware, Karma from
@@ -209,6 +233,10 @@ class SyntheticCharacter:
     spells: tuple[str, ...] = ()
     mentor_spirit: str | None = None
     foci: tuple[tuple[str, int], ...] = ()
+    karma_attribute_points: Mapping[str, int] = field(default_factory=dict)
+    karma_skill_points: Mapping[str, int] = field(default_factory=dict)
+    karma_group_points: Mapping[str, int] = field(default_factory=dict)
+    karma_specializations: Mapping[str, str] = field(default_factory=dict)
 
 
 def _skill_by_name(name: str) -> Skill:
@@ -388,6 +416,39 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
         apply_bioware_improvements(character, bioware_selection)
         character = replace(character, bioware_selection=bioware_selection)
 
+    # Step Seven's leftover-Karma spend (WP75), in the fixed order
+    # `chummer5.io.save_format.build_character` documents: attributes first, then skills, each
+    # validated against `character.karma_remaining` *at that point* — so every spend sees the
+    # already-committed ones' cost, and no two can silently double-spend the same Karma. Both come
+    # before the spell block below for the same reason (a Karma-funded spell is checked against
+    # what these left).
+    if fixture.karma_attribute_points:
+        character = replace(
+            character,
+            karma_attribute_selection=create_karma_attribute_points(
+                character,
+                dict(fixture.karma_attribute_points),
+                karma_budget=character.karma_remaining,
+            ),
+        )
+
+    if fixture.karma_skill_points or fixture.karma_group_points or fixture.karma_specializations:
+        character = replace(
+            character,
+            karma_skill_selection=create_karma_skill_selection(
+                character,
+                _SKILLS,
+                karma_skill_points={
+                    _skill_by_name(n).id: p for n, p in fixture.karma_skill_points.items()
+                },
+                karma_group_points=dict(fixture.karma_group_points),
+                karma_specializations={
+                    _skill_by_name(n).id: text for n, text in fixture.karma_specializations.items()
+                },
+                karma_budget=character.karma_remaining,
+            ),
+        )
+
     # Spells and Foci (WP74) come *after* cyberware/bioware so both read the Essence-reduced Magic
     # rating (`attribute_value("MAG")`): the "Magic Rating x 2" spell cap and the foci count/Force
     # caps all key off the finished MAG, so the Essence→Magic loss (G3) actually constrains them.
@@ -458,11 +519,16 @@ def resolve_metric(character: Character, key: str) -> object:
     - `power_points` (WP74) — Adept Power Points (0 for a Magician, asserting the type distinction)
     - `foci:nuyen_cost` / `foci:karma_cost` (WP74) — the bonded-foci spend
     - `spells:count` / `spells:karma_cost` (WP74) — spells known and their leftover-Karma cost
+    - `karma_attribute:karma_cost` (WP75) — the Step Seven attribute spend's own Karma cost (the
+      resulting *value* is already visible through `attr:<CODE>`, which sums both point sources)
+    - `karma_skill:karma_cost` / `karma_skill:broken_groups` (WP75) — the Step Seven skill-side
+      spend's own Karma cost, and the set of skill-group names it broke (a `frozenset[str]`)
     - `karma_spent` / `karma_remaining`
 
     A key naming a skill requires the fixture to have committed a `skill_allocation` (every WP72
-    fixture does); a `cyberware:`/`bioware:` key requires the matching selection to exist. Raises
-    `KeyError` on an unrecognised key rather than silently returning `None`.
+    fixture does); a `cyberware:`/`bioware:`/`karma_attribute:`/`karma_skill:` key requires the
+    matching selection to exist. Raises `KeyError` on an unrecognised key rather than silently
+    returning `None`.
     """
     if key.startswith("attr:"):
         return character.attribute_value(key[len("attr:") :])
@@ -498,6 +564,15 @@ def resolve_metric(character: Character, key: str) -> object:
     if key == "spells:karma_cost":
         assert character.spell_selection is not None
         return character.spell_selection.karma_cost
+    if key == "karma_attribute:karma_cost":
+        assert character.karma_attribute_selection is not None
+        return character.karma_attribute_selection.karma_cost
+    if key == "karma_skill:karma_cost":
+        assert character.karma_skill_selection is not None
+        return character.karma_skill_selection.karma_cost
+    if key == "karma_skill:broken_groups":
+        assert character.karma_skill_selection is not None
+        return character.karma_skill_selection.broken_groups
 
     fixed = {
         "initiative": initiative_value,

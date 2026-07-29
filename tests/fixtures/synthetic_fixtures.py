@@ -46,6 +46,13 @@ All figures below are cross-checked as follows:
   the chargen foci total-Force cap (Magic x 2, p.98) and count cap (<= Magic, p.317); Mentor Spirit
   General/Magician `FLAT_BONUS` slots (p.320-324). All already extracted in
   `spec/rulebooks/learnings/phase-i.md` (WP25/WP35) and `phase-m.md` (WP47/WP48) — no new PDF pass.
+- Step Seven leftover-Karma spend (WP75, `chummer5.engine.character`/`.skills`/`.magic`): the Karma
+  Advancement Tables' own per-step formulas — attribute `new Rating x 5`, Active skill
+  `new Rating x 2`, Active skill group `new Rating x 5`, flat 7 Karma per new specialization,
+  5 Karma per extra spell — plus the group-breaking rule (raising *or* specializing a
+  group-purchased member with Karma breaks that group) and the combined `Magic Rating x 2`
+  known-spells cap. All already extracted in `spec/rulebooks/learnings/phase-o.md` (WP51-54) — no
+  new PDF pass.
 """
 
 from __future__ import annotations
@@ -690,5 +697,300 @@ COMBAT_MAGE_FIXTURE = SyntheticCharacter(
 )
 
 
-# Every synthetic fixture, for the parametrized regression test. WP75-76 append their fixtures here.
-SYNTHETIC_FIXTURES = (REFERENCE_MUNDANE_FIXTURE, STREET_SAMURAI_FIXTURE, COMBAT_MAGE_FIXTURE)
+# ==================================================================================================
+# WP75 fixture — Yseult "Wren" Marchetti, Elf shaman face (Step Seven leftover-Karma spend)
+# ==================================================================================================
+#
+# Closes coverage gaps G4 (Step-Seven leftover-Karma spend on skills/groups, *including* the
+# group-breaking case, plus a Karma-funded specialization) and G5 (an extra spell beyond the free
+# Talent budget) — see phase-s-test-fixtures.md §2. Both mechanics are flagged "hand-verified, no
+# fixture" in their own WPs' research notes: `learnings/phase-o.md`'s WP53 entry ("No fixture in the
+# 34-file corpus exercises Karma-funded skill/group/specialization spend at all") and its WP54 entry
+# ("No fixture ... exercises Karma-funded extra spells" — Miko's 6 spells fit her free budget of 10,
+# Wesson is an Adept with no spell budget). This fixture is the first executable coverage of either.
+#
+# CONCEPT (flavor; not engine-modeled except where an assertion below says so)
+# ------------------------------------------------------------------------------------------------
+# Team role: the Face (see phase-s-test-fixtures.md §5) — the one who gets the team invited in
+# instead of breaking in, and the team's *second* magic user. Deliberately built against WP74's
+# Hermetic combat mage on both axes: Shamanic (CHA-based Drain) rather than Hermetic (LOG), and a
+# social specialist with modest magic (Talent C, Magic 3) rather than artillery (Talent A, Magic 6).
+# She also fills Cheshire's CHA-2 gap, exactly the complementary spread §5 asks new runners to be
+# checked against.
+#
+# A former corporate PR liaison who found she could hear what people actually meant — and that
+# spirits would talk to her about it. She never learned to shoot her way out of anything: she talks,
+# and if talk fails, she convinces the room it never saw her. Elf metatype grants Low-Light Vision
+# free (metatypes.xml — not karma-charged, not asserted here).
+#
+#   Handle: Wren      Metatype: Elf (Shamanic Magician)      Pronouns: she/her
+#   Loadout (Resources E, 6,000¥ — described, not engine-modeled): a Low lifestyle room she is
+#     rarely in, one immaculate suit bought on someone else's credstick, a licensed light pistol she
+#     has never fired on a run, a commlink. She is the team's poorest member on paper and its most
+#     expensively dressed. Contacts: a fixer who books her as a "consultant" and a talismonger.
+#
+# BUILD (all engine-modeled and asserted)
+# ------------------------------------------------------------------------------------------------
+# Priorities: Attributes A, Skills B, Talent C, Heritage D, Resources E.
+#   (Talent C's Magician option — Magic 3, a 5-spell free budget, and *no* free-skill grant at all
+#   (`skill_qty` is unset at letter C, unlike WP74's Talent A) — is the price of Attributes A +
+#   Skills B, and it's what makes her a secondary caster rather than a second artillery mage. Elf is
+#   offered at Heritage D, whose special-attribute-point budget is **0**, so Edge starts at the Elf
+#   floor of 1 and only Step Seven Karma can lift it.)
+#
+# Attributes — Attributes A = 24 primary points, ALL spent; 0 special points to spend (Heritage D).
+#   Elf minimums: AGI 2, CHA 3, all others 1 (EDG 1). CHA 8 is her one attribute at its natural
+#   maximum — legal per Step Two, and the Karma spend below only touches EDG, which that rule
+#   explicitly exempts (p.99).
+#     BOD +2=3, AGI +2=4, REA +3=4, STR +2=3, CHA +5=8, INT +4=5, LOG +2=3, WIL +4=5   (sum 24)
+#     EDG +0=1 from priority points → 2 after the Step Seven Karma buy below.
+#
+# Magic — Talent C grants Magic 3 and a 5-spell free budget, no free skills. Tradition: Shamanic
+#   (Drain Resistance = WIL + CHA = 5 + 8 = 13, her best pool of any kind). No cyberware, so no
+#   Essence→Magic loss: finished Magic 3, known-spells cap = 3 x 2 = 6.
+#
+# Skills — Skills B = 36 skill + 5 group points, ALL spent.
+#   Groups (5): Influence 4 → Etiquette/Leadership/Negotiation all at 4; Conjuring 1 →
+#     Summoning/Banishing/Binding all at 1 (raised to 2 by Karma below).
+#   Individual (35 + 1 specialization = 36): Spellcasting 5, Counterspelling 2, Assensing 3, Con 5
+#     (+"Fast Talk" specialization, 1 skill point — the Step Five, skill-point-funded kind),
+#     Impersonation 3, Performance 2, Intimidation 3, Perception 3, Sneaking 2, Pistols 2,
+#     First Aid 2, Arcana 2, Disguise 1.  (5+2+3+5+3+2+3+3+2+2+2+2+1 = 35, +1 spec = 36.)
+#
+# Step Seven — leftover Karma, 25 of 25 spent (karma_remaining 0). The Karma pool is 42, not 25:
+#   Positive Qualities cost 8 (Indomitable (Social)) and Negative Qualities credit 25 — Codeblock 10
+#   + SINner (Corporate Limited) 15, exactly the 25-Karma Negative cap — so the quality ledger is a
+#   net *credit* of 17 (25 - (8 - 25) = 42). Spent, in the engine's own fixed Step Seven order
+#   (attributes → skills → spells, per chummer5.io.save_format.build_character):
+#     - EDG 1 → 2:               10 Karma  (new rating 2 x 5)
+#     - Negotiation 4 → 5:       10 Karma  (new rating 5 x 2) — and this BREAKS the Influence group:
+#         Negotiation becomes individually tracked at 5 while Etiquette/Leadership stay at 4.
+#     - Negotiation specialization ("Bargaining"): 7 Karma (flat) — the second, independent
+#         group-breaking trigger, landing on the same skill as the raise.
+#     - Conjuring group 1 → 2:   10 Karma  (new rating 2 x 5) — a group raised *as a group* with
+#         Karma, legal precisely because nothing broke this group (a group can't be both raised and
+#         broken in one submission).
+#     - A 6th spell:              5 Karma  (5 Karma/spell) — one beyond the free budget of 5, and
+#         exactly at the Magic 3 x 2 = 6 known-spells cap.
+#   Total 42. Which specific spell is the Karma-funded one is never tracked (only the count matters
+#   — see SpellSelection's own docstring); in-concept it's Mind Probe, bought last.
+#
+# Spells (6): Influence, Analyze Truth, Physical Mask, Heal, Stunbolt, Mind Probe — a Face's kit:
+#   persuade, detect the lie, wear another face, patch the team up, and one bolt for emergencies.
+# ==================================================================================================
+
+SHAMAN_FACE_FIXTURE = SyntheticCharacter(
+    name='Yseult "Wren" Marchetti — Elf shaman face (WP75 Step Seven leftover-Karma spend)',
+    metatype="Elf",
+    heritage_letter="D",
+    attributes_letter="A",
+    skills_letter="B",
+    resources_letter="E",
+    talent_letter="C",
+    magic_type="Magician",
+    tradition="Shamanic",
+    attribute_points={
+        "BOD": 2,
+        "AGI": 2,
+        "REA": 3,
+        "STR": 2,
+        "CHA": 5,
+        "INT": 4,
+        "LOG": 2,
+        "WIL": 4,
+    },
+    skill_points={
+        "Spellcasting": 5,
+        "Counterspelling": 2,
+        "Assensing": 3,
+        "Con": 5,
+        "Impersonation": 3,
+        "Performance": 2,
+        "Intimidation": 3,
+        "Perception": 3,
+        "Sneaking": 2,
+        "Pistols": 2,
+        "First Aid": 2,
+        "Arcana": 2,
+        "Disguise": 1,
+    },
+    group_points={"Influence": 4, "Conjuring": 1},
+    specializations={"Con": "Fast Talk"},
+    qualities=("Indomitable (Social)", "Codeblock", "SINner (Corporate Limited)"),
+    quality_text={
+        "Codeblock": "Matrix Search — she has never trusted a search she didn't run by hand",
+        "SINner (Corporate Limited)": "Horizon limited corporate SIN — ex-PR liaison, on file",
+    },
+    spells=(
+        "Influence",
+        "Analyze Truth",
+        "Physical Mask",
+        "Heal",
+        "Stunbolt",
+        "Mind Probe",
+    ),
+    karma_attribute_points={"EDG": 1},
+    karma_skill_points={"Negotiation": 1},
+    karma_group_points={"Conjuring": 1},
+    karma_specializations={"Negotiation": "Bargaining"},
+    expected={
+        # Attribute totals: Elf metatype minimum + priority points; EDG also + its Karma point.
+        "attr:BOD": 3,
+        "attr:AGI": 4,
+        "attr:REA": 4,
+        "attr:STR": 3,
+        "attr:CHA": 8,
+        "attr:INT": 5,
+        "attr:LOG": 3,
+        "attr:WIL": 5,
+        "attr:EDG": 2,  # Elf floor 1 + 0 priority (Heritage D = 0 special pts) + 1 Karma
+        "magic:rating": 3,
+        "magic:essence_loss": 0,  # no cyberware, so no Essence→Magic reduction
+        # G4 — the group-breaking split: Negotiation left the Influence group, its siblings didn't.
+        "karma_skill:broken_groups": frozenset({"Influence"}),
+        "rating:Negotiation": 5,  # group 4 + 1 Karma point, now individually tracked
+        "rating:Etiquette": 4,  # unchanged group rating
+        "rating:Leadership": 4,  # unchanged group rating
+        # G4 — a group raised *as a group* with Karma (priority 1 + Karma 1), no breakage.
+        "rating:Summoning": 2,
+        "rating:Banishing": 2,
+        "rating:Binding": 2,
+        "rating:Con": 5,
+        "rating:Spellcasting": 5,
+        # Dice pools — the two specializations (one skill-point-funded, one Karma-funded) both +2.
+        "pool:Negotiation": 15,  # 5 + CHA 8 + 2 (Karma specialization "Bargaining")
+        "pool:Con": 15,  # 5 + CHA 8 + 2 (skill-point specialization "Fast Talk")
+        "pool:Etiquette": 12,  # 4 + CHA 8
+        "pool:Leadership": 12,  # 4 + CHA 8
+        "pool:Impersonation": 11,  # 3 + CHA 8
+        "pool:Intimidation": 11,  # 3 + CHA 8
+        "pool:Performance": 10,  # 2 + CHA 8
+        "pool:Spellcasting": 8,  # 5 + MAG 3
+        "pool:Counterspelling": 5,  # 2 + MAG 3
+        "pool:Summoning": 5,  # 2 (incl. the Karma group point) + MAG 3
+        "pool:Assensing": 8,  # 3 + INT 5
+        "pool:Perception": 8,  # 3 + INT 5
+        "pool:Disguise": 6,  # 1 + INT 5
+        "pool:Sneaking": 6,  # 2 + AGI 4
+        "pool:Pistols": 6,  # 2 + AGI 4
+        "pool:First Aid": 5,  # 2 + LOG 3
+        # G5 — the 6th spell is Karma-funded, at exactly the Magic x 2 known-spells cap.
+        "spells:count": 6,
+        "spells:karma_cost": 5,
+        # Per-selection Step Seven costs, so the ledger is asserted per source, not only in total.
+        "karma_attribute:karma_cost": 10,  # EDG 1 -> 2
+        "karma_skill:karma_cost": 27,  # Negotiation 10 + specialization 7 + Conjuring group 10
+        # Derived stats.
+        "essence": 6,  # no augmentation
+        "drain_resistance": 13,  # Shamanic: WIL 5 + CHA 8
+        "power_points": 0,  # Magician, not Adept
+        "initiative": 9,  # REA 4 + INT 5
+        "initiative_dice": 1,
+        "limit:physical": 5,  # ceil((STR*2+BOD+REA)/3) = ceil((6+3+4)/3) = ceil(13/3)
+        "limit:mental": 6,  # ceil((LOG*2+INT+WIL)/3) = ceil((6+5+5)/3) = ceil(16/3)
+        "limit:social": 10,  # ceil((16+5+6)/3)=9, +1 Indomitable (Social)
+        "cm:physical": 10,  # 8 + ceil(BOD/2) = 8 + 2
+        "cm:stun": 11,  # 8 + ceil(WIL/2) = 8 + 3
+        # Karma: qualities -17 (8 positive - 25 negative) + 10 + 27 + 5 = 25, i.e. every point of
+        # the 25-Karma starting pool spent, nothing left.
+        "karma_spent": 25,
+        "karma_remaining": 0,
+    },
+    citations={
+        "attr:BOD": "priorities.xml Attributes A = 24 pts; metatypes.xml Elf BOD min 1 (+2)",
+        "attr:AGI": "priorities.xml Attributes A; Elf AGI min 2 (+2)",
+        "attr:REA": "priorities.xml Attributes A; Elf REA min 1 (+3)",
+        "attr:STR": "priorities.xml Attributes A; Elf STR min 1 (+2)",
+        "attr:CHA": "priorities.xml Attributes A; Elf CHA min 3 (+5) = natural max 8",
+        "attr:INT": "priorities.xml Attributes A; Elf INT min 1 (+4)",
+        "attr:LOG": "priorities.xml Attributes A; Elf LOG min 1 (+2)",
+        "attr:WIL": "priorities.xml Attributes A; Elf WIL min 1 (+4)",
+        "attr:EDG": (
+            "priorities.xml Heritage D/Elf = 0 special pts, so Elf EDG min 1; +1 Karma point "
+            "(character.py karma_attribute_selection; p.99 exempts Edge from the natural-max rule)"
+        ),
+        "magic:rating": "priorities.xml Talent C Magician grants Magic 3; no Essence loss",
+        "magic:essence_loss": "ceil(0 Essence lost) = 0 (no cyberware/bioware); p.278",
+        "karma_skill:broken_groups": (
+            "p.87-88 via learnings/phase-o.md WP53: raising OR specializing a group member with "
+            "Karma in Step Seven breaks that group (skills.py create_karma_skill_selection)"
+        ),
+        "rating:Negotiation": (
+            "Influence group 4 (Skills B group pts) + 1 Karma point; individually tracked once the "
+            "group is broken (skills.py skill_rating's broken-group branch)"
+        ),
+        "rating:Etiquette": "Influence group 4; unaffected by the broken sibling (skills.py)",
+        "rating:Leadership": "Influence group 4; unaffected by the broken sibling (skills.py)",
+        "rating:Summoning": "Conjuring group 1 (Skills B group pts) + 1 Karma group point = 2",
+        "rating:Banishing": "Conjuring group 1 + 1 Karma group point = 2 (proves the group)",
+        "rating:Binding": "Conjuring group 1 + 1 Karma group point = 2 (proves the group)",
+        "rating:Con": "Skills B skill pts; 5 base (Acting group unbought)",
+        "rating:Spellcasting": "Skills B skill pts; 5 base (Sorcery unbought, no Talent grant)",
+        "pool:Negotiation": (
+            "learnings/phase-d.md (dice pool): rating 5 + CHA 8 + 2 Karma specialization "
+            "(KARMA_SPECIALIZATION_COST path, skills.py dice_pool)"
+        ),
+        "pool:Con": "learnings/phase-d.md: rating 5 + CHA 8 + 2 skill-point specialization (WP50)",
+        "pool:Etiquette": "learnings/phase-d.md: rating 4 + CHA 8",
+        "pool:Leadership": "learnings/phase-d.md: rating 4 + CHA 8",
+        "pool:Impersonation": "learnings/phase-d.md: rating 3 + CHA 8",
+        "pool:Intimidation": "learnings/phase-d.md: rating 3 + CHA 8",
+        "pool:Performance": "learnings/phase-d.md: rating 2 + CHA 8",
+        "pool:Spellcasting": "learnings/phase-d.md: rating 5 + MAG 3",
+        "pool:Counterspelling": "learnings/phase-d.md: rating 2 + MAG 3",
+        "pool:Summoning": "learnings/phase-d.md: rating 2 (incl. Karma group point) + MAG 3",
+        "pool:Assensing": "learnings/phase-d.md: rating 3 + INT 5 (Assensing is INT-linked)",
+        "pool:Perception": "learnings/phase-d.md: rating 3 + INT 5",
+        "pool:Disguise": "learnings/phase-d.md: rating 1 + INT 5 (Disguise is INT-linked)",
+        "pool:Sneaking": "learnings/phase-d.md: rating 2 + AGI 4",
+        "pool:Pistols": "learnings/phase-d.md: rating 2 + AGI 4",
+        "pool:First Aid": "learnings/phase-d.md: rating 2 + LOG 3",
+        "spells:count": (
+            "priorities.xml Talent C Magician = 5-spell free budget; 6 known = exactly the "
+            "Magic 3 x 2 cap (p.98, learnings/phase-o.md WP54)"
+        ),
+        "spells:karma_cost": (
+            "1 spell beyond the free budget x KARMA_PER_SPELL 5 (p.98 Additional Purchases table, "
+            "learnings/phase-o.md WP54)"
+        ),
+        "karma_attribute:karma_cost": (
+            "karma_advancement_cost(1, 1, ATTRIBUTE_KARMA_PER_RATING 5) = new rating 2 x 5 = 10 "
+            "(p.106-107 Karma Advancement Table for Attributes, learnings/phase-o.md WP51/WP52)"
+        ),
+        "karma_skill:karma_cost": (
+            "Negotiation 4->5 = new rating 5 x KARMA_SKILL_PER_RATING 2 = 10; specialization "
+            "KARMA_SPECIALIZATION_COST 7 (flat); Conjuring group 1->2 = new rating 2 x "
+            "KARMA_SKILL_GROUP_PER_RATING 5 = 10; total 27 (p.106-107, learnings/phase-o.md WP51)"
+        ),
+        "essence": "derived.py BASE_ESSENCE = 6 (metatypes.xml Elf essmax 6); no augmentation",
+        "drain_resistance": (
+            "derived.py drain_resistance: Shamanic tradition pair WIL + CHA = 5 + 8 = 13 "
+            "(traditions.xml; p.278, learnings/phase-i.md)"
+        ),
+        "power_points": "Character.power_points = 0 for a Magician (Adept-only; p.278-279)",
+        "initiative": "learnings/phase-d.md (Character.cs InitiativeValue): REA 4 + INT 5",
+        "initiative_dice": "learnings/phase-d.md: base 1 (no matrix/astral)",
+        "limit:physical": "learnings/phase-d.md LimitPhysical: ceil((6+3+4)/3)=ceil(13/3)=5",
+        "limit:mental": "learnings/phase-d.md LimitMental: ceil((6+5+5)/3)=ceil(16/3)=6",
+        "limit:social": (
+            "learnings/phase-d.md LimitSocial: ceil((CHA*2+WIL+ceil ESS)/3)=ceil(27/3)=9, "
+            "+1 Indomitable (Social) (qualities.xml FLAT_BONUS social_limit)"
+        ),
+        "cm:physical": "learnings/phase-d.md (PhysicalCM): 8 + ceil(BOD/2)",
+        "cm:stun": "learnings/phase-d.md (StunCM): 8 + ceil(WIL/2)",
+        "karma_spent": (
+            "p.64 (25 Karma); qualities 8 - 25 = -17 (Negative cap 25 hit exactly) + attributes 10 "
+            "+ skills 27 + spells 5 = 25"
+        ),
+        "karma_remaining": "STARTING_KARMA 25 - karma_spent 25 = 0 (fully spent)",
+    },
+)
+
+
+# Every synthetic fixture, for the parametrized regression test. WP76 appends its fixture here.
+SYNTHETIC_FIXTURES = (
+    REFERENCE_MUNDANE_FIXTURE,
+    STREET_SAMURAI_FIXTURE,
+    COMBAT_MAGE_FIXTURE,
+    SHAMAN_FACE_FIXTURE,
+)

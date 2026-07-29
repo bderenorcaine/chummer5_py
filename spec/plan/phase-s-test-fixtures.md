@@ -195,7 +195,7 @@ Plan index's tail note). Each WP below closes named gaps from §2 and follows th
   figure is `priorities.xml`/`cyberware.xml`/`foci.xml`/`mentors.xml`/`traditions.xml` data or an
   already-extracted `learnings/phase-d.md`/`phase-i.md`/`phase-m.md` formula. See
   `spec/worklogs/WP74.md`.
-- [ ] **WP75 — Step-Seven leftover-Karma spend fixture.** Closes G4, G5. A completed Priority build that
+- [x] **WP75 — Step-Seven leftover-Karma spend fixture.** Closes G4, G5. A completed Priority build that
   spends leftover Karma on an extra skill rank that breaks a skill group, a specialization, and an
   extra spell beyond the free Talent budget — asserting the Karma ledger and the resulting
   pool/spell-count changes against the WP52/WP53 cost formulas. Depends on: WP72; Phase O (WP52-53).
@@ -205,6 +205,21 @@ Plan index's tail note). Each WP below closes named gaps from §2 and follows th
   in the Influence/Acting group and the extra spell is a manipulation/illusion spell. Distinct from
   WP74's Hermetic combat mage in both attribute base (CHA vs LOG) and role (social vs artillery), so
   the two magic users don't overlap.
+  Landed as `SHAMAN_FACE_FIXTURE` — Yseult "Wren" Marchetti, an Elf Shamanic magician (Attributes A /
+  Skills B / Talent C / Heritage D / Resources E). Talent C's Magician option is the first fixture to
+  exercise a Talent row with **no free-skill grant** (`skill_qty` unset), and Heritage D/Elf is the
+  first with a **0 special-attribute-point** budget — so Edge starts at the Elf floor of 1 and only
+  Step Seven Karma lifts it. Her Karma pool is 42, not 25 (Positive 8 = Indomitable (Social);
+  Negative 25 = Codeblock 10 + SINner (Corporate Limited) 15, hitting the Negative cap exactly), and
+  **all 25 net Karma is spent, `karma_remaining` 0**: EDG 1→2 (10), Negotiation 4→5 (10, which breaks
+  the priority-bought Influence group — Etiquette/Leadership stay at 4), a Karma specialization on
+  Negotiation ("Bargaining", 7 flat — the second, independent group-breaking trigger), the Conjuring
+  group 1→2 raised *as a group* with Karma (10, legal because nothing broke that group), and a 6th
+  spell beyond the free 5-spell budget (5), landing exactly on the Magic 3 x 2 known-spells cap. The
+  fixture asserts the per-selection Karma costs, the broken-group set, both specialization kinds'
+  +2 pools (one skill-point-funded, one Karma-funded) and the full derived-stat set. No PDF pass
+  needed: every formula was already extracted in `learnings/phase-o.md` (WP51-54). See
+  `spec/worklogs/WP75.md`.
 - [ ] **WP76 — Sum-to-Ten whole-character fixture.** Closes G7. A Sum-to-Ten build (the sibling build
   method WP44 landed but no fixture exercises end-to-end) combined with a cyberware or magic layer,
   asserting the Sum-to-Ten letter-assignment validation plus the layered subsystem's derived values.
@@ -228,7 +243,7 @@ that tests X" still has that too.
 | WP72 | Renata "Cheshire" Vance | Human | Infiltrator / B&E | Stealth, locks, legwork (Perception), backup pistols |
 | WP73 | *(the Street Samurai)* | Ork / Troll | Muscle | Frontline combat, soak, physical intimidation |
 | WP74 | *(the Combat Mage)* | Elf / Human | Artillery / Astral | Combat spells, astral recon, magical defense, healing |
-| WP75 | *(the Shaman Face)* | Elf / Human | Face / secondary magic | Negotiation/Con/Etiquette, manipulation spells |
+| WP75 | Yseult "Wren" Marchetti | Elf | Face / secondary magic | Negotiation/Con/Etiquette, manipulation spells |
 | WP76 | *(the Decker)* | Dwarf / Human | Matrix | Hacking, Matrix overwatch, data search, electronic B&E |
 
 **Role coverage check.** Combat: Sam (primary) + Mage (spells) + Cheshire (backup pistols 12-dice).
