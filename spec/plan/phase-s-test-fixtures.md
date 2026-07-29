@@ -158,12 +158,22 @@ Plan index's tail note). Each WP below closes named gaps from §2 and follows th
   a positive/negative quality pair), asserting attribute totals, skill dice pools, initiative, limits,
   and condition monitors against hand-derived values cited to `learnings.md`/`priorities.xml`. Closes no
   §2 gap on its own — it's the substrate the rest depend on. Depends on: nothing new.
-- [ ] **WP73 — Priority-built cyberware + bioware Essence-stacking fixture.** Closes G1, G2. A mundane
+- [x] **WP73 — Priority-built cyberware + bioware Essence-stacking fixture.** Closes G1, G2. A mundane
   Priority build carrying ≥1 cyberware and ≥1 bioware item, asserting the shared-pool Essence total and
   the resulting Essence-derived stats. Depends on: WP72; Phase J (WP30-33), Phase L (WP45).
   **Team role (see §5): the Street Samurai** — the muscle. Ork or Troll, combat-augmented (e.g. wired
   reflexes cyber + muscle toner bio), which is exactly the cyberware+bioware Essence stacking this WP
   must test anyway.
+  Landed as `STREET_SAMURAI_FIXTURE` — Dražen "Rebar" Kovač, an Ork samurai (Attributes A / Heritage B
+  / Resources C / Skills D). Carries 5 cyberware (Obvious Full Arm, Bone Lacing (Titanium), Spurs,
+  Datajack, Smartlink — Essence 3.1) + 2 bioware (Enhanced Articulation, Platelet Factories —
+  Essence 0.5), stacking to Essence 6 − 3.6 = **2.4** in one shared pool; asserts the per-source
+  `cyberware:*`/`bioware:*` splits, the combined `essence`, the Cyberlimb +1 Physical CM, and the
+  Enhanced Articulation +1 Physical Limit / +1 Escape Artist bonuses. *Note the team-role blurb's
+  "wired reflexes + muscle toner" example is illustrative only — both are rating-scaled, hence
+  excluded from the flat WP31/WP45 catalogs, so the fixture uses flat equivalents.* No PDF/decisions
+  entry needed: every figure is `cyberware.xml`/`bioware.xml`/`priorities.xml` data or an already-
+  extracted `learnings/phase-d.md` formula. See `spec/worklogs/WP73.md`.
 - [ ] **WP74 — Priority-built magician + cyberware fixture (Essence→Magic loss), with foci/mentor.**
   Closes G3, and G6 to the extent a single magician build naturally carries a focus and a mentor
   spirit. A Priority magic build with enough cyberware to drop Essence below a whole point, asserting

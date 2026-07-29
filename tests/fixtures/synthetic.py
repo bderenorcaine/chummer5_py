@@ -32,7 +32,12 @@ The later fixture-authoring WPs each **add their own input field(s) to `Syntheti
 matching wiring to `build_synthetic()` together**, mirroring how WP4 grew its `.chum5` parser one
 field at a time rather than speculatively modelling shapes no fixture yet exercises (the same
 "don't build past what's asked or verified" discipline the acceptance criteria call for):
-- WP73 — cyberware + bioware Essence stacking (gaps G1/G2)
+- WP73 — cyberware + bioware Essence stacking (gaps G1/G2) — **landed**: adds the `cyberware`/
+  `bioware` name-list fields below, wired through `create_cyberware_selection`/
+  `create_bioware_selection` in the fixed cyberware-first, bioware-second evaluation order those
+  engine modules document (bioware sees cyberware's already-resolved Essence via
+  `other_essence_spent`), plus the `cyberware:*`/`bioware:*` metric keys `resolve_metric` reads off
+  the resulting selections.
 - WP74 — magician + cyberware Essence→Magic loss, foci/mentor (G3/G6)
 - WP75 — Step-Seven leftover-Karma spend (G4/G5)
 - WP76 — Sum-to-Ten whole-character (G7)
@@ -50,15 +55,19 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 
+from chummer5.data.bioware import Bioware, load_bioware
+from chummer5.data.cyberware import Cyberware, load_cyberware
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import Skill, load_skills
+from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_selection
 from chummer5.engine.character import (
     Character,
     create_character,
     metatype_choices,
 )
+from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
 from chummer5.engine.derived import (
     essence,
     initiative_dice,
@@ -81,9 +90,13 @@ _METATYPES = load_metatypes()
 _PRIORITIES = load_priorities()
 _SKILLS = load_skills()
 _QUALITIES = load_qualities()
+_CYBERWARE = load_cyberware()
+_BIOWARE = load_bioware()
 
 _SKILLS_BY_NAME = {s.name: s for s in _SKILLS}
 _QUALITIES_BY_NAME = {q.name: q for q in _QUALITIES}
+_CYBERWARE_BY_NAME = {c.name: c for c in _CYBERWARE}
+_BIOWARE_BY_NAME = {b.name: b for b in _BIOWARE}
 
 # The five Priority categories a full build assigns a distinct letter to. Talent is forced to E
 # (mundane) for every WP72-scope fixture — see the module docstring and the Project Overview's MVP
@@ -110,6 +123,12 @@ class SyntheticCharacter:
       one (a `BonusSupport.SELECT_TEXT` quality — e.g. SINner's SIN description, WP55). Must be
       present for exactly those and absent for every other quality, mirroring
       `create_quality_selection`'s own both-directions check.
+    - `cyberware` / `bioware` (WP73): catalog names of the purchased cyberware/bioware items. Both
+      may name the same item more than once (a matched pair of cyberlimbs, say — duplicate purchases
+      are legal, see `chummer5.engine.cyberware`). `build_synthetic()` resolves cyberware first (its
+      Essence cost unaware of bioware) then bioware second (aware of cyberware's Essence via
+      `other_essence_spent`), the fixed shared-pool evaluation order both engine modules document,
+      and both draw from the fixture's Resources-priority nuyen (bioware from what cyberware left).
 
     `expected` maps a metric key (see `resolve_metric`) to its hand-derived target value;
     `citations` maps each of those keys to the source the value was derived from (a `priorities.xml`
@@ -133,6 +152,8 @@ class SyntheticCharacter:
     specializations: Mapping[str, str] = field(default_factory=dict)
     qualities: tuple[str, ...] = ()
     quality_text: Mapping[str, str] = field(default_factory=dict)
+    cyberware: tuple[str, ...] = ()
+    bioware: tuple[str, ...] = ()
 
 
 def _skill_by_name(name: str) -> Skill:
@@ -140,6 +161,20 @@ def _skill_by_name(name: str) -> Skill:
     if skill is None:
         raise KeyError(f"synthetic fixture names an unknown skill: {name!r}")
     return skill
+
+
+def _cyberware_by_name(name: str) -> Cyberware:
+    item = _CYBERWARE_BY_NAME.get(name)
+    if item is None:
+        raise KeyError(f"synthetic fixture names an unknown cyberware item: {name!r}")
+    return item
+
+
+def _bioware_by_name(name: str) -> Bioware:
+    item = _BIOWARE_BY_NAME.get(name)
+    if item is None:
+        raise KeyError(f"synthetic fixture names an unknown bioware item: {name!r}")
+    return item
 
 
 def build_synthetic(fixture: SyntheticCharacter) -> Character:
@@ -217,6 +252,31 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
         apply_quality_improvements(character, selection.qualities)
         character = replace(character, quality_selection=selection)
 
+    if fixture.cyberware or fixture.bioware:
+        # Cyberware and bioware draw from one shared Resources-priority nuyen pool and reduce one
+        # shared Essence pool. The engine resolves them in a fixed order — cyberware first (unaware
+        # of bioware), bioware second (aware of cyberware) — see chummer5.engine.bioware's docstring
+        # for why. The fixture models no gear/Lifestyle spend, so the full Resources nuyen is
+        # available to the two of them; bioware sees what cyberware left, mirroring the web layer.
+        nuyen_budget = _PRIORITIES.resources[fixture.resources_letter].nuyen
+
+        cyberware_selection = create_cyberware_selection(
+            [_cyberware_by_name(n).id for n in fixture.cyberware],
+            _CYBERWARE,
+            nuyen_budget,
+        )
+        apply_cyberware_improvements(character, cyberware_selection)
+        character = replace(character, cyberware_selection=cyberware_selection)
+
+        bioware_selection = create_bioware_selection(
+            [_bioware_by_name(n).id for n in fixture.bioware],
+            _BIOWARE,
+            nuyen_budget - cyberware_selection.nuyen_spent,
+            other_essence_spent=cyberware_selection.essence_spent,
+        )
+        apply_bioware_improvements(character, bioware_selection)
+        character = replace(character, bioware_selection=bioware_selection)
+
     return character
 
 
@@ -231,11 +291,15 @@ def resolve_metric(character: Character, key: str) -> object:
     - `initiative` / `initiative_dice`
     - `limit:physical` / `limit:mental` / `limit:social`
     - `cm:physical` / `cm:stun`
-    - `essence`             — the exact `Decimal` Essence (unrounded)
+    - `essence`             — the exact `Decimal` Essence (unrounded) of the whole character
+    - `cyberware:essence_spent` / `cyberware:nuyen_spent` (WP73) — this selection's own totals
+    - `bioware:essence_spent` / `bioware:nuyen_spent` (WP73) — likewise, so the shared-pool split is
+      asserted per-source, not only via the combined `essence`
     - `karma_spent` / `karma_remaining`
 
     A key naming a skill requires the fixture to have committed a `skill_allocation` (every WP72
-    fixture does). Raises `KeyError` on an unrecognised key rather than silently returning `None`.
+    fixture does); a `cyberware:`/`bioware:` key requires the matching selection to exist. Raises
+    `KeyError` on an unrecognised key rather than silently returning `None`.
     """
     if key.startswith("attr:"):
         return character.attribute_value(key[len("attr:") :])
@@ -247,6 +311,18 @@ def resolve_metric(character: Character, key: str) -> object:
         assert character.skill_allocation is not None
         skill = _skill_by_name(key[len("pool:") :])
         return dice_pool(character, character.skill_allocation, skill)
+    if key == "cyberware:essence_spent":
+        assert character.cyberware_selection is not None
+        return character.cyberware_selection.essence_spent
+    if key == "cyberware:nuyen_spent":
+        assert character.cyberware_selection is not None
+        return character.cyberware_selection.nuyen_spent
+    if key == "bioware:essence_spent":
+        assert character.bioware_selection is not None
+        return character.bioware_selection.essence_spent
+    if key == "bioware:nuyen_spent":
+        assert character.bioware_selection is not None
+        return character.bioware_selection.nuyen_spent
 
     fixed = {
         "initiative": initiative_value,
@@ -284,7 +360,10 @@ def assert_fixture(fixture: SyntheticCharacter) -> None:
     character = build_synthetic(fixture)
     for key, target in fixture.expected.items():
         actual = resolve_metric(character, key)
-        if key == "essence":
+        # Essence figures are `Decimal`; normalise both sides so a fixture may author `2.4`/`3.1`
+        # as an int/float/Decimal literal and still compare equal to the engine's `Decimal`. Covers
+        # the whole-character `essence` and the per-source `*:essence_spent` metrics alike.
+        if isinstance(actual, Decimal) or isinstance(target, Decimal):
             assert _decimal(actual) == _decimal(target), (fixture.name, key, actual, target)
         else:
             assert actual == target, (fixture.name, key, actual, target)

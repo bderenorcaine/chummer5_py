@@ -8,9 +8,15 @@ metric required to carry a citation (`assert_fixture` enforces both).
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 from tests.fixtures.synthetic import assert_fixture, build_synthetic, resolve_metric
-from tests.fixtures.synthetic_fixtures import REFERENCE_MUNDANE_FIXTURE, SYNTHETIC_FIXTURES
+from tests.fixtures.synthetic_fixtures import (
+    REFERENCE_MUNDANE_FIXTURE,
+    STREET_SAMURAI_FIXTURE,
+    SYNTHETIC_FIXTURES,
+)
 
 
 @pytest.mark.parametrize("fixture", SYNTHETIC_FIXTURES, ids=lambda f: f.name)
@@ -29,6 +35,25 @@ def test_reference_fixture_builds_a_finalized_character() -> None:
     assert character.quality_selection is not None
     # Catlike's +2 Sneaking improvement actually landed in the ImprovementIndex.
     assert resolve_metric(character, "rating:Sneaking") == 5
+
+
+def test_street_samurai_stacks_cyberware_and_bioware_essence() -> None:
+    """The WP73 samurai commits both a cyberware and a bioware selection, and the two Essence costs
+    stack against the one shared pool — the interaction (G1/G2) no `.chum5` fixture exercises. A
+    smoke check that `build_synthetic` wires both selection functions through the real engine in the
+    documented cyberware-first/bioware-second order, not just that the derived numbers happen to
+    match.
+    """
+    character = build_synthetic(STREET_SAMURAI_FIXTURE)
+    assert character.metatype.name == "Ork"
+    assert character.cyberware_selection is not None
+    assert character.bioware_selection is not None
+    # Both sources contribute to one Essence pool: 6 - 3.1 - 0.5 = 2.4.
+    assert character.cyberware_selection.essence_spent == Decimal("3.1")
+    assert character.bioware_selection.essence_spent == Decimal("0.5")
+    assert resolve_metric(character, "essence") == Decimal("2.4")
+    # The Enhanced Articulation bioware bonus reached the Escape Artist rating (1 bought + 1 bio).
+    assert resolve_metric(character, "rating:Escape Artist") == 2
 
 
 def test_unrecognised_metric_key_raises() -> None:

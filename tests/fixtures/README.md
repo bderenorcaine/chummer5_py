@@ -78,17 +78,21 @@ This is the WP5/WP30 synthetic-*primitive* pattern extended to a whole character
 build-method-agnostic derived-stat formulas.
 
 The fixtures double as **playable Shadowrun characters** — legal, fully-spent priority builds with a
-name and concept (WP72's is Renata "Cheshire" Vance, a human infiltrator/cat-burglar), not degenerate
-test artifacts. This costs nothing in rigour: a fully-spent budget hits the engine's validators at
-their exact limits, and a coherent character touches more interaction paths. Only the mechanically
-derived numbers are asserted; a fixture's loadout/contacts/lifestyle prose is flavour, not
-engine-checked.
+name and concept, not degenerate test artifacts, and authored as **one coherent runner team** (see
+`phase-s-test-fixtures.md` §5): WP72's Renata "Cheshire" Vance (human infiltrator), WP73's Dražen
+"Rebar" Kovač (Ork street samurai), and the WP74-76 Combat Mage / Shaman Face / Decker to come. This
+costs nothing in rigour: a fully-spent budget hits the engine's validators at their exact limits, and
+a coherent character touches more interaction paths. Only the mechanically derived numbers are
+asserted; a fixture's loadout/contacts/lifestyle prose is flavour, not engine-checked.
 
 WP72 landed the harness + one reference fixture (`REFERENCE_MUNDANE_FIXTURE`). WP73-76 each **add
-their own input field to `SyntheticCharacter` and the matching
-`build_synthetic()` wiring together** (cyberware/bioware, magician+cyberware, leftover-Karma,
-Sum-to-Ten) — the dataclass deliberately declares only what a fixture already exercises, not
-speculative shapes. Tests live in `tests/integration/test_synthetic_fixtures.py`.
+their own input field(s) to `SyntheticCharacter` and the matching `build_synthetic()` wiring
+together** — the dataclass deliberately declares only what a fixture already exercises, not
+speculative shapes. **WP73 (landed)** adds the `cyberware`/`bioware` name-list fields and the
+`cyberware:*`/`bioware:*` metric keys, closing gaps G1/G2 (a Priority build bearing cyberware; and
+cyberware + bioware Essence costs stacking against the one shared pool) via `STREET_SAMURAI_FIXTURE`.
+WP74-76 (magician+cyberware, leftover-Karma, Sum-to-Ten) are still pending. Tests live in
+`tests/integration/test_synthetic_fixtures.py`.
 
 ### Files
 
@@ -101,5 +105,6 @@ speculative shapes. Tests live in `tests/integration/test_synthetic_fixtures.py`
 - `synthetic.py` — the `SyntheticCharacter` dataclass, `build_synthetic()`, `resolve_metric()`, and
   `assert_fixture()` (WP72).
 - `synthetic_fixtures.py` — the hand-authored `SyntheticCharacter` literals and `SYNTHETIC_FIXTURES`
-  tuple (WP72's `REFERENCE_MUNDANE_FIXTURE`; WP73-76 append theirs here).
+  tuple (WP72's `REFERENCE_MUNDANE_FIXTURE`, WP73's `STREET_SAMURAI_FIXTURE`; WP74-76 append theirs
+  here).
 - This README.

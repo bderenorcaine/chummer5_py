@@ -30,10 +30,20 @@ All figures below are cross-checked as follows:
 - Quality bonuses (all `FLAT_BONUS`, `qualities.xml`): Catlike +2 Sneaking (7¥k); Natural Athlete +2
   Gymnastics/+2 Running (7); Indomitable (Physical) +1 Physical Limit (8). Negatives are karma-only:
   SINner (Criminal) -10 (needs a free-text SIN detail, WP55) and Simsense Vertigo -5.
+- Cyberware/bioware costs & Essence (WP73, `cyberware.xml`/`bioware.xml` `<cost>`/`<ess>`, Standard
+  grade): resolved through the real `chummer5.engine.cyberware`/`chummer5.engine.bioware` selection
+  functions, which share one nuyen budget and one Essence pool (cyberware resolved first, bioware
+  second — see `chummer5.engine.bioware`'s docstring). The one modeled cyberware bonus is the
+  Cyberlimb +1 Physical CM; the one modeled bioware bonus is Enhanced Articulation's +1 Physical
+  Limit / +1 Escape Artist. Every other implant's `<bonus>` is `NO_EFFECT`/`NOT_YET_SUPPORTED`, so
+  only its Essence/nuyen cost is engine content (Project Overview's "Unmodeled real effects" posture
+  for augmentation).
 - Karma ledger: core rulebook p.64 "start with 25 Karma" (`STARTING_KARMA`); qualities net signed.
 """
 
 from __future__ import annotations
+
+from decimal import Decimal
 
 from tests.fixtures.synthetic import SyntheticCharacter
 
@@ -208,5 +218,208 @@ REFERENCE_MUNDANE_FIXTURE = SyntheticCharacter(
 )
 
 
-# Every synthetic fixture, for the parametrized regression test. WP73-76 append their fixtures here.
-SYNTHETIC_FIXTURES = (REFERENCE_MUNDANE_FIXTURE,)
+# ==================================================================================================
+# WP73 fixture — Dražen "Rebar" Kovač, Ork street samurai (cyberware + bioware Essence stacking).
+# ==================================================================================================
+#
+# Closes coverage gaps G1 (a Priority-built character bearing cyberware, Essence computed from real
+# implants) and G2 (cyberware + bioware Essence costs stacking against the one shared pool) — see
+# phase-s-test-fixtures.md §2. No real `.chum5` fixture is simultaneously Priority-built and
+# cyberware-bearing, and none combines cyberware with bioware at all (the 8 cyberware-bearing
+# curated fixtures are all SumtoTen and carry zero bioware — Phase J/L intros), so this interaction
+# has never had a whole-character fixture.
+#
+# CONCEPT (flavor; not engine-modeled except where an assertion below says so)
+# ------------------------------------------------------------------------------------------------
+# Team role: the Street Samurai (see phase-s-test-fixtures.md §5) — the muscle. He walks in the door
+# Cheshire opened and holds the room. Deliberately the team's soak/frontline: peak BODY and STR,
+# chromed to the teeth, but only CHA 2 (the Shaman Face talks) and LOG 2 (the Decker hacks) — the
+# same complementary-gap discipline the roster was authored against.
+#
+# An Ork ex-corp-security enforcer turned shadow muscle: a chromed arm, titanium-laced bones under
+# the skin, retractable spurs, and reflex-tuned bioware. He soaks fire so the runners behind him
+# don't have to, lives by a runner's code (never sell out the team), and is plainly hard to rattle.
+# Ork metatype grants Low-Light Vision free (metatypes.xml — not karma-charged, not asserted here).
+#
+#   Handle: Rebar        Metatype: Ork (mundane)        Pronouns: he/him
+#   Loadout (Resources C, 140,000¥ — 96,000 on augmentation below; the ~44,000 remainder buys, as
+#     described-not-modeled flavor: a Middle lifestyle, a milspec-surplus assault rifle + heavy
+#     pistol, an armor jacket, and a combat knife). Contacts: an ex-squadmate Fixer and a
+#     back-alley Street Doc who installed the chrome.
+#
+# BUILD (all engine-modeled and asserted)
+# ------------------------------------------------------------------------------------------------
+# Priorities (Talent forced to E, mundane): Attributes A, Heritage B, Resources C, Skills D.
+#   (Ork is only offered at Heritage A/B/C — never D, which is Human/Elf only — so with Attributes A
+#   and one of Skills/Resources forced to D, Heritage B is the highest an Ork samurai can take here;
+#   B funds 4 special-attribute points, exactly enough to lift Edge off its floor to a livable 5.)
+#
+# Attributes — Attributes A = 24 primary points, ALL spent; EDG from Heritage B/Ork's 4 special
+#   points, ALL spent. At most one Mental/Physical attribute at its natural maximum (AGI 6) — legal
+#   per Step Two. Ork minimums: BOD 4, STR 3, all others 1 (EDG 1).
+#     BOD +2=6, AGI +5=6, REA +4=5, STR +3=6, CHA +1=2, INT +4=5, LOG +1=2, WIL +4=5   (sum 24)
+#     EDG +4=5 (from 4 special points)
+#
+# Skills — Skills D = 22 skill points, 0 group points (Priority D grants no groups), ALL spent.
+#     Automatics 6, Blades 4, Pistols 3, Perception 3, Intimidation 2, Sneaking 2, Escape Artist 1,
+#     Gymnastics 1.  (6+4+3+3+2+2+1+1 = 22.)  Escape Artist ends at rating 2 — 1 bought + 1 from the
+#     Enhanced Articulation bioware bonus below, exactly the bioware→skill path this fixture
+#     exists to exercise.
+#
+# Augmentation — Cyberware (resolved first, Essence 3.1) then Bioware (second, Essence 0.5),
+#   total Essence 3.6 → remaining Essence 6 − 3.6 = 2.4 (strictly positive, a legal build):
+#     Cyberware (55,000¥): Obvious Full Arm (1.0 ess, +1 Physical CM — the one modeled cyberware
+#       bonus, ImprovementType.PHYSICAL_CM), Bone Lacing (Titanium) (1.5 ess — armor/damage bundle
+#       NOT modeled, Essence charged), Spurs (0.3 ess), Datajack (0.1 ess), Smartlink (0.2 ess —
+#       targeting bonus NOT modeled, Essence charged).
+#     Bioware (41,000¥): Enhanced Articulation (0.3 ess, +1 Physical Limit AND +1 Escape Artist),
+#       Platelet Factories (0.2 ess — damage-resistance narrative NOT modeled, Essence charged).
+#   Nuyen: 55,000 + 41,000 = 96,000 of the 140,000 Resources-C pool (the rest is loadout flavor).
+#
+# Qualities — Positive 18 of the 25 cap (Indomitable (Physical) 8 + Guts 10); Negative 15 of the 25
+#   cap (Code of Honor 15, a select-text warrior's code — WP55 path). Net karma spent 18 − 15 = 3.
+#   Physical Limit therefore takes +1 from Indomitable AND +1 from Enhanced Articulation (two
+#   independent sources stacking on the same ImprovementType.PHYSICAL_LIMIT): base 8 → 10.
+# ==================================================================================================
+
+STREET_SAMURAI_FIXTURE = SyntheticCharacter(
+    name='Dražen "Rebar" Kovač — Ork street samurai (WP73 cyberware+bioware Essence stacking)',
+    metatype="Ork",
+    heritage_letter="B",
+    attributes_letter="A",
+    skills_letter="D",
+    resources_letter="C",
+    attribute_points={
+        "BOD": 2,
+        "AGI": 5,
+        "REA": 4,
+        "STR": 3,
+        "CHA": 1,
+        "INT": 4,
+        "LOG": 1,
+        "WIL": 4,
+        "EDG": 4,
+    },
+    skill_points={
+        "Automatics": 6,
+        "Blades": 4,
+        "Pistols": 3,
+        "Perception": 3,
+        "Intimidation": 2,
+        "Sneaking": 2,
+        "Escape Artist": 1,
+        "Gymnastics": 1,
+    },
+    qualities=("Indomitable (Physical)", "Guts", "Code of Honor"),
+    quality_text={"Code of Honor": "The Runner's Code — never sell out a teammate"},
+    cyberware=(
+        "Obvious Full Arm",
+        "Bone Lacing (Titanium)",
+        "Spurs",
+        "Datajack",
+        "Smartlink",
+    ),
+    bioware=("Enhanced Articulation", "Platelet Factories"),
+    expected={
+        # Attribute totals: Ork metatype minimum + points spent (EDG from 4 special points).
+        "attr:BOD": 6,
+        "attr:AGI": 6,
+        "attr:REA": 5,
+        "attr:STR": 6,
+        "attr:CHA": 2,
+        "attr:INT": 5,
+        "attr:LOG": 2,
+        "attr:WIL": 5,
+        "attr:EDG": 5,
+        # Skill ratings — Escape Artist proves the bioware→skill bonus (1 bought + 1 bioware).
+        "rating:Automatics": 6,
+        "rating:Blades": 4,
+        "rating:Pistols": 3,
+        "rating:Escape Artist": 2,  # 1 bought + 1 Enhanced Articulation (bioware)
+        "rating:Gymnastics": 1,
+        # Dice pools: rating + linked attribute.
+        "pool:Automatics": 12,  # 6 + AGI 6
+        "pool:Blades": 10,  # 4 + AGI 6
+        "pool:Pistols": 9,  # 3 + AGI 6
+        "pool:Perception": 8,  # 3 + INT 5
+        "pool:Intimidation": 4,  # 2 + CHA 2
+        "pool:Sneaking": 8,  # 2 + AGI 6
+        "pool:Escape Artist": 8,  # 2 + AGI 6 (rating already includes +1 bioware)
+        "pool:Gymnastics": 7,  # 1 + AGI 6
+        # Per-source Essence/nuyen — makes the shared-pool stacking explicit (G2): 3.1 + 0.5 = 3.6.
+        "cyberware:essence_spent": Decimal("3.1"),
+        "cyberware:nuyen_spent": 55000,
+        "bioware:essence_spent": Decimal("0.5"),
+        "bioware:nuyen_spent": 41000,
+        # Derived stats.
+        "essence": Decimal("2.4"),  # 6 - 3.1 cyberware - 0.5 bioware
+        "initiative": 10,  # REA 5 + INT 5
+        "initiative_dice": 1,
+        "limit:physical": 10,  # ceil((STR*2+BOD+REA)/3)=ceil(23/3)=8, +1 Indomitable +1 Enh.Art
+        "limit:mental": 5,  # ceil((LOG*2+INT+WIL)/3) = ceil((4+5+5)/3) = ceil(14/3)
+        "limit:social": 4,  # ceil((CHA*2+WIL+ceil ESS 2.4->3)/3) = ceil((4+5+3)/3) = ceil(12/3)
+        "cm:physical": 12,  # 8 + ceil(BOD/2)=11, +1 Obvious Full Arm (cyberlimb)
+        "cm:stun": 11,  # 8 + ceil(WIL/2) = 8 + 3
+        # Karma: positives 18 (8+10) - negatives 15 (Code of Honor) = 3 spent of the 25 starting.
+        "karma_spent": 3,
+        "karma_remaining": 22,
+    },
+    citations={
+        "attr:BOD": "priorities.xml Attributes A = 24 pts; metatypes.xml Ork BOD min 4 (+2)",
+        "attr:AGI": "priorities.xml Attributes A; Ork AGI min 1 (+5) = natural max 6",
+        "attr:REA": "priorities.xml Attributes A; Ork REA min 1 (+4)",
+        "attr:STR": "priorities.xml Attributes A; Ork STR min 3 (+3)",
+        "attr:CHA": "priorities.xml Attributes A; Ork CHA min 1 (+1)",
+        "attr:INT": "priorities.xml Attributes A; Ork INT min 1 (+4)",
+        "attr:LOG": "priorities.xml Attributes A; Ork LOG min 1 (+1)",
+        "attr:WIL": "priorities.xml Attributes A; Ork WIL min 1 (+4)",
+        "attr:EDG": "priorities.xml Heritage B/Ork = 4 special pts; Ork EDG min 1 (+4)",
+        "rating:Automatics": "Skills D skill pts; 6 base (Firearms group unbought), chargen cap 6",
+        "rating:Blades": "Skills D skill pts; 4 base (Close Combat group unbought)",
+        "rating:Pistols": "Skills D skill pts; 3 base",
+        "rating:Escape Artist": "Skills D 1 base + 1 Enhanced Articulation (bioware.xml)",
+        "rating:Gymnastics": "Skills D skill pts; 1 base (no group under Priority D)",
+        "pool:Automatics": "learnings/phase-d.md (WP7 dice pool): rating 6 + AGI 6",
+        "pool:Blades": "learnings/phase-d.md: rating 4 + AGI 6",
+        "pool:Pistols": "learnings/phase-d.md: rating 3 + AGI 6",
+        "pool:Perception": "learnings/phase-d.md: rating 3 + INT 5",
+        "pool:Intimidation": "learnings/phase-d.md: rating 2 + CHA 2",
+        "pool:Sneaking": "learnings/phase-d.md: rating 2 + AGI 6",
+        "pool:Escape Artist": "learnings/phase-d.md: rating 2 (incl. +1 bioware) + AGI 6",
+        "pool:Gymnastics": "learnings/phase-d.md: rating 1 + AGI 6",
+        "cyberware:essence_spent": (
+            "cyberware.xml <ess>: Obvious Full Arm 1.0 + Bone Lacing (Titanium) 1.5 + Spurs 0.3 "
+            "+ Datajack 0.1 + Smartlink 0.2 = 3.1 (engine/cyberware.py essence_spent)"
+        ),
+        "cyberware:nuyen_spent": (
+            "cyberware.xml <cost>: 15000 + 30000 + 5000 + 1000 + 4000 = 55000 <= Resources C 140000"
+        ),
+        "bioware:essence_spent": (
+            "bioware.xml <ess>: Enhanced Articulation 0.3 + Platelet Factories 0.2 = 0.5 "
+            "(engine/bioware.py essence_spent, resolved after cyberware per shared-pool order)"
+        ),
+        "bioware:nuyen_spent": "bioware.xml <cost>: 24000 + 17000 = 41000 (<= 140000 - 55000 left)",
+        "essence": (
+            "derived.py essence = BASE_ESSENCE 6 - Sigma ESSENCE improvements (3.1 cyberware + 0.5 "
+            "bioware) = 2.4; one shared pool (engine/bioware.py resolve_essence docstring)"
+        ),
+        "initiative": "learnings/phase-d.md (Character.cs InitiativeValue): REA 5 + INT 5",
+        "initiative_dice": "learnings/phase-d.md: base 1 (no matrix/astral)",
+        "limit:physical": (
+            "learnings/phase-d.md LimitPhysical: ceil(23/3)=8, +1 Indomitable(Phys) "
+            "+1 Enhanced Articulation physicallimit (two ImprovementType.PHYSICAL_LIMIT sources)"
+        ),
+        "limit:mental": "learnings/phase-d.md LimitMental: ceil((LOG*2+INT+WIL)/3)=ceil(14/3)",
+        "limit:social": (
+            "learnings/phase-d.md LimitSocial: ceil((CHA*2+WIL+ceil ESS)/3); ESS 2.4 rounds up to 3"
+        ),
+        "cm:physical": "learnings/phase-d.md (PhysicalCM): 8 + ceil(BOD/2)=11, +1 Obvious Full Arm",
+        "cm:stun": "learnings/phase-d.md (StunCM): 8 + ceil(WIL/2)",
+        "karma_spent": "p.64 (25 Karma); positives 18 (Indomitable 8 + Guts 10) - COH 15 = 3",
+        "karma_remaining": "STARTING_KARMA 25 - karma_spent 3",
+    },
+)
+
+
+# Every synthetic fixture, for the parametrized regression test. WP74-76 append their fixtures here.
+SYNTHETIC_FIXTURES = (REFERENCE_MUNDANE_FIXTURE, STREET_SAMURAI_FIXTURE)
