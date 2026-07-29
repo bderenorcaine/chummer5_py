@@ -20,6 +20,10 @@
     Filter skills
     <input type="text" id="skill-filter" placeholder="e.g. Automatics" />
   </label>
+  <label>
+    <input type="checkbox" id="skill-rated-only" />
+    Only rated skills
+  </label>
 
   <form
     hx-post="/ui/skills"
@@ -108,7 +112,7 @@
           </thead>
           <tbody>
             {% for row in group.rows %}
-            <tr data-skill-name="{{ row.skill.name | lower }}">
+            <tr data-skill-name="{{ row.skill.name | lower }}" data-skill-rating="{{ row.rating }}">
               <td>{{ row.skill.name }}</td>
               <td>{{ row.skill.attribute }}</td>
               <td>{{ row.skill.skill_group or "—" }}</td>
@@ -160,20 +164,26 @@
   <script>
     (function () {
       var filterInput = document.getElementById("skill-filter");
-      if (!filterInput) return;
-      filterInput.addEventListener("input", function () {
+      var ratedOnly = document.getElementById("skill-rated-only");
+      if (!filterInput || !ratedOnly) return;
+      function applyFilter() {
         var query = filterInput.value.trim().toLowerCase();
+        var onlyRated = ratedOnly.checked;
         document.querySelectorAll("#skill-tables details").forEach(function (details) {
           var anyVisible = false;
           details.querySelectorAll("tr[data-skill-name]").forEach(function (row) {
-            var matches = !query || row.dataset.skillName.includes(query);
+            var matchesName = !query || row.dataset.skillName.includes(query);
+            var matchesRated = !onlyRated || Number(row.dataset.skillRating) > 0;
+            var matches = matchesName && matchesRated;
             row.hidden = !matches;
             if (matches) anyVisible = true;
           });
           details.hidden = !anyVisible;
-          if (query && anyVisible) details.open = true;
+          if ((query || onlyRated) && anyVisible) details.open = true;
         });
-      });
+      }
+      filterInput.addEventListener("input", applyFilter);
+      ratedOnly.addEventListener("change", applyFilter);
     })();
   </script>
   </details>

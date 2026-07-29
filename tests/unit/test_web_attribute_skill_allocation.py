@@ -90,6 +90,24 @@ def test_index_after_confirmation_shows_allocation_forms_with_full_budget() -> N
     assert "Arcana" not in response.text
 
 
+def test_skill_picker_offers_rated_only_filter_with_per_row_rating() -> None:
+    # WP67: an "Only rated skills" checkbox narrows the picker to skills with rating > 0.
+    # It's a purely client-side filter, so the server contract is just: the checkbox renders,
+    # and every skill row carries its current rating as a data attribute for the JS to read.
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
+    response = client.post("/ui/skills", data={f"skill_{skill.id}": "3"})
+
+    assert response.status_code == 200
+    assert 'id="skill-rated-only"' in response.text
+    assert "Only rated skills" in response.text
+    # The rated skill's row exposes its rating; unrated rows expose 0.
+    assert 'data-skill-rating="3"' in response.text
+    assert 'data-skill-rating="0"' in response.text
+
+
 def test_submitting_valid_attribute_points_matches_engine_output() -> None:
     client = TestClient(create_app())
     _confirm_human(client)

@@ -6,7 +6,7 @@ Feature requests captured 2026-07-27 in the same manual-testing session that rai
 QoL improvements to the chargen UI, not defects. Recorded here as future WPs; none is blocking and
 they can be picked up in any order. Numbered from WP67, after Phase U claims WP64-66.
 
-- [ ] **WP67 — Skill picker: filter to skills with a positive rating.**
+- [x] **WP67 — Skill picker: filter to skills with a positive rating.**
   Goal: let a player narrow the active-skills list to only the skills they've actually put points in
   (rating > 0), on top of the existing by-name text filter.
   Notes: `_skill_allocation.html:159-177` already has a vanilla-JS name filter over
