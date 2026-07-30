@@ -574,3 +574,48 @@ because a future cyberlimb-attribute WP would need to revisit both this and the 
 condition-monitor bonus WP31 already models, and because it is the first *cyberware* content to enter
 that registry — WP31/34's `NOT_YET_SUPPORTED` items (e.g. Smartlink) are still unregistered, which
 is a gap someone should close.
+
+## 2026-07-30 — Phase K, WP40: Hydraulic Jacks is a matched-pair implant; `BonusSupport` gains a
+fourth value shared by both cyberware catalogs; the Improvement half of the tree lands here
+
+**Hydraulic Jacks grants its bonus once per matched *pair*, not once per purchase — a rulebook rule
+with no signal anywhere in the data.** p. 457: "This implant requires you to have two cyberlegs with
+a hydraulic jack of identical Ratings in each leg. Each Rating point adds a +1 to your Physical
+limit for jumping and sprinting." So a lone jack grants **nothing**, and a pair grants `+Rating`
+**once**. The `cyberware.xml` row carries no `<pairbonus>`/`<pairinclude>` (both exist in the legacy
+schema; WP37 deliberately captures neither), and the legacy engine never evaluates a conditional
+limit modifier at all — so a per-purchase application would have silently produced `+2 x Rating` for
+`Barrett.chum5`, an entirely ordinary real build that owns exactly two. Modeled as a named rule
+(`_PAIRED_BONUS_ITEM_NAMES`), with the pair test being "two of equal Rating in **distinct** parents"
+rather than "in two legs": the jacks' `<required><parentdetails>` leg restriction is real but WP37
+loads no `<required>` data, so leg-ness is not something this engine can currently check. A later WP
+that does load `<required>` should tighten it. Recorded here rather than only in the learnings file
+because it is the first time this project has found a *pairing* mechanic at all, and `<pairbonus>`
+items elsewhere in the catalog will hit the same shape.
+
+**`BonusSupport.CONDITIONAL_BONUS` is added to `chummer5.data.cyberware`'s shared classifier, which
+means WP31's flat catalog reclassifies one row.** WP38's follow-up flagged the "which module gains
+the new value" call as open, since WP40's plan entry names `chummer5.data.cyberware` (WP31's frozen
+flat catalog) while three of the four conditional items live only in WP37's wider
+`cyberware_subsystems` catalog. Decision: extend the one shared `classify_bonus`, because the two
+catalogs read the *same rows of the same file* and a second classifier would be a copy, not a
+separation. The visible consequence is deliberate and is the point of the WP: **Spatial Recognizer
+moves from `NOT_YET_SUPPORTED` to `CONDITIONAL_BONUS` in `load_cyberware()`**, so a purchase that is
+already possible through today's shipped UI starts granting a real (conditional) +2 Mental limit.
+WP37's "WP31's loader is completely unchanged" guarantee is narrowed accordingly: which rows load
+and what they cost is still untouched; the `<bonus>` classification of one row, and the field set
+(a new `conditional_bonuses` tuple), are not. Both pinning tests were updated with that note rather
+than deleted.
+
+**WP40 also brings the tree's Improvement application, which WP38 explicitly deferred to it.**
+`apply_cyberware_tree_improvements` lives in `chummer5.engine.cyberware_subsystems` and reuses
+`chummer5.engine.cyberware.cyberware_bonus_improvements` — the engine mirroring the data layer's own
+single shared classifier. Still nothing *consumes* it: a `Character` has no tree-selection field
+until WP41, so this remains proven-in-isolation plumbing exactly as WP36-38 were.
+
+**`chummer5.engine.derived.physical_limit`/`mental_limit` gain a keyword-only `context`.** Purely
+additive (WP39's `resolve(context=None)` is the pre-existing behaviour), and deliberately not added
+to `social_limit`: no aspect this engine offers carries a conditional Social limit bonus, and WP39's
+rule is to add a context only where a real bonus needs one. This is also the first API in the
+project that distinguishes "the character sheet's headline figure" from "the figure for one specific
+test" — worth knowing before WP42 designs how to display it.

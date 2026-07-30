@@ -51,14 +51,32 @@ of the 60 flat items' raw `<bonus>` node:
   `FLAT_BONUS`) and the 4 Foot/Lower-Leg items reduce to nothing at all (`NO_EFFECT`, the same
   bucket as a genuinely empty `<bonus>`) -- 8 `FLAT_BONUS` + 4 of these = the 12 Cyberlimb items
   that carry *any* `<bonus>` at all, out of 16 total flat Cyberlimb entries.
-- `NOT_YET_SUPPORTED` -- the remaining 6: Smartlink (`<smartlink>2</smartlink>` -- no smartlink/
+- `CONDITIONAL_BONUS` (WP40 -- Phase K) -- a `<limitmodifier>` whose `<condition>` is one of the
+  four named conditions `chummer5.engine.improvements.ImprovementCondition` compiles (see below).
+  Exactly 1 of the 60 flat items: **Spatial Recognizer**, which WP31 classified `NOT_YET_SUPPORTED`
+  purely because nothing could express "only during this kind of test" yet. WP39 built that
+  primitive, so this is now real, modeled content rather than a documented gap. The other three
+  conditional items (Vision Enhancement, Audio Enhancement, Hydraulic Jacks) are rating-scaled and
+  therefore outside this loader's flat-only scope entirely -- they reach the engine through
+  `chummer5.data.cyberware_subsystems`, which shares `classify_bonus` verbatim, so this one
+  classifier covers all four.
+- `NOT_YET_SUPPORTED` -- the remaining 5: Smartlink (`<smartlink>2</smartlink>` -- no smartlink/
   called-shot mechanic modeled), Damper (`<sonicresist>2</sonicresist>` -- no sonic-attack
-  resistance modeled), Spatial Recognizer (`<limitmodifier>` gated behind a named `<condition>` --
-  a real conditional-bonus shape this loader doesn't parse, mirroring qualities'/powers' own
-  condition-gated exclusions), and the 3 Bone Lacing variants (`<armor>`/`<damageresistance>`/
+  resistance modeled), and the 3 Bone Lacing variants (`<armor>`/`<damageresistance>`/
   `<unarmeddv>`/`<unarmeddvphysical>` -- an armor/unarmed-combat bundle, no combat system in this
   engine's scope). Each individually confirmed to have a real, non-Essence/non-nuyen mechanical
   effect, not shape-matched by accident.
+
+**The four supported conditions are a whitelist of confirmed real `<condition>` strings, not a
+condition language** -- mirroring this module's own "classify known, named shapes" posture for
+`<bonus>` generally, and WP39's identical decision one layer up (`ImprovementCondition` is an Enum
+with one member per confirmed shape). `_SUPPORTED_BONUS_CONDITIONS` below is the complete set of
+`<condition>` values appearing anywhere in the SR5 cyberware rows -- verified by enumeration, so
+"whitelist" costs no coverage today; an unrecognized one falls through to `NOT_YET_SUPPORTED`
+exactly as an unrecognized `<bonus>` child already does. The condition key is carried through as
+its **verbatim legacy string**, not as an engine enum: this module is the data layer and does not
+import from `chummer5.engine`, the same split `CyberwareFlatBonus.target_kind`'s string already
+uses (`chummer5.engine.cyberware` owns both string -> enum maps).
 
 WP32 is what actually turns `FLAT_BONUS` items into real `Improvement` records (mirroring
 `chummer5.engine.qualities.apply_quality_improvements`'s shape) -- this module only classifies.
@@ -108,14 +126,38 @@ _FLAT_DECIMAL_RE = re.compile(r"-?\d+(\.\d+)?")
 # treated as a real, unmodeled effect.
 _VERIFIED_INERT_BONUS_TAGS = frozenset({"disablequality"})
 
+# <limitmodifier><limit>X</limit> -> CyberwareConditionalBonus.target_kind. Only Mental and
+# Physical occur in the SR5 cyberware rows (verified by enumeration); a `Social` one would fall
+# through to NOT_YET_SUPPORTED rather than being mapped on the assumption it works the same way.
+_LIMIT_TARGET_KINDS = {"Mental": "mental_limit", "Physical": "physical_limit"}
+
+# <limitmodifier><value>Rating</value>: the bonus is the purchased Rating, not a literal. The only
+# non-literal value shape in the SR5 rows.
+_RATING_VALUE = "Rating"
+
+# Every <condition> string appearing in the SR5 cyberware rows, verified by enumeration (WP39's
+# learnings entry has the item/limit/condition/English-text table). A whitelist, not a parser --
+# see module docstring.
+_SUPPORTED_BONUS_CONDITIONS = frozenset(
+    {
+        "LimitCondition_SkillsActivePerceptionVisual",  # Vision Enhancement
+        "LimitCondition_SkillsActivePerceptionHearing",  # Audio Enhancement
+        "LimitCondition_SkillsActivePerceptionSpatialRecognizer",  # Spatial Recognizer
+        "LimitCondition_CyberwareHydraulicJacks",  # Hydraulic Jacks
+    }
+)
+
 
 class BonusSupport(Enum):
-    """Whether/how a cyberware item's `<bonus>` node was parsed. See module docstring for the 3
-    values -- mirrors `chummer5.data.qualities.BonusSupport`'s 3-way scheme, not
-    `chummer5.data.powers.BonusSupport`'s 2-way one.
+    """Whether/how a cyberware item's `<bonus>` node was parsed. See module docstring for the 4
+    values -- WP31's 3-way scheme mirroring `chummer5.data.qualities.BonusSupport` (not
+    `chummer5.data.powers.BonusSupport`'s 2-way one), plus WP40's `CONDITIONAL_BONUS`, which no
+    other catalog module has because no other catalog has a bonus that applies only during a
+    specific kind of test.
     """
 
     FLAT_BONUS = "flat_bonus"
+    CONDITIONAL_BONUS = "conditional_bonus"
     NO_EFFECT = "no_effect"
     NOT_YET_SUPPORTED = "not_yet_supported"
 
@@ -134,6 +176,33 @@ class CyberwareFlatBonus:
 
 
 @dataclass(frozen=True)
+class CyberwareConditionalBonus:
+    """One point bonus that applies only during a specific kind of test (WP40).
+
+    `target_kind` is `"mental_limit"` or `"physical_limit"` -- the `<limitmodifier><limit>` value,
+    mapped to an `ImprovementType` by `chummer5.engine.cyberware`, the same way
+    `CyberwareFlatBonus.target_kind` already is.
+
+    `value` is `None` when the bonus is the item's own purchased Rating
+    (`<value>Rating</value>` -- Vision/Audio Enhancement, Hydraulic Jacks) rather than a literal
+    (`<value>2</value>` -- Spatial Recognizer). Use `resolve_value(rating)` rather than reading the
+    field directly; a `None` here is "ask the purchase," not "no bonus."
+
+    `condition` is the verbatim legacy `<condition>` key (e.g.
+    `"LimitCondition_SkillsActivePerceptionVisual"`), which `chummer5.engine.cyberware` maps to an
+    `ImprovementCondition` -- see the module docstring for why the data layer keeps the string.
+    """
+
+    target_kind: str
+    value: int | None
+    condition: str
+
+    def resolve_value(self, rating: int) -> int:
+        """This bonus's magnitude for a purchase at `rating`."""
+        return rating if self.value is None else self.value
+
+
+@dataclass(frozen=True)
 class Cyberware:
     id: str
     name: str
@@ -144,6 +213,8 @@ class Cyberware:
     page: int
     bonus_support: BonusSupport
     flat_bonuses: tuple[CyberwareFlatBonus, ...]  # populated only when bonus_support is FLAT_BONUS
+    # populated only when bonus_support is CONDITIONAL_BONUS (WP40)
+    conditional_bonuses: tuple[CyberwareConditionalBonus, ...]
     raw_bonus: str | None  # serialized <bonus> element, kept for future parser work; None if absent
 
 
@@ -162,16 +233,49 @@ def _is_flat_physical_cm_bonus(elem: ET.Element) -> bool:
     return {child.tag for child in elem} == {"physical"} and physical.text is not None
 
 
+def _parse_conditional_limit_bonus(elem: ET.Element) -> CyberwareConditionalBonus | None:
+    """Parse a `<limitmodifier>` child, or return `None` if it isn't a shape WP40 supports.
+
+    The supported shape is exactly `<limit>` + `<value>` + `<condition>`, with a mapped limit, a
+    whitelisted condition, and a value that is either the literal string `Rating` or a bare
+    integer. Anything else -- an extra child, an unmapped limit, an unknown condition, an
+    arithmetic value -- returns `None`, which sends the whole item to `NOT_YET_SUPPORTED`.
+    """
+    if {child.tag for child in elem} != {"limit", "value", "condition"}:
+        return None
+
+    target_kind = _LIMIT_TARGET_KINDS.get(elem.findtext("limit", "").strip())
+    condition = elem.findtext("condition", "").strip()
+    raw_value = elem.findtext("value", "").strip()
+    if target_kind is None or condition not in _SUPPORTED_BONUS_CONDITIONS:
+        return None
+
+    if raw_value == _RATING_VALUE:
+        value = None
+    elif _FLAT_INT_RE.fullmatch(raw_value) is not None:
+        value = int(raw_value)
+    else:
+        return None
+    return CyberwareConditionalBonus(target_kind=target_kind, value=value, condition=condition)
+
+
 def classify_bonus(
     bonus_elem: ET.Element | None,
-) -> tuple[BonusSupport, tuple[CyberwareFlatBonus, ...]]:
-    """Classify a `<bonus>` node, extracting flat bonuses when every remaining child is a flat
-    shape. `<disablequality>` children are stripped first (see module docstring) -- an item whose
-    `<bonus>` is empty, absent, or reduces to nothing after that stripping is `NO_EFFECT`; a single
-    unsupported remaining child marks the whole item `NOT_YET_SUPPORTED` (mirrors
-    `chummer5.data.qualities._classify_bonus`'s "never partially classify" rule for the bonus
-    itself, independent of WP31's own "still load NOT_YET_SUPPORTED items" catalog-inclusion
-    choice -- see module docstring).
+) -> tuple[BonusSupport, tuple[CyberwareFlatBonus, ...], tuple[CyberwareConditionalBonus, ...]]:
+    """Classify a `<bonus>` node, extracting flat and conditional bonuses when every remaining
+    child is a supported shape. `<disablequality>` children are stripped first (see module
+    docstring) -- an item whose `<bonus>` is empty, absent, or reduces to nothing after that
+    stripping is `NO_EFFECT`; a single unsupported remaining child marks the whole item
+    `NOT_YET_SUPPORTED` (mirrors `chummer5.data.qualities._classify_bonus`'s "never partially
+    classify" rule for the bonus itself, independent of WP31's own "still load NOT_YET_SUPPORTED
+    items" catalog-inclusion choice -- see module docstring).
+
+    An item carrying **any** supported conditional bonus is `CONDITIONAL_BONUS`, even if it also
+    carries a flat one; both tuples are populated either way, so a caller applies what it finds
+    rather than branching on the support value. No SR5 row actually mixes the two (each of the four
+    conditional items' `<bonus>` is a single `<limitmodifier>`), so this is a rule chosen for the
+    mixed case rather than one any current row exercises -- said out loud because "which support
+    value wins" would otherwise be invisible guesswork for whoever hits the first mixed row.
 
     Public (unlike `chummer5.data.qualities`/`powers`/`mentors`' identically-named private
     classifiers) because WP37's `chummer5.data.cyberware_subsystems` reads the *same* rows out of
@@ -179,13 +283,14 @@ def classify_bonus(
     reuses this rather than re-implementing it the way `chummer5.data.bioware` had to.
     """
     if bonus_elem is None or len(bonus_elem) == 0:
-        return BonusSupport.NO_EFFECT, ()
+        return BonusSupport.NO_EFFECT, (), ()
 
     children = [child for child in bonus_elem if child.tag not in _VERIFIED_INERT_BONUS_TAGS]
     if not children:
-        return BonusSupport.NO_EFFECT, ()
+        return BonusSupport.NO_EFFECT, (), ()
 
     flat_bonuses = []
+    conditional_bonuses = []
     for child in children:
         if child.tag == "conditionmonitor" and _is_flat_physical_cm_bonus(child):
             flat_bonuses.append(
@@ -194,14 +299,21 @@ def classify_bonus(
                     value=int(child.findtext("physical", "0")),
                 )
             )
-        else:
-            return BonusSupport.NOT_YET_SUPPORTED, ()
-    return BonusSupport.FLAT_BONUS, tuple(flat_bonuses)
+            continue
+        if child.tag == "limitmodifier":
+            conditional = _parse_conditional_limit_bonus(child)
+            if conditional is not None:
+                conditional_bonuses.append(conditional)
+                continue
+        return BonusSupport.NOT_YET_SUPPORTED, (), ()
+
+    support = BonusSupport.CONDITIONAL_BONUS if conditional_bonuses else BonusSupport.FLAT_BONUS
+    return support, tuple(flat_bonuses), tuple(conditional_bonuses)
 
 
 def _parse_cyberware(elem: ET.Element) -> Cyberware:
     bonus_elem = elem.find("bonus")
-    support, flat_bonuses = classify_bonus(bonus_elem)
+    support, flat_bonuses, conditional_bonuses = classify_bonus(bonus_elem)
     raw_bonus = (
         ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
     )
@@ -215,6 +327,7 @@ def _parse_cyberware(elem: ET.Element) -> Cyberware:
         page=int(elem.findtext("page", "0")),
         bonus_support=support,
         flat_bonuses=flat_bonuses,
+        conditional_bonuses=conditional_bonuses,
         raw_bonus=raw_bonus,
     )
 

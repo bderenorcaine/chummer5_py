@@ -28,9 +28,12 @@ from chummer5.data.priorities import load_priorities
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.cyberware_subsystems import (
     CyberwarePurchaseRequest,
+    apply_cyberware_tree_improvements,
     create_cyberware_tree_selection,
     cyberlimb_attribute_maximums,
 )
+from chummer5.engine.derived import mental_limit, physical_limit
+from chummer5.engine.improvements import ResolutionContext
 
 ENTRIES = load_cyberware_entries()
 BY_NAME = {entry.name: entry for entry in ENTRIES}
@@ -240,3 +243,51 @@ def test_mittens_control_rig_datajack_pairing_imports_as_bundled() -> None:
     assert (datajack.nuyen_cost, datajack.essence_cost) == (0, Decimal(0))
     assert selection.essence_spent == Decimal("1")  # p. 453: Control Rig Rating 1 -> 1 Essence
     assert selection.nuyen_spent == 43000
+
+
+def test_barretts_matched_pair_of_legs_grants_one_hydraulic_jacks_bonus() -> None:
+    """WP40's real-fixture check. Barrett has two `Synthetic Full Leg`s, each with a rating 1
+    `Hydraulic Jacks` -- exactly the matched pair p. 457 requires ("two cyberlegs with a hydraulic
+    jack of identical Ratings in each leg"). The pair grants +1 Physical limit for jumping and
+    sprinting **once**; a per-node application would give +2.
+    """
+    first = _parent_with_children("Barrett.chum5", "Synthetic Full Leg", occurrence=0)
+    second = _parent_with_children("Barrett.chum5", "Synthetic Full Leg", occurrence=1)
+    for _, children in (first, second):
+        assert ("Hydraulic Jacks", 1) in [(n, r) for n, r, s in children if s == "SR5"]
+
+    character = _character()
+    base = physical_limit(character)
+    selection = create_cyberware_tree_selection(
+        [
+            _request("Synthetic Full Leg", first[0], first[1]),
+            _request("Synthetic Full Leg", second[0], second[1]),
+        ],
+        ENTRIES,
+        1_000_000,
+        attribute_maximums=cyberlimb_attribute_maximums(character),
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert physical_limit(character, context=ResolutionContext.GYMNASTICS_JUMPING) == base + 1
+    assert physical_limit(character, context=ResolutionContext.RUNNING_SPRINTING) == base + 1
+    assert physical_limit(character) == base
+
+
+def test_blues_cybereyes_vision_enhancement_reaches_the_character_sheet() -> None:
+    """`BLUE.chum5`'s Rating 3 Cybereyes carry a Rating 3 Vision Enhancement -- +3 Mental limit on
+    visual Perception tests only (p. 444), and nothing at all on the headline figure.
+    """
+    rating, children = _parent_with_children("BLUE.chum5", "Cybereyes Basic System")
+    assert ("Vision Enhancement", 3) in [(n, r) for n, r, _ in children]
+
+    character = _character()
+    base = mental_limit(character)
+    selection = create_cyberware_tree_selection(
+        [_request("Cybereyes Basic System", rating, children)], ENTRIES, 1_000_000
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert mental_limit(character, context=ResolutionContext.PERCEPTION_VISUAL) == base + 3
+    assert mental_limit(character, context=ResolutionContext.PERCEPTION_HEARING) == base
+    assert mental_limit(character) == base

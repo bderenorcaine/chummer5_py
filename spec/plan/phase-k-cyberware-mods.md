@@ -314,7 +314,7 @@ conversation's own request not to build placeholder UI that gets thrown away app
   - The enum is `ResolutionContext`, not the more natural `TestContext`, only because pytest
     collects any importable class named `Test*`. Don't rename it back.
 
-- [ ] **WP40 — Wire real conditional-bonus subsystem items.**
+- [x] **WP40 — Wire real conditional-bonus subsystem items.**
   Goal: reclassify Vision Enhancement, Audio Enhancement, and Spatial Recognizer from
   `NOT_YET_SUPPORTED`/excluded to real, condition-gated Improvements, using WP39's new primitive.
 
@@ -340,6 +340,38 @@ conversation's own request not to build placeholder UI that gets thrown away app
   Acceptance: unit tests confirming the Mental limit bonus applies when resolving a visual-
   Perception-flagged dice pool and does not apply otherwise; explicit test that a non-visual Mental
   limit resolution (e.g. a Memory test) is unaffected by an installed Vision Enhancement.
+
+  **Landed 2026-07-30**, spread across the four modules the four items actually touch rather than
+  in a new one (the first Phase K WP with no new module), plus 17 tests. What WP41/WP42 need to
+  know:
+  - **`BonusSupport.CONDITIONAL_BONUS` went into `chummer5.data.cyberware`'s *shared* classifier**,
+    settling the open call WP38's follow-up left. Both catalogs read the same rows of the same file,
+    so a second classifier would be a copy. Deliberate consequence: **`load_cyberware()`
+    reclassifies Spatial Recognizer** from `NOT_YET_SUPPORTED`, and `Cyberware`/`CyberwareEntry`
+    each gain a `conditional_bonuses` tuple. WP37's "WP31's loader is completely unchanged" pin is
+    narrowed, not broken — same 60 rows, same costs.
+  - **A `CyberwareConditionalBonus` carries the verbatim legacy `<condition>` string**, not an
+    engine enum; `chummer5.engine.cyberware._CONDITION_KEY_TO_CONDITION` maps it, mirroring
+    `CyberwareFlatBonus.target_kind`'s existing string→`ImprovementType` split. A test pins the two
+    whitelists to each other so neither can grow alone. `value=None` means "the purchased Rating"
+    (`resolve_value(rating)`); the flat catalog *raises* on one rather than applying it as +1.
+  - **`apply_cyberware_tree_improvements` (in `chummer5.engine.cyberware_subsystems`) is the tree's
+    Improvement applier**, which WP38 explicitly deferred here. It reuses the shared
+    `chummer5.engine.cyberware.cyberware_bonus_improvements`. Still nothing consumes it — no
+    `Character` field until WP41 — so this remains proven-in-isolation plumbing.
+  - **Hydraulic Jacks is a matched *pair*: one jack grants nothing, a pair grants `+Rating` once**
+    (p. 457, quoted in `spec/rulebooks/learnings/phase-k.md`'s WP40 entry). No `<pairbonus>` exists
+    on the row and the legacy engine never evaluates these conditions, so a per-node application
+    would have silently produced `+2 x Rating` for `Barrett.chum5`. Modeled as a named rule; the
+    pair test is "two of equal Rating in **distinct** parents," since no `<required>` data is loaded
+    to check leg-ness.
+  - **`derived.physical_limit`/`mental_limit` gained a keyword-only `context`** (purely additive;
+    `social_limit` deliberately did not — no conditional Social bonus exists). This is the first
+    place the project distinguishes the character sheet's headline figure from a specific test's,
+    which WP42 needs when it shows "why a bonus applies only sometimes."
+  - The **Wireless** halves of all four items (a dice-pool modifier of the same size) and Hydraulic
+    Jacks' jump-distance/falling-damage clauses are unmodeled and now registered in the Project
+    Overview's "Unmodeled real effects" table.
 
 - [ ] **WP41 — Cyberware modification save/load + legacy import.**
   Goal: thread the purchase tree (WP38) through native save/load and legacy import, which currently

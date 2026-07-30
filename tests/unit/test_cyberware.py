@@ -9,6 +9,7 @@ from decimal import Decimal
 from chummer5.data.cyberware import (
     BonusSupport,
     Cyberware,
+    CyberwareConditionalBonus,
     CyberwareFlatBonus,
     count_by_support,
     load_cyberware,
@@ -81,10 +82,27 @@ def test_smartlink_and_bone_lacing_are_not_yet_supported() -> None:
         assert item.raw_bonus is not None
 
 
-def test_damper_and_spatial_recognizer_are_not_yet_supported() -> None:
+def test_damper_is_not_yet_supported() -> None:
     by_name = {c.name: c for c in CYBERWARE}
     assert by_name["Damper"].bonus_support == BonusSupport.NOT_YET_SUPPORTED
-    assert by_name["Spatial Recognizer"].bonus_support == BonusSupport.NOT_YET_SUPPORTED
+
+
+def test_spatial_recognizer_is_the_flat_catalogs_one_conditional_bonus() -> None:
+    # WP40 reclassifies this row from NOT_YET_SUPPORTED (where WP31 put it purely because nothing
+    # could express "only during this kind of test") to a real, condition-gated bonus. p. 444:
+    # "You get a +2 bonus on your limit in Perception Tests to find the source of a specific
+    # sound." The other three conditional items are rating-scaled, so this is the only one that
+    # reaches the flat catalog at all.
+    conditional = [c for c in CYBERWARE if c.bonus_support == BonusSupport.CONDITIONAL_BONUS]
+    assert [c.name for c in conditional] == ["Spatial Recognizer"]
+    assert conditional[0].conditional_bonuses == (
+        CyberwareConditionalBonus(
+            target_kind="mental_limit",
+            value=2,
+            condition="LimitCondition_SkillsActivePerceptionSpatialRecognizer",
+        ),
+    )
+    assert conditional[0].flat_bonuses == ()
 
 
 def test_cyberlimb_condition_monitor_bonus_items_are_flat_bonus() -> None:
@@ -140,12 +158,13 @@ def test_full_leg_variants_keep_their_condition_monitor_bonus_despite_disablequa
 
 
 def test_supported_vs_unsupported_counts_are_visible() -> None:
-    # FLAT_BONUS: 8 Cyberlimb condition-monitor items. NOT_YET_SUPPORTED: Smartlink, Damper,
-    # Spatial Recognizer, 3 Bone Lacing variants = 6. NO_EFFECT: 60 - 8 - 6 = 46 (42 genuinely
-    # empty/absent <bonus> + 4 disablequality-only).
+    # FLAT_BONUS: 8 Cyberlimb condition-monitor items. CONDITIONAL_BONUS: Spatial Recognizer (WP40).
+    # NOT_YET_SUPPORTED: Smartlink, Damper, 3 Bone Lacing variants = 5. NO_EFFECT: 60 - 8 - 1 - 5 =
+    # 46 (42 genuinely empty/absent <bonus> + 4 disablequality-only).
     counts = count_by_support(CYBERWARE)
     assert counts[BonusSupport.FLAT_BONUS] == 8
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 6
+    assert counts[BonusSupport.CONDITIONAL_BONUS] == 1
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 5
     assert counts[BonusSupport.NO_EFFECT] == 46
     assert sum(counts.values()) == 60
 
@@ -162,5 +181,6 @@ def test_cyberware_fields_hand_checked_against_the_raw_xml() -> None:
         page=451,
         bonus_support=BonusSupport.NO_EFFECT,
         flat_bonuses=(),
+        conditional_bonuses=(),
         raw_bonus=None,
     )

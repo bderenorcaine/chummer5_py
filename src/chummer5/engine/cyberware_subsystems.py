@@ -120,12 +120,36 @@ XML category despite being "Customization" rather than an "Enhancement" in the p
 they are covered by the same check -- harmless, since stacking two customizations of one attribute
 in one limb is meaningless under the "each point above 3" pricing either way.
 
+## Improvements (WP40): `apply_cyberware_tree_improvements`
+
+WP38 left this module computing money, Essence and Capacity only; WP40 adds the Improvement half,
+mirroring `chummer5.engine.cyberware.apply_cyberware_improvements` node-for-node. Every node in
+every tree grants its Essence cost (already dual-costed, so a plugin's is 0) plus whatever its
+`<bonus>` classified to, translated by `chummer5.engine.cyberware.cyberware_bonus_improvements` --
+imported rather than duplicated, matching the data layer's own single shared `classify_bonus`.
+
+Three of the four real conditional bonuses in the SR5 set are rating-scaled and therefore reachable
+*only* through this catalog: `Vision Enhancement` and `Audio Enhancement` (+Rating Mental limit, on
+visual/hearing Perception tests respectively) and `Hydraulic Jacks` (+Rating Physical limit). The
+fourth, `Spatial Recognizer`, is flat and so reaches a character through either module.
+
+**Hydraulic Jacks is a matched *pair*, which the data does not say and a per-item application gets
+wrong.** p. 457: "This implant requires you to have two cyberlegs with a hydraulic jack of
+identical Ratings in each leg. Each Rating point adds a +1 to your Physical limit for jumping and
+sprinting." So a lone jack grants nothing at all, and a pair grants `+Rating` **once**, not twice.
+`cyberware.xml` carries no `<pairbonus>`/`<pairinclude>` on this row to signal any of that (WP37
+deliberately captures neither tag), and the legacy engine never evaluates a conditional limit
+modifier anyway -- so applying this row the same way as every other one would silently produce
+`+2 x Rating` for a real, ordinary build (`Barrett.chum5` owns exactly two). Modeled here as a
+named rule (`_PAIRED_BONUS_ITEM_NAMES`): its bonus is granted once per Rating for which at least
+two jacks sit in **distinct** parents, carrying a `unique_name` so that two qualifying Ratings --
+impossible with two legs, but not something this engine counts -- collapse to the highest under
+SR5's existing "highest bonus wins" rule rather than stacking. The `<required><parentdetails>`
+"parent must be a leg" restriction is *not* enforced: WP37 captures no `<required>` data, so
+"distinct parents" is what this engine can actually check.
+
 ## What this module deliberately does not do
 
-- **No Improvements.** A purchased plugin's `<bonus>` lands on a `Character` in WP40 (which needs
-  WP39's conditional-Improvement primitive for `Vision Enhancement`/`Audio Enhancement`/
-  `Spatial Recognizer`/`Hydraulic Jacks`), not here. This module computes money, Essence and
-  Capacity only.
 - **No cyberlimb attribute model.** `Customized Agility`/`Enhanced Agility`/`Enhanced Strength`
   carry no `<bonus>` at all -- the legacy engine gives a *limb* its own STR/AGI (p. 456,
   "Physical attribute enhancements add their Rating to the appropriate attribute of the limb"),
@@ -141,13 +165,15 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from enum import Enum
 
 from chummer5.data.cyberware_subsystems import CyberwareEntry
 from chummer5.engine.character import Character
+from chummer5.engine.cyberware import cyberware_bonus_improvements
 from chummer5.engine.derived import BASE_ESSENCE
+from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
 
 # p. 456, "All standard cyberlimbs come with Strength and Agility attributes of 3" -- the value
 # `{AGIMinimum}`/`{STRMinimum}` resolves to for a cyberlimb enhancement (legacy `Cyberware
@@ -157,6 +183,15 @@ CYBERLIMB_BASE_ATTRIBUTE = 3
 # The category p. 456's "only one enhancement of each type" sentence is about. See module docstring
 # for why the rule is applied to this category only rather than generalized.
 _ONE_PER_PARENT_CATEGORY = "Cyberlimb Enhancement"
+
+# Items whose <bonus> is granted by a matched *pair*, not per purchase -- p. 457's "requires you to
+# have two cyberlegs with a hydraulic jack of identical Ratings in each leg." See the module
+# docstring's WP40 section; this is a rulebook rule with no signal in the data at all.
+_PAIRED_BONUS_ITEM_NAMES = frozenset({"Hydraulic Jacks"})
+
+# Every ImprovementType this module produces is a single character-wide total (one Essence pool,
+# one Physical Limit) -- the same sentinel target chummer5.engine.derived resolves them against.
+_GLOBAL_TARGET = ""
 
 # `{AGIMinimum}+1`, `{STRMaximum}`, ... -- the only two rating-bound placeholder shapes in the SR5
 # set, both on Customized Agility/Strength. A whitelist of named shapes, not an expression parser,
@@ -582,3 +617,80 @@ def create_cyberware_tree_selection(
         nuyen_spent=nuyen_spent,
         essence_spent=essence_spent,
     )
+
+
+def _paired_bonus_nodes(
+    selection: CyberwareTreeSelection,
+) -> dict[tuple[str, int], list[tuple[int, PurchasedCyberware]]]:
+    """Group every `_PAIRED_BONUS_ITEM_NAMES` plugin by `(item name, rating)`, tagged with the
+    index of the top-level purchase it is installed in.
+
+    The index is what makes "two jacks in *distinct* legs" checkable: two matching plugins in the
+    same limb are one leg's worth, not a pair. A paired item bought standalone (not installed in
+    anything) is deliberately not collected -- p. 457's rule is about jacks *in cyberlegs*.
+    """
+    grouped: dict[tuple[str, int], list[tuple[int, PurchasedCyberware]]] = {}
+    for parent_index, purchase in enumerate(selection.purchases):
+        for plugin in purchase.plugins:
+            if plugin.item.name in _PAIRED_BONUS_ITEM_NAMES:
+                grouped.setdefault((plugin.item.name, plugin.rating), []).append(
+                    (parent_index, plugin)
+                )
+    return grouped
+
+
+def apply_cyberware_tree_improvements(
+    character: Character, selection: CyberwareTreeSelection
+) -> None:
+    """Add every purchased node's Essence cost and `<bonus>` to `character.improvements` (WP40).
+
+    The tree-shaped counterpart of `chummer5.engine.cyberware.apply_cyberware_improvements`, and
+    deliberately the same shape: every node grants an `ESSENCE` Improvement unconditionally --
+    which for a plugin is `0`, since dual costing already zeroed its `essence_cost` -- plus the
+    Improvements its `<bonus>` classified to, resolved at that node's own purchased rating.
+
+    `source_id` is the item's catalog id, not per-purchase, exactly as in the flat function: a
+    matched pair of limbs is an ordinary build, and this project has no "retract one of a pair"
+    use case.
+
+    Hydraulic Jacks is the one item not applied per node -- see the module docstring's WP40
+    section for p. 457's matched-pair rule and why a per-node application would silently double it.
+    """
+    paired = _paired_bonus_nodes(selection)
+
+    for node in selection.walk():
+        character.improvements.add(
+            Improvement(
+                improvement_type=ImprovementType.ESSENCE,
+                target=_GLOBAL_TARGET,
+                value=0,
+                source_type=ImprovementSource.CYBERWARE,
+                source_id=node.item.id,
+                essence_value=-node.essence_cost,
+            )
+        )
+        if node.item.name in _PAIRED_BONUS_ITEM_NAMES:
+            continue
+        for improvement in cyberware_bonus_improvements(
+            item_id=node.item.id,
+            item_name=node.item.name,
+            flat_bonuses=node.item.flat_bonuses,
+            conditional_bonuses=node.item.conditional_bonuses,
+            rating=node.rating,
+        ):
+            character.improvements.add(improvement)
+
+    for (name, rating), installations in sorted(paired.items()):
+        if len({parent_index for parent_index, _ in installations}) < 2:
+            continue
+        node = installations[0][1]
+        for improvement in cyberware_bonus_improvements(
+            item_id=node.item.id,
+            item_name=node.item.name,
+            flat_bonuses=node.item.flat_bonuses,
+            conditional_bonuses=node.item.conditional_bonuses,
+            rating=rating,
+        ):
+            # `unique_name` so two qualifying Ratings would collapse to the highest under SR5's
+            # own "highest bonus wins" rule rather than stacking -- see module docstring.
+            character.improvements.add(replace(improvement, unique_name=name))

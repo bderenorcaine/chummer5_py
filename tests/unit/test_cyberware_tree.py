@@ -19,7 +19,7 @@ from decimal import Decimal
 
 import pytest
 
-from chummer5.data.cyberware import BonusSupport
+from chummer5.data.cyberware import BonusSupport, CyberwareConditionalBonus, CyberwareFlatBonus
 from chummer5.data.cyberware_formula import CyberwareFormula, parse_cyberware_formula
 from chummer5.data.cyberware_subsystems import CyberwareEntry, load_cyberware_entries
 from chummer5.data.metatypes import load_metatypes
@@ -28,10 +28,21 @@ from chummer5.engine.character import Character, create_character, metatype_choi
 from chummer5.engine.cyberware_subsystems import (
     CYBERLIMB_BASE_ATTRIBUTE,
     CyberwarePurchaseRequest,
+    CyberwareTreeSelection,
     Installation,
+    apply_cyberware_tree_improvements,
     create_cyberware_tree_selection,
     cyberlimb_attribute_maximums,
 )
+from chummer5.engine.derived import (
+    BASE_ESSENCE,
+    essence,
+    mental_limit,
+    physical_condition_monitor,
+    physical_limit,
+    social_limit,
+)
+from chummer5.engine.improvements import ImprovementType, ResolutionContext
 
 ENTRIES = load_cyberware_entries()
 BY_NAME = {entry.name: entry for entry in ENTRIES}
@@ -59,6 +70,8 @@ def _entry(
     requires_parent: bool = False,
     max_rating: str | None = None,
     min_rating: str | None = None,
+    flat_bonuses: tuple[CyberwareFlatBonus, ...] = (),
+    conditional_bonuses: tuple[CyberwareConditionalBonus, ...] = (),
 ) -> CyberwareEntry:
     """A synthetic `CyberwareEntry`, with only the fields WP38's validation actually reads set."""
     parsed_max = int(max_rating) if max_rating is not None and max_rating.isdigit() else None
@@ -83,8 +96,15 @@ def _entry(
         requires_parent=requires_parent,
         adds_to_parent_essence=False,
         adds_to_parent_capacity=False,
-        bonus_support=BonusSupport.NO_EFFECT,
-        flat_bonuses=(),
+        bonus_support=(
+            BonusSupport.CONDITIONAL_BONUS
+            if conditional_bonuses
+            else BonusSupport.FLAT_BONUS
+            if flat_bonuses
+            else BonusSupport.NO_EFFECT
+        ),
+        flat_bonuses=flat_bonuses,
+        conditional_bonuses=conditional_bonuses,
         raw_bonus=None,
     )
 
@@ -536,3 +556,166 @@ def test_smartlink_costs_essence_standalone_and_capacity_in_cybereyes() -> None:
     smartlink = next(p for p in eyes.plugins if p.item.name == "Smartlink")
     assert smartlink.capacity_cost == Decimal("3")
     assert installed.essence_spent == Decimal("0.2")  # the cybereyes', not the smartlink's
+
+
+# --------------------------------------------------------------------------------------------
+# Layer 3 (WP40): applying a purchase tree's Improvements to a character
+# --------------------------------------------------------------------------------------------
+
+
+def test_essence_and_flat_bonuses_reach_the_character_from_a_tree_purchase() -> None:
+    """The tree applier mirrors WP32's flat one: every node grants an ESSENCE Improvement (0 for a
+    plugin, since dual costing already zeroed it) plus whatever its `<bonus>` classified to.
+    """
+    character = _human_character()
+    base_cm = physical_condition_monitor(character)
+
+    selection = create_cyberware_tree_selection(
+        [_real_rated("Synthetic Full Leg", 1, (_real_rated("Hydraulic Jacks", 2),))],
+        ENTRIES,
+        1_000_000,
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    # p. 457: a Synthetic full leg is 1 Essence and carries the Cyberlimb condition-monitor bonus;
+    # its Hydraulic Jacks plugin costs Capacity, not Essence.
+    assert essence(character) == Decimal(BASE_ESSENCE) - Decimal("1")
+    assert physical_condition_monitor(character) == base_cm + 1
+
+
+def test_vision_enhancement_raises_the_mental_limit_only_for_visual_perception() -> None:
+    """WP40's headline acceptance case. p. 444: Vision enhancement "adds its Rating as a positive
+    modifier to your limit on visual Perception Tests."
+    """
+    character = _human_character()
+    base = mental_limit(character)
+
+    selection = create_cyberware_tree_selection(
+        [_real_rated("Cybereyes Basic System", 3, (_real_rated("Vision Enhancement", 2),))],
+        ENTRIES,
+        1_000_000,
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert mental_limit(character, context=ResolutionContext.PERCEPTION_VISUAL) == base + 2
+    # A Memory test is Mental-limited but has no conditional bonus of its own, so it resolves the
+    # plain figure -- the same one the character sheet shows.
+    assert mental_limit(character) == base
+    assert mental_limit(character, context=ResolutionContext.PERCEPTION_HEARING) == base
+
+
+def test_audio_enhancement_and_spatial_recognizer_apply_under_their_own_contexts() -> None:
+    character = _human_character()
+    base = mental_limit(character)
+
+    selection = create_cyberware_tree_selection(
+        [
+            _real_rated(
+                "Cyberears",
+                2,
+                (_real_rated("Audio Enhancement", 3), _real("Spatial Recognizer")),
+            )
+        ],
+        ENTRIES,
+        1_000_000,
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert mental_limit(character, context=ResolutionContext.PERCEPTION_HEARING) == base + 3
+    assert mental_limit(character, context=ResolutionContext.PERCEPTION_SOUND_SOURCE) == base + 2
+    assert mental_limit(character, context=ResolutionContext.PERCEPTION_VISUAL) == base
+    assert mental_limit(character) == base
+
+
+def _legs_with_jacks(*ratings_per_leg: tuple[int, ...]) -> CyberwareTreeSelection:
+    """One `Synthetic Full Leg` per argument, each holding jacks at the given ratings."""
+    return create_cyberware_tree_selection(
+        [
+            _real_rated(
+                "Synthetic Full Leg",
+                1,
+                tuple(_real_rated("Hydraulic Jacks", rating) for rating in ratings),
+            )
+            for ratings in ratings_per_leg
+        ],
+        ENTRIES,
+        1_000_000,
+    )
+
+
+def test_a_matched_pair_of_hydraulic_jacks_grants_its_bonus_once() -> None:
+    """p. 457: "This implant requires you to have two cyberlegs with a hydraulic jack of identical
+    Ratings in each leg. Each Rating point adds a +1 to your Physical limit for jumping and
+    sprinting." A per-node application would grant +2 x Rating here, which is the bug this exists
+    to prevent.
+    """
+    character = _human_character()
+    base = physical_limit(character)
+
+    apply_cyberware_tree_improvements(character, _legs_with_jacks((2,), (2,)))
+
+    assert physical_limit(character, context=ResolutionContext.GYMNASTICS_JUMPING) == base + 2
+    assert physical_limit(character, context=ResolutionContext.RUNNING_SPRINTING) == base + 2
+    assert physical_limit(character) == base
+    bonuses = [
+        imp
+        for imp in character.improvements.improvements
+        if imp.improvement_type is ImprovementType.PHYSICAL_LIMIT
+    ]
+    assert len(bonuses) == 1
+
+
+def test_a_single_hydraulic_jack_grants_nothing() -> None:
+    # "requires you to have two cyberlegs with a hydraulic jack ... in each leg" -- one leg's worth
+    # is not the implant.
+    character = _human_character()
+    base = physical_limit(character)
+    apply_cyberware_tree_improvements(character, _legs_with_jacks((3,)))
+    assert physical_limit(character, context=ResolutionContext.GYMNASTICS_JUMPING) == base
+
+
+def test_two_hydraulic_jacks_in_the_same_limb_are_not_a_pair() -> None:
+    # Two jacks, one leg. The Capacity budget allows it; the rule does not make it an implant.
+    character = _human_character()
+    base = physical_limit(character)
+    apply_cyberware_tree_improvements(character, _legs_with_jacks((1, 1)))
+    assert physical_limit(character, context=ResolutionContext.GYMNASTICS_JUMPING) == base
+
+
+def test_hydraulic_jacks_of_different_ratings_are_not_a_pair() -> None:
+    # "a hydraulic jack of identical Ratings in each leg" -- mismatched ratings grant nothing, and
+    # notably not the higher of the two.
+    character = _human_character()
+    base = physical_limit(character)
+    apply_cyberware_tree_improvements(character, _legs_with_jacks((1,), (3,)))
+    assert physical_limit(character, context=ResolutionContext.GYMNASTICS_JUMPING) == base
+
+
+def test_two_pairs_of_jacks_collapse_to_the_highest_rating() -> None:
+    # Not reachable with two legs, but this engine counts no limbs -- so the outcome is pinned
+    # rather than left to chance. `unique_name` puts these in one "highest bonus wins" group.
+    character = _human_character()
+    base = physical_limit(character)
+    apply_cyberware_tree_improvements(character, _legs_with_jacks((1, 4), (1, 4)))
+    assert physical_limit(character, context=ResolutionContext.RUNNING_SPRINTING) == base + 4
+
+
+def test_conditional_bonuses_leave_every_unconditional_derived_stat_untouched() -> None:
+    # WP39's zero-drift guarantee, restated at the content layer: wiring real conditional bonuses
+    # must not move any figure a character sheet already showed.
+    character = _human_character()
+    before = (mental_limit(character), physical_limit(character), social_limit(character))
+
+    selection = create_cyberware_tree_selection(
+        [
+            _real_rated("Cybereyes Basic System", 3, (_real_rated("Vision Enhancement", 3),)),
+            _real_rated("Cyberears", 1, (_real("Spatial Recognizer"),)),
+        ],
+        ENTRIES,
+        1_000_000,
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert (mental_limit(character), physical_limit(character)) == before[:2]
+    # social_limit moves only because Essence dropped, which is WP30/WP32 behaviour, not WP40's.
+    assert social_limit(character) <= before[2]

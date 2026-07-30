@@ -63,15 +63,35 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal
 
-from chummer5.data.cyberware import Cyberware
+from chummer5.data.cyberware import Cyberware, CyberwareConditionalBonus, CyberwareFlatBonus
 from chummer5.engine.character import Character
 from chummer5.engine.derived import BASE_ESSENCE
-from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
+from chummer5.engine.improvements import (
+    Improvement,
+    ImprovementCondition,
+    ImprovementSource,
+    ImprovementType,
+)
 
-# CyberwareFlatBonus.target_kind -> ImprovementType. Only one kind exists in WP31's catalog today
-# (the Cyberlimb condition-monitor bonus) -- see chummer5.data.cyberware's module docstring.
+# CyberwareFlatBonus/CyberwareConditionalBonus.target_kind -> ImprovementType. `physical_cm` is
+# WP31's Cyberlimb condition-monitor bonus; the two Limit kinds are WP40's conditional bonuses.
+# See chummer5.data.cyberware's module docstring for why the data layer names these as strings.
 _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "physical_cm": ImprovementType.PHYSICAL_CM,
+    "mental_limit": ImprovementType.MENTAL_LIMIT,
+    "physical_limit": ImprovementType.PHYSICAL_LIMIT,
+}
+
+# The legacy <condition> key -> WP39's compiled predicate. One entry per member of
+# `chummer5.data.cyberware._SUPPORTED_BONUS_CONDITIONS`; a key with no entry here is a bug rather
+# than a fall-through, since the data layer already refused to classify anything else.
+_CONDITION_KEY_TO_CONDITION = {
+    "LimitCondition_SkillsActivePerceptionVisual": ImprovementCondition.PERCEPTION_VISUAL_ONLY,
+    "LimitCondition_SkillsActivePerceptionHearing": ImprovementCondition.PERCEPTION_HEARING_ONLY,
+    "LimitCondition_SkillsActivePerceptionSpatialRecognizer": (
+        ImprovementCondition.PERCEPTION_SOUND_SOURCE_ONLY
+    ),
+    "LimitCondition_CyberwareHydraulicJacks": ImprovementCondition.JUMPING_OR_SPRINTING_ONLY,
 }
 
 # Every ImprovementType this module produces resolves against a single, character-wide total (there
@@ -142,6 +162,60 @@ def create_cyberware_selection(
     )
 
 
+def cyberware_bonus_improvements(
+    *,
+    item_id: str,
+    item_name: str,
+    flat_bonuses: Iterable[CyberwareFlatBonus],
+    conditional_bonuses: Iterable[CyberwareConditionalBonus],
+    rating: int,
+) -> tuple[Improvement, ...]:
+    """Build the `Improvement`s one purchased cyberware item's `<bonus>` grants, at `rating`.
+
+    Shared with `chummer5.engine.cyberware_subsystems` (WP40), which imports it rather than
+    re-deriving the two string -> enum maps above -- the data layer already shares one classifier
+    across both catalogs (`chummer5.data.cyberware.classify_bonus`), so the engine sharing one
+    translator is the matching half of that split. Essence is *not* built here: a standalone
+    purchase and a plugin are priced differently in Essence (see `chummer5.engine
+    .cyberware_subsystems`' dual-costing section), so each caller owns that record.
+
+    `rating` resolves a `<value>Rating</value>` conditional bonus. WP31's flat catalog has no
+    rating dimension at all (none of its 60 rows carries a `<rating>` tag), so its caller passes
+    1 -- and a rating-scaled conditional bonus appearing there would be data drift, which
+    `apply_cyberware_improvements` rejects rather than silently applying as +1.
+    """
+    improvements = [
+        Improvement(
+            improvement_type=_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
+            target=_GLOBAL_TARGET,
+            value=flat_bonus.value,
+            source_type=ImprovementSource.CYBERWARE,
+            source_id=item_id,
+        )
+        for flat_bonus in flat_bonuses
+    ]
+    for conditional in conditional_bonuses:
+        condition = _CONDITION_KEY_TO_CONDITION.get(conditional.condition)
+        if condition is None:
+            raise ValueError(
+                f"{item_name}: <condition> {conditional.condition!r} has no ImprovementCondition "
+                f"(chummer5.data.cyberware classified it as supported -- the two whitelists have "
+                f"drifted apart)"
+            )
+        improvements.append(
+            Improvement(
+                improvement_type=_TARGET_KIND_TO_IMPROVEMENT_TYPE[conditional.target_kind],
+                target=_GLOBAL_TARGET,
+                value=conditional.resolve_value(rating),
+                source_type=ImprovementSource.CYBERWARE,
+                source_id=item_id,
+                rating=rating,
+                condition=condition,
+            )
+        )
+    return tuple(improvements)
+
+
 def apply_cyberware_improvements(character: Character, selection: CyberwareSelection) -> None:
     """Add every purchased item's Essence cost (always) and `FLAT_BONUS`es (if any) to
     `character.improvements`.
@@ -158,6 +232,11 @@ def apply_cyberware_improvements(character: Character, selection: CyberwareSelec
     repeated item at once, not one at a time. This project has no chargen-time "remove a single
     cyberware purchase, keep its twin" use case (unlike a quality/power, which is always bought at
     most once), so this is a deliberate, harmless simplification, not an oversight.
+
+    **WP40** adds `CONDITIONAL_BONUS` items to what this applies -- exactly one of them reaches
+    this flat catalog (Spatial Recognizer's +2 Mental limit "to find the source of a sound"). Its
+    Improvement carries WP39's `condition`, so it counts only in a `resolve()` call that supplies
+    the matching `ResolutionContext`; the character sheet's plain Mental Limit figure is unchanged.
     """
     for item in selection.items:
         character.improvements.add(
@@ -170,13 +249,18 @@ def apply_cyberware_improvements(character: Character, selection: CyberwareSelec
                 essence_value=-item.essence_cost,
             )
         )
-        for flat_bonus in item.flat_bonuses:
-            character.improvements.add(
-                Improvement(
-                    improvement_type=_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
-                    target=_GLOBAL_TARGET,
-                    value=flat_bonus.value,
-                    source_type=ImprovementSource.CYBERWARE,
-                    source_id=item.id,
-                )
+        rating_scaled = [c for c in item.conditional_bonuses if c.value is None]
+        if rating_scaled:
+            raise ValueError(
+                f"{item.name}: a rating-scaled conditional bonus cannot be applied from the flat "
+                f"catalog, which carries no rating (chummer5.data.cyberware loads only rows with "
+                f"no <rating> tag) -- buy it through chummer5.engine.cyberware_subsystems instead"
             )
+        for improvement in cyberware_bonus_improvements(
+            item_id=item.id,
+            item_name=item.name,
+            flat_bonuses=item.flat_bonuses,
+            conditional_bonuses=item.conditional_bonuses,
+            rating=1,
+        ):
+            character.improvements.add(improvement)

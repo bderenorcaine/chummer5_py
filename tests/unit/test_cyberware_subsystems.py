@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections import Counter
 from decimal import Decimal
 
-from chummer5.data.cyberware import BonusSupport, load_cyberware
+from chummer5.data.cyberware import BonusSupport, CyberwareConditionalBonus, load_cyberware
 from chummer5.data.cyberware_formula import FormulaKind
 from chummer5.data.cyberware_subsystems import CyberwareEntry, load_cyberware_entries
 
@@ -82,9 +82,18 @@ def test_vision_enhancement_is_a_rating_scaled_plugin() -> None:
     assert vision.capacity_cost.resolve(rating=2) == Decimal(2)
     assert vision.cost.resolve(rating=2) == Decimal(8000)
     assert vision.essence_cost.resolve(rating=2) == Decimal("0.1")
-    # Its <bonus> is the condition-gated Mental limit modifier WP39/WP40 exist for -- still
-    # unsupported at the data layer, exactly as WP31 left it.
-    assert vision.bonus_support is BonusSupport.NOT_YET_SUPPORTED
+    # Its <bonus> is the condition-gated Mental limit modifier WP39/WP40 exist for. WP40 classifies
+    # it for real; the value is the purchased Rating (value=None), not a literal -- p. 444, "It
+    # adds its Rating as a positive modifier to your limit on visual Perception Tests."
+    assert vision.bonus_support is BonusSupport.CONDITIONAL_BONUS
+    assert vision.conditional_bonuses == (
+        CyberwareConditionalBonus(
+            target_kind="mental_limit",
+            value=None,
+            condition="LimitCondition_SkillsActivePerceptionVisual",
+        ),
+    )
+    assert vision.conditional_bonuses[0].resolve_value(rating=2) == 2
 
 
 def test_synthetic_full_arm_keeps_a_bare_integer_capacity_budget() -> None:
@@ -264,6 +273,7 @@ def test_bonus_classification_matches_wp31_row_for_row() -> None:
             continue
         assert entry.bonus_support == original.bonus_support
         assert entry.flat_bonuses == original.flat_bonuses
+        assert entry.conditional_bonuses == original.conditional_bonuses
         assert entry.raw_bonus == original.raw_bonus
 
 
@@ -284,7 +294,8 @@ def test_flat_rows_agree_with_wp31s_resolved_cost_and_essence() -> None:
 def test_wp31s_loader_is_completely_unchanged() -> None:
     # WP37's acceptance criteria: additive to WP31/32/33, not a breaking change. The flat catalog's
     # count, field set and a hand-checked row all stay exactly as tests/unit/test_cyberware.py
-    # pinned them.
+    # pinned them. (WP40 adds one field, `conditional_bonuses` -- a deliberate, additive widening
+    # of the shared classifier, not a change to which rows load or what any of them cost.)
     flat = load_cyberware()
     assert len(flat) == 60
     commlink = next(item for item in flat if item.name == "Commlink")
@@ -299,6 +310,7 @@ def test_wp31s_loader_is_completely_unchanged() -> None:
         "page",
         "bonus_support",
         "flat_bonuses",
+        "conditional_bonuses",
         "raw_bonus",
     }
 
@@ -307,3 +319,54 @@ def test_every_entry_is_frozen_and_hashable() -> None:
     # Mirrors the rest of the data layer: catalog rows are frozen values, safe to share.
     assert all(isinstance(entry, CyberwareEntry) for entry in ENTRIES)
     assert len({hash(entry) for entry in ENTRIES}) == len(ENTRIES)
+
+
+def test_exactly_four_rows_carry_a_supported_conditional_bonus() -> None:
+    # WP40. The complete set, enumerated rather than assumed -- WP39's own research found the fourth
+    # (Hydraulic Jacks) after two earlier plan entries had named only the three Eyeware/Earware
+    # items. Values/limits hand-checked against the rulebook text transcribed in
+    # spec/rulebooks/learnings/phase-k.md's WP40 entry.
+    conditional = {
+        entry.name: entry.conditional_bonuses
+        for entry in ENTRIES
+        if entry.bonus_support is BonusSupport.CONDITIONAL_BONUS
+    }
+    assert conditional == {
+        "Vision Enhancement": (
+            CyberwareConditionalBonus(
+                target_kind="mental_limit",
+                value=None,  # p. 444: "adds its Rating ... to your limit on visual Perception"
+                condition="LimitCondition_SkillsActivePerceptionVisual",
+            ),
+        ),
+        "Audio Enhancement": (
+            CyberwareConditionalBonus(
+                target_kind="mental_limit",
+                value=None,  # p. 444: "adds its Rating to your limit in audio Perception Tests"
+                condition="LimitCondition_SkillsActivePerceptionHearing",
+            ),
+        ),
+        "Spatial Recognizer": (
+            CyberwareConditionalBonus(
+                target_kind="mental_limit",
+                value=2,  # p. 444: "+2 bonus on your limit in Perception Tests to find the source"
+                condition="LimitCondition_SkillsActivePerceptionSpatialRecognizer",
+            ),
+        ),
+        "Hydraulic Jacks": (
+            CyberwareConditionalBonus(
+                target_kind="physical_limit",
+                value=None,  # p. 457: "Each Rating point adds a +1 to your Physical limit"
+                condition="LimitCondition_CyberwareHydraulicJacks",
+            ),
+        ),
+    }
+
+
+def test_no_row_carries_an_unclassified_limitmodifier() -> None:
+    # The whitelist's coverage claim: every <limitmodifier> in the SR5 rows is one of the four
+    # above. A future data update adding a fifth would land in NOT_YET_SUPPORTED and fail here,
+    # which is the point -- silently ignoring a real limit bonus is what this catches.
+    for entry in ENTRIES:
+        if entry.raw_bonus is not None and "<limitmodifier>" in entry.raw_bonus:
+            assert entry.bonus_support is BonusSupport.CONDITIONAL_BONUS, entry.name

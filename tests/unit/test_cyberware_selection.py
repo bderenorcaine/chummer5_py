@@ -11,7 +11,12 @@ from decimal import Decimal
 
 import pytest
 
-from chummer5.data.cyberware import BonusSupport, Cyberware, CyberwareFlatBonus
+from chummer5.data.cyberware import (
+    BonusSupport,
+    Cyberware,
+    CyberwareConditionalBonus,
+    CyberwareFlatBonus,
+)
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.engine.character import create_character, metatype_choices
@@ -20,8 +25,18 @@ from chummer5.engine.cyberware import (
     apply_cyberware_improvements,
     create_cyberware_selection,
 )
-from chummer5.engine.derived import BASE_ESSENCE, essence, physical_condition_monitor
-from chummer5.engine.improvements import ImprovementSource, ImprovementType
+from chummer5.engine.derived import (
+    BASE_ESSENCE,
+    essence,
+    mental_limit,
+    physical_condition_monitor,
+)
+from chummer5.engine.improvements import (
+    ImprovementCondition,
+    ImprovementSource,
+    ImprovementType,
+    ResolutionContext,
+)
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
@@ -38,6 +53,7 @@ def _no_effect_item(item_id: str, name: str, cost: int, essence_cost: str) -> Cy
         page=1,
         bonus_support=BonusSupport.NO_EFFECT,
         flat_bonuses=(),
+        conditional_bonuses=(),
         raw_bonus=None,
     )
 
@@ -53,6 +69,7 @@ def _cyberlimb_item(item_id: str, name: str, cost: int, essence_cost: str) -> Cy
         page=1,
         bonus_support=BonusSupport.FLAT_BONUS,
         flat_bonuses=(CyberwareFlatBonus(target_kind="physical_cm", value=1),),
+        conditional_bonuses=(),
         raw_bonus="<bonus><conditionmonitor><physical>1</physical></conditionmonitor></bonus>",
     )
 
@@ -197,3 +214,93 @@ def test_cyberware_selection_is_a_frozen_dataclass_field_default_none() -> None:
     )
     character = replace(character, cyberware_selection=selection)
     assert character.cyberware_selection is selection
+
+
+# --- WP40: conditional bonuses ------------------------------------------------------------------
+
+
+def _conditional_item(
+    item_id: str, name: str, *, value: int | None, condition: str, target_kind: str = "mental_limit"
+) -> Cyberware:
+    return Cyberware(
+        id=item_id,
+        name=name,
+        category="Earware",
+        cost=4000,
+        essence_cost=Decimal("0.1"),
+        source="SR5",
+        page=1,
+        bonus_support=BonusSupport.CONDITIONAL_BONUS,
+        flat_bonuses=(),
+        conditional_bonuses=(
+            CyberwareConditionalBonus(target_kind=target_kind, value=value, condition=condition),
+        ),
+        raw_bonus="<bonus><limitmodifier /></bonus>",
+    )
+
+
+SPATIAL = _conditional_item(
+    "sr",
+    "Spatial Recognizer",
+    value=2,
+    condition="LimitCondition_SkillsActivePerceptionSpatialRecognizer",
+)
+
+
+def test_conditional_bonus_applies_only_under_its_own_resolution_context() -> None:
+    character = _human_character()
+    base = mental_limit(character)
+
+    selection = create_cyberware_selection(["sr"], (*CATALOG, SPATIAL), nuyen_budget=100000)
+    apply_cyberware_improvements(character, selection)
+
+    # p. 444: "+2 bonus on your limit in Perception Tests to find the source of a specific sound."
+    assert mental_limit(character, context=ResolutionContext.PERCEPTION_SOUND_SOURCE) == base + 2
+    # The headline figure, and any Mental-limited test with no conditional bonus of its own (a
+    # Memory test, say), are untouched.
+    assert mental_limit(character) == base
+    # No subsumption between conditions (WP39): a plain hearing Perception test is not "finding the
+    # source of a sound", so this bonus does not apply to it.
+    assert mental_limit(character, context=ResolutionContext.PERCEPTION_HEARING) == base
+
+
+def test_conditional_improvement_carries_the_compiled_condition_not_a_string() -> None:
+    character = _human_character()
+    selection = create_cyberware_selection(["sr"], (*CATALOG, SPATIAL), nuyen_budget=100000)
+    apply_cyberware_improvements(character, selection)
+
+    bonus = next(
+        imp
+        for imp in character.improvements.improvements
+        if imp.improvement_type is ImprovementType.MENTAL_LIMIT
+    )
+    assert bonus.condition is ImprovementCondition.PERCEPTION_SOUND_SOURCE_ONLY
+    assert bonus.value == 2
+    assert bonus.source_type is ImprovementSource.CYBERWARE
+    assert bonus.source_id == "sr"
+
+
+def test_flat_catalog_refuses_a_rating_scaled_conditional_bonus() -> None:
+    # WP31's catalog has no rating dimension at all (no row carries a <rating> tag), so a
+    # <value>Rating</value> bonus arriving here is data drift. Applying it as +1 would be a
+    # plausible-but-wrong number, which is exactly what this engine refuses to produce.
+    rating_scaled = _conditional_item(
+        "ve",
+        "Vision Enhancement",
+        value=None,
+        condition="LimitCondition_SkillsActivePerceptionVisual",
+    )
+    character = _human_character()
+    selection = create_cyberware_selection(["ve"], (*CATALOG, rating_scaled), nuyen_budget=100000)
+    with pytest.raises(ValueError, match="rating-scaled conditional bonus"):
+        apply_cyberware_improvements(character, selection)
+
+
+def test_every_supported_condition_key_maps_to_an_improvement_condition() -> None:
+    # The two whitelists (data-layer <condition> strings, engine-layer compiled predicates) are
+    # written in different modules; this pins them together so neither can grow without the other.
+    from chummer5.data.cyberware import _SUPPORTED_BONUS_CONDITIONS
+    from chummer5.engine.cyberware import _CONDITION_KEY_TO_CONDITION
+
+    assert set(_CONDITION_KEY_TO_CONDITION) == set(_SUPPORTED_BONUS_CONDITIONS)
+    assert set(_CONDITION_KEY_TO_CONDITION.values()) == set(ImprovementCondition)

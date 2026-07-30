@@ -69,7 +69,7 @@ import math
 from decimal import Decimal
 
 from chummer5.engine.character import Character
-from chummer5.engine.improvements import ImprovementType
+from chummer5.engine.improvements import ImprovementType, ResolutionContext
 
 # Resolution target for the 7 character-wide ImprovementTypes this module reads -- see
 # ImprovementType's docstring for why a fixed sentinel, rather than a per-instance target, is
@@ -119,26 +119,46 @@ def initiative_dice(character: Character) -> int:
     return min(total, MAX_INITIATIVE_DICE)
 
 
-def physical_limit(character: Character) -> int:
-    """`Character.LimitPhysical`: ceil((STR*2 + BOD + REA) / 3) + Σ improvements."""
+def physical_limit(character: Character, *, context: ResolutionContext | None = None) -> int:
+    """`Character.LimitPhysical`: ceil((STR*2 + BOD + REA) / 3) + Σ improvements.
+
+    `context` (WP40) selects which *conditional* improvements count -- `Hydraulic Jacks` raises this
+    limit only for jumping and sprinting (p. 457). Omitting it gives the plain, unconditional limit,
+    which is what the character sheet's headline figure shows and what every pre-WP40 caller
+    already computed. See `chummer5.engine.improvements`' "Conditional Improvements" section.
+    """
     total = _ceil_div(
         character.attribute_value("STR") * 2
         + character.attribute_value("BOD")
         + character.attribute_value("REA"),
         3,
     )
-    return total + character.improvements.resolve(ImprovementType.PHYSICAL_LIMIT, _GLOBAL_TARGET)
+    return total + character.improvements.resolve(
+        ImprovementType.PHYSICAL_LIMIT, _GLOBAL_TARGET, context=context
+    )
 
 
-def mental_limit(character: Character) -> int:
-    """`Character.LimitMental`: ceil((LOG*2 + INT + WIL) / 3) + Σ improvements."""
+def mental_limit(character: Character, *, context: ResolutionContext | None = None) -> int:
+    """`Character.LimitMental`: ceil((LOG*2 + INT + WIL) / 3) + Σ improvements.
+
+    `context` (WP40), as in `physical_limit`: `Vision Enhancement`, `Audio Enhancement` and
+    `Spatial Recognizer` each raise this limit only during their own kind of Perception test
+    (p. 444). A Mental-limited test with no conditional bonus of its own -- a Memory test, say --
+    passes no context and sees the plain figure.
+
+    `social_limit` deliberately grows no such parameter: no aspect this engine offers carries a
+    conditional Social limit bonus, and WP39's rule is to add a context only where a real bonus
+    needs one.
+    """
     total = _ceil_div(
         character.attribute_value("LOG") * 2
         + character.attribute_value("INT")
         + character.attribute_value("WIL"),
         3,
     )
-    return total + character.improvements.resolve(ImprovementType.MENTAL_LIMIT, _GLOBAL_TARGET)
+    return total + character.improvements.resolve(
+        ImprovementType.MENTAL_LIMIT, _GLOBAL_TARGET, context=context
+    )
 
 
 def essence(character: Character) -> Decimal:

@@ -138,6 +138,7 @@ from chummer5.data.cyberware import (
     CORE_RULEBOOK_SOURCE,
     DEFAULT_CYBERWARE_PATH,
     BonusSupport,
+    CyberwareConditionalBonus,
     CyberwareFlatBonus,
     classify_bonus,
 )
@@ -204,6 +205,9 @@ class CyberwareEntry:
 
     bonus_support: BonusSupport
     flat_bonuses: tuple[CyberwareFlatBonus, ...]  # populated only when bonus_support is FLAT_BONUS
+    # populated only when bonus_support is CONDITIONAL_BONUS (WP40): Vision Enhancement, Audio
+    # Enhancement and Hydraulic Jacks are rating-scaled and so live *only* in this wider catalog.
+    conditional_bonuses: tuple[CyberwareConditionalBonus, ...]
     raw_bonus: str | None  # serialized <bonus> element; None if absent
 
     @property
@@ -294,7 +298,7 @@ def _child_names(elem: ET.Element, container: str, child: str) -> tuple[str, ...
 def _parse_entry(elem: ET.Element) -> CyberwareEntry:
     name = elem.findtext("name", "")
     bonus_elem = elem.find("bonus")
-    support, flat_bonuses = classify_bonus(bonus_elem)
+    support, flat_bonuses, conditional_bonuses = classify_bonus(bonus_elem)
     raw_max_rating = elem.findtext("rating")
     raw_min_rating = elem.findtext("minrating")
     capacity_budget, capacity_cost, bundled_free = _parse_capacity(
@@ -326,6 +330,7 @@ def _parse_entry(elem: ET.Element) -> CyberwareEntry:
         adds_to_parent_capacity=elem.find("addtoparentcapacity") is not None,
         bonus_support=support,
         flat_bonuses=flat_bonuses,
+        conditional_bonuses=conditional_bonuses,
         raw_bonus=(
             ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
         ),

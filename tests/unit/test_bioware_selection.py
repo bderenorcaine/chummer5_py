@@ -166,6 +166,7 @@ def test_shared_floor_matches_a_real_combined_cyberware_and_bioware_check() -> N
         page=1,
         bonus_support=BonusSupport.NO_EFFECT,
         flat_bonuses=(),
+        conditional_bonuses=(),
         raw_bonus=None,
     )
     cyberware_selection = create_cyberware_selection(["arm"], (arm,), nuyen_budget=1_000_000)
