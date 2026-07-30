@@ -485,3 +485,47 @@ apply beyond the WP that found them:
   (the quoted mechanic there is unaffected — only the page number for the tables). Future WPs citing
   this PDF should derive the offset from a footer rather than trusting an XML `<page>` tag or the
   `-f N` page number.
+
+## 2026-07-29 — Phase K, WP37/WP39: cut the cyberware third nesting level; this engine evaluates
+conditional bonuses the legacy engine only displays
+
+Two findings from WP37 and WP39 that reach past the WPs that found them.
+
+**WP37 — the Cyber Implant Weapon → Weapon Accessory layer should be cut explicitly in WP38, not
+supported.** The Phase K intro flagged it as "a genuine two-level nesting case; confirm whether any
+curated fixture actually exercises it before deciding whether to support that third level or cut it
+explicitly." Confirmed, both ways: no fixture exercises it (every depth-2/3 nested purchase across
+all 34 `.chum5` files is a Chrome Flesh modular-limb chain, out of SR5 scope — the two cyber implant
+weapons that appear at all are childless), and the data gives such a weapon no budget to spend (its
+`<capacity>` is bracketed, and legacy `Cyberware.CapacityRemaining` returns 0 for a purely-bracketed
+Capacity, matching neither of its two branches). The 3 SR5 accessories instead carry
+`<addtoparentcapacity>`/`<addtoparentess>` — their cost folds into the *weapon's* cost against the
+*grandparent limb*, which is a different mechanic, not one more level of the same one. Recorded as a
+scoping ruling rather than left in a docstring because it decides what WP38 builds. Both flags are
+captured in `chummer5.data.cyberware_subsystems` regardless, so WP38 can revisit from data.
+
+**WP37 — a correction to the pre-Phase-K bundled-free reading, which that entry itself flagged as
+needing confirmation.** Auto-inclusion is driven by a parent's `<subsystems>` element, not by the
+`[*]` Capacity marker, and the SR5 set has **three** instances, not two: the third is
+`Control Rig` → `Datajack`, which carries neither `[*]` nor `<allowsubsystems>` and *is* real fixture
+content (`Mittens Chargen.chum5`). The two signals mean different things and both are needed.
+Recorded here because "there are exactly two bundled items, both marked `[*]`" had already been
+written down twice (the pre-Phase-K learnings entry and the Phase K intro) and would otherwise keep
+propagating.
+
+**WP39 — this engine evaluates conditional Improvements; the legacy engine does not, so for this one
+mechanic there is no regression oracle.** Legacy Chummer builds a `LimitModifier` object carrying a
+condition *string* and displays it on the character sheet as a note for the player to apply by hand;
+it never adjusts the limit total. This project's stated testing strategy leans on the legacy engine
+as the oracle for "silently-wrong rules logic," so it matters to record where that oracle simply
+isn't there. Consequence already acted on: WP39 models **no subsumption** between related conditions
+(Spatial Recognizer's "Perception to find the source of a sound" does not satisfy a
+Perception-(Hearing) resolution), because nothing establishes the containment as a rule rather than a
+reading and there is nothing to diff against. Any later WP wanting a hierarchy is making a fresh
+ruling, not restoring a lost one.
+
+**WP39 — the SR5 conditional-bonus catalog is four items, not the three both WP39's and WP40's plan
+entries name.** The fourth is Hydraulic Jacks ("Only for Gymnastics (Jumping) and Running
+(Sprinting)", a Physical rather than Mental limit modifier, present twice in `Barrett.chum5`). It is
+the reason an `ImprovementCondition` maps to a *set* of `ResolutionContext`s rather than to one.
+WP40's entry has been annotated accordingly.
