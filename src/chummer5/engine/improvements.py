@@ -10,10 +10,11 @@ different vocabulary.
 
 Deliberately changes *how* it's evaluated, not the shape, per the Project Overview's Improvement
 engine design notes:
-- No string-encoded conditions re-parsed at read time. WP5 doesn't add a `condition` field at all
+- No string-encoded conditions re-parsed at read time. WP5 didn't add a `condition` field at all
   (unlike the legacy class) — every MVP-supported quality bonus (see WP3) is unconditional, so
-  there is no real consumer for one yet; add it, compiled to a typed predicate at construction,
-  when a WP actually needs it, rather than carrying unused scaffolding now.
+  there was no real consumer for one; the note there said to add it, compiled to a typed predicate
+  at construction, "when a WP actually needs it, rather than carrying unused scaffolding now."
+  **WP39 is that WP** — see "Conditional Improvements" below.
 - `ImprovementIndex` stores a flat list plus a
   `dict[(ImprovementType, target)] -> list[Improvement]` index, fully rebuilt on every
   `add`/`remove_source` call instead of being individually invalidated per field mutation like the
@@ -21,6 +22,62 @@ engine design notes:
 
 See `spec/worklogs/WP5.md` for the full reasoning, including the legacy `ValueOf`/dedup algorithm
 this was checked against.
+
+## Conditional Improvements (WP39 — Phase K)
+
+Some real bonuses apply only during a *specific kind of test*. The four confirmed instances in the
+SR5 cyberware set (all `<limitmodifier>` nodes carrying a `<condition>`, all currently classified
+`NOT_YET_SUPPORTED` by `chummer5.data.cyberware`):
+
+- **Vision Enhancement** (Mental limit) — `LimitCondition_SkillsActivePerceptionVisual`,
+  "Only for Perception (Visual)"
+- **Audio Enhancement** (Mental limit) — `LimitCondition_SkillsActivePerceptionHearing`,
+  "Only for Perception (Hearing)"
+- **Spatial Recognizer** (Mental limit) — `LimitCondition_SkillsActivePerceptionSpatialRecognizer`,
+  "Only for Perception to find the source of a sound"
+- **Hydraulic Jacks** (Physical limit) — `LimitCondition_CyberwareHydraulicJacks`,
+  "Only for Gymnastics (Jumping) and Running (Sprinting)"
+
+(English text from `legacy/Chummer/lang/en-us.xml`; the item/limit/condition triples from
+`legacy/Chummer/data/cyberware.xml`'s own `<limitmodifier>` nodes.)
+
+**The design, and the three "decide & document" calls WP39's plan entry asks for:**
+
+1. **A `Condition` is an `Enum` (`ImprovementCondition`), not a closure and not a tagged union.**
+   A closure is uninspectable and unhashable-in-practice, which would break `Improvement`'s
+   `frozen=True`/value-equality shape and make a saved or compared Improvement meaningless. A tagged
+   union buys parameterization nothing here needs: every confirmed shape is the *unparameterized*
+   statement "this bonus applies only during these tests." The enum is the compiled form — resolved
+   once when the `Improvement` is constructed, never re-parsed from the legacy condition string at
+   read time, which is the whole point of the Project Overview's critique of the legacy engine.
+   This mirrors WP25's named-xpath-predicate precedent: classify the handful of real, named shapes;
+   do **not** build a general condition-string interpreter.
+2. **The call-site context is a single optional `ResolutionContext`**, the smallest shape that
+   covers all four rows above. `ImprovementIndex.resolve(...)` grows a keyword-only `context`
+   parameter
+   defaulting to `None`, so this is **purely additive**: every existing call site is unchanged,
+   and
+   `context=None` means "resolve the plain, unconditional value," which is exactly what those call
+   sites already computed. `condition=None` on an Improvement is likewise a true no-op — an
+   unconditional Improvement contributes in *every* resolution, with or without a context.
+3. **A condition maps to a *set* of `ResolutionContext`s, not to one.** Hydraulic Jacks is why:
+   its single condition covers two unrelated activities (Gymnastics/Jumping *and*
+   Running/Sprinting). Without that, the fourth row would have needed two Improvements for one
+   bonus.
+
+**No subsumption between conditions is modeled, deliberately.** Spatial Recognizer's "Perception to
+find the source of a sound" is arguably a special case of Audio Enhancement's "Perception
+(Hearing)", so one could argue a hearing-Perception resolution should also pick up a Spatial
+Recognizer bonus. Matching is plain set membership instead — no hierarchy — because (a) nothing
+establishes the containment as a rule rather than a reading, and (b) there is no legacy oracle to
+check against: the legacy engine never auto-applies a conditional limit modifier at all. It builds a
+`LimitModifier` object carrying the condition *string* and displays it on the character sheet as a
+note for the player to apply by hand. This engine going further (actually evaluating the condition)
+is a deliberate improvement on that, but it means any judgment call about which conditions overlap
+is ours alone, and WP40 owns making one if real content ever needs it.
+
+`ESSENCE` improvements are unconditional by construction — Essence cost is not a per-test thing.
+`resolve_essence()` raises rather than silently ignoring a condition it finds, so that stays true.
 """
 
 from __future__ import annotations
@@ -130,6 +187,80 @@ class ImprovementSource(Enum):
     MENTOR_SPIRIT = auto()
 
 
+class ResolutionContext(Enum):
+    """One specific test/activity a value is being resolved *for* — the call-site context a
+    conditional Improvement is evaluated against (WP39).
+
+    Deliberately the smallest vocabulary that covers the four real conditional bonuses listed in
+    the module docstring, not a general "kind of test" taxonomy. A resolution that passes no
+    context at all (`context=None`, the default) is asking for the plain, unconditional value; that
+    is what every call site written before WP39 asks for, and it is what a character sheet's
+    headline Mental Limit figure should show.
+
+    Add a member when a real bonus needs one, the same way `ImprovementType` grew.
+
+    (Named `ResolutionContext` rather than the more natural `TestContext` — SR5 calls these "tests"
+    — purely because pytest tries to *collect* any importable class whose name starts with `Test`,
+    which turns every test module importing it into a `PytestCollectionWarning`. Don't rename it
+    back.)
+    """
+
+    PERCEPTION_VISUAL = auto()
+    PERCEPTION_HEARING = auto()
+    # "Perception to find the source of a sound" -- narrower than PERCEPTION_HEARING, but not
+    # modeled as a subset of it; see the module docstring's "no subsumption" paragraph.
+    PERCEPTION_SOUND_SOURCE = auto()
+    GYMNASTICS_JUMPING = auto()
+    RUNNING_SPRINTING = auto()
+
+
+# Which TestContexts satisfy each condition. Module-private: the mapping is reachable through
+# `ImprovementCondition.contexts`, which is the supported way to read it.
+_CONDITION_CONTEXTS: dict[ImprovementCondition, frozenset[ResolutionContext]]
+
+
+class ImprovementCondition(Enum):
+    """A named, hardcoded predicate restricting when an Improvement applies (WP39).
+
+    One member per confirmed real `<condition>` string in the SR5 data — see the module docstring
+    for the table mapping each to its item, its legacy key and its English text, and for why this is
+    an `Enum` rather than a closure or a tagged union. This is **not** a general condition language:
+    an unrecognized legacy condition string has no member here and its bonus stays
+    `NOT_YET_SUPPORTED` at the data layer, exactly as an unrecognized `<bonus>` shape already does.
+    """
+
+    PERCEPTION_VISUAL_ONLY = "perception_visual_only"
+    PERCEPTION_HEARING_ONLY = "perception_hearing_only"
+    PERCEPTION_SOUND_SOURCE_ONLY = "perception_sound_source_only"
+    JUMPING_OR_SPRINTING_ONLY = "jumping_or_sprinting_only"
+
+    @property
+    def contexts(self) -> frozenset[ResolutionContext]:
+        """The `ResolutionContext`s that satisfy this condition. A set, not a single value, because
+        Hydraulic Jacks' one condition covers two activities — see the module docstring.
+        """
+        return _CONDITION_CONTEXTS[self]
+
+    def is_met(self, context: ResolutionContext | None) -> bool:
+        """True when `context` is one this condition allows. `None` (no context supplied) never
+        satisfies a condition: a resolution that doesn't say which test it is for gets the plain,
+        unconditional value.
+        """
+        return context is not None and context in self.contexts
+
+
+_CONDITION_CONTEXTS = {
+    ImprovementCondition.PERCEPTION_VISUAL_ONLY: frozenset({ResolutionContext.PERCEPTION_VISUAL}),
+    ImprovementCondition.PERCEPTION_HEARING_ONLY: frozenset({ResolutionContext.PERCEPTION_HEARING}),
+    ImprovementCondition.PERCEPTION_SOUND_SOURCE_ONLY: frozenset(
+        {ResolutionContext.PERCEPTION_SOUND_SOURCE}
+    ),
+    ImprovementCondition.JUMPING_OR_SPRINTING_ONLY: frozenset(
+        {ResolutionContext.GYMNASTICS_JUMPING, ResolutionContext.RUNNING_SPRINTING}
+    ),
+}
+
+
 @dataclass(frozen=True)
 class Improvement:
     """One `target += value` record.
@@ -161,6 +292,15 @@ class Improvement:
     error a `float` field would introduce for exactly the repeating-fraction values (`0.3`, `0.1`,
     ...) this catalog actually contains, and keeps every other `ImprovementType`'s `resolve()` path
     completely untouched. `None` for every non-`ESSENCE` improvement.
+
+    **`condition` (WP39) restricts *when* this improvement applies.** `None` — the default, and the
+    value every Improvement this engine produced through WP38 carries — means "always," identical
+    in every respect to the pre-WP39 behaviour. A non-`None` `ImprovementCondition` means the
+    improvement is counted only by a `resolve()` call that supplies a matching
+    `ResolutionContext`; see the module docstring for the design and for the four real bonuses this
+    exists for. The
+    condition is a compiled enum member chosen when the Improvement is constructed, never a string
+    re-interpreted at read time.
     """
 
     improvement_type: ImprovementType
@@ -171,6 +311,7 @@ class Improvement:
     rating: int = 1
     unique_name: str | None = None
     essence_value: Decimal | None = None
+    condition: ImprovementCondition | None = None
 
 
 class ImprovementIndex:
@@ -209,12 +350,26 @@ class ImprovementIndex:
             index.setdefault((imp.improvement_type, imp.target), []).append(imp)
         self._index = index
 
-    def resolve(self, improvement_type: ImprovementType, target: str) -> int:
-        """Sum every Improvement targeting `(improvement_type, target)`, applying dedup.
+    def resolve(
+        self,
+        improvement_type: ImprovementType,
+        target: str,
+        *,
+        context: ResolutionContext | None = None,
+    ) -> int:
+        """Sum every *applicable* Improvement targeting `(improvement_type, target)`, with dedup.
 
         Improvements with `unique_name = None` all stack additively. Improvements sharing a
         non-`None` `unique_name` collapse to their single highest `value` first — SR5's "highest
         bonus wins" — then that one value is added to the total once per distinct `unique_name`.
+
+        **`context` (WP39) selects which conditional Improvements count.** An Improvement with
+        `condition=None` always counts, context or not. One with a condition counts only when
+        `context` satisfies it. Omitting `context` therefore resolves the plain, unconditional
+        value — byte-identical to this method's pre-WP39 behaviour for every existing call site,
+        none of which passes one. Condition filtering happens **before** the `unique_name` dedup
+        pass, so an inapplicable conditional Improvement can't win a dedup group it shouldn't be
+        competing in.
 
         Rejects `ImprovementType.ESSENCE` outright (WP30) rather than silently summing zeros: an
         `ESSENCE` improvement's real magnitude lives in `essence_value`, not `value` (see that
@@ -229,6 +384,8 @@ class ImprovementIndex:
         best_by_unique_name: dict[str, int] = {}
         total = 0
         for imp in self._index.get((improvement_type, target), ()):
+            if imp.condition is not None and not imp.condition.is_met(context):
+                continue
             if imp.unique_name is None:
                 total += imp.value
             else:
@@ -245,11 +402,22 @@ class ImprovementIndex:
         a player double-dipping on *bonuses*; an Essence cost is a plain sum of whatever cyberware/
         bioware was actually bought, confirmed against the legacy engine's own `Character.Essence()`
         -- see `spec/worklogs/WP30.md`). `unique_name` is therefore not consulted at all here.
+
+        Takes no `context` (WP39), because an Essence cost is not a per-test thing: whatever you had
+        implanted costs what it costs during every test alike. A conditional `ESSENCE` Improvement
+        raises rather than being silently counted or silently skipped — nothing produces one, and
+        the two ways of "handling" it quietly are both wrong.
         """
         total = Decimal(0)
         for imp in self._index.get((ImprovementType.ESSENCE, target), ()):
             assert imp.essence_value is not None, (
                 "ESSENCE improvement missing essence_value -- see Improvement's own docstring"
             )
+            if imp.condition is not None:
+                raise ValueError(
+                    f"ESSENCE improvement from {imp.source_type.name}/{imp.source_id} carries "
+                    f"condition {imp.condition.name}; Essence cost is unconditional by "
+                    f"construction (see ImprovementIndex.resolve_essence's docstring)"
+                )
             total += imp.essence_value
         return total

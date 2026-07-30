@@ -213,7 +213,7 @@ conversation's own request not to build placeholder UI that gets thrown away app
   session's WP33 research) confirming the resolved Capacity spend matches what the limb's own
   Capacity budget allows.
 
-- [ ] **WP39 — Conditional Improvements: a new engine primitive.**
+- [x] **WP39 — Conditional Improvements: a new engine primitive.**
   Goal: give `Improvement` (WP5) a real, typed condition mechanism — the one genuinely new,
   foundational engine primitive this phase needs, proven with synthetic data before any cyberware
   content uses it (mirrors WP5's own "prove in isolation" methodology, applied to itself).
@@ -240,9 +240,46 @@ conversation's own request not to build placeholder UI that gets thrown away app
   completely unaffected — `condition=None` must be a true no-op, zero behavioral drift for every
   character this engine builds today.
 
+  **Landed 2026-07-29**, entirely inside `chummer5.engine.improvements` (no other module touched),
+  with 12 tests appended to `tests/unit/test_improvements.py`. What WP40-42 need to know:
+  - **`Improvement.condition: ImprovementCondition | None = None`**, plus a new
+    `ResolutionContext` enum and a keyword-only `context` parameter on `ImprovementIndex.resolve`.
+    **Purely additive** — the signature change the WP entry anticipated turned out not to be
+    needed: `context=None` resolves the plain unconditional value, which is exactly what every
+    pre-WP39 call site already computed, so **zero call sites changed**. `condition=None` is a true
+    no-op; an unconditional Improvement counts in every resolution, with or without a context.
+  - **A `Condition` is an `Enum`** (not a closure, not a tagged union): `Improvement` must stay
+    `frozen`, hashable and value-comparable, which a closure breaks, and every confirmed real shape
+    is unparameterized. The condition is compiled at construction, never a string re-read at
+    resolve time.
+  - **A condition maps to a *set* of `ResolutionContext`s.** Forced by a fourth real bonus this
+    WP's own entry doesn't name: **Hydraulic Jacks** (Physical limit, "Only for Gymnastics
+    (Jumping) *and* Running (Sprinting)") — one condition, two unrelated activities. It is real
+    fixture content (`Barrett.chum5` has two), so WP40 should wire **four** items, not three.
+  - **No subsumption between conditions is modeled**, deliberately — Spatial Recognizer's "find the
+    source of a sound" does *not* satisfy a hearing-Perception resolution. See
+    `spec/rulebooks/learnings/phase-k.md`'s WP39 entry: the legacy engine never evaluates these
+    conditions at all (it displays the condition string as a player-applied note), so there is **no
+    oracle** for that call; making one is a fresh decision needing its own citation.
+  - Condition filtering runs **before** the `unique_name` dedup pass, so an inapplicable conditional
+    bonus can't win a dedup group it isn't competing in. `resolve_essence()` takes no context and
+    *raises* on a conditional `ESSENCE` improvement rather than silently counting or skipping it.
+  - The enum is `ResolutionContext`, not the more natural `TestContext`, only because pytest
+    collects any importable class named `Test*`. Don't rename it back.
+
 - [ ] **WP40 — Wire real conditional-bonus subsystem items.**
   Goal: reclassify Vision Enhancement, Audio Enhancement, and Spatial Recognizer from
   `NOT_YET_SUPPORTED`/excluded to real, condition-gated Improvements, using WP39's new primitive.
+
+  **Corrected by WP39 (2026-07-29): there are four such items, not three.** The fourth is
+  **Hydraulic Jacks** (`Cyberlimb Accessory`) — `<limitmodifier><limit>Physical</limit>
+  <value>Rating</value><condition>LimitCondition_CyberwareHydraulicJacks</condition>`, "Only for
+  Gymnastics (Jumping) and Running (Sprinting)". It targets `PHYSICAL_LIMIT` where the other three
+  target `MENTAL_LIMIT`, it is the reason WP39 models a condition as a *set* of contexts (one
+  condition, two activities), and it is real fixture content (`Barrett.chum5` carries two). All four
+  conditions already have an `ImprovementCondition` member and their English text is transcribed in
+  `spec/rulebooks/learnings/phase-k.md`'s WP39 entry — so the `pdftotext` pass this WP's deliverables
+  ask for is already done; re-confirm rather than re-derive.
   Deliverables:
   - Extend `chummer5.data.cyberware`'s bonus classifier with a new `BonusSupport` value for
     "conditional flat bonus." Confirm each item's exact condition semantics via `pdftotext -layout`
