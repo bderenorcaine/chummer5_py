@@ -529,3 +529,48 @@ entries name.** The fourth is Hydraulic Jacks ("Only for Gymnastics (Jumping) an
 (Sprinting)", a Physical rather than Mental limit modifier, present twice in `Barrett.chum5`). It is
 the reason an `ImprovementCondition` maps to a *set* of `ResolutionContext`s rather than to one.
 WP40's entry has been annotated accordingly.
+
+## 2026-07-30 — Phase K, WP38: the tree selection sits alongside the flat one (WP41 migrates);
+bundled subsystems are always auto-attached; cyberlimb attributes are an unmodeled mechanic
+
+Three findings from WP38 that reach past the WP that found them.
+
+**The purchase tree does not replace `CyberwareSelection` — WP41 does that.** WP38's plan entry
+called this out as "a real compatibility decision, not a mechanical rename," and the decision is:
+alongside. `chummer5.engine.cyberware.create_cyberware_selection` is typed on WP31's flat
+`Cyberware` all the way out through `io.save_format`, `io.legacy_import`, `web.routes.cyberware` and
+five test modules, while a tree node necessarily holds WP37's `CyberwareEntry` (a rating-scaled row
+has no single cost until a rating is chosen). Retyping every call site *and* introducing the nesting
+mechanic in one WP would bundle a mechanical migration into a rules change — the same split WP37
+already declined to make. **WP41 owns the migration**, which is natural since it has to touch
+save/load and legacy import anyway; `CyberwareTreeSelection` reuses
+`nuyen_budget`/`nuyen_spent`/`essence_spent` verbatim so the swap stays mechanical. Consequence worth
+stating explicitly: until WP41, a `Character` has no field for a tree selection at all, so the
+"two selection shapes both charging Essence" hazard cannot arise by accident.
+
+**Bundled subsystems (`<subsystems>`) are always auto-attached and free, and bundling bypasses every
+eligibility check.** WP38's entry asked for the fixture check before choosing between
+"always-auto-attached (simpler)" and "a skippable choice." Checked: **8 of 8** `<subsystems>`-bearing
+purchases across all 34 `.chum5` fixtures carry their bundled child (5 Cybereyes Basic System, 2
+Cyberears, 1 Control Rig), never skipped — so always-attached it is. "Free" means all three
+currencies: 0 nuyen (legacy `Cyberware.Create` forces `objSubsystem.Cost = "0"`, and every fixture
+stores `<cost>0` for a bundled item), 0 Essence (any child contributes zero), 0 Capacity. The
+bypass matters beyond tidiness: `Control Rig` → `Datajack` satisfies *none* of the three eligibility
+tests a normal plugin must pass (no `<allowsubsystems>` on the parent, wrong category, and a bare
+rather than bracketed `<capacity>`), so treating a bundled item as an ordinary plugin would reject
+real fixture content. An explicit request for a bundled name resolves to the same free node instead
+of erroring, so WP41's legacy import needs no special case for `<children>` listing `Image Link`.
+
+**Cyberlimb attributes are a mechanic this engine has no representation of, and WP38 makes four
+items purchasable on that basis.** `Customized Agility`, `Customized Strength`, `Enhanced Agility`
+and `Enhanced Strength` carry **no `<bonus>` element at all** — their real effect is a *per-limb*
+STR/AGI attribute ("Physical attribute enhancements add their Rating to the appropriate attribute of
+the limb," p. 456; "All standard cyberlimbs come with Strength and Agility attributes of 3"), which
+the legacy engine models as a whole parallel attribute system per limb and this project does not
+model anywhere. Offered anyway, correctly priced in nuyen and Capacity, per the 2026-07-24 policy:
+every *computable* chargen-time effect is applied in full, the unmodeled part is recorded in the
+Project Overview's "Unmodeled real effects" registry. Flagged here rather than only in the registry
+because a future cyberlimb-attribute WP would need to revisit both this and the `Cyberlimb`
+condition-monitor bonus WP31 already models, and because it is the first *cyberware* content to enter
+that registry — WP31/34's `NOT_YET_SUPPORTED` items (e.g. Smartlink) are still unregistered, which
+is a gap someone should close.

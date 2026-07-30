@@ -176,6 +176,8 @@ Implementation Plan for the first WP built under the new policy.
 | Social Stress | Quality (Negative) | Karma credit + chosen cause/trigger detail (free text) | Reduces the number of 1s required to glitch a Leadership/Etiquette test by 1 (p. 85) — no test-resolution/glitch system exists | WP55 |
 | Natural Immunity (Natural) | Quality (Positive) | Karma cost + chosen disease/toxin detail (free text) | Full immunity to one chosen disease or toxin (p. 76) — no toxin/pathogen resistance subsystem exists (the same bucket Allergy's 8 SR5 variants are already in) | WP55 |
 | Natural Immunity (Synthetic) | Quality (Positive) | Karma cost + chosen disease/toxin detail (free text) | Same as Natural, at the higher (synthetic) tier, p. 76 | WP55 |
+| Customized Agility / Customized Strength | Cyberware (Cyberlimb Enhancement); installable only into a cyberlimb | Nuyen cost (`(Rating - MinRating + 1) x 5,000¥`), zero Capacity cost, purchasable range capped at the character's natural maximum for that attribute | Raises the *limb's own* Strength/Agility above its base of 3 (p. 456) — cyberlimbs have a whole parallel per-limb attribute system this engine has no representation of, so nothing downstream (limb-specific tests, unarmed Damage Value) reads it | WP38 |
+| Enhanced Agility / Enhanced Strength | Cyberware (Cyberlimb Enhancement); installable only into a cyberlimb | Nuyen cost (`Rating x 6,500¥`) and Capacity cost (`Rating`) | Adds its Rating to the limb's Agility/Strength (p. 456) — same unmodeled per-limb attribute system as Customization above; carries no `<bonus>` element at all in the source data | WP38 |
 
 ## Architecture & major design decisions
 

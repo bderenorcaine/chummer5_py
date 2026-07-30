@@ -185,7 +185,7 @@ conversation's own request not to build placeholder UI that gets thrown away app
     `<limit>` (limb-count mechanic), `<allowgear>` (25 rows can hold gear children), `<selectside>`,
     `<pairbonus>`/`<pairinclude>`, `<required>`/`<forbidden>`, `<addweapon>`, `<avail>`.
 
-- [ ] **WP38 — Purchase tree & Capacity budget validation.**
+- [x] **WP38 — Purchase tree & Capacity budget validation.**
   Goal: let a cyberware purchase actually nest — a limb with plugins installed into it, validated
   against the parent's resolved Capacity budget.
   Deliverables:
@@ -212,6 +212,53 @@ conversation's own request not to build placeholder UI that gets thrown away app
   `Customized Agility` + `Enhanced Agility` + `Cyberlimb Optimization`, already dumped during this
   session's WP33 research) confirming the resolved Capacity spend matches what the limb's own
   Capacity budget allows.
+
+  **Landed 2026-07-30** as `chummer5.engine.cyberware_subsystems` (a new module, mirroring WP37's
+  data-layer sibling exactly — `data.cyberware`↔`engine.cyberware` is the WP31/32 flat pair,
+  `data.cyberware_subsystems`↔`engine.cyberware_subsystems` the WP37/38 tree pair), with 30 tests in
+  `tests/unit/test_cyberware_tree.py` and 6 in `tests/integration/test_cyberware_tree_fixtures.py`.
+  Public API: `CyberwarePurchaseRequest` (nested request: item id + rating + plugin requests),
+  `create_cyberware_tree_selection(requests, catalog, nuyen_budget, *, attribute_maximums=None,
+  other_essence_spent=Decimal(0)) -> CyberwareTreeSelection`, `PurchasedCyberware` (validated node),
+  `Installation`, and `cyberlimb_attribute_maximums(character)`. What WP40-42 need to know:
+  - **It sits alongside `CyberwareSelection`, it does not replace it** — the compatibility decision
+    the entry above flagged as real. `create_cyberware_selection` is typed on WP31's `Cyberware` out
+    through `io.save_format`, `io.legacy_import`, `web.routes.cyberware` and five test modules; a
+    tree node needs WP37's `CyberwareEntry`. **WP41 owns that call-site migration** (it has to touch
+    save/load and legacy import anyway). `CyberwareTreeSelection` deliberately reuses
+    `nuyen_budget`/`nuyen_spent`/`essence_spent` verbatim so the swap is mechanical.
+  - **Nothing consumes this module yet, deliberately** — no `Character` field, no Improvements, no
+    UI, exactly as WP36/WP37 added no behaviour. A `Character` must never carry both selection
+    shapes; today there is no field for this one, so it can't happen by accident.
+  - **Dual costing confirmed from three directions, not just the p. 29103 citation the entry names.**
+    The sharpest is p. 456's Bodyware narrative — "Bodyware cannot be installed into cyberlimbs
+    unless it has a Capacity cost [in brackets]. Bodyware with a Capacity cost can be installed in
+    cyberlimbs, **costing capacity rather than Essence**" — plus legacy `Cyberware.cs`'s
+    `GetCalculatedESSPrototypeInvariantCoreAsync`, whose first line is `if (Parent != null &&
+    !AddToParentESS) return 0;`. Nuyen *is* charged either way (same file: "Add in the cost of all
+    child components"). So a plugin charges Capacity + nuyen and **zero** Essence.
+  - **`[*]` bundled items are always auto-attached, and free in all three currencies.** The fixture
+    check the entry asked for: 8 of 8 `<subsystems>`-bearing purchases across all 34 `.chum5` files
+    carry their bundled child (5 Cybereyes, 2 Cyberears, 1 Control Rig) — never skipped, so the
+    simpler always-attached model is the right one. Free is from legacy `Cyberware.Create`'s
+    `objSubsystem.Cost = "0"`, corroborated by every fixture storing `<cost>0` for a bundled item.
+    An *explicit* request for a bundled name resolves to the same free node rather than erroring,
+    so WP41's legacy import (whose `<children>` does list `Image Link`) needs no special case.
+    Bundled auto-attach bypasses the parent-eligibility/category/Capacity-price checks entirely —
+    forced by Control Rig → Datajack, which satisfies none of the three.
+  - **Two validation rules beyond the entry's deliverable list, both from p. 456.** A limb holds at
+    most one `Cyberlimb Enhancement` of each type ("you can't stack two Strength 3 enhancements in
+    the same cyberarm"), and a customization may not exceed the character's natural maximum for that
+    attribute ("you can't use the cyberlimb (so don't overdo it)") — which is what
+    `{AGIMaximum}`/`{STRMaximum}` resolve to. `{AGIMinimum}`/`{STRMinimum}` resolve to the *limb's*
+    floor of 3 (`CYBERLIMB_BASE_ATTRIBUTE`), not the character's, so `{AGIMinimum}+1` is 4.
+  - **The third nesting level is cut, as ruled.** A plugin holding a plugin raises, naming the
+    Cyber Implant Weapon Accessory fold-into-parent mechanic. A cyber implant weapon itself installs
+    into a limb normally.
+  - **`Customized`/`Enhanced Agility`/`Strength` are purchasable and correctly priced but
+    mechanically inert** — they carry no `<bonus>` at all; their real effect is a *per-limb* STR/AGI
+    attribute this engine has no representation of. Registered in the Project Overview's "Unmodeled
+    real effects" table rather than silently dropped.
 
 - [x] **WP39 — Conditional Improvements: a new engine primitive.**
   Goal: give `Improvement` (WP5) a real, typed condition mechanism — the one genuinely new,
