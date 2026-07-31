@@ -657,7 +657,14 @@ extends that to every rating-scaled `NOT_YET_SUPPORTED` row too (e.g. `Wired Ref
 importable, whose Initiative/Reaction bonus this engine does not model). Not fixed here — it is a
 registry backfill spanning WP31/34's own content, not something WP41 introduced — but it is now
 larger than when it was first flagged, and it should be closed before WP42 puts a wider catalog in
-front of a player.
+front of a player. **Scoped the same day as Phase K's WP77** (the registry backfill) **and WP78**
+(the part that turned out not to be a registry problem at all) — an audit run while writing those
+found that of the 15 `NOT_YET_SUPPORTED` augmentation rows, 5 have a `<bonus>` this engine *can*
+compute (attribute, Initiative Dice and skill bonuses on `Reaction Enhancers`, `Wired Reflexes`,
+`Muscle Replacement`, `Voice Modulator`, and the bioware `Reflex Recorder`). Those 5 are a
+departure from the 2026-07-24 "model it in full or exclude it" policy rather than an acceptable
+documented gap, and one of them (`Reflex Recorder`) is offered by the shipped UI today. See
+`spec/plan/phase-k-cyberware-mods.md` for the full per-row split.
 
 **A nested Bioware entry is refused rather than half-costed.** Real SR5 allows Capacity-priced
 bodyware inside a cyberlimb (p. 456's "Bodyware with a Capacity cost can be installed in cyberlimbs,

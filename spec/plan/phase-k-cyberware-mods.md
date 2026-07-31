@@ -429,6 +429,112 @@ conversation's own request not to build placeholder UI that gets thrown away app
     unmodeled and is absent from the Project Overview's "Unmodeled real effects" registry. WP41 did
     not backfill it; see `spec/decisions-log.md`, 2026-07-31.
 
+**WP77 and WP78 are numbered after WP42 but sequenced *before* it** — they were claimed on
+2026-07-31, once WP41 had already been written. WP41's own follow-up is why: WP42 is the WP that
+puts the widest augmentation catalog this project has ever offered in front of a player, and it
+should not do that while 15 rows in that catalog are purchasable, priced, and mechanically silent
+with no record of the fact. See the two entries' own "Depends on" lines for the exact ordering.
+
+- [ ] **WP77 — Augmentation `<bonus>` coverage audit + "Unmodeled real effects" backfill.**
+  Goal: close the gap WP38's worklog first flagged and WP41's widening made larger — every
+  `BonusSupport.NOT_YET_SUPPORTED` cyberware/bioware row is offered for purchase, charged in full,
+  and grants *nothing*, and none of them appears in the Project Overview's "Unmodeled real effects"
+  registry. That registry is the project's one place to look up "what does this offered aspect
+  actually not do," and augmentation content has never been entered in it. **Documentation and
+  classification only — no engine or catalog change** (see WP78 for the half that needs code).
+
+  **This session's audit, to be re-confirmed rather than re-derived** (run over all 87 SR5
+  `cyberware.xml` rows via `load_cyberware_entries()` plus all 6 `load_bioware()` rows; the counts
+  below are exact as of 2026-07-31 but a WP that trusts them without re-running the classifier is
+  doing it wrong). **15 rows classify as `NOT_YET_SUPPORTED`: 14 cyberware + 1 bioware.** They split
+  into two genuinely different buckets, and the whole point of this WP is that they are *not* one
+  bucket:
+
+  **Bucket B — genuinely outside this engine's scope. These 10 are this WP's registry rows:**
+  | Row | In WP31's flat 60 (offered today)? | `<bonus>` | Why unmodeled |
+  |---|---|---|---|
+  | Bone Lacing (Plastic / Aluminum / Titanium) | **yes**, all 3 | `<armor>`, `<damageresistance>`, `<unarmeddv>` | no character-level Armor total, no damage-resistance or unarmed-combat system |
+  | Smartlink | **yes** | `<smartlink>2` | +2 dice on ranged attacks — no test resolution, no wireless state |
+  | Damper | **yes** | `<sonicresist>2` | no sonic/damage-resistance subsystem |
+  | Dermal Plating | no | `<armor>Rating` | same as Bone Lacing's armor half |
+  | Armor (Cyberlimb Enhancement) | no | `<armor>Rating` | same |
+  | Internal Air Tank | no | `<toxininhalationimmune/>`, `<pathogeninhalationimmune/>` | the same toxin/pathogen bucket Natural Immunity and Resistance to Pathogens/Toxins are already registered in |
+  | Skillwires | no | `<skillwire>Rating` | no skillsoft subsystem |
+  | Skilljack | no | `<skillsoftaccess>Rating` | no skillsoft subsystem |
+
+  **Bucket A — computable by this engine today, and therefore *not* registry material.** Each of
+  these 5 has a `<bonus>` whose effect maps onto an `ImprovementType` that already exists
+  (`ATTRIBUTE`, `SKILL`, `INITIATIVE_DICE`), so under the Project Overview's 2026-07-24 policy —
+  "every *computed, chargen-time* effect … must be modeled in full, or the aspect stays excluded" —
+  registering them would be the wrong remedy. They are a **live policy violation**, not an accepted
+  gap. This WP's job is to *name* them as one and hand them to WP78, not to fix or exclude them:
+  | Row | Offered today? | `<bonus>` | Maps to |
+  |---|---|---|---|
+  | Reaction Enhancers | via legacy import only (WP41) | `<specificattribute>` REA +Rating | `ImprovementType.ATTRIBUTE` |
+  | Wired Reflexes | via legacy import only | REA +Rating **and** `<initiativepass>Rating` | `ATTRIBUTE` + `INITIATIVE_DICE` |
+  | Muscle Replacement | via legacy import only | AGI +Rating and STR +Rating | `ATTRIBUTE` |
+  | Voice Modulator | via legacy import only | `<specificskill>` Impersonation +Rating | `SKILL` |
+  | **Reflex Recorder** (bioware) | **yes — in the shipped UI since WP45** | `<selectskill limittoattribute="BOD,AGI,REA,STR">` +1 | `SKILL`, plus a player choice |
+
+  Deliverables:
+  - Re-run the classification over both catalogs; confirm (or correct, and say so) the 15/10/5 split
+    and the per-row table above. Treat a mismatch as the finding, not as a reason to stop.
+  - Add the 10 Bucket B rows to the Project Overview's "Unmodeled real effects" table, in that
+    table's existing column shape, sourced `WP77`. Note in the `Kind` column which are offered by
+    today's UI (5) versus reachable only through WP41's legacy import (5) — a player-visible gap and
+    an import-only one are not the same severity, and the registry currently has no way to tell them
+    apart for any aspect.
+  - **Re-confirm each Bucket B "why unmodeled" against the code before writing it down**, rather than
+    trusting this table. The armor rows are the one to be careful with: `chummer5.engine.resources
+    .StarterGearItem.armor_rating` *does* exist (WP21), so "no armor at all" is wrong — what's
+    missing is a character-level Armor total for anything to add to. Get that sentence right.
+  - Record the Bucket A finding in `spec/decisions-log.md` as a dated entry: these 5 are offered and
+    inert, that is a departure from the 2026-07-24 policy, WP78 is the fix, and they are deliberately
+    **not** being excluded in the meantime (excluding `Reflex Recorder` would remove shipped
+    functionality and break `Barrett.chum5`'s import positive case on the way to fixing it properly).
+  Depends on: nothing new. **Should land before WP42.**
+  Acceptance: the registry gains 10 rows; a test (or a documented one-off check — decide which, and
+  say why) that pins "every `NOT_YET_SUPPORTED` augmentation row is either in the registry or named
+  in WP78's scope," so this can't silently regrow the next time a catalog widens. No behavioural
+  change: `pytest` count and every existing assertion unchanged.
+
+- [ ] **WP78 — Model the computable augmentation bonuses.**
+  Goal: fix WP77's Bucket A — make the 5 rows whose real SR5 effect this engine *can* compute
+  actually compute it, so they stop being offered-but-inert. This is the first time the augmentation
+  `<bonus>` grammar grows since WP31 defined it, and it is deliberately its own WP for the same
+  reason WP39 was: it changes a shared classifier both cyberware catalogs and (partly) the bioware
+  one read, so it gets proven against synthetic data before real content depends on it.
+  Deliverables:
+  - Extend `chummer5.data.cyberware.classify_bonus`'s whitelist with the confirmed shapes:
+    `<specificattribute>` (name + `Rating`-or-literal value), `<initiativepass>`, `<specificskill>`
+    (name + value). Keep the "classify known, named shapes" posture — a whitelist, not a general
+    `<bonus>` interpreter (WP22/WP25/WP27/WP36's shared precedent).
+  - `CyberwareFlatBonus` carries `target_kind` + `value` and every producer passes `_GLOBAL_TARGET`
+    today, because every modeled bonus so far has been a single character-wide total. An attribute or
+    skill bonus needs a **real target** (`"REA"`, a skill id). Decide & document whether that is a new
+    field on `CyberwareFlatBonus` or a sibling type, and how a skill *name* in the XML resolves to a
+    skill id (`Impersonation` is an SR5 active skill — confirm).
+  - Wire them through `chummer5.engine.cyberware.cyberware_bonus_improvements`, which both the flat
+    and tree appliers already share, so neither path needs its own change.
+  - **`<disablequality>` is deliberately out of scope** — `Wired Reflexes` and `Muscle Replacement`
+    both carry one, and neither target is in the SR5 quality catalog (`Celerity` is not; the other is
+    a raw guid — resolve it and confirm before relying on this). If either turns out to name a real
+    SR5 quality, it does *not* get half-modeled: register it in the "Unmodeled real effects" table
+    the way WP77 registered Bucket B, and say so.
+  - **`Reflex Recorder`'s `<selectskill>` is a player choice, and is the one row that may not fit
+    this WP.** It needs a chosen skill persisted (`CharacterSave`), re-validated on load, and picked
+    in the UI — structurally the same problem WP55 solved for `SELECT_TEXT` qualities, and a real
+    increment on top of the other four. Decide early whether it belongs here or as its own WP, and
+    record the decision either way rather than letting it quietly determine the WP's size.
+  Depends on: WP77 (its audit is this WP's input).
+  Acceptance: unit tests, synthetic data first, that a `Reaction Enhancers` purchase raises REA (and
+  through it Initiative and the Physical limit, which is the point), that `Wired Reflexes` raises
+  both REA and Initiative Dice, and that `Voice Modulator` raises exactly the Impersonation dice pool
+  and no other skill's; hand-checked against pp. 452-455's own printed entries. Plus an integration
+  check against a real fixture that owns one (`Reaction Enhancers`: `BLUE`, `Mittens Chargen`,
+  `SCSi`; `Wired Reflexes`: `Fuzzy-chargen`, `SCSi`), and an explicit test that every row this WP
+  reclassifies has been removed from WP77's registry rows or was never in them.
+
 - [ ] **WP42 — Cyberware modification/subsystem UI.**
   Goal: expose subsystem/plugin purchase through the browser. Deliberately last, and deliberately
   out of scope until WP36-41 are solid — this project's own "rules engine first, UI last" principle,
