@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     # `dataclasses.dataclass` never needs these names to actually resolve at import time.
     from chummer5.data.traditions import Tradition
     from chummer5.engine.bioware import BiowareSelection
-    from chummer5.engine.cyberware import CyberwareSelection
+    from chummer5.engine.cyberware_subsystems import CyberwareTreeSelection
     from chummer5.engine.foci import FociSelection
     from chummer5.engine.knowledge import KarmaKnowledgeSelection, KnowledgeSelection
     from chummer5.engine.lifestyle import LifestyleSelection
@@ -250,10 +250,15 @@ class Character:
     roster + Power Point spend, the same "selection is a record, Improvements are a side effect of
     applying it" split every prior selection type already has.
 
-    **WP32** adds `cyberware_selection: CyberwareSelection | None` -- purchased cyberware, the same
-    "`None` until committed" wrapping-field shape as `power_selection` (nothing reads it piecemeal;
-    every effect -- Essence cost, and any `FLAT_BONUS` -- reaches `improvements` via
-    `chummer5.engine.cyberware.apply_cyberware_improvements`, not via a field read directly).
+    **WP32** adds `cyberware_selection` -- purchased cyberware, the same "`None` until committed"
+    wrapping-field shape as `power_selection` (nothing reads it piecemeal; every effect -- Essence
+    cost, and any `<bonus>` -- reaches `improvements` via an `apply_*_improvements` call, not via a
+    field read directly). **WP41** retypes it from WP32's flat `CyberwareSelection` to Phase K's
+    `chummer5.engine.cyberware_subsystems.CyberwareTreeSelection`: a purchase is a *tree* now (a
+    cyberlimb/cybereye/cyberear holding plugins that charge its Capacity instead of the character's
+    Essence), and a `Character` carries exactly one cyberware shape -- WP38 deliberately added no
+    field for the tree so that "a character holding both, each charging Essence" could never arise
+    while the two coexisted. A flat purchase is simply a zero-plugin tree.
 
     **WP45** adds `bioware_selection: BiowareSelection | None` -- purchased bioware, the identical
     "`None` until committed" wrapping-field shape as `cyberware_selection` (same reasons: nothing
@@ -357,7 +362,8 @@ class Character:
     magic_granted_skill_ids: tuple[str, ...] = ()  # the Talent free-skill grant's picks (WP25)
     spell_selection: SpellSelection | None = None  # Magician's chosen spells (WP26)
     power_selection: PowerSelection | None = None  # Adept's purchased Powers (WP27)
-    cyberware_selection: CyberwareSelection | None = None  # purchased cyberware (WP32)
+    # WP32, retyped to the WP38 purchase tree in WP41 -- see class docstring.
+    cyberware_selection: CyberwareTreeSelection | None = None
     bioware_selection: BiowareSelection | None = None  # purchased bioware (WP45)
     # Special Attribute Points spent raising MAG beyond magic_rating (post-WP29 correction; see
     # class docstring's own paragraph and chummer5.engine.magic.create_magic_attribute_points).

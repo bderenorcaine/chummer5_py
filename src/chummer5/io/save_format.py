@@ -62,17 +62,32 @@ MAG beyond `talent_codename`'s starting rating, a real, rulebook-confirmed mecha
 correction and `spec/rulebooks/learnings.md`. Defaults to `0`, the same "predates this field"
 shape every other magic field above defaults to Mundane.
 
-**WP33** adds `cyberware_item_ids` -- purchased `chummer5.data.cyberware.Cyberware` ids, the same
-"selection, not derived value" shape every prior field already has. Defaults to `()` ("predates
-this field", the same shape every WP28 magic field defaults to), so every save written before this
-WP (which never had cyberware to lose) round-trips unchanged. `build_character` validates it
-against WP32's `create_cyberware_selection`, using `resources_selection.nuyen_remaining` (gear +
-Lifestyle already subtracted) as the shared nuyen budget cyberware draws from -- see
-`chummer5.engine.cyberware`'s own docstring for why this is one shared Step Six pool, not a separate
-one. **WP34** (the cyberware UI) additionally folds `cyberware_selection.nuyen_spent` back into the
-`resources_selection` this function returns, via a second `create_resources_selection` call once
-cyberware is resolved -- see this function's own inline comment for why that re-call always
-succeeds.
+**WP33** adds a purchased-cyberware field, the same "selection, not derived value" shape every
+prior field already has. Defaults to empty ("predates this field", the same shape every WP28 magic
+field defaults to), so every save written before that WP (which never had cyberware to lose)
+round-trips unchanged. `build_character` validates it using `resources_selection.nuyen_remaining`
+(gear + Lifestyle already subtracted) as the shared nuyen budget cyberware draws from -- one shared
+Step Six pool, not a separate one. **WP34** (the cyberware UI) additionally folds
+`cyberware_selection.nuyen_spent` back into the `resources_selection` this function returns, via a
+second `create_resources_selection` call once cyberware is resolved -- see this function's own
+inline comment for why that re-call always succeeds.
+
+**WP41** replaces WP33's flat `cyberware_item_ids: tuple[str, ...]` with `cyberware_purchases:
+tuple[CyberwarePurchaseRequest, ...]` -- Phase K's purchase *tree*, so a saved cybereye can carry
+the Vision Enhancement installed into it instead of losing it. `CyberwarePurchaseRequest`
+(`chummer5.engine.cyberware_subsystems`) is reused directly rather than copied into a
+save-format-local mirror, for exactly the reason `Contact` already is: it is a plain, frozen,
+JSON-shaped (`str`/`int`/nested-tuple) dataclass with no engine state in it, and it is *already*
+the shape `create_cyberware_tree_selection` takes, so persisting anything else would mean
+translating twice.
+
+**A pre-WP41 save still loads**, and this is the one field whose backward compatibility isn't just
+a default: `_dict_to_save` reads `"cyberware_purchases"` when present and otherwise falls back to
+`"cyberware_item_ids"`, mapping each id to a zero-plugin, rating-1 request. That mapping is exact,
+not approximate -- the two catalogs are the same `cyberware.xml` rows read twice, so WP31's ids are
+a subset of WP37's (verified), and every WP31 row is unrated, whose only legal rating is 1. Writing
+only ever emits the new key; `FORMAT_VERSION` is unchanged, since a reader that understands both
+keys is not a schema break.
 
 **WP43** adds `karma_converted` -- however much Karma the player converted to nuyen at Step Six
 (core rulebook p. 94), the same "selection, not derived value" shape every prior field has.
@@ -205,7 +220,7 @@ from types import MappingProxyType
 from typing import Any
 
 from chummer5.data.bioware import Bioware
-from chummer5.data.cyberware import Cyberware
+from chummer5.data.cyberware_subsystems import CyberwareEntry
 from chummer5.data.foci import Focus
 from chummer5.data.lifestyle import LifestyleTier
 from chummer5.data.mentors import MentorSpiritArchetype
@@ -224,7 +239,12 @@ from chummer5.engine.character import (
     create_karma_attribute_points,
     metatype_choices,
 )
-from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
+from chummer5.engine.cyberware_subsystems import (
+    CyberwarePurchaseRequest,
+    apply_cyberware_tree_improvements,
+    create_cyberware_tree_selection,
+    cyberlimb_attribute_maximums,
+)
 from chummer5.engine.foci import apply_foci_improvements, create_foci_selection
 from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.knowledge import (
@@ -331,9 +351,9 @@ class CharacterSave:
     # .create_magic_attribute_points). Defaults to 0 for the same "predates this field" reason
     # every other WP28 magic field defaults to Mundane.
     magic_attribute_points: int = 0
-    # WP33: purchased cyberware ids (chummer5.data.cyberware.Cyberware.id). Defaults to () --
-    # "predates this field", the same shape every WP28 magic field defaults to.
-    cyberware_item_ids: tuple[str, ...] = ()
+    # WP33, retyped from a flat id list to WP38's purchase tree in WP41 (see module docstring).
+    # Defaults to () -- "predates this field", the same shape every WP28 magic field defaults to.
+    cyberware_purchases: tuple[CyberwarePurchaseRequest, ...] = ()
     # WP45: purchased bioware ids (chummer5.data.bioware.Bioware.id). Defaults to () -- "predates
     # this field", the identical shape cyberware_item_ids already has.
     bioware_item_ids: tuple[str, ...] = ()
@@ -412,7 +432,7 @@ def create_character_save(
     spell_ids: Iterable[str] = (),
     power_picks: Iterable[PowerPickTriple] = (),
     magic_attribute_points: int = 0,
-    cyberware_item_ids: Iterable[str] = (),
+    cyberware_purchases: Iterable[CyberwarePurchaseRequest] = (),
     bioware_item_ids: Iterable[str] = (),
     karma_converted: int = 0,
     bound_spirit_picks: Iterable[BoundSpiritPickTriple] = (),
@@ -460,7 +480,7 @@ def create_character_save(
         spell_ids=tuple(spell_ids),
         power_picks=tuple(power_picks),
         magic_attribute_points=magic_attribute_points,
-        cyberware_item_ids=tuple(cyberware_item_ids),
+        cyberware_purchases=tuple(cyberware_purchases),
         bioware_item_ids=tuple(bioware_item_ids),
         karma_converted=karma_converted,
         bound_spirit_picks=tuple(bound_spirit_picks),
@@ -478,6 +498,43 @@ def create_character_save(
         karma_knowledge_points=MappingProxyType(dict(karma_knowledge_points)),
         quality_text=MappingProxyType(dict(quality_text)),
         rating_gear_picks=tuple(rating_gear_picks),
+    )
+
+
+def _purchase_to_dict(purchase: CyberwarePurchaseRequest) -> dict[str, Any]:
+    """One cyberware purchase-tree node as JSON (WP41), recursing into its plugins.
+
+    Written unconditionally with all three keys, even for the overwhelmingly common zero-plugin,
+    rating-1 leaf, so a save file reads the same way at every node -- this format has never
+    optimized for byte count (`indent=2`), and an omitted key would make "rating not stated" and
+    "rating 1" indistinguishable to a human reading the file.
+    """
+    return {
+        "item_id": purchase.item_id,
+        "rating": purchase.rating,
+        "plugins": [_purchase_to_dict(plugin) for plugin in purchase.plugins],
+    }
+
+
+def _purchase_from_dict(data: Mapping[str, Any]) -> CyberwarePurchaseRequest:
+    return CyberwarePurchaseRequest(
+        item_id=data["item_id"],
+        rating=data.get("rating", 1),
+        plugins=tuple(_purchase_from_dict(p) for p in data.get("plugins", ())),
+    )
+
+
+def _purchases_from_dict(data: Mapping[str, Any]) -> tuple[CyberwarePurchaseRequest, ...]:
+    """Read WP41's `cyberware_purchases`, falling back to WP33's flat `cyberware_item_ids`.
+
+    See the module docstring for why that fallback is exact rather than lossy: every WP33-era id is
+    also a WP37 catalog id, and every WP31 row is unrated (so rating 1 is its only legal value).
+    """
+    if "cyberware_purchases" in data:
+        return tuple(_purchase_from_dict(p) for p in data["cyberware_purchases"])
+    return tuple(
+        CyberwarePurchaseRequest(item_id=item_id)
+        for item_id in data.get("cyberware_item_ids", ())
     )
 
 
@@ -515,7 +572,9 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
             for power_id, rating, selected_attribute in save.power_picks
         ],
         "magic_attribute_points": save.magic_attribute_points,
-        "cyberware_item_ids": list(save.cyberware_item_ids),
+        "cyberware_purchases": [
+            _purchase_to_dict(purchase) for purchase in save.cyberware_purchases
+        ],
         "bioware_item_ids": list(save.bioware_item_ids),
         "karma_converted": save.karma_converted,
         "bound_spirit_picks": [
@@ -591,7 +650,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
             for p in data.get("power_picks", ())
         ),
         magic_attribute_points=data.get("magic_attribute_points", 0),
-        cyberware_item_ids=data.get("cyberware_item_ids", ()),
+        cyberware_purchases=_purchases_from_dict(data),
         bioware_item_ids=data.get("bioware_item_ids", ()),
         karma_converted=data.get("karma_converted", 0),
         bound_spirit_picks=(
@@ -641,7 +700,7 @@ def build_character(
     traditions: tuple[Tradition, ...] = (),
     spells: tuple[Spell, ...] = (),
     powers: tuple[Power, ...] = (),
-    cyberware: tuple[Cyberware, ...] = (),
+    cyberware: tuple[CyberwareEntry, ...] = (),
     bioware: tuple[Bioware, ...] = (),
     foci: tuple[Focus, ...] = (),
     mentors: tuple[MentorSpiritArchetype, ...] = (),
@@ -669,7 +728,10 @@ def build_character(
     only Mundane characters (every existing call site, until WP29) has nothing new to pass.
 
     **WP33**: `cyberware` defaults to `()` for the same reason -- a save with no
-    `cyberware_item_ids` (every pre-WP33 save) never resolves against it.
+    `cyberware_purchases` (every pre-WP33 save) never resolves against it. **WP41** retypes it to
+    WP37's wider `CyberwareEntry` catalog (`chummer5.data.cyberware_subsystems
+    .load_cyberware_entries()`, all 87 SR5 rows), since a purchase tree's nodes are
+    `CyberwareEntry`s -- passing WP31's 60-row flat catalog here no longer type-checks.
 
     **WP45**: `bioware` defaults to `()` for the same reason -- a save with no `bioware_item_ids`
     (every pre-WP45 save) never resolves against it. Resolved *after* cyberware (a fixed evaluation
@@ -784,11 +846,18 @@ def build_character(
 
     # WP33: cyberware draws from the same shared Step Six nuyen pool gear/Lifestyle already spent
     # out of `resources_selection.nuyen_budget` -- `nuyen_remaining` is exactly what's left (see
-    # chummer5.engine.cyberware's own docstring for the confirmed-shared-budget citation).
-    cyberware_selection = create_cyberware_selection(
-        save.cyberware_item_ids, cyberware, resources_selection.nuyen_remaining
+    # chummer5.engine.cyberware_subsystems' own docstring for the confirmed-shared-budget citation).
+    # WP41: built as a purchase tree. `attribute_maximums` is what `{AGIMaximum}`/`{STRMaximum}`
+    # rating bounds resolve against (Customized Agility/Strength only) -- `character` already
+    # carries its metatype's ranges at this point, and passing them unconditionally means a save
+    # carrying one of those two items validates the same way a live chargen session does.
+    cyberware_selection = create_cyberware_tree_selection(
+        save.cyberware_purchases,
+        cyberware,
+        resources_selection.nuyen_remaining,
+        attribute_maximums=cyberlimb_attribute_maximums(character),
     )
-    apply_cyberware_improvements(character, cyberware_selection)
+    apply_cyberware_tree_improvements(character, cyberware_selection)
 
     # WP45: bioware is resolved second (a fixed evaluation order -- see chummer5.engine.bioware's
     # own docstring), against whatever nuyen cyberware left over and cyberware's own essence_spent

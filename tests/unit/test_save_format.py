@@ -13,7 +13,7 @@ from decimal import Decimal
 import pytest
 
 from chummer5.data.bioware import load_bioware
-from chummer5.data.cyberware import load_cyberware
+from chummer5.data.cyberware_subsystems import load_cyberware_entries
 from chummer5.data.foci import load_foci
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.mentors import load_mentors
@@ -25,6 +25,7 @@ from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD, SUM_TO_TEN_BUILD_METHOD
+from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
 from chummer5.engine.derived import essence
 from chummer5.engine.resources import Contact
 from chummer5.io.save_format import (
@@ -44,7 +45,7 @@ LIFESTYLES = load_lifestyles()
 TRADITIONS = load_traditions()
 SPELLS = load_spells()
 POWERS = load_powers()
-CYBERWARE = load_cyberware()
+CYBERWARE = load_cyberware_entries()
 BIOWARE = load_bioware()
 FOCI = load_foci()
 MENTORS = load_mentors()
@@ -270,7 +271,7 @@ def test_build_character_rejects_magic_attribute_points_exceeding_the_shared_bud
         )
 
 
-def test_json_round_trip_preserves_cyberware_item_ids() -> None:
+def test_json_round_trip_preserves_cyberware_purchases() -> None:
     save = create_character_save(
         metatype_name="Human",
         heritage_letter="D",
@@ -285,16 +286,65 @@ def test_json_round_trip_preserves_cyberware_item_ids() -> None:
         gear_names=(),
         lifestyle_tier_name="Street",
         lifestyle_months=1,
-        cyberware_item_ids=("cyber-datajack", "cyber-datajack"),
+        cyberware_purchases=(
+            CyberwarePurchaseRequest(item_id="cyber-datajack"),
+            CyberwarePurchaseRequest(item_id="cyber-datajack"),
+            CyberwarePurchaseRequest(
+                item_id="cyber-cybereyes",
+                rating=3,
+                plugins=(CyberwarePurchaseRequest(item_id="cyber-vision-enh", rating=2),),
+            ),
+        ),
     )
     assert from_json(to_json(save)) == save
-    assert json.loads(to_json(save))["cyberware_item_ids"] == ["cyber-datajack", "cyber-datajack"]
+    assert json.loads(to_json(save))["cyberware_purchases"] == [
+        {"item_id": "cyber-datajack", "rating": 1, "plugins": []},
+        {"item_id": "cyber-datajack", "rating": 1, "plugins": []},
+        {
+            "item_id": "cyber-cybereyes",
+            "rating": 3,
+            "plugins": [{"item_id": "cyber-vision-enh", "rating": 2, "plugins": []}],
+        },
+    ]
+
+
+def test_a_pre_wp41_save_falls_back_to_the_flat_cyberware_item_ids_key() -> None:
+    """WP41's one non-default backward-compatibility path (see `chummer5.io.save_format`'s own
+    docstring): a save written before this WP has `cyberware_item_ids`, not `cyberware_purchases`.
+    Each id maps to a zero-plugin, rating-1 request -- exact rather than approximate, since every
+    row WP31's flat catalog offered is unrated.
+    """
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+    )
+    legacy_shaped = json.loads(to_json(save))
+    del legacy_shaped["cyberware_purchases"]
+    legacy_shaped["cyberware_item_ids"] = ["cyber-datajack", "cyber-datajack"]
+
+    reloaded = from_json(json.dumps(legacy_shaped))
+    assert reloaded.cyberware_purchases == (
+        CyberwarePurchaseRequest(item_id="cyber-datajack"),
+        CyberwarePurchaseRequest(item_id="cyber-datajack"),
+    )
 
 
 def test_build_character_applies_cyberware_selection() -> None:
-    """WP33: `build_character` validates `cyberware_item_ids` against WP32's
-    `create_cyberware_selection`, using the Resources-priority letter's nuyen remaining *after*
-    gear/Lifestyle as the shared budget cyberware draws from (see `chummer5.engine.cyberware`'s own
+    """WP33: `build_character` validates `cyberware_purchases` against WP38's
+    `create_cyberware_tree_selection` (WP41), using the Resources-priority letter's nuyen remaining
+    *after* gear/Lifestyle as the shared budget cyberware draws from (see
+    `chummer5.engine.cyberware_subsystems`'s own
     docstring) -- and applies the resulting Essence Improvement to the built `Character`.
     """
     datajack = next(c for c in CYBERWARE if c.name == "Datajack")
@@ -312,7 +362,7 @@ def test_build_character_applies_cyberware_selection() -> None:
         gear_names=(),
         lifestyle_tier_name="Street",
         lifestyle_months=1,
-        cyberware_item_ids=(datajack.id,),
+        cyberware_purchases=(CyberwarePurchaseRequest(item_id=datajack.id),),
     )
     character = build_character(
         save,
@@ -324,14 +374,68 @@ def test_build_character_applies_cyberware_selection() -> None:
         cyberware=CYBERWARE,
     )
     assert character.cyberware_selection is not None
-    assert datajack.id in {c.id for c in character.cyberware_selection.items}
-    assert essence(character) == Decimal(6) - datajack.essence_cost
+    assert datajack.id in {n.item.id for n in character.cyberware_selection.walk()}
+    assert essence(character) == Decimal(6) - datajack.essence_cost.resolve(rating=1)
+
+
+def test_build_character_rebuilds_a_nested_cyberware_purchase_tree() -> None:
+    """WP41: a save carries the *tree*, so a cybereye's plugins survive save/load instead of being
+    lost the way WP33's flat id list lost them. Numbers are p. 454's eyeware table: Rating 2
+    cybereyes cost 6,000 nuyen / 0.3 Essence with Capacity 8, and a Rating 2 `Vision Enhancement`
+    installed in it costs 8,000 nuyen and Capacity 2 -- **zero** Essence, per the dual-costing rule.
+    """
+    cybereyes = next(c for c in CYBERWARE if c.name == "Cybereyes Basic System")
+    vision = next(c for c in CYBERWARE if c.name == "Vision Enhancement")
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="A",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        cyberware_purchases=(
+            CyberwarePurchaseRequest(
+                item_id=cybereyes.id,
+                rating=2,
+                plugins=(CyberwarePurchaseRequest(item_id=vision.id, rating=2),),
+            ),
+        ),
+    )
+    character = build_character(
+        from_json(to_json(save)),  # through the wire format, not just the in-memory object
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        cyberware=CYBERWARE,
+    )
+    selection = character.cyberware_selection
+    assert selection is not None
+    (purchase,) = selection.purchases
+    assert purchase.rating == 2
+    assert purchase.capacity_budget == Decimal(8)
+    assert selection.nuyen_spent == 6000 + 8000
+    assert selection.essence_spent == Decimal("0.3")
+    assert essence(character) == Decimal(6) - Decimal("0.3")
+    # `Image Link` is bundled with the basic system and re-attached on load, free.
+    assert {p.item.name for p in purchase.plugins} == {"Vision Enhancement", "Image Link"}
+    # And the tree survives a second round trip back out to a save.
+    assert selection.to_requests() == save.cyberware_purchases
 
 
 def test_build_character_rejects_cyberware_exceeding_the_shared_nuyen_budget() -> None:
     """Cyberware shares its nuyen budget with gear/Lifestyle -- a Resources letter whose remaining
     budget (after Lifestyle) can't cover an expensive item's cost must reject the build, mirroring
-    `chummer5.engine.cyberware.create_cyberware_selection`'s own over-budget check.
+    `chummer5.engine.cyberware_subsystems.create_cyberware_tree_selection`'s own over-budget
+    check.
     """
     synthetic_full_arm = next(c for c in CYBERWARE if c.name == "Synthetic Full Arm")
     save = create_character_save(
@@ -348,7 +452,7 @@ def test_build_character_rejects_cyberware_exceeding_the_shared_nuyen_budget() -
         gear_names=(),
         lifestyle_tier_name="Street",
         lifestyle_months=1,
-        cyberware_item_ids=(synthetic_full_arm.id,),
+        cyberware_purchases=(CyberwarePurchaseRequest(item_id=synthetic_full_arm.id),),
     )
     with pytest.raises(ValueError, match="nuyen budget"):
         build_character(
@@ -440,7 +544,7 @@ def test_build_character_shares_the_essence_pool_between_cyberware_and_bioware()
         gear_names=(),
         lifestyle_tier_name="Street",
         lifestyle_months=1,
-        cyberware_item_ids=(datajack.id,),
+        cyberware_purchases=(CyberwarePurchaseRequest(item_id=datajack.id),),
         bioware_item_ids=(cats_eyes.id,),
     )
     character = build_character(
@@ -453,10 +557,13 @@ def test_build_character_shares_the_essence_pool_between_cyberware_and_bioware()
         cyberware=CYBERWARE,
         bioware=BIOWARE,
     )
-    assert essence(character) == Decimal(6) - datajack.essence_cost - cats_eyes.essence_cost
+    assert (
+        essence(character)
+        == Decimal(6) - datajack.essence_cost.resolve(rating=1) - cats_eyes.essence_cost
+    )
     assert character.resources_selection is not None
     assert character.resources_selection.bioware_cost == cats_eyes.cost
-    assert character.resources_selection.cyberware_cost == datajack.cost
+    assert character.resources_selection.cyberware_cost == datajack.cost.resolve(rating=1)
 
 
 def test_build_character_rejects_bioware_exceeding_the_shared_nuyen_budget() -> None:

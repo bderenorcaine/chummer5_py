@@ -54,7 +54,7 @@ from chummer5.io.save_format import (
 from chummer5.web.catalogs import (
     ALL_SKILLS_SORTED,
     BIOWARE,
-    CYBERWARE,
+    CYBERWARE_ENTRIES,
     DEFAULT_LIFESTYLE_MONTHS,
     DEFAULT_LIFESTYLE_TIER_NAME,
     FOCI,
@@ -268,10 +268,13 @@ def _character_sheet_context(
     for item in resources_selection.gear:
         gear_counts[(item.name, item.rating)] = gear_counts.get((item.name, item.rating), 0) + 1
     # WP34: tallied the same way gear is, since duplicate cyberware purchases (a matched pair of
-    # cyberlimbs) are legal -- see chummer5.engine.cyberware's own docstring.
+    # cyberlimbs) are legal -- see chummer5.engine.cyberware_subsystems' own docstring. WP41: over
+    # `walk()`, so an imported character's installed plugins appear in the recap instead of
+    # vanishing behind their parent. This stays one flat "name x quantity" list; showing plugins
+    # *nested under* their parent, with each conditional bonus's condition text, is WP42's job.
     cyberware_counts: dict[str, int] = {}
-    for cyberware_item in cyberware_selection.items if cyberware_selection is not None else ():
-        cyberware_counts[cyberware_item.name] = cyberware_counts.get(cyberware_item.name, 0) + 1
+    for node in cyberware_selection.walk() if cyberware_selection is not None else ():
+        cyberware_counts[node.item.name] = cyberware_counts.get(node.item.name, 0) + 1
     # WP45: same tallying for bioware.
     bioware_counts: dict[str, int] = {}
     for bioware_item in bioware_selection.items if bioware_selection is not None else ():
@@ -501,11 +504,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     an as-yet-uncommitted Talent selection (`character.magic_type is None`), mirroring the
     Lifestyle fallback immediately above.
 
-    **WP34**: `cyberware_item_ids` threads through the same "selection, not derived value" way
-    every prior field already does, defaulting to `()` for an as-yet-uncommitted selection --
-    `CyberwareSelection.items` may repeat the same id (duplicate purchases are legal, see
-    `chummer5.engine.cyberware`'s own docstring), so this is a flat, repeats-allowed id list, not a
-    `{id: quantity}` mapping, mirroring `gear_names` immediately above.
+    **WP34**: `cyberware_purchases` threads through the same "selection, not derived value" way
+    every prior field already does, defaulting to `()` for an as-yet-uncommitted selection.
+    **WP41**: it is `CyberwareTreeSelection.to_requests()` -- the purchase tree turned back into the
+    plain request shape it was built from (repeats allowed: duplicate purchases are legal, see
+    `chummer5.engine.cyberware_subsystems`' own docstring), rather than WP34's flat id list.
 
     **WP45**: `bioware_item_ids` threads through identically.
 
@@ -568,8 +571,8 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.power_selection is not None
         else ()
     )
-    cyberware_item_ids = (
-        tuple(item.id for item in character.cyberware_selection.items)
+    cyberware_purchases = (
+        character.cyberware_selection.to_requests()
         if character.cyberware_selection is not None
         else ()
     )
@@ -651,7 +654,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         spell_ids=spell_ids,
         power_picks=power_picks,
         magic_attribute_points=character.magic_attribute_points,
-        cyberware_item_ids=cyberware_item_ids,
+        cyberware_purchases=cyberware_purchases,
         bioware_item_ids=bioware_item_ids,
         karma_converted=karma_converted,
         bound_spirit_picks=bound_spirit_picks,
@@ -786,7 +789,7 @@ async def load_save(request: Request) -> HTMLResponse:
                 traditions=TRADITIONS,
                 spells=SPELLS,
                 powers=POWERS,
-                cyberware=CYBERWARE,
+                cyberware=CYBERWARE_ENTRIES,
                 bioware=BIOWARE,
                 foci=FOCI,
                 mentors=MENTORS,
@@ -837,7 +840,7 @@ async def import_chum5_route(request: Request) -> HTMLResponse:
                     traditions=TRADITIONS,
                     spells=SPELLS,
                     powers=POWERS,
-                    cyberware=CYBERWARE,
+                    cyberware=CYBERWARE_ENTRIES,
                     bioware=BIOWARE,
                 )
             except UnsupportedLegacyCharacterError as exc:

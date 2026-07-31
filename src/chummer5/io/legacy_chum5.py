@@ -116,11 +116,16 @@ class LegacyPower:
 
 @dataclass(frozen=True)
 class LegacyCyberware:
-    """One raw *top-level* `<cyberwares><cyberware>` entry (WP33). Nested `<children>` (cyberlimb
-    enhancements/accessories bought onto a limb) are deliberately not parsed here -- WP31/32 already
-    treat that as a different category of purchase entirely, out of Phase J's scope (see
-    `tests/integration/test_cyberware_fixtures.py`'s identical "top-level only" precedent), so
-    parsing them here would only grow a field this project has no use for.
+    """One raw `<cyberware>` entry, with its own nested `<children>` (WP33, widened by WP41).
+
+    **WP33 parsed top-level entries only**, deliberately: nothing in the engine could receive a
+    nested purchase, and every nested item in the corpus was either non-`SR5`-sourced or
+    rating-scaled beyond WP31's flat catalog, so recursing would have grown a field with no
+    consumer. **WP41 is the WP that gives it one** -- Phase K's `chummer5.engine
+    .cyberware_subsystems` models a purchase tree, so a cyberlimb's `Customized Agility` or a
+    cybereye's `Vision Enhancement` is now importable content rather than noise. `children` mirrors
+    the XML exactly, at any depth; deciding which of those levels this engine can actually
+    represent is `chummer5.io.legacy_import`'s job, not this parser's.
 
     `<improvementsource>` ("Cyberware" or "Bioware") is the only reliable way to split the two
     content types this one wrapper element holds -- `<category>` alone doesn't (e.g. "Basic"/
@@ -129,7 +134,12 @@ class LegacyCyberware:
     `<ess>` is routinely a rating formula (`"Rating * 0.3"`, `"FixedValues(2,3,5)"`), not a bare
     literal -- this parser's contract is "what the save says", not "what it resolves to" (see module
     docstring). `chummer5.io.legacy_import` decides importability by matching `name`+`grade` against
-    WP31's catalog rather than parsing these fields numerically at all.
+    a catalog rather than parsing these fields numerically at all.
+
+    `rating` is `<rating>`'s literal value, which the legacy format stores as **0 for an unrated
+    item** (confirmed across every cyberware-bearing fixture: `Datajack`, `Smartlink`, every
+    cyberlimb). This engine's own floor for an unrated row is 1, so `chummer5.io.legacy_import`
+    resolves the two rather than this parser silently normalising a value the save doesn't contain.
     """
 
     name: str
@@ -139,6 +149,8 @@ class LegacyCyberware:
     improvement_source: str  # "Cyberware" or "Bioware"
     cost: str  # raw <cost> text -- often a rating formula, see class docstring
     essence: str  # raw <ess> text, same caveat
+    rating: int  # WP41: <rating>, 0 for an unrated item -- see class docstring
+    children: tuple[LegacyCyberware, ...]  # WP41: nested <children><cyberware>, at any depth
 
 
 @dataclass(frozen=True)
@@ -219,9 +231,9 @@ class LegacyCharacter:
     # <lifestyles><lifestyle>...</lifestyle></lifestyles>, every entry in document order (WP20;
     # see LegacyLifestyle's own docstring for why "which one is primary" isn't decided here).
     lifestyles: tuple[LegacyLifestyle, ...]
-    # <cyberwares><cyberware>... -- every *top-level* entry (WP12 parsed only a presence boolean;
-    # WP33 widens this to real per-item data, see LegacyCyberware's own docstring for why nested
-    # <children> stay unparsed). Cyberware *and* Bioware entries both live under this one wrapper
+    # <cyberwares><cyberware>... -- every top-level entry, each carrying its own nested
+    # <children> (WP12 parsed only a presence boolean; WP33 widened it to per-item data, WP41 made
+    # it recursive). Cyberware *and* Bioware entries both live under this one wrapper
     # element (`<improvementsource>` distinguishes them, not the element name).
     cyberware: tuple[LegacyCyberware, ...]
     # WP28: <tradition><name> -- always present in the save format (even for a mundane character,
@@ -360,12 +372,14 @@ def _parse_cyberware_item(elem: ET.Element) -> LegacyCyberware:
         improvement_source=elem.findtext("improvementsource", ""),
         cost=elem.findtext("cost", ""),
         essence=elem.findtext("ess", ""),
+        rating=int(elem.findtext("rating", "0") or "0"),
+        children=_parse_cyberwares(elem.find("children")),
     )
 
 
 def _parse_cyberwares(elem: ET.Element | None) -> tuple[LegacyCyberware, ...]:
-    # Top-level <cyberware> children only -- see LegacyCyberware's own docstring for why nested
-    # <children> (cyberlimb enhancements/accessories) are deliberately not parsed here.
+    # WP41: recursive -- `<children>` uses the same `<cyberware>` element shape as the top-level
+    # `<cyberwares>` wrapper, so one function parses every level.
     if elem is None:
         return ()
     return tuple(_parse_cyberware_item(c) for c in elem.findall("cyberware"))
@@ -474,7 +488,8 @@ def load_chum5(path: Path) -> LegacyCharacter:
     `magic_enabled` boolean already parsed since WP4 (`MAG`'s own resolved rating needs no new field
     at all: `attributes["MAG"].total_value` already resolves generically, the same way every other
     attribute does). WP33 widens WP12's boolean `has_cyberware` flag into real per-item data
-    (`cyberware`, see `LegacyCyberware`) -- every top-level `<cyberwares><cyberware>` entry, needed
+    (`cyberware`, see `LegacyCyberware`; WP41 makes it recursive) -- every `<cyberwares><cyberware>`
+    entry and its own nested `<children>`, needed
     both to decide per-item importability and to cross-check Essence math against WP30's mechanism.
     Vehicles/gear/matrix/etc. remain untouched — this parser only extracts what WP6-WP33's engine
     and import path need to validate against.

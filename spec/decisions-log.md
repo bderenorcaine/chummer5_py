@@ -619,3 +619,57 @@ to `social_limit`: no aspect this engine offers carries a conditional Social lim
 rule is to add a context only where a real bonus needs one. This is also the first API in the
 project that distinguishes "the character sheet's headline figure" from "the figure for one specific
 test" — worth knowing before WP42 designs how to display it.
+
+## 2026-07-31 — Phase K, WP41: the flat cyberware selection is retired (not deprecated in place);
+legacy import's cyberware catalog widens from 60 rows to 87; nested Bioware is refused
+
+**WP32's `CyberwareSelection`/`create_cyberware_selection`/`apply_cyberware_improvements` are
+deleted, and this was WP38's question to answer here.** WP38 shipped the purchase tree "alongside"
+the flat selection precisely so that a mechanical call-site migration wouldn't ride along with a
+rules change, and handed the survives-or-not call to WP41 ("the WP that decides whether
+`CyberwareSelection` survives at all or becomes a thin wrapper over a zero-plugin tree"). Decision:
+delete. Once `Character.cyberware_selection` is typed on `CyberwareTreeSelection`, the flat builder
+has no constructor path and no consumer — a second selection builder whose output can never be
+attached to a character is a trap for the next agent, not a convenience, and the tree engine already
+enforces a strict superset of its rules (unknown ids, nuyen budget, the strictly-positive Essence
+floor shared via `other_essence_spent`, duplicates legal). Nothing was lost in coverage:
+`tests/unit/test_cyberware_selection.py` became `tests/unit/test_cyberware_bonus.py`, keeping the
+`<bonus>` → `Improvement` translation tests plus the data/engine condition-whitelist pin, because
+every selection/apply test it held already has a counterpart in `tests/unit/test_cyberware_tree.py`.
+`chummer5.data.cyberware.load_cyberware()` is **not** retired — the web picker still lists its 60
+flat rows until WP42 widens the UI, so "the flat catalog" and "the flat selection engine" had
+genuinely different fates.
+
+**`chummer5.io.legacy_import` now resolves cyberware against WP37's 87-row `CyberwareEntry`
+catalog, at every nesting level.** WP41's plan entry only asks for nested items to resolve against
+that catalog, but keeping top-level items on WP31's flat 60 would have made a `Cybereyes Basic
+System` unimportable and therefore its children unreachable — the exact content the WP exists to
+import. Consequence, deliberate: **"rating-scaled" stops being a rejection reason at all** (Phase K
+built a formula resolver so that it wouldn't be), and a stored `<rating>` is now imported. Non-SR5
+source and non-Standard grade remain blocking at both levels, unchanged. `LegacyCyberware` gains
+`rating` (stored as literal `0` for an unrated item in the legacy format — resolved to this engine's
+floor of 1 in `legacy_import`, not silently normalised in the parser) and `children`.
+
+**A gap this widening makes bigger, and did not fix.** WP38's worklog already flagged that WP31/34's
+`NOT_YET_SUPPORTED`-bonus cyberware (Smartlink and friends) is offered with its bonus unmodeled and
+is absent from the Project Overview's "Unmodeled real effects" registry. Widening the import catalog
+extends that to every rating-scaled `NOT_YET_SUPPORTED` row too (e.g. `Wired Reflexes`, now
+importable, whose Initiative/Reaction bonus this engine does not model). Not fixed here — it is a
+registry backfill spanning WP31/34's own content, not something WP41 introduced — but it is now
+larger than when it was first flagged, and it should be closed before WP42 puts a wider catalog in
+front of a player.
+
+**A nested Bioware entry is refused rather than half-costed.** Real SR5 allows Capacity-priced
+bodyware inside a cyberlimb (p. 456's "Bodyware with a Capacity cost can be installed in cyberlimbs,
+costing capacity rather than Essence" — the same sentence WP38 cited for dual costing), but
+`chummer5.data.bioware` carries no Capacity data at all, so there is nothing to charge the parent.
+Checked before deciding: **zero** nested `<cyberware>` entries across all 34 fixtures carry
+`improvementsource == "Bioware"`, so this refuses a case the corpus never exercises rather than
+blocking real content. A future bioware-Capacity WP would lift it.
+
+**Structural validation stays in the engine, not duplicated into `_blocking_reasons`.** The itemized
+import checks cover name/source/grade (what can be decided per item, with no character); category
+eligibility, the parent's Capacity budget and rating bounds all surface from
+`create_cyberware_tree_selection` during `build_character` as a plain `ValueError` — exactly where an
+over-budget nuyen spend has surfaced from since WP33. Re-implementing them in the import module
+would be a second copy of rules that can drift.

@@ -1,4 +1,4 @@
-"""Cross-checks `chummer5.data.cyberware`/`chummer5.engine.cyberware` (WP31/WP32) against the real
+"""Cross-checks `chummer5.data.cyberware` (WP31's flat catalog) against the real
 per-item `<ess>`/`<cost>` data in 6 of the Phase J intro's 8 real cyberware-bearing fixtures --
 `BLUE`, `Barrett`, `Bastion`, `Blindfire`, `Monomax (approved) 3`, `Gentle Earthquake` (`SCSi` and
 `Fuzzy-chargen` are the other 2, not used here since neither is needed to cover the confirmed flat
@@ -12,13 +12,13 @@ the boolean `has_cyberware` -- that's WP33's job). So this file reads each fixtu
 `tests/integration/test_magic_fixtures.py`'s identical "read the raw XML by hand where the fixture
 can't be built/imported yet" precedent (used there for Miko's `<spells>`/Wesson's `<powers>`).
 
-Only the top-level `<cyberware>` elements are read (each Cyberlimb's nested `<children>` --
-Cyberlimb Enhancement mods bought for it -- are a different category entirely, out of this phase's
-scope; see `chummer5.data.cyberware`'s module docstring). Per the Phase J intro, only a modest,
-specific subset of real purchases across these fixtures are flat-cost-and-Essence items this
-project's WP31 catalog actually includes: Datajack, the Cyberlimb variants, Smartlink, and Bone
-Lacing (Titanium) -- this file checks exactly that subset, not every raw cyberware entry (most of
-the rest are Rating-scaled or non-SR5-sourced, out of WP31's own scope already).
+Only the top-level `<cyberware>` elements are read here. Each Cyberlimb's nested `<children>`
+are Phase K's subject, covered by `tests/integration/test_cyberware_tree_fixtures.py` (WP38) and
+`tests/integration/test_cyberware_import_fixtures.py` (WP41) instead. Per the Phase J intro, only
+a modest, specific subset of real purchases across these fixtures are flat-cost-and-Essence items
+this project's WP31 catalog actually includes: Datajack, the Cyberlimb variants, Smartlink, and
+Bone Lacing (Titanium) -- this file checks exactly that subset, not every raw cyberware entry (most
+of the rest are Rating-scaled or non-SR5-sourced, out of WP31's own scope already).
 
 **A fixture's stored `<ess>`/`<cost>` are the catalog's flat, un-grade-adjusted values, confirmed
 directly**: several of these purchases were actually bought at `Used`/`Alphaware` grade in their
@@ -29,6 +29,13 @@ grade-multiplied number (`Used` would be Essence x1.25, cost x0.75 -- confirmed 
 catalog against these fixtures' raw fields is valid *regardless* of which real grade was actually
 purchased -- the grade multiplier is applied elsewhere (a computed `TotalESS`/`TotalCost`
 property), never baked into the stored per-item field itself.
+
+**WP41** retired WP32's flat `create_cyberware_selection`/`apply_cyberware_improvements` (see
+`chummer5.engine.cyberware`'s own docstring for why), so the two purchase-composing tests below now
+go through `chummer5.engine.cyberware_subsystems`' purchase tree instead -- each flat item as a
+zero-plugin leaf, which is exactly what the retired pair produced. The *catalog* assertions are
+unchanged: WP31's `load_cyberware()` is still what this file's flat subset is checked against, and
+its ids are a subset of WP37's wider catalog, so the same rows are being priced either way.
 """
 
 from __future__ import annotations
@@ -39,14 +46,23 @@ from decimal import Decimal
 from tests.fixtures.mundane_chum5 import mundane_fixture_path
 
 from chummer5.data.cyberware import load_cyberware
+from chummer5.data.cyberware_subsystems import load_cyberware_entries
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.engine.character import create_character, metatype_choices
-from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
+from chummer5.engine.cyberware_subsystems import (
+    CyberwarePurchaseRequest,
+    apply_cyberware_tree_improvements,
+    create_cyberware_tree_selection,
+)
 from chummer5.engine.derived import BASE_ESSENCE, essence, physical_condition_monitor
 
 CYBERWARE = load_cyberware()
 CYBERWARE_BY_NAME = {c.name: c for c in CYBERWARE}
+# WP41: the same rows, as the purchase tree's own catalog type -- ids are shared, so a flat pick
+# resolves identically in both.
+ENTRIES = load_cyberware_entries()
+ENTRIES_BY_NAME = {entry.name: entry for entry in ENTRIES}
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 
@@ -120,7 +136,7 @@ def test_confirmed_flat_items_essence_and_cost_match_the_catalog_exactly() -> No
 
 def test_bastions_two_cyberlimb_pairs_raise_physical_condition_monitor_and_reduce_essence() -> None:
     """Bastion.chum5 really does buy two `Obvious Full Arm` + two `Obvious Full Leg` (confirmed via
-    `_raw_cyberware` above) -- composes WP31's catalog + WP32's selection/apply against a hand-built
+    `_raw_cyberware` above) -- composes the catalog + WP38's purchase tree against a hand-built
     `Character` (Bastion isn't `Priority`-built, so it can't be constructed by `create_character`
     from its own real priority letters -- this proves the mechanism using its real *item* data on an
     arbitrarily-chosen priority-built shell instead, mirroring `test_magic_fixtures.py`'s identical
@@ -152,12 +168,18 @@ def test_bastions_two_cyberlimb_pairs_raise_physical_condition_monitor_and_reduc
     base_essence = essence(character)
     assert base_essence == Decimal(BASE_ESSENCE)
 
-    item_ids = [CYBERWARE_BY_NAME[name].id for name in bastion_cyberlimb_names]
-    selection = create_cyberware_selection(item_ids, CYBERWARE, nuyen_budget=1_000_000)
+    selection = create_cyberware_tree_selection(
+        [
+            CyberwarePurchaseRequest(item_id=ENTRIES_BY_NAME[name].id)
+            for name in bastion_cyberlimb_names
+        ],
+        ENTRIES,
+        nuyen_budget=1_000_000,
+    )
     assert selection.nuyen_spent == 15000 * 2 + 15000 * 2
     assert selection.essence_spent == Decimal("4")
 
-    apply_cyberware_improvements(character, selection)
+    apply_cyberware_tree_improvements(character, selection)
 
     assert physical_condition_monitor(character) == base_cm + 4
     assert essence(character) == base_essence - Decimal("4")
@@ -197,9 +219,11 @@ def test_smartlink_purchase_costs_essence_but_applies_no_flat_bonus() -> None:
         priorities=PRIORITIES,
         attribute_points={},
     )
-    smartlink_id = CYBERWARE_BY_NAME["Smartlink"].id
-    selection = create_cyberware_selection([smartlink_id], CYBERWARE, nuyen_budget=100000)
-    apply_cyberware_improvements(character, selection)
+    smartlink_id = ENTRIES_BY_NAME["Smartlink"].id
+    selection = create_cyberware_tree_selection(
+        [CyberwarePurchaseRequest(item_id=smartlink_id)], ENTRIES, nuyen_budget=100000
+    )
+    apply_cyberware_tree_improvements(character, selection)
 
     assert essence(character) == Decimal(BASE_ESSENCE) - Decimal("0.2")
     assert character.improvements.improvements[0].improvement_type.name == "ESSENCE"

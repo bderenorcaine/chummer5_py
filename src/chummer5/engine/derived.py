@@ -270,8 +270,10 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
         for power_pick in character.power_selection.picks:
             add(power_pick.power.name, getattr(power_pick.power, "unmodeled_effect_note", None))
     if character.cyberware_selection is not None:
-        for cyberware_item in character.cyberware_selection.items:
-            add(cyberware_item.name, getattr(cyberware_item, "unmodeled_effect_note", None))
+        # WP41: every node of every purchase tree, plugins included -- an unmodeled effect on a
+        # cybereye's plugin is as real as one on a standalone item.
+        for node in character.cyberware_selection.walk():
+            add(node.item.name, getattr(node.item, "unmodeled_effect_note", None))
     if character.bioware_selection is not None:
         for bioware_item in character.bioware_selection.items:
             add(bioware_item.name, getattr(bioware_item, "unmodeled_effect_note", None))

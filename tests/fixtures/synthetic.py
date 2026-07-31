@@ -33,7 +33,7 @@ matching wiring to `build_synthetic()` together**, mirroring how WP4 grew its `.
 field at a time rather than speculatively modelling shapes no fixture yet exercises (the same
 "don't build past what's asked or verified" discipline the acceptance criteria call for):
 - WP73 — cyberware + bioware Essence stacking (gaps G1/G2) — **landed**: adds the `cyberware`/
-  `bioware` name-list fields below, wired through `create_cyberware_selection`/
+  `bioware` name-list fields below, wired through `create_cyberware_tree_selection`/
   `create_bioware_selection` in the fixed cyberware-first, bioware-second evaluation order those
   engine modules document (bioware sees cyberware's already-resolved Essence via
   `other_essence_spent`), plus the `cyberware:*`/`bioware:*` metric keys `resolve_metric` reads off
@@ -81,7 +81,7 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal
 
 from chummer5.data.bioware import Bioware, load_bioware
-from chummer5.data.cyberware import Cyberware, load_cyberware
+from chummer5.data.cyberware_subsystems import CyberwareEntry, load_cyberware_entries
 from chummer5.data.foci import Focus, load_foci
 from chummer5.data.mentors import load_mentors
 from chummer5.data.metatypes import load_metatypes
@@ -102,7 +102,12 @@ from chummer5.engine.character import (
     create_karma_attribute_points,
     metatype_choices,
 )
-from chummer5.engine.cyberware import apply_cyberware_improvements, create_cyberware_selection
+from chummer5.engine.cyberware_subsystems import (
+    CyberwarePurchaseRequest,
+    apply_cyberware_tree_improvements,
+    create_cyberware_tree_selection,
+    cyberlimb_attribute_maximums,
+)
 from chummer5.engine.derived import (
     drain_resistance,
     essence,
@@ -139,7 +144,7 @@ _METATYPES = load_metatypes()
 _PRIORITIES = load_priorities()
 _SKILLS = load_skills()
 _QUALITIES = load_qualities()
-_CYBERWARE = load_cyberware()
+_CYBERWARE = load_cyberware_entries()
 _BIOWARE = load_bioware()
 _TRADITIONS = load_traditions()
 _SPELLS = load_spells()
@@ -185,7 +190,9 @@ class SyntheticCharacter:
       `create_quality_selection`'s own both-directions check.
     - `cyberware` / `bioware` (WP73): catalog names of the purchased cyberware/bioware items. Both
       may name the same item more than once (a matched pair of cyberlimbs, say — duplicate purchases
-      are legal, see `chummer5.engine.cyberware`). `build_synthetic()` resolves cyberware first (its
+      are legal, see `chummer5.engine.cyberware_subsystems`). Each name is bought as a zero-plugin
+      purchase tree at rating 1 (WP41); no synthetic fixture installs a plugin yet. `build_
+      synthetic()` resolves cyberware first (its
       Essence cost unaware of bioware) then bioware second (aware of cyberware's Essence via
       `other_essence_spent`), the fixed shared-pool evaluation order both engine modules document,
       and both draw from the fixture's Resources-priority nuyen (bioware from what cyberware left).
@@ -270,7 +277,7 @@ def _skill_by_name(name: str) -> Skill:
     return skill
 
 
-def _cyberware_by_name(name: str) -> Cyberware:
+def _cyberware_by_name(name: str) -> CyberwareEntry:
     item = _CYBERWARE_BY_NAME.get(name)
     if item is None:
         raise KeyError(f"synthetic fixture names an unknown cyberware item: {name!r}")
@@ -448,12 +455,13 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
         # available to the two of them; bioware sees what cyberware left, mirroring the web layer.
         nuyen_budget = _PRIORITIES.resources[fixture.resources_letter].nuyen
 
-        cyberware_selection = create_cyberware_selection(
-            [_cyberware_by_name(n).id for n in fixture.cyberware],
+        cyberware_selection = create_cyberware_tree_selection(
+            [CyberwarePurchaseRequest(item_id=_cyberware_by_name(n).id) for n in fixture.cyberware],
             _CYBERWARE,
             nuyen_budget,
+            attribute_maximums=cyberlimb_attribute_maximums(character),
         )
-        apply_cyberware_improvements(character, cyberware_selection)
+        apply_cyberware_tree_improvements(character, cyberware_selection)
         character = replace(character, cyberware_selection=cyberware_selection)
 
         bioware_selection = create_bioware_selection(

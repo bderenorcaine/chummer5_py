@@ -6,26 +6,28 @@ SR5 lets a parent item (a cyberlimb, a cybereye, a cyberear) *hold* plugins, whi
 parent's **Capacity** instead of the character's Essence. This module is that mechanic: a nested
 purchase request in, a validated, fully-costed purchase tree out.
 
-## Alongside `chummer5.engine.cyberware`, not replacing it -- and why
+## This replaced `chummer5.engine.cyberware`'s flat selection in WP41
 
-WP38's plan entry left this open ("decide & document whether this replaces `CyberwareSelection
-.items`'s current flat `tuple[Cyberware, ...]` outright ... or sits alongside it"). It sits
-alongside, for the same reason WP37's `CyberwareEntry` sits alongside WP31's `Cyberware` rather
-than widening it: a tree node needs a `CyberwareEntry` (parsed formulas, Capacity structure), and
-`CyberwareSelection`/`create_cyberware_selection` are typed on `Cyberware` all the way out through
-`chummer5.io.save_format`, `chummer5.io.legacy_import`, `chummer5.web.routes.cyberware` and five
-test modules. Retyping all of those *and* introducing the tree mechanic in one WP would bundle a
-mechanical migration into a rules change, which is exactly the split WP37 already declined to make
-("migrating WP32/33/34's call sites onto `CyberwareEntry` is a later WP's call"). **WP41 is that
-call site migration** -- it has to touch save/load and legacy import anyway, which is where the
-flat-vs-tree shape actually becomes visible outside the engine.
+WP38's plan entry left the question open ("decide & document whether this replaces
+`CyberwareSelection.items`'s current flat `tuple[Cyberware, ...]` outright ... or sits alongside
+it"), and WP38 answered "alongside, for now": retyping `chummer5.io.save_format`,
+`chummer5.io.legacy_import`, `chummer5.web.routes.cyberware` and five test modules *and*
+introducing the tree mechanic in one WP would have bundled a mechanical migration into a rules
+change. **WP41 performed that migration**, since it had to touch save/load and legacy import
+anyway -- which is exactly where the flat-vs-tree shape becomes visible outside the engine.
 
-Concretely, that means: **nothing consumes this module yet, deliberately.** No `Character` field,
-no Improvements, no UI -- exactly as WP36 and WP37 each added no behaviour to any character this
-engine builds today. `CyberwareTreeSelection` deliberately mirrors `CyberwareSelection`'s
-`nuyen_budget`/`nuyen_spent`/`essence_spent` field names so WP41 can swap one for the other without
-re-deriving what the totals mean. A `Character` must never end up carrying both at once; there is
-no field for this one, so that can't happen by accident today.
+So as of WP41: `Character.cyberware_selection` is a `CyberwareTreeSelection`, every purchase path
+(the web route, `build_character`, `import_legacy_character`) resolves against WP37's
+`CyberwareEntry` catalog, and WP32's `CyberwareSelection`/`create_cyberware_selection`/
+`apply_cyberware_improvements` are **retired** rather than left as a second, unattachable builder
+(see `chummer5.engine.cyberware`'s own docstring). A flat purchase is a zero-plugin tree; nothing
+was lost in the swap, because this module's validation is a strict superset of what the flat one
+did. `CyberwareTreeSelection` still carries `CyberwareSelection`'s `nuyen_budget`/`nuyen_spent`/
+`essence_spent` field names, which is what made that swap mechanical.
+
+What is still deliberately *not* wired: the **UI**. `chummer5.web.routes.cyberware`'s picker
+continues to offer WP31's 60 flat rows at rating 1, so every tree the browser builds is a set of
+zero-plugin leaves. Rating selection and plugin installation are **WP42**.
 
 ## Essence-vs-Capacity dual costing: the same catalog row, two prices
 
@@ -278,8 +280,8 @@ class PurchasedCyberware:
 class CyberwareTreeSelection:
     """A validated set of cyberware purchase trees and their combined nuyen/Essence cost.
 
-    Field names mirror `chummer5.engine.cyberware.CyberwareSelection`'s deliberately -- see the
-    module docstring for the WP41 migration this is shaped for. `purchases` holds only the
+    Field names mirror WP32's retired `CyberwareSelection`'s deliberately -- see the module
+    docstring for the WP41 migration that shape made mechanical. `purchases` holds only the
     top-level (standalone) purchases; plugins hang off their parents.
     """
 
@@ -298,6 +300,30 @@ class CyberwareTreeSelection:
             return nodes
 
         return tuple(node for purchase in self.purchases for node in _walk(purchase))
+
+    def to_requests(self) -> tuple[CyberwarePurchaseRequest, ...]:
+        """The `CyberwarePurchaseRequest` tree this selection was built from (WP41).
+
+        The inverse of `create_cyberware_tree_selection`'s input, and what
+        `chummer5.io.save_format.CharacterSave.cyberware_purchases` persists: a validated selection
+        holds resolved catalog objects and prices, none of which a save file should carry (this
+        project's "selections, not derived values" rule).
+
+        **Bundled nodes are omitted**, because they are not picks -- `create_cyberware_tree_
+        selection` re-attaches them itself on the way back in (see the module docstring's bundled-
+        subsystem section), so persisting them would either duplicate them or rely on the
+        explicit-request-resolves-to-the-same-free-node behaviour to paper over it. Round-tripping
+        `to_requests()` through `create_cyberware_tree_selection` reproduces this selection exactly.
+        """
+
+        def _request(node: PurchasedCyberware) -> CyberwarePurchaseRequest:
+            return CyberwarePurchaseRequest(
+                item_id=node.item.id,
+                rating=node.rating,
+                plugins=tuple(_request(plugin) for plugin in node.plugins if not plugin.bundled),
+            )
+
+        return tuple(_request(purchase) for purchase in self.purchases if not purchase.bundled)
 
 
 def cyberlimb_attribute_maximums(character: Character) -> Mapping[str, int]:

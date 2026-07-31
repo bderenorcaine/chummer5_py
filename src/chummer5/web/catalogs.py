@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 
 from chummer5.data.bioware import load_bioware
 from chummer5.data.cyberware import load_cyberware
+from chummer5.data.cyberware_subsystems import load_cyberware_entries
 from chummer5.data.foci import load_foci
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.mentors import load_mentors
@@ -44,7 +45,16 @@ SKILLS = load_skills()
 QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
 # WP34 (Phase J's UI): the flat-cost, flat-Essence, Standard-grade cyberware catalog (WP31).
+# Still what the picker in `_cyberware.html` *offers* -- WP42 is the WP that widens the UI to
+# rating-scaled items and plugin installation.
 CYBERWARE = load_cyberware()
+# WP41: WP37's full 87-row SR5 catalog, with formulas parsed and Capacity/subsystem structure
+# captured. This is what every *engine* call resolves against now
+# (`create_cyberware_tree_selection`, `build_character`, `import_chum5`), since
+# `Character.cyberware_selection` is a purchase tree.
+# CYBERWARE's ids are a subset of these, so a flat pick made from the picker above resolves here
+# unchanged.
+CYBERWARE_ENTRIES = load_cyberware_entries()
 # WP45: the flat-cost, flat-Essence, low-Availability, Standard-grade bioware catalog.
 BIOWARE = load_bioware()
 # WP47: the Rating-scaled SR5 Foci catalog (32 items, 7 rulebook categories).

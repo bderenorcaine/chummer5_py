@@ -2,6 +2,22 @@
 
 **WP62**: split out of the former `chummer5.web.app` -- see `spec/plan/phase-r-architecture-
 cleanup.md`'s WP58 audit for the target shape this module is part of.
+
+**WP41 retypes what this route commits, not what it offers.**
+`Character.cyberware_selection` is Phase K's purchase *tree* now
+(`chummer5.engine.cyberware_subsystems.CyberwareTreeSelection`), so this route builds
+`CyberwarePurchaseRequest`s and resolves them against `CYBERWARE_ENTRIES` (WP37's full 87-row
+catalog). The **picker is deliberately unchanged**: it still lists `CYBERWARE` (WP31's 60 flat
+rows) with a quantity box per item, so every tree this route builds is a set of zero-plugin,
+rating-1 leaves. Widening the UI -- rating-scaled items, and installing a plugin into a
+limb/cybereye/cyberear against its live Capacity -- is **WP42**, which is why this WP does not
+build one: a picker written against a half-migrated engine would be thrown away.
+
+Two consequences of the split worth naming, both verified rather than assumed: no row in
+`CYBERWARE` carries a `<rating>` tag, so rating 1 is every offered item's only legal value; and
+none of the three `<subsystems>`-bearing parents (`Cybereyes Basic System`, `Cyberears`,
+`Control Rig`) is in `CYBERWARE` either, so the tree engine's bundled auto-attach cannot fire from
+this picker and the flat cost/Essence arithmetic `_cyberware_context` shows stays exact.
 """
 
 from __future__ import annotations
@@ -24,10 +40,11 @@ from chummer5.engine.bioware import (
     create_bioware_selection,
 )
 from chummer5.engine.character import Character
-from chummer5.engine.cyberware import (
-    CyberwareSelection,
-    apply_cyberware_improvements,
-    create_cyberware_selection,
+from chummer5.engine.cyberware_subsystems import (
+    CyberwarePurchaseRequest,
+    CyberwareTreeSelection,
+    apply_cyberware_tree_improvements,
+    create_cyberware_tree_selection,
 )
 from chummer5.engine.derived import BASE_ESSENCE
 from chummer5.engine.improvements import ImprovementSource
@@ -37,7 +54,13 @@ from chummer5.engine.resources import (
     resources_gear_args,
     starting_nuyen,
 )
-from chummer5.web.catalogs import BIOWARE, CYBERWARE, PRIORITIES, templates
+from chummer5.web.catalogs import (
+    BIOWARE,
+    CYBERWARE,
+    CYBERWARE_ENTRIES,
+    PRIORITIES,
+    templates,
+)
 from chummer5.web.forms import display_karma_to_nuyen
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
@@ -54,21 +77,34 @@ _CYBERWARE_BY_CATEGORY = tuple(sorted(CYBERWARE, key=lambda item: (item.category
 _BIOWARE_BY_CATEGORY = tuple(sorted(BIOWARE, key=lambda item: (item.category, item.name)))
 
 
-def _replace_committed_cyberware(character: Character, selection: CyberwareSelection) -> Character:
+def _replace_committed_cyberware(
+    character: Character, selection: CyberwareTreeSelection
+) -> Character:
     """Swap whatever `CYBERWARE`-sourced Improvements `character.improvements` currently holds for
     `selection`'s, and re-attach `selection` as `character.cyberware_selection` -- mirrors
     `chummer5.web.routes.qualities._replace_committed_qualities`'s identical shape, with one
     difference: removes by each *distinct* previously-purchased item id, not once per purchased
     unit. `ImprovementIndex.remove_source` already retracts every Improvement a given source id
     granted at once, and a repeated purchase of the same item shares one `source_id` (the item's
-    own catalog id -- see `chummer5.engine.cyberware`'s own "duplicate purchases share one
-    source_id" docstring), so removing that id once already clears every copy.
+    own catalog id -- see `chummer5.engine.cyberware_subsystems
+    .apply_cyberware_tree_improvements`'s own docstring), so removing that id once already clears
+    every copy. **WP41**: `walk()`, not the old flat `items` -- a plugin's own Improvements are
+    sourced by its own id, so a parent's id alone would leave them behind.
     """
     if character.cyberware_selection is not None:
-        for item_id in {item.id for item in character.cyberware_selection.items}:
+        for item_id in {node.item.id for node in character.cyberware_selection.walk()}:
             character.improvements.remove_source(ImprovementSource.CYBERWARE, item_id)
-    apply_cyberware_improvements(character, selection)
+    apply_cyberware_tree_improvements(character, selection)
     return replace(character, cyberware_selection=selection)
+
+
+def _purchase_requests(item_ids: Iterable[str]) -> tuple[CyberwarePurchaseRequest, ...]:
+    """Flat picker ids -> zero-plugin, rating-1 purchase requests (WP41).
+
+    The one adapter between this route's unchanged quantity-per-item form and the tree engine. See
+    the module docstring for why rating 1 is exact rather than a placeholder.
+    """
+    return tuple(CyberwarePurchaseRequest(item_id=item_id) for item_id in item_ids)
 
 
 def _replace_committed_bioware(character: Character, selection: BiowareSelection) -> Character:
@@ -188,8 +224,8 @@ def _cyberware_context(
 
     Same `error`-gated re-validation pattern as `_resources_context`/`_lifestyle_context`: when
     `error` is unset, re-derives whether the currently-selected items still fit the combined budget
-    (and the shared Essence floor `create_cyberware_selection`/`create_bioware_selection` enforce),
-    surfacing a distinct `cyberware_budget_warning` rather than silently going over/under on the
+    (and the shared Essence floor `create_cyberware_tree_selection`/`create_bioware_selection`
+    enforce), surfacing a distinct `cyberware_budget_warning` rather than going over/under on the
     next render.
     """
     if character is None:
@@ -215,7 +251,9 @@ def _cyberware_context(
     budget_warning: str | None = None
     if error is None:
         try:
-            cyberware_selection = create_cyberware_selection(item_ids, CYBERWARE, nuyen_available)
+            cyberware_selection = create_cyberware_tree_selection(
+                _purchase_requests(item_ids), CYBERWARE_ENTRIES, nuyen_available
+            )
             create_bioware_selection(
                 bioware_item_ids,
                 BIOWARE,
@@ -277,7 +315,9 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
             # first, unaware of bioware; bioware second, aware of cyberware's own nuyen/Essence
             # spend -- so a combination only invalid once both are counted together is always
             # caught, on the bioware call.
-            selection = create_cyberware_selection(item_ids, CYBERWARE, nuyen_available)
+            selection = create_cyberware_tree_selection(
+                _purchase_requests(item_ids), CYBERWARE_ENTRIES, nuyen_available
+            )
             bioware_selection = create_bioware_selection(
                 bioware_item_ids,
                 BIOWARE,

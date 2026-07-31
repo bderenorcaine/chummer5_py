@@ -7,12 +7,13 @@ covered in `tests/integration/test_legacy_import.py`.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import MappingProxyType
 
 import pytest
 
 from chummer5.data.bioware import load_bioware
-from chummer5.data.cyberware import load_cyberware
+from chummer5.data.cyberware_subsystems import load_cyberware_entries
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import load_powers
@@ -21,6 +22,7 @@ from chummer5.data.qualities import BonusSupport, load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
 from chummer5.io.legacy_chum5 import (
     LegacyAttribute,
     LegacyCharacter,
@@ -46,7 +48,40 @@ LIFESTYLES = load_lifestyles()
 TRADITIONS = load_traditions()
 SPELLS = load_spells()
 POWERS = load_powers()
-CYBERWARE = load_cyberware()
+CYBERWARE = load_cyberware_entries()
+
+
+def _legacy_cyberware(
+    name: str,
+    *,
+    category: str = "Headware",
+    grade: str = "Standard",
+    source: str = "SR5",
+    improvement_source: str = "Cyberware",
+    cost: str = "0",
+    essence: str = "0",
+    rating: int = 0,
+    children: tuple[LegacyCyberware, ...] = (),
+) -> LegacyCyberware:
+    """One `<cyberwares><cyberware>` entry, defaulted to the shape these tests care about.
+
+    WP41 added `rating`/`children` to `LegacyCyberware`; every call site here would otherwise repeat
+    two fields that are almost always `0`/`()`. `rating=0` is what the legacy format literally
+    stores for an unrated item -- see that class's own docstring.
+    """
+    return LegacyCyberware(
+        name=name,
+        category=category,
+        grade=grade,
+        source=source,
+        improvement_source=improvement_source,
+        cost=cost,
+        essence=essence,
+        rating=rating,
+        children=children,
+    )
+
+
 BIOWARE = load_bioware()
 
 
@@ -311,28 +346,58 @@ def test_accepts_adept_with_no_tradition_needed() -> None:
     assert result.built.tradition is None
 
 
-def test_rejects_unsupported_cyberware_item() -> None:
+def test_rejects_non_sr5_cyberware_item() -> None:
     """WP33 replaces the old blanket "character has cyberware/bioware" rejection with a real,
-    itemized check per real purchase -- a rating-scaled item (Wired Reflexes' real Essence cost is
-    `FixedValues(2,3,5)`, not a bare literal, so it isn't in WP31's flat catalog at all) is rejected
-    by name, not with a generic message.
+    itemized check per real purchase -- an item outside the catalog is rejected by name, not with a
+    generic message. `Cyberlimb Optimization` is `CF`-sourced (real content in `Barrett.chum5`), so
+    it is out of MVP's core-rulebook scope no matter how its cost is expressed.
     """
-    with pytest.raises(UnsupportedLegacyCharacterError, match=r"'Wired Reflexes'.*rating-scaled"):
+    with pytest.raises(UnsupportedLegacyCharacterError, match=r"'Cyberlimb Optimization'.*non-SR5"):
         _import(
             _legacy_character(
                 cyberware=(
-                    LegacyCyberware(
-                        name="Wired Reflexes",
-                        category="Bodyware",
-                        grade="Standard",
-                        source="SR5",
-                        improvement_source="Cyberware",
-                        cost="FixedValues(39000,149000,217000)",
-                        essence="FixedValues(2,3,5)",
+                    _legacy_cyberware(
+                        "Cyberlimb Optimization",
+                        category="Cyberlimb Accessory",
+                        source="CF",
+                        cost="2000",
+                        essence="0",
                     ),
                 )
             )
         )
+
+
+def test_accepts_a_rating_scaled_cyberware_item_at_its_stored_rating() -> None:
+    """WP41 widens the import catalog from WP31's 60 flat rows to WP37's full 87-row SR5 set, so a
+    rating-scaled item -- rejected outright through WP33-WP40 -- now imports at the rating the save
+    records. `Wired Reflexes` at Rating 1 is real content (`Fuzzy-chargen.chum5`, `SCSi.chum5`);
+    its printed Rating 1 cost is 39,000 nuyen / 2 Essence (`FixedValues(...)`'s first entry).
+    """
+    result = import_legacy_character(
+        _legacy_character(
+            cyberware=(
+                _legacy_cyberware(
+                    "Wired Reflexes",
+                    category="Bodyware",
+                    cost="FixedValues(39000,149000,217000)",
+                    essence="FixedValues(2,3,5)",
+                    rating=1,
+                ),
+            )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        cyberware=CYBERWARE,
+    )
+    (purchase,) = result.save.cyberware_purchases
+    assert purchase.rating == 1
+    assert result.built.cyberware_selection is not None
+    assert result.built.cyberware_selection.nuyen_spent == 39000
+    assert result.built.cyberware_selection.essence_spent == Decimal("2")
 
 
 def test_rejects_non_standard_grade_cyberware() -> None:
@@ -346,8 +411,8 @@ def test_rejects_non_standard_grade_cyberware() -> None:
         _import(
             _legacy_character(
                 cyberware=(
-                    LegacyCyberware(
-                        name="Datajack",
+                    _legacy_cyberware(
+                        "Datajack",
                         category="Headware",
                         grade="Alphaware",
                         source="SR5",
@@ -372,8 +437,8 @@ def test_rejects_unsupported_bioware_item() -> None:
         _import(
             _legacy_character(
                 cyberware=(
-                    LegacyCyberware(
-                        name="Mnemonic Enhancer",
+                    _legacy_cyberware(
+                        "Mnemonic Enhancer",
                         category="Cultured",
                         grade="Standard",
                         source="SR5",
@@ -398,8 +463,8 @@ def test_rejects_non_standard_grade_bioware() -> None:
         _import(
             _legacy_character(
                 cyberware=(
-                    LegacyCyberware(
-                        name="Platelet Factories",
+                    _legacy_cyberware(
+                        "Platelet Factories",
                         category="Basic",
                         grade="Used",
                         source="SR5",
@@ -421,8 +486,8 @@ def test_accepts_standard_grade_flat_cyberware_item() -> None:
     result = import_legacy_character(
         _legacy_character(
             cyberware=(
-                LegacyCyberware(
-                    name="Datajack",
+                _legacy_cyberware(
+                    "Datajack",
                     category="Headware",
                     grade="Standard",
                     source="SR5",
@@ -439,9 +504,118 @@ def test_accepts_standard_grade_flat_cyberware_item() -> None:
         lifestyles=LIFESTYLES,
         cyberware=CYBERWARE,
     )
-    assert result.save.cyberware_item_ids == (datajack.id,)
+    assert result.save.cyberware_purchases == (CyberwarePurchaseRequest(item_id=datajack.id),)
     assert result.built.cyberware_selection is not None
-    assert datajack.id in {c.id for c in result.built.cyberware_selection.items}
+    assert datajack.id in {n.item.id for n in result.built.cyberware_selection.walk()}
+
+
+def test_nested_children_import_as_a_real_purchase_tree() -> None:
+    """WP41's headline: `<children>` are parsed and resolved per item now, not discarded.
+
+    `Cybereyes Basic System` Rating 1 + a Rating 1 `Vision Enhancement` is a real fixture shape
+    (`Fuzzy-chargen.chum5`, `SCSi.chum5`, `prime.chum5` all buy cybereyes with children). Numbers
+    hand-checked against p. 454's eyeware table: cybereyes Rating 1 cost 4,000 nuyen / 0.2 Essence
+    / Capacity 4; Vision Enhancement Rating 1 costs 4,000 nuyen and **Capacity 1, not Essence**,
+    because it is installed rather than standalone.
+    """
+    result = import_legacy_character(
+        _legacy_character(
+            cyberware=(
+                _legacy_cyberware(
+                    "Cybereyes Basic System",
+                    category="Eyeware",
+                    cost="FixedValues(4000,6000,10000,14000)",
+                    essence="(Rating * 0.1) + 0.1",
+                    rating=1,
+                    children=(
+                        _legacy_cyberware(
+                            "Vision Enhancement",
+                            category="Eyeware",
+                            cost="Rating * 4000",
+                            essence="0.1",
+                            rating=1,
+                        ),
+                    ),
+                ),
+            )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        cyberware=CYBERWARE,
+    )
+    (purchase,) = result.save.cyberware_purchases
+    (plugin,) = purchase.plugins
+    assert plugin.rating == 1
+
+    selection = result.built.cyberware_selection
+    assert selection is not None
+    (cybereyes,) = selection.purchases
+    # `Image Link` is bundled with the basic system and auto-attached free, so the tree holds two
+    # plugins even though the save requested one.
+    assert {p.item.name for p in cybereyes.plugins} == {"Vision Enhancement", "Image Link"}
+    assert selection.nuyen_spent == 4000 + 4000
+    assert selection.essence_spent == Decimal("0.2")
+    vision = next(p for p in cybereyes.plugins if p.item.name == "Vision Enhancement")
+    assert vision.capacity_cost == Decimal(1)
+    assert vision.essence_cost == Decimal(0)
+
+
+def test_a_non_sr5_child_is_itemized_by_name_not_silently_dropped() -> None:
+    """The acceptance criterion's negative half: an unresolvable *plugin* blocks the import with a
+    reason naming both it and its parent, rather than vanishing (which would leave the parent's
+    Capacity spend understated). `Microscopic Lenses` is `CF`-sourced -- real content installed in
+    `BLUE.chum5`'s cybereyes.
+    """
+    with pytest.raises(
+        UnsupportedLegacyCharacterError,
+        match=r"'Microscopic Lenses'.*installed in 'Cybereyes Basic System'",
+    ):
+        _import(
+            _legacy_character(
+                cyberware=(
+                    _legacy_cyberware(
+                        "Cybereyes Basic System",
+                        category="Eyeware",
+                        rating=1,
+                        children=(
+                            _legacy_cyberware(
+                                "Microscopic Lenses", category="Eyeware", source="CF"
+                            ),
+                        ),
+                    ),
+                )
+            )
+        )
+
+
+def test_a_nested_bioware_entry_is_rejected_rather_than_half_costed() -> None:
+    """Bodyware with a Capacity cost really can be installed in a cyberlimb (p. 456), but
+    `chummer5.data.bioware` carries no Capacity data, so this import path refuses it. No fixture in
+    the corpus exercises it -- zero nested entries carry `improvementsource == "Bioware"`.
+    """
+    with pytest.raises(
+        UnsupportedLegacyCharacterError, match=r"bioware installed as a cyberware subsystem"
+    ):
+        _import(
+            _legacy_character(
+                cyberware=(
+                    _legacy_cyberware(
+                        "Synthetic Full Arm",
+                        category="Cyberlimb",
+                        children=(
+                            _legacy_cyberware(
+                                "Reflex Recorder",
+                                category="Cultured",
+                                improvement_source="Bioware",
+                            ),
+                        ),
+                    ),
+                )
+            )
+        )
 
 
 def test_accepts_standard_grade_flat_bioware_item() -> None:
@@ -453,8 +627,8 @@ def test_accepts_standard_grade_flat_bioware_item() -> None:
     result = import_legacy_character(
         _legacy_character(
             cyberware=(
-                LegacyCyberware(
-                    name="Reflex Recorder",
+                _legacy_cyberware(
+                    "Reflex Recorder",
                     category="Cultured",
                     grade="Standard",
                     source="SR5",
@@ -647,20 +821,19 @@ def test_does_not_reject_resonance_enabled() -> None:
 
 def test_itemizes_every_blocking_reason_in_one_pass() -> None:
     # `Karma` (not `SumtoTen`, which WP44 accepts) keeps this a genuine 3-reason case: build
-    # method, Talent codename, and cyberware each independently blocking.
+    # method, Talent codename, and cyberware each independently blocking.  (`Cyberlimb
+    # Optimization` is `CF`-sourced, so it stays blocking after WP41 widened the catalog.)
     legacy = _legacy_character(
         build_method="Karma",
         magic_enabled=True,
         priorities=_priorities(talent="A,1", talent_codename="Mystic Adept"),
         cyberware=(
-            LegacyCyberware(
-                name="Wired Reflexes",
-                category="Bodyware",
-                grade="Standard",
-                source="SR5",
-                improvement_source="Cyberware",
-                cost="FixedValues(39000,149000,217000)",
-                essence="FixedValues(2,3,5)",
+            _legacy_cyberware(
+                "Cyberlimb Optimization",
+                category="Cyberlimb Accessory",
+                source="CF",
+                cost="2000",
+                essence="0",
             ),
         ),
     )
@@ -669,7 +842,7 @@ def test_itemizes_every_blocking_reason_in_one_pass() -> None:
     assert len(exc_info.value.reasons) == 3
     assert any("build method 'Karma' is not supported" in r for r in exc_info.value.reasons)
     assert any("Talent option 'Mystic Adept' is not supported" in r for r in exc_info.value.reasons)
-    assert any("Wired Reflexes" in r for r in exc_info.value.reasons)
+    assert any("Cyberlimb Optimization" in r for r in exc_info.value.reasons)
 
 
 def test_unsupported_quality_is_dropped_and_reported_not_fatal() -> None:

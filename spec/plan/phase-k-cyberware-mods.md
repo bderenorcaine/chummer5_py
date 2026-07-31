@@ -373,7 +373,7 @@ conversation's own request not to build placeholder UI that gets thrown away app
     Jacks' jump-distance/falling-damage clauses are unmodeled and now registered in the Project
     Overview's "Unmodeled real effects" table.
 
-- [ ] **WP41 — Cyberware modification save/load + legacy import.**
+- [x] **WP41 — Cyberware modification save/load + legacy import.**
   Goal: thread the purchase tree (WP38) through native save/load and legacy import, which currently
   discards `<children>` entirely (a deliberate, documented WP31/33 scope cut, not an oversight).
   Deliverables:
@@ -391,6 +391,43 @@ conversation's own request not to build placeholder UI that gets thrown away app
   confirming each resolvable child imports with the correct Capacity/Essence math, and non-resolvable
   ones (most of them, per WP33's own finding that most nested items are non-SR5-sourced or
   rating-scaled beyond what WP36/37 cover) are itemized, not silently dropped.
+
+  **Landed 2026-07-31**, spread across the io + engine + web layers with no new module, plus 12 new
+  tests (1107 total). This is the WP that **finished** WP38's deferred call-site migration:
+  `Character.cyberware_selection` is a `CyberwareTreeSelection` now, and every purchase path
+  resolves against WP37's full 87-row `CyberwareEntry` catalog. What WP42 needs to know:
+  - **WP32's `CyberwareSelection`/`create_cyberware_selection`/`apply_cyberware_improvements` are
+    retired**, not left in place — a second selection builder whose output can no longer be attached
+    to a `Character` is a trap, and the tree engine enforces a strict superset of its rules.
+    `chummer5.engine.cyberware` survives as the shared `<bonus>` → `Improvement` translator only
+    (`cyberware_bonus_improvements` + the two string→enum maps); its tests moved to
+    `tests/unit/test_cyberware_bonus.py`. `chummer5.data.cyberware.load_cyberware()` is **not**
+    retired — the UI picker still lists its 60 flat rows.
+  - **`CharacterSave.cyberware_item_ids` → `cyberware_purchases: tuple[CyberwarePurchaseRequest,
+    ...]`.** `CyberwarePurchaseRequest` is reused verbatim as the persisted shape (the same reason
+    `Contact` already is), with a new `CyberwareTreeSelection.to_requests()` as the inverse —
+    bundled nodes omitted, since `create_cyberware_tree_selection` re-attaches them on load.
+    A pre-WP41 save still loads: `_dict_to_save` falls back to the old key, mapping each id to a
+    zero-plugin rating-1 request, which is exact (WP31's ids ⊂ WP37's; every WP31 row is unrated).
+    `FORMAT_VERSION` is unchanged.
+  - **The web layer is retyped but the picker is untouched, deliberately** — `_parse_cyberware`
+    still yields flat ids, wrapped by a one-line `_purchase_requests` adapter, so every tree the
+    browser builds is zero-plugin leaves at rating 1. Verified safe rather than assumed: no
+    `CYBERWARE` row carries a `<rating>` tag, and none of the three `<subsystems>`-bearing parents
+    (Cybereyes, Cyberears, Control Rig) is in `CYBERWARE`, so bundled auto-attach cannot fire from
+    the picker. **WP42 owns rating selection and plugin installation.**
+  - **Legacy import widened its catalog, not just its recursion.** "Rating-scaled" is no longer a
+    rejection reason at any level (that was Phase K's whole point); non-SR5 source and non-Standard
+    grade still are, and each nested item's reason names its parent. A **nested Bioware entry is
+    rejected** (real SR5 allows it — p. 456 — but `chummer5.data.bioware` has no Capacity data, and
+    zero fixture entries exercise it). Structural rules (category eligibility, Capacity budget,
+    rating bounds) are deliberately *not* re-implemented in `_blocking_reasons`; they surface from
+    `create_cyberware_tree_selection` at build time, the same place an over-budget nuyen spend
+    always has.
+  - **A consequence worth watching:** widening the import catalog also widens the pre-existing gap
+    WP38's worklog flagged — `NOT_YET_SUPPORTED`-bonus cyberware is offered/imported with its bonus
+    unmodeled and is absent from the Project Overview's "Unmodeled real effects" registry. WP41 did
+    not backfill it; see `spec/decisions-log.md`, 2026-07-31.
 
 - [ ] **WP42 — Cyberware modification/subsystem UI.**
   Goal: expose subsystem/plugin purchase through the browser. Deliberately last, and deliberately

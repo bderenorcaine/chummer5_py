@@ -67,8 +67,7 @@ result:
   optimistic acceptance text). Wesson (Human Adept) needs no tradition at all and imports cleanly.
   **WP33** replaces the old blanket "character has cyberware/bioware" rejection with a real,
   itemized check per real `<cyberwares><cyberware>` entry
-  (`chummer5.io.legacy_chum5.LegacyCyberware` -- top-level entries only, see that class's own
-  docstring): a Bioware entry
+  (`chummer5.io.legacy_chum5.LegacyCyberware`): a Bioware entry
   (`improvement_source == "Bioware"`) is always rejected by name, since no Bioware catalog exists at
   all yet; a Cyberware entry is rejected by name+grade unless it resolves against WP31's
   flat-cost/flat-Essence, Standard-grade-only catalog (`chummer5.data.cyberware.load_cyberware`) --
@@ -90,6 +89,22 @@ result:
   check real positive-case coverage (`Barrett`'s Reflex Recorder/Sleep Regulator/Platelet Factories,
   all Standard grade) alongside negative cases (rating-scaled Bioware, and Bioware bought at a
   non-Standard grade, e.g. `Bastion`'s Platelet Factories at `Used` grade).
+  **WP41 makes this check recursive and widens the catalog it runs against.** WP33 read only
+  top-level `<cyberware>` entries, because nothing downstream could receive a nested purchase;
+  Phase K's `chummer5.engine.cyberware_subsystems` now models a purchase *tree*, so each nested
+  `<children><cyberware>` is resolved and itemized independently, exactly the way a top-level entry
+  already was. The catalog moves with it, from WP31's 60-row flat-only `load_cyberware()` to WP37's
+  full 87-row `chummer5.data.cyberware_subsystems.load_cyberware_entries()` -- a rating-scaled row
+  (`Cybereyes Basic System`, `Vision Enhancement`, `Customized Agility`) is exactly what Phase K
+  built a formula resolver for, so "rating-scaled" is no longer a rejection reason at either level.
+  Non-`SR5` source and non-Standard grade still are, at both levels. Two consequences worth naming:
+  a **nested Bioware entry is rejected outright** (bioware-in-a-cyberlimb is a real SR5 mechanic --
+  p. 456's "Bodyware with a Capacity cost can be installed in cyberlimbs" -- but this project has no
+  Bioware Capacity data, and no fixture in the corpus exercises it: zero nested entries carry
+  `improvementsource == "Bioware"`); and the *structural* rules (a plugin's category being one its
+  parent accepts, the parent's Capacity budget, a rating inside the item's own bounds) are
+  deliberately **not** re-implemented here -- they surface from `create_cyberware_tree_selection`
+  during `build_character`, the same place an over-budget nuyen spend has always surfaced from.
   `UnsupportedLegacyCharacterError.reasons` collects *every* blocking issue found in one pass, not
   just the first, so a caller gets one itemized report rather than a fix-one-rerun-find-the-next
   loop. **WP44** widens the build-method check above from "Priority only" to "Priority or
@@ -244,11 +259,12 @@ violation this module's own checks don't anticipate) surfaces as `build_characte
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from chummer5.data.bioware import Bioware
-from chummer5.data.cyberware import Cyberware
+from chummer5.data.cyberware_subsystems import CyberwareEntry
 from chummer5.data.knowledge import KNOWLEDGE_CATEGORY_NAMES
 from chummer5.data.lifestyle import STARTING_TIER_NAMES, LifestyleTier
 from chummer5.data.metatypes import Metatype
@@ -260,10 +276,11 @@ from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
 from chummer5.engine.build_method import SUPPORTED_BUILD_METHODS
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character, sr5_metatypes
+from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
 from chummer5.engine.magic import OFFERED_TALENT_CODENAMES, mvp_power_catalog
 from chummer5.engine.qualities import mvp_quality_catalog
 from chummer5.engine.resources import Contact
-from chummer5.io.legacy_chum5 import LegacyCharacter, load_chum5, priority_letter
+from chummer5.io.legacy_chum5 import LegacyCharacter, LegacyCyberware, load_chum5, priority_letter
 from chummer5.io.save_format import (
     DEFAULT_TALENT_CODENAME,
     DEFAULT_TALENT_LETTER,
@@ -284,7 +301,7 @@ STANDARD_GAME_OPTION = "Standard"
 # failing cleanly.
 VALID_PRIORITY_LETTERS = frozenset("ABCDE")
 
-# chummer5.data.cyberware.load_cyberware() only offers Standard-grade values (see that module's
+# Both cyberware catalogs only carry Standard-grade values (see chummer5.data.cyberware's
 # docstring and the Phase J intro) -- a real purchase at any other grade is rejected even when its
 # name matches a catalog entry (see this module's own docstring for why the stored raw fields can't
 # be trusted to reflect the real grade-adjusted cost/Essence).
@@ -312,10 +329,101 @@ class UnsupportedLegacyCharacterError(ValueError):
         super().__init__("cannot import: " + "; ".join(reasons))
 
 
+def _augmentation_reasons(
+    items: Iterable[LegacyCyberware],
+    cyberware_by_name: Mapping[str, CyberwareEntry],
+    bioware_by_name: Mapping[str, Bioware],
+    *,
+    parent_name: str | None,
+) -> list[str]:
+    """Itemize every `<cyberwares><cyberware>` entry this engine can't represent, at every depth.
+
+    One reason per unresolvable item, named individually (never "this character has cyberware") --
+    see the module docstring for why cyberware/bioware issues are *blocking* rather than
+    dropped-and-reported, and for the WP41 split between the name/grade/source checks done here and
+    the structural ones (`<allowsubsystems>` category eligibility, Capacity budget, rating bounds)
+    left to `create_cyberware_tree_selection` at build time.
+    """
+    reasons: list[str] = []
+    where = f" installed in {parent_name!r}" if parent_name is not None else ""
+    for item in items:
+        if item.improvement_source == BIOWARE_IMPROVEMENT_SOURCE:
+            if parent_name is not None:
+                # Real SR5 allows Capacity-priced bodyware inside a cyberlimb (p. 456), but
+                # `chummer5.data.bioware` carries no Capacity data at all, and no fixture in the
+                # corpus does it -- so this is refused rather than half-costed.
+                reasons.append(
+                    f"cannot import {item.name!r} installed in {parent_name!r}: bioware installed "
+                    "as a cyberware subsystem is out of scope (no bioware Capacity data)"
+                )
+            elif bioware_by_name.get(item.name) is None or item.grade != STANDARD_BIOWARE_GRADE:
+                reasons.append(
+                    f"cannot import {item.name!r} ({item.grade or 'unknown'} grade): "
+                    "rating-scaled, non-Standard-grade, high-Availability, or non-SR5 bioware is "
+                    "out of scope"
+                )
+            reasons.extend(
+                _augmentation_reasons(
+                    item.children, cyberware_by_name, bioware_by_name, parent_name=item.name
+                )
+            )
+            continue
+        if cyberware_by_name.get(item.name) is None or item.grade != STANDARD_CYBERWARE_GRADE:
+            reasons.append(
+                f"cannot import {item.name!r} ({item.grade or 'unknown'} grade){where}: "
+                "non-Standard-grade or non-SR5 cyberware is out of scope"
+            )
+        reasons.extend(
+            _augmentation_reasons(
+                item.children, cyberware_by_name, bioware_by_name, parent_name=item.name
+            )
+        )
+    return reasons
+
+
+def _import_rating(item: LegacyCyberware, entry: CyberwareEntry) -> int:
+    """The rating to buy an imported item at.
+
+    The legacy format stores `<rating>0</rating>` for an unrated item, while this engine's floor for
+    one is 1 (`CyberwarePurchaseRequest.rating`'s own default) -- so an unrated row is always bought
+    at 1 regardless of what the save says, and only a genuinely rated row uses the stored value.
+    """
+    if entry.is_rated and item.rating > 0:
+        return item.rating
+    return 1
+
+
+def _cyberware_purchase_requests(
+    items: Iterable[LegacyCyberware], cyberware_by_name: Mapping[str, CyberwareEntry]
+) -> tuple[CyberwarePurchaseRequest, ...]:
+    """Turn resolved legacy entries into WP38's nested purchase requests (WP41).
+
+    Only reachable once `_augmentation_reasons` has confirmed every entry at every depth resolves,
+    so the `cyberware_by_name` lookups here cannot fail. Bioware entries are skipped: a top-level
+    one is collected separately (it has its own catalog and its own flat selection), and a nested
+    one is already a blocking reason.
+
+    Bundled subsystems (`Cybereyes Basic System` -> `Image Link`, `Control Rig` -> `Datajack`)
+    need no special case: legacy `<children>` lists them explicitly, and
+    `create_cyberware_tree_selection` resolves an explicit request for a bundled name to the same
+    free node it would have attached on its own (see `chummer5.engine.cyberware_subsystems`'
+    bundled-subsystem section -- a decision WP38 made with this import path specifically in mind).
+    """
+    return tuple(
+        CyberwarePurchaseRequest(
+            item_id=cyberware_by_name[item.name].id,
+            rating=_import_rating(item, cyberware_by_name[item.name]),
+            plugins=_cyberware_purchase_requests(item.children, cyberware_by_name),
+        )
+        for item in items
+        if item.improvement_source != BIOWARE_IMPROVEMENT_SOURCE
+    )
+
+
 def _blocking_reasons(
     legacy: LegacyCharacter,
     traditions: tuple[Tradition, ...],
-    cyberware: tuple[Cyberware, ...],
+    cyberware: tuple[CyberwareEntry, ...],
     bioware: tuple[Bioware, ...],
 ) -> tuple[str, ...]:
     reasons = []
@@ -366,25 +474,15 @@ def _blocking_reasons(
                     "MVP offers (Hermetic, Shamanic)"
                 )
     # WP33/WP45: real, itemized cyberware and bioware checks, replacing the old blanket "character
-    # has cyberware/bioware" rejection -- see module docstring.
-    cyberware_by_name = {item.name: item for item in cyberware}
-    bioware_by_name = {item.name: item for item in bioware}
-    for legacy_item in legacy.cyberware:
-        if legacy_item.improvement_source == BIOWARE_IMPROVEMENT_SOURCE:
-            bioware_catalog_item = bioware_by_name.get(legacy_item.name)
-            if bioware_catalog_item is None or legacy_item.grade != STANDARD_BIOWARE_GRADE:
-                reasons.append(
-                    f"cannot import {legacy_item.name!r} ({legacy_item.grade or 'unknown'} grade): "
-                    "rating-scaled, non-Standard-grade, high-Availability, or non-SR5 bioware is "
-                    "out of scope"
-                )
-            continue
-        catalog_item = cyberware_by_name.get(legacy_item.name)
-        if catalog_item is None or legacy_item.grade != STANDARD_CYBERWARE_GRADE:
-            reasons.append(
-                f"cannot import {legacy_item.name!r} ({legacy_item.grade or 'unknown'} grade): "
-                "rating-scaled, non-Standard-grade, or non-SR5 cyberware is out of scope"
-            )
+    # has cyberware/bioware" rejection. WP41: recursive over <children> -- see module docstring.
+    reasons.extend(
+        _augmentation_reasons(
+            legacy.cyberware,
+            {item.name: item for item in cyberware},
+            {item.name: item for item in bioware},
+            parent_name=None,
+        )
+    )
     if legacy.metavariant is not None:
         reasons.append(f"metavariant {legacy.metavariant!r} is out of MVP scope")
     # WP52: `ALLOCATABLE_ATTRIBUTES` (Mental/Physical/EDG) Karma-bought points are now modeled --
@@ -443,7 +541,7 @@ def import_legacy_character(
     traditions: tuple[Tradition, ...] = (),
     spells: tuple[Spell, ...] = (),
     powers: tuple[Power, ...] = (),
-    cyberware: tuple[Cyberware, ...] = (),
+    cyberware: tuple[CyberwareEntry, ...] = (),
     bioware: tuple[Bioware, ...] = (),
 ) -> ImportResult:
     """Convert an already-parsed `LegacyCharacter` into a validated, built native character.
@@ -464,14 +562,13 @@ def import_legacy_character(
     # WP33/WP45: every remaining `legacy.cyberware` entry is now guaranteed (by `_blocking_reasons`
     # above) to be a Cyberware entry that resolves by name against `cyberware` at Standard grade, or
     # a Bioware entry that resolves by name against `bioware` at Standard grade -- nothing here can
-    # fail.
-    cyberware_by_name = {item.name: item for item in cyberware}
+    # fail. WP41: the cyberware half is a nested request tree now, the bioware half deliberately
+    # stays a flat top-level id list (a nested bioware entry is a blocking reason, see
+    # `_augmentation_reasons`).
     bioware_by_name = {item.name: item for item in bioware}
-    cyberware_item_ids = [
-        cyberware_by_name[item.name].id
-        for item in legacy.cyberware
-        if item.improvement_source != BIOWARE_IMPROVEMENT_SOURCE
-    ]
+    cyberware_purchases = _cyberware_purchase_requests(
+        legacy.cyberware, {item.name: item for item in cyberware}
+    )
     bioware_item_ids = [
         bioware_by_name[item.name].id
         for item in legacy.cyberware
@@ -723,7 +820,7 @@ def import_legacy_character(
         spell_ids=spell_ids,
         power_picks=power_picks,
         magic_attribute_points=magic_attribute_points,
-        cyberware_item_ids=cyberware_item_ids,
+        cyberware_purchases=cyberware_purchases,
         bioware_item_ids=bioware_item_ids,
         # WP43: <nuyenbp> -- Karma actually converted to nuyen at Step Six. `_blocking_reasons`
         # doesn't need its own check for this: STANDARD_GAME_OPTION already restricts import to
@@ -776,7 +873,7 @@ def import_chum5(
     traditions: tuple[Tradition, ...] = (),
     spells: tuple[Spell, ...] = (),
     powers: tuple[Power, ...] = (),
-    cyberware: tuple[Cyberware, ...] = (),
+    cyberware: tuple[CyberwareEntry, ...] = (),
     bioware: tuple[Bioware, ...] = (),
 ) -> ImportResult:
     """Parse a `.chum5` file (WP4's `load_chum5`) and import it (see `import_legacy_character`)."""

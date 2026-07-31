@@ -21,7 +21,10 @@ from chummer5.engine.bioware import (
     create_bioware_selection,
 )
 from chummer5.engine.character import create_character, metatype_choices
-from chummer5.engine.cyberware import create_cyberware_selection
+from chummer5.engine.cyberware_subsystems import (
+    CyberwarePurchaseRequest,
+    create_cyberware_tree_selection,
+)
 from chummer5.engine.derived import BASE_ESSENCE, essence, physical_limit
 from chummer5.engine.improvements import ImprovementSource, ImprovementType
 
@@ -154,25 +157,22 @@ def test_shared_floor_matches_a_real_combined_cyberware_and_bioware_check() -> N
     bioware), then bioware second (aware of cyberware) -- the combined Essence spend must still
     respect the one shared floor regardless of which module's own check is doing the rejecting.
     """
-    from chummer5.data.cyberware import Cyberware
+    from chummer5.data.cyberware_subsystems import load_cyberware_entries
 
-    arm = Cyberware(
-        id="arm",
-        name="Synthetic Full Arm",
-        category="Cyberlimb",
-        cost=20000,
-        essence_cost=Decimal("5.9"),
-        source="SR5",
-        page=1,
-        bonus_support=BonusSupport.NO_EFFECT,
-        flat_bonuses=(),
-        conditional_bonuses=(),
-        raw_bonus=None,
+    # A real catalog row, priced by the tree engine (WP41): 5 Reaction Enhancers at Rating 1
+    # (0.3 Essence each) spends 1.5, leaving the bioware call below to trip the shared floor.
+    reaction_enhancers = next(
+        entry for entry in load_cyberware_entries() if entry.name == "Reaction Enhancers"
     )
-    cyberware_selection = create_cyberware_selection(["arm"], (arm,), nuyen_budget=1_000_000)
+    cyberware_selection = create_cyberware_tree_selection(
+        [CyberwarePurchaseRequest(item_id=reaction_enhancers.id)] * 5,
+        (reaction_enhancers,),
+        nuyen_budget=1_000_000,
+    )
+    assert cyberware_selection.essence_spent == Decimal("1.5")
     with pytest.raises(ValueError, match="would leave no Essence remaining"):
         create_bioware_selection(
-            ["ce"],
+            ["ce"] * 50,
             CATALOG,
             nuyen_budget=1_000_000,
             other_essence_spent=cyberware_selection.essence_spent,

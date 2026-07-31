@@ -11,7 +11,7 @@ from dataclasses import replace
 from decimal import Decimal
 
 from chummer5.data.bioware import load_bioware
-from chummer5.data.cyberware import load_cyberware
+from chummer5.data.cyberware_subsystems import load_cyberware_entries
 from chummer5.data.foci import load_foci
 from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.metatypes import load_metatypes
@@ -22,7 +22,11 @@ from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.bioware import BiowareSelection
 from chummer5.engine.character import Character, create_character, metatype_choices
-from chummer5.engine.cyberware import CyberwareSelection
+from chummer5.engine.cyberware_subsystems import (
+    CyberwareTreeSelection,
+    Installation,
+    PurchasedCyberware,
+)
 from chummer5.engine.derived import (
     BASE_ESSENCE,
     drain_resistance,
@@ -334,7 +338,7 @@ def test_unmodeled_effect_notes_walks_other_selection_kinds_without_crashing() -
     # catalog dataclasses populate `unmodeled_effect_note` yet (WP56 only wires up Quality) -- this
     # pins down that the generic getattr-based walk tolerates that (no crash, no false entries)
     # rather than assuming every kind it visits already has the field.
-    cyberware = next(iter(load_cyberware()))
+    cyberware = next(iter(load_cyberware_entries()))
     bioware = next(iter(load_bioware()))
     power = next(iter(load_powers()))
     focus = next(iter(load_foci()))
@@ -344,8 +348,13 @@ def test_unmodeled_effect_notes_walks_other_selection_kinds_without_crashing() -
     character = _mundane_character("Human")
     character = replace(
         character,
-        cyberware_selection=CyberwareSelection(
-            items=(cyberware,), nuyen_budget=0, nuyen_spent=0, essence_spent=Decimal(0)
+        cyberware_selection=CyberwareTreeSelection(
+            purchases=(
+                PurchasedCyberware(item=cyberware, rating=1, installation=Installation.STANDALONE),
+            ),
+            nuyen_budget=0,
+            nuyen_spent=0,
+            essence_spent=Decimal(0),
         ),
         bioware_selection=BiowareSelection(
             items=(bioware,), nuyen_budget=0, nuyen_spent=0, essence_spent=Decimal(0)
