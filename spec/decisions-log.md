@@ -680,3 +680,55 @@ eligibility, the parent's Capacity budget and rating bounds all surface from
 `create_cyberware_tree_selection` during `build_character` as a plain `ValueError` — exactly where an
 over-budget nuyen spend has surfaced from since WP33. Re-implementing them in the import module
 would be a second copy of rules that can drift.
+
+## 2026-07-31 — Phase K, WP77: five offered augmentations are a live policy violation, not a
+registry gap; the registry gains a reachability marker; the notes are written but not yet shown
+
+**The audit re-run, and it holds.** WP41's entry stated 15 `NOT_YET_SUPPORTED` augmentation rows
+(14 cyberware + 1 bioware), splitting 10/5. Re-derived from scratch over `load_cyberware_entries()`'s
+87 SR5 rows and `load_bioware()`'s 6: **exact**, per row and per count. No correction needed, which
+is worth recording because the WP entry explicitly asked for the counts to be re-run rather than
+trusted.
+
+**The 10 that belong in the registry are now in it** (as 8 table rows — Bone Lacing's 3 variants
+share one, differing only in magnitude, matching the registry's existing `Customized Agility /
+Customized Strength` grouping). Each names the printed effect and the specific missing subsystem;
+see `spec/rulebooks/learnings/phase-k.md`'s WP77 entry for the citations.
+
+**The other 5 are *not* registered, deliberately.** `Reaction Enhancers`, `Wired Reflexes`,
+`Muscle Replacement`, `Voice Modulator` (all cyberware) and `Reflex Recorder` (bioware) carry a
+`<bonus>` that maps onto an `ImprovementType` this engine already has — `ATTRIBUTE`,
+`INITIATIVE_DICE`, `SKILL`. Under the 2026-07-24 policy ("every *computed, chargen-time* effect …
+must be modeled in full, or the aspect stays excluded") these are a **departure from the policy**,
+not an accepted gap, and registering them would launder one into the other. They stay offered and
+inert in the meantime rather than being excluded: `Reflex Recorder` has been in the shipped bioware
+picker since WP45 and is real content in `Barrett.chum5`'s import positive case, so excluding it
+would remove working functionality *and* break a passing test on the way to fixing it properly.
+WP78 is the fix. `tests/unit/test_augmentation_unmodeled_registry.py` pins the split so a future
+catalog widening cannot quietly add a row to either bucket — a test rather than the one-off check
+WP77's entry allowed, because the failure mode is a future change, which no one-off check catches.
+
+**The registry's `Kind` column now records reachability.** Half of WP77's 10 rows (Bone Lacing ×3,
+Smartlink, Damper) are purchasable from the browser today; the other half (Dermal Plating, Armor,
+Internal Air Tank, Skillwires, Skilljack) are rating-scaled and so reachable only by importing a
+legacy `.chum5` — WP41 widened import to all 87 rows while the picker stayed on WP31's flat 60. A
+player-visible gap and an import-only one are not the same severity and the registry previously had
+no way to say so. Rows predating WP77 were **not** retro-labelled: doing it right needs a
+per-catalog reachability check this WP only ran over its own 10, and a wrong label is worse than
+none.
+
+**Correction carried into the registry: Smartlink's printed effect is +2 *Accuracy*, not +2 dice.**
+WP77's own scoping entry said "+2 dice on ranged attacks." The book (p. 433, via p. 444/453) says
+the smartgun system "increases the gun's Accuracy by 2" when you have a smartlink — a Limit, not a
+dice pool. The legacy engine does apply `<smartlink>2` as a wireless-gated dice-pool modifier
+(`Weapon.cs`), so the WP entry described the *code* accurately and the *book* inaccurately. Nothing
+turns on it here — both readings are equally unmodeled — but the registry states both rather than
+repeating the half that is wrong about SR5.
+
+**A gap this WP documents and cannot close: none of these notes are shown to a player.** WP56 built
+exactly the mechanism for it — `Quality.unmodeled_effect_note`, surfaced on the character sheet's
+"Unmodeled real effects" disclosure via `chummer5.engine.derived.unmodeled_effect_notes`, which
+*already walks cyberware and bioware* looking for that field. No augmentation catalog populates it,
+so a player who buys Bone Lacing (Titanium) sees an empty section where a Low-Light Vision quality
+would show a note. WP77 is documentation-only by its own scope and WP78's is the 5 computable rows,
+so neither covers this. **Scoped as WP79** (Phase K, before WP42) rather than left as worklog prose.

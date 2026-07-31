@@ -156,6 +156,12 @@ judgment calls that led to excluding SINner/Prejudiced/etc. specifically (as opp
 them with a documented gap) no longer apply going forward — see WP55's own entry in the
 Implementation Plan for the first WP built under the new policy.
 
+**Reachability is part of a row, not a footnote (WP77).** An aspect the browser UI offers today and
+one reachable only by importing a legacy `.chum5` file are not the same severity of gap, so the
+`Kind` column now says which. Rows predating WP77 carry no such marker — they were not
+retro-labelled, because getting it right per row needs the same per-catalog reachability check WP77
+only ran over its own 10.
+
 | Aspect | Kind | What's modeled | What's not (and why) | Source |
 |---|---|---|---|---|
 | Gearhead | Quality (Positive) | Karma cost only | Vehicle/drone Speed/Handling/dice-pool bonus during vehicle or chase combat (p. 74) — no vehicle/combat subsystem exists | WP22 |
@@ -182,6 +188,14 @@ Implementation Plan for the first WP built under the new policy.
 | Audio Enhancement | Cyberware (Earware) | Nuyen/Essence/Capacity cost + **+Rating Mental limit, conditional on a hearing Perception test** (p. 444) | Same Wireless dice-pool half, for audio Perception tests (p. 444) | WP40 |
 | Spatial Recognizer | Cyberware (Earware) | Nuyen/Essence/Capacity cost + **+2 Mental limit, conditional on a Perception test to find a sound's source** (p. 444) | Same Wireless dice-pool half (p. 444) | WP40 |
 | Hydraulic Jacks | Cyberware (Cyberlimb Accessory); installable only into a cyberleg | Nuyen/Capacity cost + **+Rating Physical limit for jumping/sprinting, granted once per matched pair** (p. 457) | The same sentence's other two clauses — +20% maximum jump distance and −2 m falling distance for falling-damage purposes (p. 457) — no movement or falling-damage system exists. Its "parent must be a leg" `<required>` is also unenforced (no `<required>` data is loaded); the pair check is "two of equal Rating in distinct parents" | WP40 |
+| Bone Lacing (Plastic / Aluminum / Titanium) | Cyberware (Bodyware); **offered by today's UI**, all 3 | Nuyen + Essence cost only | Its entire printed effect (p. 454): extra Body dice for resisting physical damage, an Armor bonus of the same size, and an unarmed Damage Value of (STR + N)P — +1 / +2 / +3 by material. No character-level Armor total exists for a bonus to add to (`chummer5.engine.resources.StarterGearItem.armor_rating` holds a bought armor item's own rating; nothing sums or reads it), and there is no damage-resistance test or unarmed-combat representation at all | WP77 |
+| Smartlink | Cyberware (Eyeware); **offered by today's UI** | Nuyen + Essence cost only | +2 to a smartgun's Accuracy while you fire it (p. 433; the implant is the eyeware version of the p. 444 accessory) — no weapon, Accuracy or attack-test representation exists. The legacy engine reads the same `<smartlink>2` as a wireless-gated ranged **dice-pool** modifier rather than an Accuracy one; both readings are equally unmodeled here | WP77 |
+| Damper | Cyberware (Earware); **offered by today's UI** | Nuyen + Essence cost only | +2 dice resisting sonic attacks, including flashbangs (p. 454) — no test resolution, no sonic/damage-resistance subsystem | WP77 |
+| Dermal Plating | Cyberware (Bodyware); reachable only through legacy import (WP41) | Nuyen + Essence cost (both Rating-scaled) | +Rating Armor, cumulative with other armor and without adding Encumbrance (p. 454) — the same missing character-level Armor total as Bone Lacing | WP77 |
+| Armor (Cyberlimb Enhancement) | Cyberware (Cyberlimb Enhancement), installable only into a cyberlimb; reachable only through legacy import (WP41) | Nuyen + Capacity cost | +Rating Armor bonus, cumulative, no Encumbrance (p. 456) — same missing Armor total. Its "one enhancement of each type per limb" cap is part of the same unmodeled per-limb system Customized/Enhanced Agility/Strength are already registered for | WP77 |
+| Internal Air Tank | Cyberware (Bodyware); reachable only through legacy import (WP41) | Nuyen + Essence cost | Holding your breath for up to Rating hours, and complete protection from inhalation-vector toxin attacks while you do (p. 455) — the same toxin/pathogen bucket Natural Immunity and Resistance to Pathogens/Toxins are already in, plus no breath/environmental subsystem | WP77 |
+| Skillwires | Cyberware (Bodyware); reachable only through legacy import (WP41) | Nuyen + Essence cost (both Rating-scaled) | Use of activesofts up to the skillwire's Rating, and only while they run on an implanted skilljack (p. 455) — no skillsoft subsystem. The softs themselves are equally absent: SR5's Activesoft/Knowsoft/Linguasoft are Rating-scaled-cost gear and so fall outside WP21's flat-cost gear catalog, leaving nothing to run | WP77 |
+| Skilljack | Cyberware (Headware); reachable only through legacy import (WP41) | Nuyen + Essence cost (both Rating-scaled) | Interpreting knowsofts/linguasofts and running activesofts, capped at Rating × 2 total and Rating per skill (p. 452) — the same missing skillsoft subsystem as Skillwires | WP77 |
 
 ## Architecture & major design decisions
 

@@ -435,7 +435,7 @@ puts the widest augmentation catalog this project has ever offered in front of a
 should not do that while 15 rows in that catalog are purchasable, priced, and mechanically silent
 with no record of the fact. See the two entries' own "Depends on" lines for the exact ordering.
 
-- [ ] **WP77 — Augmentation `<bonus>` coverage audit + "Unmodeled real effects" backfill.**
+- [x] **WP77 — Augmentation `<bonus>` coverage audit + "Unmodeled real effects" backfill.**
   Goal: close the gap WP38's worklog first flagged and WP41's widening made larger — every
   `BonusSupport.NOT_YET_SUPPORTED` cyberware/bioware row is offered for purchase, charged in full,
   and grants *nothing*, and none of them appears in the Project Overview's "Unmodeled real effects"
@@ -498,6 +498,29 @@ with no record of the fact. See the two entries' own "Depends on" lines for the 
   in WP78's scope," so this can't silently regrow the next time a catalog widens. No behavioural
   change: `pytest` count and every existing assertion unchanged.
 
+  **Landed 2026-07-31**, documentation-only as scoped: no `src/` file changed, every pre-existing
+  assertion untouched, +5 tests (1112 total). What WP78 and WP42 need to know:
+  - **The audit re-ran exact.** 15 `NOT_YET_SUPPORTED` rows (14 cyberware + 1 bioware), splitting
+    10 registry / 5 Bucket A, per row and per count. The entry's own table needed no correction.
+  - **The 10 are in the Project Overview's registry** as 8 table rows (Bone Lacing's 3 variants
+    share one, differing only in magnitude — the existing `Customized Agility / Customized
+    Strength` grouping). Printed effects and citations: `spec/rulebooks/learnings/phase-k.md`'s
+    WP77 entry.
+  - **One correction to this entry's own table: Smartlink's printed effect is +2 *Accuracy*, not
+    +2 dice** (p. 433 via p. 444/453). The legacy engine *does* apply `<smartlink>2` as a
+    wireless-gated dice-pool modifier, so the table described the code, not the book. Both are
+    equally unmodeled here; the registry row says both.
+  - **`tests/unit/test_augmentation_unmodeled_registry.py` is the pin** — a test, not a one-off
+    check, since the failure mode is a *future* catalog widening. It holds both bucket name-lists
+    literally (the WP56 posture: the markdown registry is never read at runtime), so **WP78 must
+    move each row it models out of `WP78_SCOPE`**, which is exactly the check WP78's own acceptance
+    criteria ask for.
+  - **The registry's `Kind` column now records reachability** (offered by today's UI vs. legacy
+    import only) — 5 and 5 among these rows. Pre-WP77 rows are not retro-labelled.
+  - **A gap found while writing the rows, now WP79:** nothing *shows* any of this to a player.
+    WP56's `unmodeled_effect_note` mechanism exists and `derived.unmodeled_effect_notes` already
+    walks cyberware/bioware for it, but no augmentation catalog populates the field.
+
 - [ ] **WP78 — Model the computable augmentation bonuses.**
   Goal: fix WP77's Bucket A — make the 5 rows whose real SR5 effect this engine *can* compute
   actually compute it, so they stop being offered-but-inert. This is the first time the augmentation
@@ -534,6 +557,36 @@ with no record of the fact. See the two entries' own "Depends on" lines for the 
   check against a real fixture that owns one (`Reaction Enhancers`: `BLUE`, `Mittens Chargen`,
   `SCSi`; `Wired Reflexes`: `Fuzzy-chargen`, `SCSi`), and an explicit test that every row this WP
   reclassifies has been removed from WP77's registry rows or was never in them.
+
+- [ ] **WP79 — Surface augmentation unmodeled-effect notes on the character sheet.**
+  Goal: make WP77's 8 registry rows visible where a player can act on them. WP56 built the whole
+  mechanism for qualities — `Quality.unmodeled_effect_note`, mirrored by hand from the Project
+  Overview's table into `chummer5.data.qualities._UNMODELED_EFFECT_NOTES`, collected by
+  `chummer5.engine.derived.unmodeled_effect_notes` and rendered as the character sheet's "Unmodeled
+  real effects" disclosure. That collector **already walks `cyberware_selection.walk()` and
+  `bioware_selection.items`** with a kind-agnostic `getattr(item, "unmodeled_effect_note", None)`
+  (WP56 wrote it that way on purpose, and has a test pinning "walks them, contributes nothing").
+  So this is a data-layer WP: populate the field, and the sheet lights up with no engine or template
+  change. Claimed 2026-07-31 by WP77, which found the gap while writing rows nobody can see.
+  Deliverables:
+  - An `unmodeled_effect_note` field on `chummer5.data.cyberware.Cyberware`,
+    `chummer5.data.cyberware_subsystems.CyberwareEntry` and `chummer5.data.bioware.Bioware`,
+    populated from a by-name dict per module, mirroring `_UNMODELED_EFFECT_NOTES` exactly (default
+    `None`, so no caller/test changes).
+  - Notes for WP77's 8 registry rows **plus the 6 augmentation rows already in the registry from
+    WP38/WP40** (Customized/Enhanced Agility/Strength, Vision/Audio Enhancement, Spatial
+    Recognizer, Hydraulic Jacks) — those have a *partly* modeled effect, so their note is the
+    unmodeled remainder, not "this does nothing." Check the wording carries that.
+  - Decide whether the two catalogs' dicts are one shared constant or two: `Cyberware` and
+    `CyberwareEntry` load the same rows from the same file, and only the second reaches a
+    `Character` today.
+  Depends on: WP77 (the rows). Independent of WP78 — but if WP78 lands first, its 5 rows must have
+  **no** note, which is the same invariant `tests/unit/test_augmentation_unmodeled_registry.py`
+  already pins. **Should land before WP42**, which is what puts the widest catalog in front of a
+  player.
+  Acceptance: a web test that a character owning Bone Lacing (Titanium) renders a non-empty
+  "Unmodeled real effects" row for it (mirroring WP56's own quality-side test), and a data test that
+  every name in that file's `REGISTERED_UNMODELED` resolves to a note in both cyberware catalogs.
 
 - [ ] **WP42 — Cyberware modification/subsystem UI.**
   Goal: expose subsystem/plugin purchase through the browser. Deliberately last, and deliberately
