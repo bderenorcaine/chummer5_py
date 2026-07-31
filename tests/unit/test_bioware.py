@@ -7,7 +7,13 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from chummer5.data.bioware import Bioware, BiowareFlatBonus, count_by_support, load_bioware
+from chummer5.data.bioware import (
+    Bioware,
+    BiowareFlatBonus,
+    BiowareSelectSkillBonus,
+    count_by_support,
+    load_bioware,
+)
 from chummer5.data.cyberware import BonusSupport
 
 BIOWARE = load_bioware()
@@ -86,20 +92,35 @@ def test_enhanced_articulation_has_two_distinct_flat_bonus_shapes() -> None:
     )
 
 
-def test_reflex_recorder_is_not_yet_supported() -> None:
+def test_reflex_recorder_is_a_select_skill_bonus() -> None:
     # <bonus><selectskill limittoattribute="BOD,AGI,REA,STR"><val>1</val></selectskill></bonus> --
     # a player-selected skill bonus, structurally different from <specificskill>'s fixed-name shape.
+    # WP80 gave it its own BonusSupport value (it was NOT_YET_SUPPORTED from WP45 until then): the
+    # catalog records that a pick is required and what it may be, never the pick itself.
     item = next(b for b in BIOWARE if b.name == "Reflex Recorder")
-    assert item.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    assert item.bonus_support == BonusSupport.SELECT_SKILL
+    assert item.select_skill_bonus == BiowareSelectSkillBonus(
+        value=1, limit_to_attributes=("BOD", "AGI", "REA", "STR")
+    )
     assert item.flat_bonuses == ()
     assert item.raw_bonus is not None
 
 
+def test_reflex_recorder_is_the_only_select_skill_row() -> None:
+    # Shape-gated rather than name-gated (see chummer5.data.bioware's docstring), so this pins that
+    # the shape is as narrow as claimed -- one row in either augmentation catalog.
+    assert [b.name for b in BIOWARE if b.bonus_support == BonusSupport.SELECT_SKILL] == [
+        "Reflex Recorder"
+    ]
+
+
 def test_supported_vs_unsupported_counts_are_visible() -> None:
-    # FLAT_BONUS: Enhanced Articulation. NOT_YET_SUPPORTED: Reflex Recorder. NO_EFFECT: the other 4.
+    # FLAT_BONUS: Enhanced Articulation. SELECT_SKILL: Reflex Recorder (WP80; NOT_YET_SUPPORTED
+    # before that). NO_EFFECT: the other 4 -- no row is unsupported at all any more.
     counts = count_by_support(BIOWARE)
     assert counts[BonusSupport.FLAT_BONUS] == 1
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 1
+    assert counts[BonusSupport.SELECT_SKILL] == 1
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 0
     assert counts[BonusSupport.NO_EFFECT] == 4
     assert sum(counts.values()) == 6
 

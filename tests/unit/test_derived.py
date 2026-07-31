@@ -20,7 +20,7 @@ from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
-from chummer5.engine.bioware import BiowareSelection
+from chummer5.engine.bioware import BiowarePurchase, BiowareSelection
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.cyberware_subsystems import (
     CyberwareTreeSelection,
@@ -357,7 +357,10 @@ def test_unmodeled_effect_notes_walks_other_selection_kinds_without_crashing() -
             essence_spent=Decimal(0),
         ),
         bioware_selection=BiowareSelection(
-            items=(bioware,), nuyen_budget=0, nuyen_spent=0, essence_spent=Decimal(0)
+            purchases=(BiowarePurchase(item=bioware),),
+            nuyen_budget=0,
+            nuyen_spent=0,
+            essence_spent=Decimal(0),
         ),
         power_selection=PowerSelection(
             picks=(PowerPick(power=power, rating=1),),

@@ -43,16 +43,37 @@ confirms this is an ordinary SR5 purchase pattern for bioware specifically.** No
 own curated corpus's real Bioware purchases (see Log/worklog) are duplicates of the same item, so
 this is a consistency choice (one `create_*_selection` shape across cyberware/bioware/gear, all of
 which allow repeats) rather than a separately-verified rule the way cyberware's own duplicate-
-cyberlimb-pair finding was.
+cyberlimb-pair finding was. **WP80 turns it into a verified one for `Reflex Recorder`
+specifically** -- p. 460: "Multiple recorders may be taken for multiple skills, but you can't
+implant two reflex recorders for the same skill" -- which is also the first SR5 rule this engine
+has that constrains *which* duplicates are legal, rather than whether duplicates are.
+
+**WP80: a purchase is a `BiowarePurchaseRequest`, not a bare id, because one row needs a player
+choice.** `Reflex Recorder`'s `<bonus>` is a `<selectskill>` (see `chummer5.data.bioware`'s
+docstring): the catalog says a pick is required and what it may be, and the *purchase* carries the
+pick. Two consequences worth stating once:
+
+- **Per purchase, not per catalog row.** The pick can't live in a `{item_id: skill}` mapping the
+  way WP55's `QualitySelection.quality_text` does, because a quality can only be taken once while
+  bioware can be bought repeatedly -- and p. 460 explicitly contemplates buying several recorders
+  for several skills (`cyberware.xml`'s own LCD-sourced implant packages bundle two, forced to
+  `Locksmith` and `Pistols`). Hence `BiowarePurchase`, one per bought unit.
+- **A bare id is still accepted** wherever no choice is involved: `create_bioware_selection` takes
+  `Iterable[str | BiowarePurchaseRequest]` and reads a plain string as "this item, no player
+  choice." That is a total, well-defined meaning rather than a placeholder (5 of the 6 offered rows
+  have no choice to make), so it keeps every pre-WP80 caller correct instead of rewriting them into
+  a shape carrying a permanent `chosen_skill=None`. An id for a row that *does* require a pick is
+  rejected, loudly, by the same validation a `BiowarePurchaseRequest(chosen_skill=None)` hits.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
 from chummer5.data.bioware import Bioware
+from chummer5.data.skills import Skill
 from chummer5.engine.character import Character
 from chummer5.engine.derived import BASE_ESSENCE
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
@@ -76,26 +97,127 @@ _GLOBAL_TARGET = ""
 
 
 @dataclass(frozen=True)
+class BiowarePurchaseRequest:
+    """One requested bioware purchase (WP80): a catalog id, plus the player's skill pick for the
+    rows that need one (`Reflex Recorder`; `None` for every other row).
+
+    The unresolved, persistable half of a purchase -- exactly what `chummer5.io.save_format
+    .CharacterSave.bioware_purchases` stores and what a web form/legacy import produces, mirroring
+    `chummer5.engine.cyberware_subsystems.CyberwarePurchaseRequest`'s identical split between a
+    request and its resolved form.
+    """
+
+    item_id: str
+    chosen_skill: str | None = None
+
+
+@dataclass(frozen=True)
+class BiowarePurchase:
+    """One resolved bioware purchase: the catalog row, and the player's pick if it needed one."""
+
+    item: Bioware
+    chosen_skill: str | None = None
+
+
+@dataclass(frozen=True)
 class BiowareSelection:
     """A validated set of purchased bioware items and their combined nuyen/Essence cost.
 
-    `items` may contain the same `Bioware` more than once -- see module docstring for why duplicate
-    purchases are allowed (a consistency choice, not a separately-verified rule the way cyberware's
-    own was).
+    `purchases` may contain the same `Bioware` more than once -- see module docstring for why
+    duplicate purchases are allowed (a consistency choice, not a separately-verified rule the way
+    cyberware's own was) and for the one SR5 rule constraining *which* duplicates are legal.
+
+    `items` is the purchased rows without their picks, kept as a property (WP80) so every consumer
+    that only wants "what did this character buy" -- the character sheet's recap,
+    `chummer5.engine.derived.unmodeled_effect_notes`, the web layer's Improvement swap -- reads
+    the same way it did before purchases grew a second field.
     """
 
-    items: tuple[Bioware, ...]
+    purchases: tuple[BiowarePurchase, ...]
     nuyen_budget: int
     nuyen_spent: int
     essence_spent: Decimal
 
+    @property
+    def items(self) -> tuple[Bioware, ...]:
+        return tuple(purchase.item for purchase in self.purchases)
+
+    def to_requests(self) -> tuple[BiowarePurchaseRequest, ...]:
+        """The persistable inverse of `create_bioware_selection`'s input (WP80) -- mirrors
+        `chummer5.engine.cyberware_subsystems.CyberwareTreeSelection.to_requests`."""
+        return tuple(
+            BiowarePurchaseRequest(item_id=purchase.item.id, chosen_skill=purchase.chosen_skill)
+            for purchase in self.purchases
+        )
+
+
+def select_skill_choices(item: Bioware, skills: Iterable[Skill]) -> tuple[Skill, ...]:
+    """Every active skill a `SELECT_SKILL` row's pick may legally be (WP80), name-sorted.
+
+    `()` for a row with no pick to make. The row's `limittoattribute` filter is the only restriction
+    SR5 states (p. 460: "a specific skill linked to a Physical attribute"), so this deliberately
+    does *not* narrow further -- an untrained skill is a legal pick (the recorder raises its Rating
+    from 0 to 1), and so are the three Exotic skills, which the filter itself doesn't exclude.
+
+    Shared by the browser picker and `chummer5.io.legacy_import`, so "what may be chosen" and "what
+    is accepted" can't drift apart.
+    """
+    bonus = item.select_skill_bonus
+    if bonus is None:
+        return ()
+    return tuple(
+        sorted(
+            (skill for skill in skills if skill.attribute in bonus.limit_to_attributes),
+            key=lambda skill: skill.name,
+        )
+    )
+
+
+def _as_request(purchase: str | BiowarePurchaseRequest) -> BiowarePurchaseRequest:
+    """A bare catalog id means "this item, no player choice" -- see module docstring (WP80)."""
+    return BiowarePurchaseRequest(item_id=purchase) if isinstance(purchase, str) else purchase
+
+
+def _resolve_chosen_skill(
+    item: Bioware, chosen_skill: str | None, skills_by_name: Mapping[str, Skill]
+) -> str | None:
+    """Validate one purchase's skill pick against its catalog row (WP80).
+
+    Returns the pick to store (`None` for a row that needs none). Raises `ValueError` when a row
+    that requires a pick has none, when a row that requires none has one (the "don't silently
+    ignore a stale/tampered field" rule `create_quality_selection` applies to `quality_text`), or
+    when the pick isn't an active skill whose linked attribute passes the row's own
+    `limittoattribute` filter.
+    """
+    bonus = item.select_skill_bonus
+    if bonus is None:
+        if chosen_skill is not None:
+            raise ValueError(
+                f"a skill was chosen for {item.name!r}, which has no skill to choose: "
+                f"{chosen_skill!r}"
+            )
+        return None
+    if chosen_skill is None or not chosen_skill.strip():
+        raise ValueError(f"{item.name} requires a chosen skill")
+    name = chosen_skill.strip()
+    skill = skills_by_name.get(name)
+    if skill is None:
+        raise ValueError(f"not an active skill: {name!r}")
+    if skill.attribute not in bonus.limit_to_attributes:
+        raise ValueError(
+            f"{item.name}: {skill.name} is linked to {skill.attribute}, not one of "
+            f"{', '.join(bonus.limit_to_attributes)}"
+        )
+    return name
+
 
 def create_bioware_selection(
-    item_ids: Iterable[str],
+    purchases: Iterable[str | BiowarePurchaseRequest],
     catalog: Iterable[Bioware],
     nuyen_budget: int,
     *,
     other_essence_spent: Decimal = Decimal(0),
+    skills: Iterable[Skill] = (),
 ) -> BiowareSelection:
     """Build a `BiowareSelection`, validating nuyen spend and the (shared) Essence floor together.
 
@@ -106,15 +228,47 @@ def create_bioware_selection(
     evaluation order), leaves strictly-positive Essence remaining. Duplicate ids are allowed -- see
     module docstring. Does not require the full nuyen budget to be spent, mirroring every other
     `create_*` function in this engine.
+
+    **WP80**: each purchase may be a bare id or a `BiowarePurchaseRequest` (see module docstring).
+    A `BonusSupport.SELECT_SKILL` row (`Reflex Recorder`) additionally requires a `chosen_skill`
+    that resolves against `skills` and passes its own `limittoattribute` filter, and no two such
+    purchases may name the same skill (p. 460: "you can't implant two reflex recorders for the same
+    skill"). `skills` defaults to `()` -- the same "a caller with nothing to resolve passes
+    nothing" shape `build_character`'s own optional catalogs use -- so buying a row that needs a
+    pick without supplying a skill catalog fails as an unresolvable pick rather than silently
+    skipping the check.
     """
     by_id = {item.id: item for item in catalog}
-    ids = list(item_ids)
+    requests = [_as_request(purchase) for purchase in purchases]
 
-    unknown = sorted({item_id for item_id in ids if item_id not in by_id})
+    unknown = sorted({r.item_id for r in requests if r.item_id not in by_id})
     if unknown:
         raise ValueError(f"not a bioware catalog id: {unknown}")
 
-    selected = tuple(by_id[item_id] for item_id in ids)
+    skills_by_name = {skill.name: skill for skill in skills}
+    resolved = tuple(
+        BiowarePurchase(
+            item=by_id[r.item_id],
+            chosen_skill=_resolve_chosen_skill(by_id[r.item_id], r.chosen_skill, skills_by_name),
+        )
+        for r in requests
+    )
+
+    # p. 460: multiple recorders are legal, one per skill. Checked per (item, skill) rather than per
+    # skill overall, since the rule is about implanting two of *the same* item for one skill.
+    picks_seen: set[tuple[str, str]] = set()
+    for purchase in resolved:
+        if purchase.chosen_skill is None:
+            continue
+        pick = (purchase.item.id, purchase.chosen_skill)
+        if pick in picks_seen:
+            raise ValueError(
+                f"two {purchase.item.name} purchases both chose {purchase.chosen_skill} -- "
+                "only one per skill is allowed"
+            )
+        picks_seen.add(pick)
+
+    selected = tuple(purchase.item for purchase in resolved)
 
     nuyen_spent = sum(item.cost for item in selected)
     if nuyen_spent > nuyen_budget:
@@ -129,7 +283,7 @@ def create_bioware_selection(
         )
 
     return BiowareSelection(
-        items=selected,
+        purchases=resolved,
         nuyen_budget=nuyen_budget,
         nuyen_spent=nuyen_spent,
         essence_spent=essence_spent,
@@ -137,13 +291,21 @@ def create_bioware_selection(
 
 
 def apply_bioware_improvements(character: Character, selection: BiowareSelection) -> None:
-    """Add every purchased item's Essence cost (always) and `FLAT_BONUS`es (if any) to
-    `character.improvements`, under `ImprovementSource.BIOWARE` -- mirrors `chummer5.engine
-    .cyberware.apply_cyberware_improvements`'s shape exactly, including granting an unconditional
-    `ESSENCE` Improvement for every item (even `NOT_YET_SUPPORTED` ones, e.g. Reflex Recorder) and
-    sharing one `source_id` (the item's own catalog id) across duplicate purchases of the same item.
+    """Add every purchased item's Essence cost (always), its `FLAT_BONUS`es (if any) and its
+    `SELECT_SKILL` bonus against the player's own pick (WP80) to `character.improvements`, under
+    `ImprovementSource.BIOWARE` -- mirrors `chummer5.engine.cyberware
+    .apply_cyberware_improvements`'s shape exactly, including granting an unconditional `ESSENCE`
+    Improvement for every item (even
+    `NOT_YET_SUPPORTED` ones) and sharing one `source_id` (the item's own catalog id) across
+    duplicate purchases of the same item.
+
+    Two `Reflex Recorder`s sharing that one `source_id` is correct rather than a collision: they
+    target *different* skills (`create_bioware_selection` rejects two picking the same one), so
+    they resolve independently, and `ImprovementIndex.remove_source` still retracts both at once --
+    which is exactly what the web layer's own "swap this source's Improvements" step wants.
     """
-    for item in selection.items:
+    for purchase in selection.purchases:
+        item = purchase.item
         character.improvements.add(
             Improvement(
                 improvement_type=ImprovementType.ESSENCE,
@@ -160,6 +322,19 @@ def apply_bioware_improvements(character: Character, selection: BiowareSelection
                     improvement_type=_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
                     target=flat_bonus.target_name,
                     value=flat_bonus.value,
+                    source_type=ImprovementSource.BIOWARE,
+                    source_id=item.id,
+                )
+            )
+        # WP80: the SELECT_SKILL bonus, aimed at the player's own pick. p. 460 says the recorder
+        # "adds 1 to the Rating of a specific skill", so this is ImprovementType.SKILL (a rating
+        # bonus), not a dice-pool modifier -- see chummer5.data.bioware's docstring.
+        if item.select_skill_bonus is not None and purchase.chosen_skill is not None:
+            character.improvements.add(
+                Improvement(
+                    improvement_type=ImprovementType.SKILL,
+                    target=purchase.chosen_skill,
+                    value=item.select_skill_bonus.value,
                     source_type=ImprovementSource.BIOWARE,
                     source_id=item.id,
                 )

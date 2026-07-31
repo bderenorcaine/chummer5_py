@@ -274,6 +274,7 @@ from chummer5.data.qualities import BonusSupport, Quality
 from chummer5.data.skills import Skill
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
+from chummer5.engine.bioware import BiowarePurchaseRequest, select_skill_choices
 from chummer5.engine.build_method import SUPPORTED_BUILD_METHODS
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character, sr5_metatypes
 from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
@@ -329,10 +330,36 @@ class UnsupportedLegacyCharacterError(ValueError):
         super().__init__("cannot import: " + "; ".join(reasons))
 
 
+def _bioware_pick_reason(
+    item: LegacyCyberware, entry: Bioware, skills: Iterable[Skill]
+) -> str | None:
+    """WP80: itemize a `SELECT_SKILL` bioware entry whose `<extra>` doesn't resolve to a legal pick.
+
+    `Reflex Recorder` is the only such row (`Barrett.chum5` stores `<extra>Longarms</extra>`). An
+    unresolvable or missing pick is a blocking reason like every other unimportable augmentation
+    detail, rather than being silently dropped -- dropping it would import an item whose whole
+    modeled effect is that pick. Duplicate picks across two purchases of the same item are *not*
+    checked here: like every other structural rule (see this module's WP41 docstring paragraph),
+    that one surfaces from `create_bioware_selection` at build time.
+    """
+    if entry.select_skill_bonus is None:
+        return None
+    eligible = {skill.name for skill in select_skill_choices(entry, skills)}
+    if item.extra in eligible:
+        return None
+    filter_codes = "/".join(entry.select_skill_bonus.limit_to_attributes)
+    chosen = item.extra or "(none recorded)"
+    return (
+        f"cannot import {item.name!r}: its chosen skill {chosen!r} is not an active skill linked "
+        f"to {filter_codes}"
+    )
+
+
 def _augmentation_reasons(
     items: Iterable[LegacyCyberware],
     cyberware_by_name: Mapping[str, CyberwareEntry],
     bioware_by_name: Mapping[str, Bioware],
+    skills: tuple[Skill, ...],
     *,
     parent_name: str | None,
 ) -> list[str]:
@@ -362,9 +389,19 @@ def _augmentation_reasons(
                     "rating-scaled, non-Standard-grade, high-Availability, or non-SR5 bioware is "
                     "out of scope"
                 )
+            else:
+                # WP80: the item resolves -- but if it carries a purchase-time skill pick, that pick
+                # has to resolve too.
+                pick_reason = _bioware_pick_reason(item, bioware_by_name[item.name], skills)
+                if pick_reason is not None:
+                    reasons.append(pick_reason)
             reasons.extend(
                 _augmentation_reasons(
-                    item.children, cyberware_by_name, bioware_by_name, parent_name=item.name
+                    item.children,
+                    cyberware_by_name,
+                    bioware_by_name,
+                    skills,
+                    parent_name=item.name,
                 )
             )
             continue
@@ -375,7 +412,7 @@ def _augmentation_reasons(
             )
         reasons.extend(
             _augmentation_reasons(
-                item.children, cyberware_by_name, bioware_by_name, parent_name=item.name
+                item.children, cyberware_by_name, bioware_by_name, skills, parent_name=item.name
             )
         )
     return reasons
@@ -425,6 +462,7 @@ def _blocking_reasons(
     traditions: tuple[Tradition, ...],
     cyberware: tuple[CyberwareEntry, ...],
     bioware: tuple[Bioware, ...],
+    skills: tuple[Skill, ...] = (),
 ) -> tuple[str, ...]:
     reasons = []
     if legacy.build_method not in SUPPORTED_BUILD_METHODS:
@@ -480,6 +518,7 @@ def _blocking_reasons(
             legacy.cyberware,
             {item.name: item for item in cyberware},
             {item.name: item for item in bioware},
+            skills,
             parent_name=None,
         )
     )
@@ -555,7 +594,7 @@ def import_legacy_character(
     `build_character`'s own WP28/WP33/WP45 defaults -- a Mundane, augmentation-free legacy character
     (every fixture this project imported before WP28/WP33/WP45) never touches any of the five.
     """
-    reasons = _blocking_reasons(legacy, traditions, cyberware, bioware)
+    reasons = _blocking_reasons(legacy, traditions, cyberware, bioware, skills)
     if reasons:
         raise UnsupportedLegacyCharacterError(reasons)
 
@@ -563,14 +602,21 @@ def import_legacy_character(
     # above) to be a Cyberware entry that resolves by name against `cyberware` at Standard grade, or
     # a Bioware entry that resolves by name against `bioware` at Standard grade -- nothing here can
     # fail. WP41: the cyberware half is a nested request tree now, the bioware half deliberately
-    # stays a flat top-level id list (a nested bioware entry is a blocking reason, see
-    # `_augmentation_reasons`).
+    # stays a flat top-level list (a nested bioware entry is a blocking reason, see
+    # `_augmentation_reasons`). WP80: each bioware entry is a request rather than a bare id, so a
+    # `Reflex Recorder`'s own `<extra>` (its chosen skill, already confirmed resolvable above)
+    # rides along.
     bioware_by_name = {item.name: item for item in bioware}
     cyberware_purchases = _cyberware_purchase_requests(
         legacy.cyberware, {item.name: item for item in cyberware}
     )
-    bioware_item_ids = [
-        bioware_by_name[item.name].id
+    bioware_purchases = [
+        BiowarePurchaseRequest(
+            item_id=bioware_by_name[item.name].id,
+            chosen_skill=(
+                item.extra if bioware_by_name[item.name].select_skill_bonus is not None else None
+            ),
+        )
         for item in legacy.cyberware
         if item.improvement_source == BIOWARE_IMPROVEMENT_SOURCE
     ]
@@ -821,7 +867,7 @@ def import_legacy_character(
         power_picks=power_picks,
         magic_attribute_points=magic_attribute_points,
         cyberware_purchases=cyberware_purchases,
-        bioware_item_ids=bioware_item_ids,
+        bioware_purchases=bioware_purchases,
         # WP43: <nuyenbp> -- Karma actually converted to nuyen at Step Six. `_blocking_reasons`
         # doesn't need its own check for this: STANDARD_GAME_OPTION already restricts import to
         # Standard-gameplay-option characters, and every Standard settings.xml block caps this at

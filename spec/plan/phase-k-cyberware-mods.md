@@ -433,9 +433,10 @@ conversation's own request not to build placeholder UI that gets thrown away app
 once WP41 had already been written. WP41's own follow-up is why: WP42 is the WP that puts the widest
 augmentation catalog this project has ever offered in front of a player, and it should not do that
 while 15 rows in that catalog are purchasable, priced, and mechanically silent with no record of the
-fact. WP77 (audit + registry), WP78 (model the computable ones) and WP79 (show the notes) have
-landed — so WP42's hard prerequisite among them is met. WP80 (`Reflex Recorder`'s player choice) and
-WP81 (natural vs. augmented attribute maximum) remain and do not gate WP42. See each entry's own
+fact. WP77 (audit + registry), WP78 (model the computable ones), WP79 (show the notes) and WP80
+(`Reflex Recorder`'s player choice) have landed — so WP42's hard prerequisite among them is met, and
+no augmentation row is offered-and-inert any more. WP81 (natural vs. augmented attribute maximum)
+and WP82 (the same for skills, claimed by WP80) remain and do not gate WP42. See each entry's own
 "Depends on" line.
 
 - [x] **WP77 — Augmentation `<bonus>` coverage audit + "Unmodeled real effects" backfill.**
@@ -657,7 +658,7 @@ WP81 (natural vs. augmented attribute maximum) remain and do not gate WP42. See 
     `Project Overview.md` at test time, which WP56 rejected and this WP did not reopen. The
     Project Overview's registry preamble now states the hand-mirror obligation explicitly instead.
 
-- [ ] **WP80 — `Reflex Recorder`: a purchase-time skill choice on an augmentation.**
+- [x] **WP80 — `Reflex Recorder`: a purchase-time skill choice on an augmentation.**
   Goal: finish WP77's Bucket A. `Reflex Recorder` (bioware, `source == "SR5"`, in the shipped
   picker since WP45) carries `<bonus><selectskill limittoattribute="BOD,AGI,REA,STR"><val>1</val>
   </selectskill></bonus>` — "+1 to one active skill linked to a physical attribute, chosen at
@@ -698,6 +699,49 @@ WP81 (natural vs. augmented attribute maximum) remain and do not gate WP42. See 
   `tests/unit/test_augmentation_unmodeled_registry.py`'s `MODELED_BUT_UNCLASSIFIED`, emptying that
   bucket for the first time since WP77 created it.
 
+  **Landed 2026-07-31**, across the data/engine/save/import/web layers as scoped (no new module;
+  `chummer5.data.{bioware,cyberware}`, `chummer5.engine.bioware`, `chummer5.io.{save_format,
+  legacy_chum5,legacy_import}`, `chummer5.web.routes.{cyberware,character,priorities}` +
+  `_cyberware.html`), +22 tests (1173 total). What WP42 and WP81-82 need to know:
+  - **Both open questions answered, and both by the printed entry (p. 460), not by the data.**
+    (a) "The reflex recorder adds 1 to the **Rating** of a specific skill linked to a Physical
+    attribute" — a rating bonus, so `ImprovementType.SKILL` (this engine's established route) is
+    correct and no dice-pool primitive was needed. It settles this row only: Voice Modulator's own
+    printed wording is "to your dice pool," so the wider question WP78's worklog raised stays open.
+    (b) **There is no matched-pair rule, and no `<pairinclude>` in `bioware.xml`** — this entry's
+    own claim was wrong. The element it saw is in `Barrett.chum5`'s saved character node, beside an
+    empty `<pairbonus />`; the only two `<pairinclude>`s in the file belong to `Striking Callus
+    (Hands)/(Feet)`, both `CF`. What the page *does* state is the opposite rule: "Multiple recorders
+    may be taken for multiple skills, but you can't implant two reflex recorders for the same
+    skill," now enforced per (item, skill).
+  - **`SELECT_SKILL` is a 5th value on the shared `chummer5.data.cyberware.BonusSupport`**, not a
+    bioware-local enum — the same shape `CONDITIONAL_BONUS` already has (present on the shared type,
+    produced by only one of the two catalogs). Classified by *shape*, not name-gated the way
+    qualities' `SELECT_TEXT` is: a `<selectskill>` with a `limittoattribute` filter and exactly one
+    `<val>` has one unambiguous reading. Verified sole producer: no SR5 `cyberware.xml` row carries
+    `<selectskill>` in its `<bonus>` at all.
+  - **`create_bioware_selection` takes `Iterable[str | BiowarePurchaseRequest]`.** A bare id keeps
+    meaning "this item, no player choice" — a total, well-defined meaning for 5 of the 6 offered
+    rows, so ~20 pre-WP80 call sites stayed correct instead of being rewritten to carry a permanent
+    `chosen_skill=None`. `BiowareSelection.purchases` is the new field; `items` survives as a
+    property, so `derived.unmodeled_effect_notes` and the web layer's Improvement swap read
+    unchanged.
+  - **`CharacterSave.bioware_item_ids` → `bioware_purchases`**, with WP41's exact fallback shape.
+    The fallback is exact for every row *except* `Reflex Recorder`, whose pick was never persisted:
+    such a save now fails to build ("requires a chosen skill") rather than loading with the bonus
+    silently dropped. `FORMAT_VERSION` unchanged.
+  - **`LegacyCyberware` gained `extra`** (defaulted, so synthetic test constructions are unchanged);
+    an `<extra>` that doesn't resolve to a skill passing the filter is an itemized blocking reason,
+    while the duplicate-skill rule stays a build-time check — the same split WP41 drew between
+    name/grade checks here and structural ones in `create_*`.
+  - **The picker renders one `<select name="bioware_skill_{id}_{n}">` per bought unit**, and only
+    for a bought row (an unbought row renders no dropdown at all). The section's existing live
+    re-render on `change` is what keeps the count in step with the quantity box.
+  - **A gap found, not closed, scoped as WP82:** `skill_rating` clamps to `MAX_SKILL_RATING_CREATE`
+    (6), so this bonus does nothing on a skill already at 6 — the skill-side twin of WP81, reachable
+    from today's shipped UI, and shared by every skill Improvement this project grants. See
+    `spec/decisions-log.md`, 2026-07-31.
+
 - [ ] **WP81 — Natural vs. augmented attribute maximum.**
   Goal: let an Improvement raise an attribute above its metatype maximum, up to SR5's augmented
   maximum, without breaking the chargen rules that currently read `attribute_value` as the *natural*
@@ -729,6 +773,36 @@ WP81 (natural vs. augmented attribute maximum) remain and do not gate WP42. See 
   an explicit test that the "only one at its natural maximum" Karma rule still reads the *natural*
   rating; `tests/integration/test_character_fixtures.py`'s existing skip of augmented attributes
   revisited — some of what it skips should now be checkable.
+
+- [ ] **WP82 — Natural vs. augmented skill rating.**
+  Goal: WP81's question, asked of skills instead of attributes. `chummer5.engine.skills.skill_rating`
+  returns `min(purchased points + Σ improvements, MAX_SKILL_RATING_CREATE)`, so an *augmentation's*
+  bonus is silently swallowed once the purchased rating reaches 6 — a Reflex Recorder bought for a
+  rating-6 skill costs 14,000¥ and 0.1 Essence and changes nothing. Claimed 2026-07-31 by WP80,
+  which made it reachable at a magnitude where it bites; see `spec/decisions-log.md`'s entry of that
+  date.
+  **Smaller than WP81, and the difference is the point.** SR5's 6 is a cap on what you may *buy* at
+  character creation (p. 131's Skill Rating Table: "the maximum skill level for starting player
+  characters", with ratings 7-12 described right below it), and this project's two purchase-side
+  validators — `create_skill_allocation` and `create_karma_skill_selection` — already read purchased
+  points directly rather than going through `skill_rating`, so they are natural-only by construction
+  and need no change. That is the opposite of WP81's situation, where
+  `create_karma_attribute_selection` genuinely reads the augmented value.
+  Deliverables:
+  - The ceiling itself: establish what actually bounds an augmented skill rating (rulebook first,
+    then legacy's `Skill.RatingMaximum`/`TotalBaseRating` split as the executable spec) rather than
+    assuming it mirrors the attribute `+4` rule, and apply it in `skill_rating`.
+  - An audit of `skill_rating`'s callers for which ones want the natural rating and which the
+    augmented one — `dice_pool`, the character sheet's skill rows, and the skill picker's own
+    "points spent" display are three different answers.
+  - Character sheet display: a skill above its purchased rating should read as augmented, mirroring
+    whatever WP81 settles on for attributes (and WP35's "reduced from N by Essence loss" precedent).
+  Depends on: nothing of WP81's code, but landing them together (or WP81 first) keeps one display
+  convention rather than two.
+  Acceptance: a test that a rating-6 skill plus a Reflex Recorder reaches 7 while a rating-6 skill
+  *purchase* is still rejected at buy time; a test that the "no skill above 6 at creation" Karma and
+  priority-point rules still read the purchased rating; every existing dice-pool assertion unchanged
+  for characters with no skill Improvement.
 
 - [ ] **WP42 — Cyberware modification/subsystem UI.**
   Goal: expose subsystem/plugin purchase through the browser. Deliberately last, and deliberately

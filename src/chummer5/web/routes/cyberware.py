@@ -35,9 +35,11 @@ from starlette.datastructures import FormData
 from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware import Cyberware
 from chummer5.engine.bioware import (
+    BiowarePurchaseRequest,
     BiowareSelection,
     apply_bioware_improvements,
     create_bioware_selection,
+    select_skill_choices,
 )
 from chummer5.engine.character import Character
 from chummer5.engine.cyberware_subsystems import (
@@ -59,6 +61,7 @@ from chummer5.web.catalogs import (
     CYBERWARE,
     CYBERWARE_ENTRIES,
     PRIORITIES,
+    SKILLS,
     templates,
 )
 from chummer5.web.forms import display_karma_to_nuyen
@@ -75,6 +78,14 @@ router = APIRouter()
 _CYBERWARE_BY_CATEGORY = tuple(sorted(CYBERWARE, key=lambda item: (item.category, item.name)))
 # Same reasoning, applied to WP45's much smaller bioware catalog (2 categories, Basic/Cultured).
 _BIOWARE_BY_CATEGORY = tuple(sorted(BIOWARE, key=lambda item: (item.category, item.name)))
+# WP80: the skills each SELECT_SKILL row's purchase-time pick may come from (`Reflex Recorder` is
+# the only such row today: the 28 active skills linked to BOD/AGI/REA/STR). Computed once at import
+# time like the two sorts above -- it depends only on static catalogs, never on the character.
+_BIOWARE_SKILL_CHOICES = {
+    item.id: select_skill_choices(item, SKILLS)
+    for item in BIOWARE
+    if item.select_skill_bonus is not None
+}
 
 
 def _replace_committed_cyberware(
@@ -138,20 +149,39 @@ def _parse_cyberware(form: FormData, catalog: Iterable[Cyberware]) -> tuple[str,
     return tuple(ids)
 
 
-def _parse_bioware(form: FormData, catalog: Iterable[Bioware]) -> tuple[str, ...]:
-    """Expand each bioware item's submitted quantity into that many repeats of its id -- mirrors
+def _parse_bioware(
+    form: FormData, catalog: Iterable[Bioware]
+) -> tuple[BiowarePurchaseRequest, ...]:
+    """Expand each bioware item's submitted quantity into that many purchase requests -- mirrors
     `_parse_cyberware`'s identical shape, keyed by `bioware_{id}` form fields instead of
     `cyberware_{id}` ones.
+
+    **WP80**: a row that needs a purchase-time skill pick (`Reflex Recorder`) submits one
+    `bioware_skill_{id}_{n}` field per bought unit, `n` counting from 0 -- so buying two really is
+    two independent picks, which is what SR5 asks for (p. 460). A missing/blank field becomes
+    `None` and is rejected by `create_bioware_selection` with the same message a tampered one would
+    get, rather than being silently defaulted to some skill the player never chose.
     """
-    ids: list[str] = []
+    requests: list[BiowarePurchaseRequest] = []
     for item in catalog:
         raw = form.get(f"bioware_{item.id}")
         try:
             quantity = int(str(raw)) if raw is not None else 0
         except ValueError:
             quantity = 0
-        ids.extend([item.id] * max(quantity, 0))
-    return tuple(ids)
+        for index in range(max(quantity, 0)):
+            chosen = (
+                form.get(f"bioware_skill_{item.id}_{index}")
+                if item.select_skill_bonus is not None
+                else None
+            )
+            requests.append(
+                BiowarePurchaseRequest(
+                    item_id=item.id,
+                    chosen_skill=str(chosen) if chosen else None,
+                )
+            )
+    return tuple(requests)
 
 
 def _catalog_groups(
@@ -184,11 +214,33 @@ def _catalog_groups(
     ]
 
 
+def _bioware_groups(
+    requests: tuple[BiowarePurchaseRequest, ...], by_id: dict[str, Bioware]
+) -> list[dict[str, Any]]:
+    """`_catalog_groups`'s bioware counterpart (WP80), which needs two things the cyberware picker
+    doesn't: each bought unit's own skill pick, and the list of skills that pick may come from.
+
+    `chosen_skills` is one entry per bought unit, in submission order, so the template can render
+    exactly `quantity` dropdowns and re-select what the player already chose across the live
+    re-render the form does on every change.
+    """
+    picks: dict[str, list[str | None]] = {}
+    for request in requests:
+        picks.setdefault(request.item_id, []).append(request.chosen_skill)
+    groups = _catalog_groups(tuple(r.item_id for r in requests), _BIOWARE_BY_CATEGORY, by_id)
+    for group in groups:
+        for row in group["rows"]:
+            item = row["item"]
+            row["skill_choices"] = _BIOWARE_SKILL_CHOICES.get(item.id, ())
+            row["chosen_skills"] = picks.get(item.id, [])
+    return groups
+
+
 def _cyberware_context(
     character: Character | None,
     resources_letter: str,
     item_ids: tuple[str, ...],
-    bioware_item_ids: tuple[str, ...],
+    bioware_requests: tuple[BiowarePurchaseRequest, ...],
     gear_cost: int,
     lifestyle_cost: int,
     karma_converted: int = 0,
@@ -233,7 +285,7 @@ def _cyberware_context(
     cyberware_by_id = {item.id: item for item in CYBERWARE}
     bioware_by_id = {item.id: item for item in BIOWARE}
     cyberware_groups = _catalog_groups(item_ids, _CYBERWARE_BY_CATEGORY, cyberware_by_id)
-    bioware_groups = _catalog_groups(bioware_item_ids, _BIOWARE_BY_CATEGORY, bioware_by_id)
+    bioware_groups = _bioware_groups(bioware_requests, bioware_by_id)
     budget = starting_nuyen(resources_letter, PRIORITIES) + display_karma_to_nuyen(karma_converted)
     nuyen_available = budget - gear_cost - lifestyle_cost - foci_cost
     cyberware_spent = sum(
@@ -245,7 +297,7 @@ def _cyberware_context(
         (cyberware_by_id[item_id].essence_cost for item_id in item_ids), Decimal(0)
     )
     bioware_essence_spent = sum(
-        (bioware_by_id[item_id].essence_cost for item_id in bioware_item_ids), Decimal(0)
+        (bioware_by_id[request.item_id].essence_cost for request in bioware_requests), Decimal(0)
     )
     essence_spent = cyberware_essence_spent + bioware_essence_spent
     budget_warning: str | None = None
@@ -255,10 +307,11 @@ def _cyberware_context(
                 _purchase_requests(item_ids), CYBERWARE_ENTRIES, nuyen_available
             )
             create_bioware_selection(
-                bioware_item_ids,
+                bioware_requests,
                 BIOWARE,
                 nuyen_available - cyberware_selection.nuyen_spent,
                 other_essence_spent=cyberware_selection.essence_spent,
+                skills=SKILLS,
             )
         except ValueError as exc:
             budget_warning = (
@@ -288,7 +341,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
     else:
         form = await request.form()
         item_ids = _parse_cyberware(form, CYBERWARE)
-        bioware_item_ids = _parse_bioware(form, BIOWARE)
+        bioware_requests = _parse_bioware(form, BIOWARE)
         resources_selection = session.character.resources_selection
         # WP66: preserve each committed Rating-priced item's chosen rating across re-validation.
         gear_names, rating_gear = (
@@ -317,10 +370,11 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 _purchase_requests(item_ids), CYBERWARE_ENTRIES, nuyen_available
             )
             bioware_selection = create_bioware_selection(
-                bioware_item_ids,
+                bioware_requests,
                 BIOWARE,
                 nuyen_available - selection.nuyen_spent,
                 other_essence_spent=selection.essence_spent,
+                skills=SKILLS,
             )
             new_resources_selection = create_resources_selection(
                 session.resources_letter,
@@ -338,7 +392,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 session.character,
                 session.resources_letter,
                 item_ids,
-                bioware_item_ids,
+                bioware_requests,
                 gear_cost,
                 lifestyle_cost,
                 karma_converted,
@@ -355,7 +409,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 session.character,
                 session.resources_letter,
                 item_ids,
-                bioware_item_ids,
+                bioware_requests,
                 gear_cost,
                 lifestyle_cost,
                 karma_converted,

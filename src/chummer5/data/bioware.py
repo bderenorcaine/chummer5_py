@@ -51,20 +51,50 @@ assumption):
   .cyberware.CyberwareFlatBonus`, which never needed one -- its only flat shape, the Cyberlimb
   condition-monitor bonus, has nothing to name) -- mirrors `chummer5.data.qualities.FlatBonus`'s
   shape instead.
-- `NOT_YET_SUPPORTED` -- 1 of 6 (Reflex Recorder): `<bonus><selectskill limittoattribute="BOD,AGI,
-  REA,STR"><val>1</val></selectskill></bonus>` -- a *player-selected* skill bonus (any active skill
-  linked to one of 4 attributes, chosen at purchase time), not a specifically-named one --
-  structurally different from `<specificskill>`'s fixed-name shape, and this engine has no
-  "purchase-time skill picker for a bonus" mechanism (the closest precedent, Phase I's Talent
-  free-skill grant, resolves a category/xpath *filter* into a caller-supplied list, not a
-  single-skill pick with no further engine support). Correctly falls through to
-  `NOT_YET_SUPPORTED` rather than being silently mis-shaped as `<specificskill>`.
+- `SELECT_SKILL` (WP80; `NOT_YET_SUPPORTED` from WP45 until then) -- 1 of 6 (Reflex Recorder):
+  `<bonus><selectskill limittoattribute="BOD,AGI,REA,STR"><val>1</val></selectskill></bonus>` -- a
+  *player-selected* skill bonus (any active skill linked to one of 4 attributes, chosen at purchase
+  time), not a specifically-named one -- structurally different from `<specificskill>`'s fixed-name
+  shape. See the WP80 section below.
+
+**WP80: `<selectskill>` is a purchase-time player choice, so it is its own `BonusSupport` value.**
+`SELECT_SKILL` (added to the shared `chummer5.data.cyberware.BonusSupport`) mirrors
+`chummer5.data.qualities.BonusSupport.SELECT_TEXT` exactly: the catalog records *that* a pick is
+required and what it is allowed to be, never the pick itself -- which belongs to the purchase
+(`chummer5.engine.bioware.BiowarePurchase.chosen_skill`), persisted per purchase rather than per
+catalog row, because SR5 explicitly contemplates buying several ("Multiple recorders may be taken
+for multiple skills, but you can't implant two reflex recorders for the same skill", p. 460).
+
+Classified by *shape*, not by name (unlike `qualities`' `_VERIFIED_SELECT_TEXT_NAMES` gate): a
+`<selectskill>` carrying a `limittoattribute` filter and exactly one `<val>` child has one
+unambiguous reading, whereas `<selecttext>`'s meaning genuinely varies per quality. A
+`<selectskill>` *without* `limittoattribute`, or with any other child, still falls through to
+`NOT_YET_SUPPORTED` -- an unfiltered or otherwise-shaped pick is a different mechanic, not this one.
+Verified by enumeration: `Reflex Recorder` is the only SR5-sourced row in either augmentation
+catalog whose `<bonus>` contains a `<selectskill>` at all (no SR5 `cyberware.xml` row does).
+
+The printed effect is a **Rating** bonus, not a dice-pool one -- p. 460: "The reflex recorder adds
+1 to the Rating of a specific skill linked to a Physical attribute." So `chummer5.engine.bioware`
+routes it through `ImprovementType.SKILL`, this engine's established skill-rating route, rather than
+needing the pool-modifier primitive WP78's worklog flagged as a possibility. (The `.chum5` corpus'
+own copy of this bonus carries a `<!-- Hero Lab says this is not RAW <applytorating>True -->`
+comment; the rulebook sentence above settles it in favour of a rating bonus.) See
+`spec/decisions-log.md`, 2026-07-31, for the one consequence that leaves open: `skill_rating`
+clamps to `MAX_SKILL_RATING_CREATE`, so this bonus does nothing on a skill already at 6.
 
 WP32-style Essence-floor and Improvement application is `chummer5.engine.bioware`'s job -- this
 module only classifies, mirroring `chummer5.data.cyberware`'s own loader/engine split. Also mirrors
 that module's "keep `NOT_YET_SUPPORTED` items in the loaded catalog" decision: Reflex Recorder's
 Essence/nuyen cost is real, correctly-modeled content even though its skill bonus isn't applied --
 see `chummer5.data.cyberware`'s own docstring for the full reasoning this reuses unchanged.
+
+**Not modeled, and deliberately not enforced: "Reflex recorder bioware is incompatible with
+skillwires cyberware" (p. 460).** Cross-catalog incompatibility is a validation mechanism this
+engine has never had (nothing checks a bioware purchase against a cyberware one beyond the shared
+Essence/nuyen pools), and the rule has no computable consequence here: `Skillwires` grants nothing
+at all in this engine (it is one of WP77's registered "Unmodeled real effects" rows), so allowing
+both changes no derived number. `bioware.xml` carries no `<forbidden>` node for `Reflex Recorder`
+either, so the legacy engine does not enforce it either. Recorded rather than silently skipped.
 
 **WP79: `unmodeled_effect_note`, and why this module's mirror is empty.** Cyberware and bioware both
 carry the field now, populated by hand from the Project Overview's "Unmodeled real effects" table
@@ -74,10 +104,10 @@ because the two catalogs load different files with independent name spaces -- an
 which is a fact about the registry, not an oversight: no `bioware.xml` row is in it. Of the 6
 offered rows, 5 have their whole printed effect modeled or genuinely have none, and the 6th
 (`Reflex Recorder`) is deliberately *not* registry material -- its `<selectskill>` bonus is
-computable by this engine and merely unimplemented, which WP77 classified as a live policy
-violation for WP80 to fix rather than an accepted gap. Registering it would launder the one into
-the other. The field and the dict exist so that a future bioware row that *is* registry material is
-a one-line data change here, matching the other two augmentation catalogs.
+computable by this engine, which WP77 classified as a live policy violation for WP80 to fix rather
+than an accepted gap (and WP80 did: it is modeled now). Registering it would have laundered the one
+into the other. The field and the dict exist so that a future bioware row that *is* registry
+material is a one-line data change here, matching the other two augmentation catalogs.
 """
 
 from __future__ import annotations
@@ -119,6 +149,10 @@ MAX_AVAILABILITY = 12
 # file) -- see module docstring's Enhanced Articulation citation.
 _FLAT_SKILL_FIELDS = frozenset({"name", "bonus"})
 _FLAT_ATTRIBUTE_FIELDS = frozenset({"name", "val"})
+# WP80: the one shape a <selectskill> node is accepted in -- a single <val> child, plus a
+# limittoattribute filter as an attribute. Anything else falls through to NOT_YET_SUPPORTED.
+_SELECT_SKILL_FIELDS = frozenset({"val"})
+_LIMIT_TO_ATTRIBUTE = "limittoattribute"
 _LIMIT_BONUS_TAGS = {
     "mentallimit": "mental_limit",
     "physicallimit": "physical_limit",
@@ -145,6 +179,21 @@ class BiowareFlatBonus:
 
 
 @dataclass(frozen=True)
+class BiowareSelectSkillBonus:
+    """A flat bonus to *one active skill the player picks at purchase time* (WP80).
+
+    `value` is the bonus's magnitude (`<val>`, always 1 in the SR5 catalog); `limit_to_attributes`
+    is the `limittoattribute` filter's attribute codes (`("BOD", "AGI", "REA", "STR")` -- SR5's four
+    Physical attributes), which is the *only* restriction on what the player may pick. The pick
+    itself is never stored here: it belongs to the purchase, not the catalog row -- see the module
+    docstring, and `chummer5.engine.bioware.BiowarePurchase.chosen_skill` for where it lives.
+    """
+
+    value: int
+    limit_to_attributes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Bioware:
     id: str
     name: str
@@ -157,6 +206,9 @@ class Bioware:
     bonus_support: BonusSupport
     flat_bonuses: tuple[BiowareFlatBonus, ...]  # populated only when bonus_support is FLAT_BONUS
     raw_bonus: str | None  # serialized <bonus> element, kept for future parser work; None if absent
+    # WP80: populated only when bonus_support is SELECT_SKILL -- the purchase-time skill pick this
+    # item requires, and the filter that pick must satisfy. None for every other row.
+    select_skill_bonus: BiowareSelectSkillBonus | None = None
     # WP79: this item's real, unmodeled SR5 effect, from _UNMODELED_EFFECT_NOTES -- None for every
     # SR5 bioware row today, deliberately. See module docstring.
     unmodeled_effect_note: str | None = None
@@ -185,18 +237,43 @@ def _is_flat_attribute_bonus(elem: ET.Element) -> bool:
     return {child.tag for child in elem} == _FLAT_ATTRIBUTE_FIELDS
 
 
+def _select_skill_bonus(elem: ET.Element) -> BiowareSelectSkillBonus | None:
+    """WP80: `<selectskill limittoattribute="BOD,AGI,REA,STR"><val>1</val></selectskill>` ->
+    `BiowareSelectSkillBonus`, or `None` for any other `<selectskill>` shape (an unfiltered pick, or
+    one carrying children this module doesn't recognize) -- see the module docstring for why the
+    filter is required rather than defaulted to "any skill".
+    """
+    codes = tuple(
+        code.strip() for code in elem.get(_LIMIT_TO_ATTRIBUTE, "").split(",") if code.strip()
+    )
+    if not codes or {child.tag for child in elem} != _SELECT_SKILL_FIELDS:
+        return None
+    return BiowareSelectSkillBonus(value=int(elem.findtext("val", "0")), limit_to_attributes=codes)
+
+
 def _classify_bonus(
     bonus_elem: ET.Element | None,
-) -> tuple[BonusSupport, tuple[BiowareFlatBonus, ...]]:
+) -> tuple[BonusSupport, tuple[BiowareFlatBonus, ...], BiowareSelectSkillBonus | None]:
     """Classify a `<bonus>` node -- mirrors `chummer5.data.cyberware._classify_bonus`'s "absent/
     empty is unconditionally NO_EFFECT, no name-gate needed" rule (see that module's docstring for
     why no equivalent of qualities' "empty bonus but real narrative effect" ambiguity applies here),
     but recognizes `chummer5.data.qualities`'s skill/attribute/limit flat shapes instead of
     cyberware's `<conditionmonitor>` one -- see this module's own docstring for the Enhanced
     Articulation shape that needs both a skill and a limit bonus recognized from the same node.
+
+    **WP80**: a lone `<selectskill>` child classifies `SELECT_SKILL` and returns the third element
+    of this tuple instead of any flat bonus. It is deliberately not mixable with the flat shapes --
+    no SR5 row combines them, and "half a node is a player pick, half isn't" is exactly the
+    partial classification `classify_bonus`'s all-or-nothing rule exists to prevent.
     """
     if bonus_elem is None or len(bonus_elem) == 0:
-        return BonusSupport.NO_EFFECT, ()
+        return BonusSupport.NO_EFFECT, (), None
+
+    if len(bonus_elem) == 1 and bonus_elem[0].tag == "selectskill":
+        select_skill = _select_skill_bonus(bonus_elem[0])
+        if select_skill is None:
+            return BonusSupport.NOT_YET_SUPPORTED, (), None
+        return BonusSupport.SELECT_SKILL, (), select_skill
 
     flat_bonuses = []
     for child in bonus_elem:
@@ -225,13 +302,13 @@ def _classify_bonus(
                 )
             )
         else:
-            return BonusSupport.NOT_YET_SUPPORTED, ()
-    return BonusSupport.FLAT_BONUS, tuple(flat_bonuses)
+            return BonusSupport.NOT_YET_SUPPORTED, (), None
+    return BonusSupport.FLAT_BONUS, tuple(flat_bonuses), None
 
 
 def _parse_bioware(elem: ET.Element, availability: int) -> Bioware:
     bonus_elem = elem.find("bonus")
-    support, flat_bonuses = _classify_bonus(bonus_elem)
+    support, flat_bonuses, select_skill_bonus = _classify_bonus(bonus_elem)
     raw_bonus = (
         ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
     )
@@ -248,6 +325,7 @@ def _parse_bioware(elem: ET.Element, availability: int) -> Bioware:
         bonus_support=support,
         flat_bonuses=flat_bonuses,
         raw_bonus=raw_bonus,
+        select_skill_bonus=select_skill_bonus,
         unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(name),
     )
 

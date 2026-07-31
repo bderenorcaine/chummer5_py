@@ -273,10 +273,18 @@ def _character_sheet_context(
     cyberware_counts: dict[str, int] = {}
     for node in cyberware_selection.walk() if cyberware_selection is not None else ():
         cyberware_counts[node.item.name] = cyberware_counts.get(node.item.name, 0) + 1
-    # WP45: same tallying for bioware.
+    # WP45: same tallying for bioware. WP80: keyed by the *displayed* label rather than the item
+    # name, so two Reflex Recorders bought for different skills read as two lines ("Reflex Recorder
+    # (Longarms)"), not one line of two -- the same "the pick is part of what was bought" display
+    # WP55 gives a SELECT_TEXT quality above.
     bioware_counts: dict[str, int] = {}
-    for bioware_item in bioware_selection.items if bioware_selection is not None else ():
-        bioware_counts[bioware_item.name] = bioware_counts.get(bioware_item.name, 0) + 1
+    for purchase in bioware_selection.purchases if bioware_selection is not None else ():
+        label = (
+            f"{purchase.item.name} ({purchase.chosen_skill})"
+            if purchase.chosen_skill is not None
+            else purchase.item.name
+        )
+        bioware_counts[label] = bioware_counts.get(label, 0) + 1
 
     return {
         "character": character,
@@ -574,10 +582,8 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.cyberware_selection is not None
         else ()
     )
-    bioware_item_ids = (
-        tuple(item.id for item in character.bioware_selection.items)
-        if character.bioware_selection is not None
-        else ()
+    bioware_purchases = (
+        character.bioware_selection.to_requests() if character.bioware_selection is not None else ()
     )
     karma_converted = (
         character.resources_selection.karma_converted
@@ -651,7 +657,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         power_picks=power_picks,
         magic_attribute_points=character.magic_attribute_points,
         cyberware_purchases=cyberware_purchases,
-        bioware_item_ids=bioware_item_ids,
+        bioware_purchases=bioware_purchases,
         karma_converted=karma_converted,
         bound_spirit_picks=bound_spirit_picks,
         foci_picks=foci_picks,

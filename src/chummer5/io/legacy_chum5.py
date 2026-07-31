@@ -151,6 +151,11 @@ class LegacyCyberware:
     essence: str  # raw <ess> text, same caveat
     rating: int  # WP41: <rating>, 0 for an unrated item -- see class docstring
     children: tuple[LegacyCyberware, ...]  # WP41: nested <children><cyberware>, at any depth
+    # WP80: <extra>, the item's own select-a-target text -- the same shape LegacyQuality.extra has.
+    # For a Bioware `Reflex Recorder` this is the chosen skill ("Longarms" in `Barrett.chum5`);
+    # empty for every item with nothing to select. Defaulted so the many synthetic
+    # `LegacyCyberware(...)` constructions in tests keep working unchanged.
+    extra: str = ""
 
 
 @dataclass(frozen=True)
@@ -374,6 +379,7 @@ def _parse_cyberware_item(elem: ET.Element) -> LegacyCyberware:
         essence=elem.findtext("ess", ""),
         rating=int(elem.findtext("rating", "0") or "0"),
         children=_parse_cyberwares(elem.find("children")),
+        extra=elem.findtext("extra", ""),
     )
 
 

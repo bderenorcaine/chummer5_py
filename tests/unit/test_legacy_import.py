@@ -22,7 +22,9 @@ from chummer5.data.qualities import BonusSupport, load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.engine.bioware import BiowarePurchaseRequest
 from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
+from chummer5.engine.improvements import ImprovementType
 from chummer5.io.legacy_chum5 import (
     LegacyAttribute,
     LegacyCharacter,
@@ -62,12 +64,14 @@ def _legacy_cyberware(
     essence: str = "0",
     rating: int = 0,
     children: tuple[LegacyCyberware, ...] = (),
+    extra: str = "",
 ) -> LegacyCyberware:
     """One `<cyberwares><cyberware>` entry, defaulted to the shape these tests care about.
 
     WP41 added `rating`/`children` to `LegacyCyberware`; every call site here would otherwise repeat
     two fields that are almost always `0`/`()`. `rating=0` is what the legacy format literally
-    stores for an unrated item -- see that class's own docstring.
+    stores for an unrated item -- see that class's own docstring. WP80 added `extra` for the same
+    reason: only a `Reflex Recorder` ever carries one.
     """
     return LegacyCyberware(
         name=name,
@@ -77,6 +81,7 @@ def _legacy_cyberware(
         improvement_source=improvement_source,
         cost=cost,
         essence=essence,
+        extra=extra,
         rating=rating,
         children=children,
     )
@@ -620,8 +625,11 @@ def test_a_nested_bioware_entry_is_rejected_rather_than_half_costed() -> None:
 
 def test_accepts_standard_grade_flat_bioware_item() -> None:
     """The bioware mirror of the cyberware test above -- a real WP45 catalog item (Reflex Recorder,
-    mirroring `Barrett.chum5`'s own real purchase) bought at Standard grade imports cleanly and
-    reaches the built character's `bioware_selection`.
+    mirroring `Barrett.chum5`'s own real purchase, `<extra>Longarms</extra>` included) bought at
+    Standard grade imports cleanly and reaches the built character's `bioware_selection`.
+
+    **WP80**: the `<extra>` is the item's chosen skill, and it rides along into the purchase -- an
+    import that dropped it would silently lose the item's entire modeled effect.
     """
     reflex_recorder = next(b for b in BIOWARE if b.name == "Reflex Recorder")
     result = import_legacy_character(
@@ -635,6 +643,7 @@ def test_accepts_standard_grade_flat_bioware_item() -> None:
                     improvement_source="Bioware",
                     cost="14000",
                     essence="0.1",
+                    extra="Longarms",
                 ),
             )
         ),
@@ -645,9 +654,52 @@ def test_accepts_standard_grade_flat_bioware_item() -> None:
         lifestyles=LIFESTYLES,
         bioware=BIOWARE,
     )
-    assert result.save.bioware_item_ids == (reflex_recorder.id,)
+    assert result.save.bioware_purchases == (
+        BiowarePurchaseRequest(item_id=reflex_recorder.id, chosen_skill="Longarms"),
+    )
     assert result.built.bioware_selection is not None
     assert reflex_recorder.id in {b.id for b in result.built.bioware_selection.items}
+    assert result.built.improvements.resolve(ImprovementType.SKILL, "Longarms") == 1
+
+
+def test_rejects_a_bioware_skill_pick_that_does_not_resolve() -> None:
+    """WP80: an `<extra>` naming a skill outside the item's own `limittoattribute` filter (Alchemy
+    is MAG-linked) is itemized as a blocking reason, like every other unimportable augmentation
+    detail -- never silently dropped, which would import an item whose whole modeled effect is the
+    pick.
+    """
+    with pytest.raises(UnsupportedLegacyCharacterError) as exc_info:
+        _import(
+            _legacy_character(
+                cyberware=(
+                    _legacy_cyberware(
+                        "Reflex Recorder",
+                        category="Cultured",
+                        improvement_source="Bioware",
+                        extra="Alchemy",
+                    ),
+                )
+            )
+        )
+    assert any(
+        "'Reflex Recorder'" in reason and "'Alchemy'" in reason for reason in exc_info.value.reasons
+    )
+
+
+def test_rejects_a_bioware_entry_whose_required_skill_pick_is_missing() -> None:
+    # The same check for an empty `<extra>` -- reported as "(none recorded)" rather than "''".
+    with pytest.raises(UnsupportedLegacyCharacterError, match="none recorded"):
+        _import(
+            _legacy_character(
+                cyberware=(
+                    _legacy_cyberware(
+                        "Reflex Recorder",
+                        category="Cultured",
+                        improvement_source="Bioware",
+                    ),
+                )
+            )
+        )
 
 
 def test_karma_bought_attribute_points_now_import_instead_of_being_rejected() -> None:

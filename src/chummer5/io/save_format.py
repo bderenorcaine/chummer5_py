@@ -104,6 +104,19 @@ validates it against `chummer5.engine.bioware.create_bioware_selection`, resolve
 nuyen budget left over once gear/Lifestyle/cyberware are resolved, and cyberware's own
 `essence_spent` as bioware's `other_essence_spent`, so the shared Essence floor accounts for both.
 
+**WP80** replaces that flat id list with `bioware_purchases: tuple[BiowarePurchaseRequest, ...]`,
+for the same reason and in the same shape WP41 replaced `cyberware_item_ids`: one bioware row
+(`Reflex Recorder`) carries a purchase-time *skill pick* that a bare id cannot express, and
+`BiowarePurchaseRequest` (`chummer5.engine.bioware`) is already exactly what
+`create_bioware_selection` takes. **A pre-WP80 save still loads**: `_dict_to_save` reads
+`"bioware_purchases"` when present and otherwise falls back to `"bioware_item_ids"`, mapping each
+id to a request with no pick. That fallback is exact for every row *except* `Reflex Recorder`,
+whose pick genuinely wasn't recorded before this WP -- such a save now fails to build, with
+"Reflex Recorder requires a chosen skill", rather than loading a character whose skill bonus was
+silently dropped. That is the intended behaviour and not a regression to work around: the pick was
+never stored, so there is nothing to recover, and WP45-WP79 never applied the bonus either.
+`FORMAT_VERSION` is unchanged, since a reader that understands both keys is not a schema break.
+
 **WP46** adds `bound_spirit_picks` -- a Magician's bound spirits, the same "selection, not derived
 value" shape every prior field has. Defaults to `()` ("predates this field"), so every save written
 before this WP round-trips unchanged.
@@ -231,7 +244,11 @@ from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
-from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_selection
+from chummer5.engine.bioware import (
+    BiowarePurchaseRequest,
+    apply_bioware_improvements,
+    create_bioware_selection,
+)
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
 from chummer5.engine.character import (
     Character,
@@ -354,9 +371,10 @@ class CharacterSave:
     # WP33, retyped from a flat id list to WP38's purchase tree in WP41 (see module docstring).
     # Defaults to () -- "predates this field", the same shape every WP28 magic field defaults to.
     cyberware_purchases: tuple[CyberwarePurchaseRequest, ...] = ()
-    # WP45: purchased bioware ids (chummer5.data.bioware.Bioware.id). Defaults to () -- "predates
-    # this field", the identical shape cyberware_item_ids already has.
-    bioware_item_ids: tuple[str, ...] = ()
+    # WP45, retyped from a flat id list to WP80's purchase requests (see module docstring) so a
+    # Reflex Recorder's chosen skill survives a save/load. Defaults to () -- "predates this field",
+    # the identical shape cyberware_purchases already has.
+    bioware_purchases: tuple[BiowarePurchaseRequest, ...] = ()
     # WP43: Karma converted to nuyen at Step Six (core rulebook p. 94, up to 10). Defaults to 0 --
     # "predates this field"/"player didn't convert any", the same shape every prior optional field
     # defaults to.
@@ -433,7 +451,7 @@ def create_character_save(
     power_picks: Iterable[PowerPickTriple] = (),
     magic_attribute_points: int = 0,
     cyberware_purchases: Iterable[CyberwarePurchaseRequest] = (),
-    bioware_item_ids: Iterable[str] = (),
+    bioware_purchases: Iterable[str | BiowarePurchaseRequest] = (),
     karma_converted: int = 0,
     bound_spirit_picks: Iterable[BoundSpiritPickTriple] = (),
     foci_picks: Iterable[FociPickPair] = (),
@@ -481,7 +499,7 @@ def create_character_save(
         power_picks=tuple(power_picks),
         magic_attribute_points=magic_attribute_points,
         cyberware_purchases=tuple(cyberware_purchases),
-        bioware_item_ids=tuple(bioware_item_ids),
+        bioware_purchases=tuple(_as_bioware_request(p) for p in bioware_purchases),
         karma_converted=karma_converted,
         bound_spirit_picks=tuple(bound_spirit_picks),
         foci_picks=tuple(foci_picks),
@@ -521,6 +539,39 @@ def _purchase_from_dict(data: Mapping[str, Any]) -> CyberwarePurchaseRequest:
         item_id=data["item_id"],
         rating=data.get("rating", 1),
         plugins=tuple(_purchase_from_dict(p) for p in data.get("plugins", ())),
+    )
+
+
+def _as_bioware_request(purchase: str | BiowarePurchaseRequest) -> BiowarePurchaseRequest:
+    """A bare id means "this item, no player choice" (WP80) -- the same shorthand
+    `create_bioware_selection` itself accepts, so a caller with nothing to pick keeps passing ids.
+    """
+    return BiowarePurchaseRequest(item_id=purchase) if isinstance(purchase, str) else purchase
+
+
+def _bioware_purchase_to_dict(purchase: BiowarePurchaseRequest) -> dict[str, Any]:
+    """One bioware purchase as JSON (WP80), with both keys written unconditionally for the same
+    reason `_purchase_to_dict` writes all three: a save file should read the same way at every
+    entry, and `null` is a clearer "no pick to make" than an absent key."""
+    return {"item_id": purchase.item_id, "chosen_skill": purchase.chosen_skill}
+
+
+def _bioware_purchases_from_dict(data: Mapping[str, Any]) -> tuple[BiowarePurchaseRequest, ...]:
+    """Read WP80's `bioware_purchases`, falling back to WP45's flat `bioware_item_ids`.
+
+    See the module docstring for the one row (`Reflex Recorder`) whose fallback is deliberately not
+    exact: its pick was never persisted before WP80, so such a save now fails to build rather than
+    loading with a silently-dropped bonus.
+    """
+    if "bioware_purchases" in data:
+        return tuple(
+            BiowarePurchaseRequest(
+                item_id=purchase["item_id"], chosen_skill=purchase.get("chosen_skill")
+            )
+            for purchase in data["bioware_purchases"]
+        )
+    return tuple(
+        BiowarePurchaseRequest(item_id=item_id) for item_id in data.get("bioware_item_ids", ())
     )
 
 
@@ -574,7 +625,9 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "cyberware_purchases": [
             _purchase_to_dict(purchase) for purchase in save.cyberware_purchases
         ],
-        "bioware_item_ids": list(save.bioware_item_ids),
+        "bioware_purchases": [
+            _bioware_purchase_to_dict(purchase) for purchase in save.bioware_purchases
+        ],
         "karma_converted": save.karma_converted,
         "bound_spirit_picks": [
             {"spirit_type": spirit_type, "force": force, "services": services}
@@ -650,7 +703,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         ),
         magic_attribute_points=data.get("magic_attribute_points", 0),
         cyberware_purchases=_purchases_from_dict(data),
-        bioware_item_ids=data.get("bioware_item_ids", ()),
+        bioware_purchases=_bioware_purchases_from_dict(data),
         karma_converted=data.get("karma_converted", 0),
         bound_spirit_picks=(
             (p["spirit_type"], p.get("force"), p["services"])
@@ -860,10 +913,12 @@ def build_character(
     # own docstring), against whatever nuyen cyberware left over and cyberware's own essence_spent
     # as other_essence_spent, so the shared Essence floor accounts for both.
     bioware_selection = create_bioware_selection(
-        save.bioware_item_ids,
+        save.bioware_purchases,
         bioware,
         resources_selection.nuyen_remaining - cyberware_selection.nuyen_spent,
         other_essence_spent=cyberware_selection.essence_spent,
+        # WP80: re-validates a persisted skill pick against the same filter the purchase did.
+        skills=skills,
     )
     apply_bioware_improvements(character, bioware_selection)
 

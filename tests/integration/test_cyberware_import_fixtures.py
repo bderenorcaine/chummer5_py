@@ -171,7 +171,9 @@ def test_fuzzys_cybereyes_subtree_imports_with_hand_checked_capacity_and_essence
         "Flare Compensation",
     ]
     assert (
-        _augmentation_reasons([cybereyes], CYBERWARE_BY_NAME, BIOWARE_BY_NAME, parent_name=None)
+        _augmentation_reasons(
+            [cybereyes], CYBERWARE_BY_NAME, BIOWARE_BY_NAME, SKILLS, parent_name=None
+        )
         == []
     )
 
@@ -205,7 +207,9 @@ def test_barretts_synthetic_full_arm_itemizes_every_one_of_its_six_children() ->
     naming the parent it was installed in, so nothing is dropped without being reported.
     """
     arm = _top_level_item("Barrett.chum5", "Synthetic Full Arm")
-    reasons = _augmentation_reasons([arm], CYBERWARE_BY_NAME, BIOWARE_BY_NAME, parent_name=None)
+    reasons = _augmentation_reasons(
+        [arm], CYBERWARE_BY_NAME, BIOWARE_BY_NAME, SKILLS, parent_name=None
+    )
     assert len(reasons) == 7
     assert any("'Synthetic Full Arm' (Used grade):" in r for r in reasons)
     for child in arm.children:
@@ -221,7 +225,9 @@ def test_blues_standard_grade_limb_itemizes_only_its_non_sr5_child() -> None:
     understate the limb's real Capacity spend; the import reports exactly that one node instead.
     """
     leg = _top_level_item("BLUE.chum5", "Obvious Full Leg")
-    reasons = _augmentation_reasons([leg], CYBERWARE_BY_NAME, BIOWARE_BY_NAME, parent_name=None)
+    reasons = _augmentation_reasons(
+        [leg], CYBERWARE_BY_NAME, BIOWARE_BY_NAME, SKILLS, parent_name=None
+    )
     assert reasons == [
         "cannot import 'Retractable Climbing Claws (Feet)' (Standard grade) installed in "
         "'Obvious Full Leg': non-Standard-grade or non-SR5 cyberware is out of scope"

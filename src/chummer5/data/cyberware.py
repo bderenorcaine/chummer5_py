@@ -348,10 +348,19 @@ class BonusSupport(Enum):
     `chummer5.data.powers.BonusSupport`'s 2-way one), plus WP40's `CONDITIONAL_BONUS`, which no
     other catalog module has because no other catalog has a bonus that applies only during a
     specific kind of test.
+
+    **WP80 adds a 5th, `SELECT_SKILL`** -- a bonus whose target is a *player's* purchase-time skill
+    pick rather than a fixed one, the direct analogue of `chummer5.data.qualities.BonusSupport
+    .SELECT_TEXT`. No cyberware row produces it (verified by enumeration: no SR5 `cyberware.xml`
+    entry carries `<selectskill>` in its `<bonus>` at all); it exists on this shared Enum because
+    `chummer5.data.bioware` reuses this type rather than defining its own, exactly as
+    `CONDITIONAL_BONUS` exists here without any bioware row producing it. See
+    `chummer5.data.bioware`'s docstring for the one row that does.
     """
 
     FLAT_BONUS = "flat_bonus"
     CONDITIONAL_BONUS = "conditional_bonus"
+    SELECT_SKILL = "select_skill"
     NO_EFFECT = "no_effect"
     NOT_YET_SUPPORTED = "not_yet_supported"
 

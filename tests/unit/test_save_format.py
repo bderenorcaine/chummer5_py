@@ -24,9 +24,11 @@ from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.engine.bioware import BiowarePurchaseRequest
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD, SUM_TO_TEN_BUILD_METHOD
 from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
 from chummer5.engine.derived import essence
+from chummer5.engine.improvements import ImprovementType
 from chummer5.engine.resources import Contact
 from chummer5.io.save_format import (
     FORMAT_VERSION,
@@ -466,7 +468,7 @@ def test_build_character_rejects_cyberware_exceeding_the_shared_nuyen_budget() -
         )
 
 
-def test_json_round_trip_preserves_bioware_item_ids() -> None:
+def test_json_round_trip_preserves_bioware_purchases() -> None:
     save = create_character_save(
         metatype_name="Human",
         heritage_letter="D",
@@ -481,14 +483,87 @@ def test_json_round_trip_preserves_bioware_item_ids() -> None:
         gear_names=(),
         lifestyle_tier_name="Street",
         lifestyle_months=1,
-        bioware_item_ids=("bio-cats-eyes", "bio-cats-eyes"),
+        bioware_purchases=("bio-cats-eyes", "bio-cats-eyes"),
     )
     assert from_json(to_json(save)) == save
-    assert json.loads(to_json(save))["bioware_item_ids"] == ["bio-cats-eyes", "bio-cats-eyes"]
+    # WP80: bare ids are accepted as "no player choice" and stored as full requests.
+    assert json.loads(to_json(save))["bioware_purchases"] == [
+        {"item_id": "bio-cats-eyes", "chosen_skill": None},
+        {"item_id": "bio-cats-eyes", "chosen_skill": None},
+    ]
+
+
+def test_json_round_trip_preserves_a_bioware_skill_pick() -> None:
+    """WP80: a `Reflex Recorder`'s chosen skill is part of the purchase, so it has to survive the
+    round trip -- the save-format half of that WP's acceptance criteria."""
+    reflex_recorder = next(b for b in BIOWARE if b.name == "Reflex Recorder")
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="A",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        bioware_purchases=(
+            BiowarePurchaseRequest(item_id=reflex_recorder.id, chosen_skill="Longarms"),
+        ),
+    )
+    reloaded = from_json(to_json(save))
+    assert reloaded == save
+    assert reloaded.bioware_purchases[0].chosen_skill == "Longarms"
+
+    character = build_character(
+        reloaded,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        bioware=BIOWARE,
+    )
+    assert character.bioware_selection is not None
+    assert character.bioware_selection.purchases[0].chosen_skill == "Longarms"
+    assert character.improvements.resolve(ImprovementType.SKILL, "Longarms") == 1
+
+
+def test_a_pre_wp80_save_reads_its_flat_bioware_item_ids() -> None:
+    """WP80's backward-compatibility fallback, mirroring WP41's own `cyberware_item_ids` one: a
+    save written before this WP has no `bioware_purchases` key at all, and each id becomes a
+    request with no pick. Exact for every row except `Reflex Recorder`, whose pick was never
+    persisted -- see `chummer5.io.save_format`'s docstring.
+    """
+    cats_eyes = next(b for b in BIOWARE if b.name == "Cat's Eyes")
+    save = create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="A",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter="B",
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+    )
+    data = json.loads(to_json(save))
+    del data["bioware_purchases"]
+    data["bioware_item_ids"] = [cats_eyes.id]
+    reloaded = from_json(json.dumps(data))
+    assert reloaded.bioware_purchases == (BiowarePurchaseRequest(item_id=cats_eyes.id),)
 
 
 def test_build_character_applies_bioware_selection() -> None:
-    """WP45 mirrors WP33's own cyberware test: `build_character` validates `bioware_item_ids`
+    """WP45 mirrors WP33's own cyberware test: `build_character` validates `bioware_purchases`
     against `create_bioware_selection`, using whatever nuyen cyberware left over as the shared
     budget bioware draws from, and applies the resulting Essence Improvement.
     """
@@ -507,7 +582,7 @@ def test_build_character_applies_bioware_selection() -> None:
         gear_names=(),
         lifestyle_tier_name="Street",
         lifestyle_months=1,
-        bioware_item_ids=(cats_eyes.id,),
+        bioware_purchases=(cats_eyes.id,),
     )
     character = build_character(
         save,
@@ -545,7 +620,7 @@ def test_build_character_shares_the_essence_pool_between_cyberware_and_bioware()
         lifestyle_tier_name="Street",
         lifestyle_months=1,
         cyberware_purchases=(CyberwarePurchaseRequest(item_id=datajack.id),),
-        bioware_item_ids=(cats_eyes.id,),
+        bioware_purchases=(cats_eyes.id,),
     )
     character = build_character(
         save,
@@ -585,7 +660,7 @@ def test_build_character_rejects_bioware_exceeding_the_shared_nuyen_budget() -> 
         gear_names=(),
         lifestyle_tier_name="Street",
         lifestyle_months=1,
-        bioware_item_ids=(enhanced_articulation.id,),
+        bioware_purchases=(enhanced_articulation.id,),
     )
     with pytest.raises(ValueError, match="nuyen budget"):
         build_character(

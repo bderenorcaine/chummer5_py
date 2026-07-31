@@ -17,6 +17,7 @@ from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.engine.character import metatype_choices
 from chummer5.web.app import BIOWARE, CYBERWARE, create_app
+from chummer5.web.catalogs import SKILLS
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
@@ -24,8 +25,15 @@ PRIORITIES = load_priorities()
 CATS_EYES = next(b for b in BIOWARE if b.name == "Cat's Eyes")
 ENHANCED_ARTICULATION = next(b for b in BIOWARE if b.name == "Enhanced Articulation")
 SLEEP_REGULATOR = next(b for b in BIOWARE if b.name == "Sleep Regulator")
+REFLEX_RECORDER = next(b for b in BIOWARE if b.name == "Reflex Recorder")
 SYNTHETIC_FULL_ARM = next(c for c in CYBERWARE if c.name == "Synthetic Full Arm")
 SUBMACHINE_GUN = next(c for c in CYBERWARE if c.name == "Submachine Gun")
+
+
+def _squash(text: str) -> str:
+    """Collapse whitespace, so an assertion about rendered markup doesn't depend on how Jinja
+    happens to indent it (WP80)."""
+    return " ".join(text.split())
 
 
 def _confirm_human(client: TestClient) -> None:
@@ -228,3 +236,146 @@ def test_save_load_round_trips_bioware_selection() -> None:
     assert "Character loaded." in load_response.text
     sheet = fresh_client.get("/character/sheet")
     assert "Sleep Regulator × 1" in sheet.text
+
+
+# --- WP80: Reflex Recorder's purchase-time skill picker -------------------------------------------
+
+
+def test_reflex_recorder_row_offers_a_skill_picker_only_once_bought() -> None:
+    """The picker is per bought *unit*, so an unbought row shows no dropdown at all -- 28 `<option>`
+    elements for a row nobody has bought would be noise on every render of this section.
+    """
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post("/ui/cyberware", data={f"bioware_{REFLEX_RECORDER.id}": "0"})
+    assert f"bioware_skill_{REFLEX_RECORDER.id}_0" not in response.text
+
+    response = client.post("/ui/cyberware", data={f"bioware_{REFLEX_RECORDER.id}": "1"})
+    assert f"bioware_skill_{REFLEX_RECORDER.id}_0" in response.text
+    assert "Longarms (AGI)" in response.text
+    # The `limittoattribute` filter, visible in the offered options: no LOG-linked skill.
+    assert "Computer (LOG)" not in response.text
+
+
+def test_buying_a_reflex_recorder_with_a_chosen_skill_raises_that_skills_pool() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    # Buy 3 points of Longarms first, so the sheet shows a real rating to compare against.
+    longarms = next(s for s in SKILLS if s.name == "Longarms")
+    client.post("/ui/skills", data={f"skill_{longarms.id}": "3"})
+    sheet = client.get("/character/sheet")
+    assert "<td>Longarms</td> <td>3</td>" in _squash(sheet.text)
+
+    response = client.post(
+        "/ui/cyberware",
+        data={
+            f"bioware_{REFLEX_RECORDER.id}": "1",
+            f"bioware_skill_{REFLEX_RECORDER.id}_0": "Longarms",
+        },
+    )
+    assert response.status_code == 200
+    assert 'value="Longarms" selected' in _squash(response.text)
+
+    sheet = client.get("/character/sheet")
+    assert "Reflex Recorder (Longarms) × 1" in sheet.text
+    assert "<td>Longarms</td> <td>4</td>" in _squash(sheet.text)
+
+
+def test_buying_a_reflex_recorder_without_choosing_a_skill_is_an_error() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post("/ui/cyberware", data={f"bioware_{REFLEX_RECORDER.id}": "1"})
+
+    assert "Reflex Recorder requires a chosen skill" in response.text
+    sheet = client.get("/character/sheet")
+    assert "Reflex Recorder" not in sheet.text
+
+
+def test_two_reflex_recorders_pick_independently_and_reject_a_repeated_skill() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/ui/cyberware",
+        data={
+            f"bioware_{REFLEX_RECORDER.id}": "2",
+            f"bioware_skill_{REFLEX_RECORDER.id}_0": "Longarms",
+            f"bioware_skill_{REFLEX_RECORDER.id}_1": "Longarms",
+        },
+    )
+    assert "only one per skill" in response.text
+
+    response = client.post(
+        "/ui/cyberware",
+        data={
+            f"bioware_{REFLEX_RECORDER.id}": "2",
+            f"bioware_skill_{REFLEX_RECORDER.id}_0": "Longarms",
+            f"bioware_skill_{REFLEX_RECORDER.id}_1": "Sneaking",
+        },
+    )
+    assert response.status_code == 200
+    sheet = client.get("/character/sheet")
+    assert "Reflex Recorder (Longarms) × 1" in sheet.text
+    assert "Reflex Recorder (Sneaking) × 1" in sheet.text
+
+
+def test_save_load_round_trips_a_reflex_recorders_chosen_skill() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post(
+        "/ui/cyberware",
+        data={
+            f"bioware_{REFLEX_RECORDER.id}": "1",
+            f"bioware_skill_{REFLEX_RECORDER.id}_0": "Longarms",
+        },
+    )
+
+    save_response = client.get("/character/save")
+    fresh_client = TestClient(create_app())
+    fresh_client.get("/")
+    load_response = fresh_client.post(
+        "/character/load",
+        files={"save_file": ("character.json", save_response.content, "application/json")},
+    )
+
+    assert "Character loaded." in load_response.text
+    sheet = fresh_client.get("/character/sheet")
+    assert "Reflex Recorder (Longarms) × 1" in sheet.text
+
+
+def test_reconfirming_priorities_keeps_a_reflex_recorders_chosen_skill() -> None:
+    """The full-page re-render path (`chummer5.web.routes.priorities`) rebuilds this section's rows
+    from the committed selection -- WP80 made that carry requests, not bare ids, so the pick has to
+    still be selected afterwards rather than silently reverting to "— choose a skill —".
+    """
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post(
+        "/ui/cyberware",
+        data={
+            f"bioware_{REFLEX_RECORDER.id}": "1",
+            f"bioware_skill_{REFLEX_RECORDER.id}_0": "Longarms",
+        },
+    )
+
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    response = client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "D",
+            "resources_letter": "C",
+            "talent_letter": "E",
+            "metatype_id": human_choice.metatype.id,
+        },
+    )
+
+    assert 'value="Longarms" selected' in _squash(response.text)
+    sheet = client.get("/character/sheet")
+    assert "Reflex Recorder (Longarms) × 1" in sheet.text

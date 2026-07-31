@@ -21,6 +21,7 @@ raw `<cyberwares><cyberware improvementsource="Bioware">` elements directly with
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from dataclasses import replace
 from decimal import Decimal
 
 from tests.fixtures.mundane_chum5 import mundane_fixture_path
@@ -28,14 +29,21 @@ from tests.fixtures.mundane_chum5 import mundane_fixture_path
 from chummer5.data.bioware import load_bioware
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
-from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_selection
+from chummer5.data.skills import load_skills
+from chummer5.engine.bioware import (
+    BiowarePurchaseRequest,
+    apply_bioware_improvements,
+    create_bioware_selection,
+)
 from chummer5.engine.character import create_character, metatype_choices
 from chummer5.engine.derived import BASE_ESSENCE, essence, physical_limit
+from chummer5.engine.skills import create_skill_allocation, dice_pool, skill_rating
 
 BIOWARE = load_bioware()
 BIOWARE_BY_NAME = {b.name: b for b in BIOWARE}
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
+SKILLS = load_skills()
 
 # The confirmed flat-cost-and-Essence Bioware subset that actually appears, at Standard grade,
 # unmodified by a rating formula, in Barrett.chum5's real purchases.
@@ -59,6 +67,38 @@ def _raw_bioware(fixture_name: str) -> list[tuple[str, str, str, str]]:
         for cw in cyberwares.findall("cyberware")
         if cw.findtext("improvementsource") == "Bioware"
     ]
+
+
+def _barrett_reflex_recorder_extra() -> str:
+    """WP80: the skill Barrett's own Reflex Recorder was bought for, read straight out of the
+    fixture's `<extra>` rather than hardcoded -- the same element `chummer5.io.legacy_import`
+    imports it from.
+    """
+    root = ET.parse(mundane_fixture_path("Barrett.chum5")).getroot()
+    cyberwares = root.find(".//cyberwares")
+    assert cyberwares is not None
+    return next(
+        cw.findtext("extra", "")
+        for cw in cyberwares.findall("cyberware")
+        if cw.findtext("name") == "Reflex Recorder"
+    )
+
+
+BARRETT_REFLEX_RECORDER_SKILL = _barrett_reflex_recorder_extra()
+
+
+def _human_character():
+    heritage = PRIORITIES.heritage["A"]
+    human_choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    )
+    return create_character(
+        metatype_choice=human_choice,
+        heritage_letter="A",
+        attributes_letter="B",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
 
 
 def test_barrett_has_all_three_confirmed_flat_items() -> None:
@@ -104,8 +144,16 @@ def test_barretts_real_bioware_purchase_reduces_essence_on_a_hand_built_characte
     base_essence = essence(character)
     assert base_essence == Decimal(BASE_ESSENCE)
 
-    item_ids = [BIOWARE_BY_NAME[name].id for name in _CONFIRMED_FLAT_NAMES]
-    selection = create_bioware_selection(item_ids, BIOWARE, nuyen_budget=1_000_000)
+    # WP80: Reflex Recorder is among these 3, and now needs its own purchase-time skill pick --
+    # Barrett's real one, `<extra>Longarms</extra>`.
+    requests = [
+        BiowarePurchaseRequest(
+            item_id=BIOWARE_BY_NAME[name].id,
+            chosen_skill=BARRETT_REFLEX_RECORDER_SKILL if name == "Reflex Recorder" else None,
+        )
+        for name in _CONFIRMED_FLAT_NAMES
+    ]
+    selection = create_bioware_selection(requests, BIOWARE, nuyen_budget=1_000_000, skills=SKILLS)
     expected_essence = sum(
         (BIOWARE_BY_NAME[name].essence_cost for name in _CONFIRMED_FLAT_NAMES), Decimal(0)
     )
@@ -117,8 +165,8 @@ def test_barretts_real_bioware_purchase_reduces_essence_on_a_hand_built_characte
 
 
 def test_reflex_recorder_sleep_regulator_platelet_factories_hand_checked() -> None:
-    # Reflex Recorder (Cultured, NOT_YET_SUPPORTED -- a player-selected skill bonus this engine
-    # doesn't model); Sleep Regulator/Platelet Factories (both Basic/Cultured, NO_EFFECT --
+    # Reflex Recorder (Cultured, SELECT_SKILL since WP80 -- a player-selected skill bonus);
+    # Sleep Regulator/Platelet Factories (both Basic/Cultured, NO_EFFECT --
     # narrative sleep/healing effects, verified moot per chummer5.data.bioware's own docstring).
     reflex_recorder = BIOWARE_BY_NAME["Reflex Recorder"]
     assert reflex_recorder.essence_cost == Decimal("0.1")
@@ -134,29 +182,47 @@ def test_reflex_recorder_sleep_regulator_platelet_factories_hand_checked() -> No
     assert platelet_factories.cost == 17000
 
 
-def test_reflex_recorder_purchase_costs_essence_but_applies_no_flat_bonus() -> None:
-    """A NOT_YET_SUPPORTED item (Reflex Recorder) still costs real Essence when purchased -- only
-    its (unmodeled) player-selected skill bonus is dropped, mirroring `test_cyberware_fixtures.py`'s
-    identical Smartlink test.
+def test_barretts_real_reflex_recorder_raises_exactly_the_skill_she_chose() -> None:
+    """WP80's acceptance criterion against real fixture content: `Barrett.chum5` stores
+    `<extra>Longarms</extra>` on her Reflex Recorder, so the purchase must raise Longarms' rating
+    (and through it its dice pool) by exactly 1 -- p. 460: "adds 1 to the Rating of a specific skill
+    linked to a Physical attribute" -- and no other skill's.
+
+    Read out of the fixture rather than hardcoded, so a corpus change can't quietly pass.
     """
-    heritage = PRIORITIES.heritage["A"]
-    human_choice = next(
-        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
+    assert BARRETT_REFLEX_RECORDER_SKILL == "Longarms"
+    character = _human_character()
+    longarms = next(s for s in SKILLS if s.name == BARRETT_REFLEX_RECORDER_SKILL)
+    allocation = create_skill_allocation(
+        "C", PRIORITIES, SKILLS, skill_points={longarms.id: 3}, group_points={}
     )
-    character = create_character(
-        metatype_choice=human_choice,
-        heritage_letter="A",
-        attributes_letter="B",
-        priorities=PRIORITIES,
-        attribute_points={},
+    character = replace(character, skill_allocation=allocation)
+    assert skill_rating(character, allocation, longarms) == 3
+
+    selection = create_bioware_selection(
+        [
+            BiowarePurchaseRequest(
+                item_id=BIOWARE_BY_NAME["Reflex Recorder"].id,
+                chosen_skill=BARRETT_REFLEX_RECORDER_SKILL,
+            )
+        ],
+        BIOWARE,
+        nuyen_budget=100000,
+        skills=SKILLS,
     )
-    reflex_recorder_id = BIOWARE_BY_NAME["Reflex Recorder"].id
-    selection = create_bioware_selection([reflex_recorder_id], BIOWARE, nuyen_budget=100000)
     apply_bioware_improvements(character, selection)
 
+    assert skill_rating(character, allocation, longarms) == 4
+    assert dice_pool(character, allocation, longarms) == 4 + character.attribute_value(
+        longarms.attribute
+    )
+    # Essence is still charged, exactly as it was before the bonus was modeled.
     assert essence(character) == Decimal(BASE_ESSENCE) - Decimal("0.1")
-    assert character.improvements.improvements[0].improvement_type.name == "ESSENCE"
-    assert len(character.improvements.improvements) == 1  # no FLAT_BONUS Improvement added
+    # Every other skill is untouched: one SKILL Improvement, aimed at one name.
+    skill_improvements = [
+        i for i in character.improvements.improvements if i.improvement_type.name == "SKILL"
+    ]
+    assert [(i.target, i.value) for i in skill_improvements] == [("Longarms", 1)]
 
 
 def test_enhanced_articulation_flat_bonus_raises_physical_limit_on_a_hand_built_character() -> None:

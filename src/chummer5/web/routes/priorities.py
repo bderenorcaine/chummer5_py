@@ -304,8 +304,10 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.cyberware_selection is not None
         else 0
     )
-    bioware_item_ids = (
-        tuple(item.id for item in character.bioware_selection.items)
+    # WP80: requests, not bare ids -- a committed `Reflex Recorder`'s chosen skill has to survive
+    # a full-page re-render, or re-submitting the (unchanged) form would drop it.
+    bioware_requests = (
+        character.bioware_selection.to_requests()
         if character is not None and character.bioware_selection is not None
         else ()
     )
@@ -350,7 +352,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         character,
         session.resources_letter,
         cyberware_item_ids,
-        bioware_item_ids,
+        bioware_requests,
         gear_cost,
         lifestyle_cost,
         karma_converted,

@@ -11,14 +11,18 @@ from decimal import Decimal
 
 import pytest
 
-from chummer5.data.bioware import Bioware, BiowareFlatBonus
+from chummer5.data.bioware import Bioware, BiowareFlatBonus, BiowareSelectSkillBonus
 from chummer5.data.cyberware import BonusSupport
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
+from chummer5.data.skills import Skill
 from chummer5.engine.bioware import (
+    BiowarePurchase,
+    BiowarePurchaseRequest,
     BiowareSelection,
     apply_bioware_improvements,
     create_bioware_selection,
+    select_skill_choices,
 )
 from chummer5.engine.character import create_character, metatype_choices
 from chummer5.engine.cyberware_subsystems import (
@@ -64,10 +68,55 @@ def _limit_bonus_item(item_id: str, name: str, cost: int, essence_cost: str) -> 
     )
 
 
+def _select_skill_item(item_id: str, name: str, cost: int, essence_cost: str) -> Bioware:
+    """WP80: a row whose bonus is a purchase-time player pick (`Reflex Recorder`'s shape)."""
+    return Bioware(
+        id=item_id,
+        name=name,
+        category="Cultured",
+        cost=cost,
+        essence_cost=Decimal(essence_cost),
+        availability=10,
+        source="SR5",
+        page=460,
+        bonus_support=BonusSupport.SELECT_SKILL,
+        flat_bonuses=(),
+        raw_bonus='<bonus><selectskill limittoattribute="BOD,AGI,REA,STR"><val>1</val>'
+        "</selectskill></bonus>",
+        select_skill_bonus=BiowareSelectSkillBonus(
+            value=1, limit_to_attributes=("BOD", "AGI", "REA", "STR")
+        ),
+    )
+
+
+def _skill(skill_id: str, name: str, attribute: str) -> Skill:
+    return Skill(
+        id=skill_id,
+        name=name,
+        attribute=attribute,
+        category="Combat Active",
+        skill_group=None,
+        can_default=True,
+        exotic=False,
+        specializations=(),
+        source="SR5",
+        page=1,
+    )
+
+
+# Two eligible (AGI/STR-linked) skills and one that fails the filter (LOG-linked), mirroring the
+# real filter's shape without depending on the real catalog -- that cross-check is in
+# tests/integration/test_bioware_fixtures.py.
+LONGARMS = _skill("lon", "Longarms", "AGI")
+SWIMMING = _skill("swi", "Swimming", "STR")
+COMPUTER = _skill("com", "Computer", "LOG")
+SKILLS = (LONGARMS, SWIMMING, COMPUTER)
+
 CATS_EYES = _no_effect_item("ce", "Cat's Eyes", 4000, "0.1")
 SLEEP_REGULATOR = _no_effect_item("sr", "Sleep Regulator", 12000, "0.1")
 ARTICULATION = _limit_bonus_item("ea", "Enhanced Articulation", 24000, "0.3")
-CATALOG = (CATS_EYES, SLEEP_REGULATOR, ARTICULATION)
+RECORDER = _select_skill_item("rr", "Reflex Recorder", 14000, "0.1")
+CATALOG = (CATS_EYES, SLEEP_REGULATOR, ARTICULATION, RECORDER)
 
 
 def _human_character():
@@ -224,7 +273,132 @@ def test_bioware_selection_is_a_frozen_dataclass_field_default_none() -> None:
     character = _human_character()
     assert character.bioware_selection is None
     selection = BiowareSelection(
-        items=(CATS_EYES,), nuyen_budget=1000, nuyen_spent=4000, essence_spent=Decimal("0.1")
+        purchases=(BiowarePurchase(item=CATS_EYES),),
+        nuyen_budget=1000,
+        nuyen_spent=4000,
+        essence_spent=Decimal("0.1"),
     )
     character = replace(character, bioware_selection=selection)
     assert character.bioware_selection is selection
+
+
+# --- WP80: `Reflex Recorder`'s purchase-time skill choice -----------------------------------------
+
+
+def _recorder(chosen_skill: str | None) -> BiowarePurchaseRequest:
+    return BiowarePurchaseRequest(item_id="rr", chosen_skill=chosen_skill)
+
+
+def test_select_skill_choices_are_exactly_the_skills_passing_the_filter() -> None:
+    assert select_skill_choices(RECORDER, SKILLS) == (LONGARMS, SWIMMING)
+    # A row with no pick to make offers none, rather than "every skill".
+    assert select_skill_choices(CATS_EYES, SKILLS) == ()
+
+
+def test_purchase_with_a_chosen_skill_raises_exactly_that_skill() -> None:
+    character = _human_character()
+    selection = create_bioware_selection(
+        [_recorder("Longarms")], CATALOG, nuyen_budget=100000, skills=SKILLS
+    )
+    assert selection.purchases[0].chosen_skill == "Longarms"
+    apply_bioware_improvements(character, selection)
+
+    # p. 460: "adds 1 to the Rating of a specific skill" -- a rating bonus, hence SKILL.
+    assert character.improvements.resolve(ImprovementType.SKILL, "Longarms") == 1
+    assert character.improvements.resolve(ImprovementType.SKILL, "Swimming") == 0
+    assert essence(character) == Decimal(BASE_ESSENCE) - Decimal("0.1")
+
+
+def test_rejects_a_skill_outside_the_limittoattribute_filter() -> None:
+    with pytest.raises(ValueError, match="Computer is linked to LOG"):
+        create_bioware_selection(
+            [_recorder("Computer")], CATALOG, nuyen_budget=100000, skills=SKILLS
+        )
+
+
+def test_rejects_an_unknown_skill_name() -> None:
+    with pytest.raises(ValueError, match="not an active skill"):
+        create_bioware_selection([_recorder("Nope")], CATALOG, nuyen_budget=100000, skills=SKILLS)
+
+
+def test_rejects_a_missing_or_blank_pick() -> None:
+    for chosen in (None, "   "):
+        with pytest.raises(ValueError, match="requires a chosen skill"):
+            create_bioware_selection(
+                [_recorder(chosen)], CATALOG, nuyen_budget=100000, skills=SKILLS
+            )
+
+
+def test_a_bare_id_for_a_row_that_needs_a_pick_is_rejected_too() -> None:
+    # The bare-id shorthand means "no player choice", which is not a legal state for this row --
+    # see chummer5.engine.bioware's module docstring.
+    with pytest.raises(ValueError, match="requires a chosen skill"):
+        create_bioware_selection(["rr"], CATALOG, nuyen_budget=100000, skills=SKILLS)
+
+
+def test_rejects_a_pick_supplied_for_a_row_that_has_nothing_to_choose() -> None:
+    # The same "don't silently ignore a stale/tampered field" rule create_quality_selection applies
+    # to a SELECT_TEXT quality's own free text.
+    with pytest.raises(ValueError, match="has no skill to choose"):
+        create_bioware_selection(
+            [BiowarePurchaseRequest(item_id="ce", chosen_skill="Longarms")],
+            CATALOG,
+            nuyen_budget=100000,
+            skills=SKILLS,
+        )
+
+
+def test_two_recorders_for_different_skills_each_raise_their_own() -> None:
+    # p. 460: "Multiple recorders may be taken for multiple skills".
+    character = _human_character()
+    selection = create_bioware_selection(
+        [_recorder("Longarms"), _recorder("Swimming")],
+        CATALOG,
+        nuyen_budget=100000,
+        skills=SKILLS,
+    )
+    apply_bioware_improvements(character, selection)
+
+    assert character.improvements.resolve(ImprovementType.SKILL, "Longarms") == 1
+    assert character.improvements.resolve(ImprovementType.SKILL, "Swimming") == 1
+    assert essence(character) == Decimal(BASE_ESSENCE) - Decimal("0.2")
+
+
+def test_two_recorders_for_the_same_skill_are_rejected() -> None:
+    # p. 460: "... but you can't implant two reflex recorders for the same skill."
+    with pytest.raises(ValueError, match="only one per skill"):
+        create_bioware_selection(
+            [_recorder("Longarms"), _recorder("Longarms")],
+            CATALOG,
+            nuyen_budget=100000,
+            skills=SKILLS,
+        )
+
+
+def test_to_requests_round_trips_the_pick() -> None:
+    selection = create_bioware_selection(
+        [_recorder("Longarms"), "ce"], CATALOG, nuyen_budget=100000, skills=SKILLS
+    )
+    assert selection.to_requests() == (
+        BiowarePurchaseRequest(item_id="rr", chosen_skill="Longarms"),
+        BiowarePurchaseRequest(item_id="ce", chosen_skill=None),
+    )
+    assert selection.items == (RECORDER, CATS_EYES)
+
+
+def test_removing_the_source_retracts_both_recorders_at_once() -> None:
+    # Duplicate purchases share one source_id (the catalog id), which the web layer's own
+    # "swap this source's Improvements" step relies on.
+    character = _human_character()
+    selection = create_bioware_selection(
+        [_recorder("Longarms"), _recorder("Swimming")],
+        CATALOG,
+        nuyen_budget=100000,
+        skills=SKILLS,
+    )
+    apply_bioware_improvements(character, selection)
+    character.improvements.remove_source(ImprovementSource.BIOWARE, "rr")
+
+    assert character.improvements.resolve(ImprovementType.SKILL, "Longarms") == 0
+    assert character.improvements.resolve(ImprovementType.SKILL, "Swimming") == 0
+    assert essence(character) == Decimal(BASE_ESSENCE)

@@ -76,7 +76,28 @@
         <tbody>
           {% for row in group.rows %}
           <tr>
-            <td>{{ row.item.name }}</td>
+            <td>
+              {{ row.item.name }}
+              {# WP80: one skill picker per bought unit -- SR5 p. 460 allows several recorders, one skill each. #}
+              {% if row.skill_choices and row.quantity %}
+              <div class="bioware-skill-picks">
+                {% for index in range(row.quantity) %}
+                <label>
+                  Skill{% if row.quantity > 1 %} {{ index + 1 }}{% endif %}:
+                  <select name="bioware_skill_{{ row.item.id }}_{{ index }}">
+                    <option value="">— choose a skill —</option>
+                    {% for skill in row.skill_choices %}
+                    <option
+                      value="{{ skill.name }}"
+                      {% if row.chosen_skills[index] == skill.name %}selected{% endif %}
+                    >{{ skill.name }} ({{ skill.attribute }})</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </td>
             <td>{{ row.item.cost }}</td>
             <td>{{ row.item.essence_cost }}</td>
             <td>

@@ -786,3 +786,62 @@ coexists: in this project's scope, an adept with `Improved Physical Attribute` (
 one of these implants. Closing it means teaching `resolve()` a magic `"precedence0"` string, i.e.
 pushing a legacy serialization detail into the engine primitive WP5/WP39 deliberately kept clean —
 so it is recorded here instead, with the modeled half being the one the book states outright.
+
+## 2026-07-31 — Phase K, WP80: WP77's Bucket A is empty; a `<selectskill>` bonus is a Rating bonus, not a pool one; the skill-side twin of WP81 becomes WP82
+
+**The policy violation WP77 named is closed.** `Reflex Recorder` classifies `SELECT_SKILL` (a new
+value on the shared `chummer5.data.cyberware.BonusSupport`, mirroring
+`chummer5.data.qualities.BonusSupport.SELECT_TEXT`) and grants a real `ImprovementType.SKILL`
+Improvement against the player's own pick, so no augmentation row is offered-and-inert any more.
+`tests/unit/test_augmentation_unmodeled_registry.py`'s `MODELED_BUT_UNCLASSIFIED` is empty for the
+first time since WP77 created it, and stays as an empty frozenset — a future `NOT_YET_SUPPORTED` row
+has to be put in one bucket or the other, deliberately, to pass that file.
+
+**The rating-vs-pool question WP78's worklog raised is settled for this row, by the book, and only
+for this row.** p. 460: "The reflex recorder adds 1 to the *Rating* of a specific skill linked to a
+Physical attribute." So this engine's established `ImprovementType.SKILL` route (which folds into
+`skill_rating`) is correct, and WP80 needed no new dice-pool primitive. That does **not** generalize:
+Voice Modulator's own printed wording (p. 452) is "Add the Rating of the modulator to your *dice
+pool* for Impersonation skill tests," so the two really are different bonuses that happen to share
+one XML shape (`<specificskill>` with no `<applytorating>`, which legacy reads uniformly as a pool
+modifier). Whether the *other* skill bonuses this project ships — Voice Modulator (WP78), Enhanced
+Articulation (WP45), every focus (WP47) and Mentor Spirit (WP48) slot, Voice Control (WP27) — need a
+genuine pool modifier is still open, and still not one WP's job to answer for all of them.
+
+**A gap this WP surfaced and did not close, scoped as WP82: `skill_rating` clamps to
+`MAX_SKILL_RATING_CREATE` (6), which swallows an augmented bonus.** SR5's 6 is a cap on what you may
+*buy* at character creation, not on what an implant may add on top — the same natural-vs-augmented
+distinction WP81 exists to draw for attributes. Today a Reflex Recorder bought for a skill already at
+6 costs 14,000¥ and 0.1 Essence and changes nothing. This is reachable from today's shipped UI, and
+it is not specific to WP80: every skill Improvement in this project (Enhanced Articulation, foci,
+Mentor Spirits, Voice Modulator, Voice Control) hits the same clamp. Scoped as **WP82**, not fixed
+here — but worth recording that it is a *smaller* job than WP81's attribute equivalent, and the
+difference is instructive: the two purchase-side validators (`create_skill_allocation`,
+`create_karma_skill_selection`) already read purchased points directly rather than going through
+`skill_rating`, so they are natural-only by construction and need no change. What WP82 has to decide
+is the ceiling itself — p. 131's Skill Rating Table calls 6 "the maximum skill level for starting
+player characters" and goes on to describe ratings 7-12, so 6 is explicitly a *starting* cap, but
+what bounds an augmented skill rating instead is a question WP82 has to answer against the rulebook
+and legacy's own `Skill.RatingMaximum`, not one this WP guessed at — and what the character sheet
+shows for a skill sitting above 6.
+
+**Two smaller corrections, both to WP80's own entry, both found by re-checking rather than
+trusting it.** (1) `Reflex Recorder` carries **no** `<pairinclude>` in `bioware.xml` — the entry
+asked whether a matched pair behaves differently the way Hydraulic Jacks does, and the answer is
+that there is no pair rule at all, in the data or in print; the element the entry saw lives in
+`Barrett.chum5`'s saved character node next to an empty `<pairbonus />`. (2) p. 460's "Reflex
+recorder bioware is incompatible with skillwires cyberware" is real and deliberately unenforced:
+this engine has no cross-catalog incompatibility mechanism, the catalog row carries no `<forbidden>`
+node (so legacy doesn't enforce it either), and `Skillwires` grants nothing at all here (a WP77
+registry row), so allowing both changes no derived number. Recorded in
+`chummer5.data.bioware`'s docstring rather than in the "Unmodeled real effects" table, which is for
+an offered aspect's own uncomputed *effects* — `Reflex Recorder`'s are now all computed, and adding
+it there would launder the fix into an accepted gap.
+
+**One backward-compatibility break, deliberate and narrow.** `CharacterSave.bioware_item_ids`
+becomes `bioware_purchases` (WP41's `cyberware_purchases` precedent, same fallback shape), because a
+bare id cannot carry a skill pick. A pre-WP80 save loads through the fallback exactly, *except* one
+holding a `Reflex Recorder`: its pick was never persisted, so the save now fails to build with
+"Reflex Recorder requires a chosen skill" instead of loading a character whose bonus is silently
+dropped. Nothing is recoverable in that case — the pick was never written — and WP45-WP79 never
+applied the bonus either, so the failure loses nothing but announces itself.

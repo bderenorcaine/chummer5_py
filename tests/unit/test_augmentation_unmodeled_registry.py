@@ -17,10 +17,13 @@ Overview's 2026-07-24 policy when the unmodeled effect is genuinely outside this
 **WP78 emptied most of the second bucket** (this file's `WP78_SCOPE` as written by WP77): the four
 cyberware rows -- Reaction Enhancers, Wired Reflexes, Muscle Replacement, Voice Modulator -- now
 classify `FLAT_BONUS` and grant real Improvements, so they no longer appear in the live
-`NOT_YET_SUPPORTED` set at all and the constant naming them is gone rather than shrunk. **One row
-survives**, the bioware `Reflex Recorder`, whose `<selectskill>` is a purchase-time *player choice*
-(persisted, re-validated on load, picked in the UI) rather than a fixed bonus -- WP78 ruled that its
-own WP, **WP80**, for the same reason WP55 was one for `SELECT_TEXT` qualities.
+`NOT_YET_SUPPORTED` set at all and the constant naming them is gone rather than shrunk. **WP80
+emptied the rest**: the bioware `Reflex Recorder`, whose `<selectskill>` is a purchase-time *player
+choice* (persisted, re-validated on load, picked in the UI) rather than a fixed bonus, now
+classifies `SELECT_SKILL` and grants a real Improvement against the player's own pick. So
+`MODELED_BUT_UNCLASSIFIED` is empty, and the constant stays -- as an empty frozenset it is what a
+future `NOT_YET_SUPPORTED` row would have to be added to, deliberately, to pass the first test
+below.
 
 **Why a test rather than the one-off check WP77's entry allowed as an alternative.** The failure
 mode is a *future* catalog widening (WP42's UI, or any later `<bonus>` grammar change) quietly
@@ -71,16 +74,12 @@ REGISTERED_UNMODELED = frozenset(
     }
 )
 
-# WP77's Bucket A, as it stands after WP78 modeled the four cyberware rows: a `<bonus>` that maps
-# onto an `ImprovementType` this engine already has, still offered and still inert. A live departure
-# from the "model it in full or exclude it" policy rather than an accepted gap -- WP80 is the fix,
-# and this row is deliberately not being excluded in the meantime (it has shipped in the bioware
-# picker since WP45 and is real content in `Barrett.chum5`'s import positive case).
-MODELED_BUT_UNCLASSIFIED = frozenset(
-    {
-        "Reflex Recorder",  # bioware; `<selectskill>` is a player choice -- see this file's header
-    }
-)
+# WP77's Bucket A: a `<bonus>` that maps onto an `ImprovementType` this engine already has, still
+# offered and still inert -- a live departure from the "model it in full or exclude it" policy
+# rather than an accepted gap. **Empty since WP80**, for the first time since WP77 created it: WP78
+# modeled the four cyberware rows and WP80 modeled `Reflex Recorder`, the last one. A future row
+# lands here only as a deliberate act, with a WP named for fixing it.
+MODELED_BUT_UNCLASSIFIED: frozenset[str] = frozenset()
 
 # Of the registered rows, the ones a player can buy from the browser today. The rest are reachable
 # only by importing a legacy `.chum5` (WP41 widened import to all 87 rows) -- a distinction the
@@ -119,15 +118,16 @@ def test_the_two_buckets_are_disjoint() -> None:
     assert not REGISTERED_UNMODELED & MODELED_BUT_UNCLASSIFIED
 
 
-def test_the_audited_split_is_now_10_cyberware_plus_1_bioware() -> None:
+def test_the_audited_split_is_now_10_cyberware_and_no_bioware() -> None:
     # WP77 re-ran WP41's audit rather than trusting its counts and got 14 + 1, split 10 registry /
-    # 5 computable. WP78 modeled 4 of the 5 computable ones (all cyberware), so the cyberware count
-    # drops by exactly 4 and the registry side is untouched. Pinned as numbers so a catalog change
-    # that shifts them is visible as more than a name-set diff above.
+    # 5 computable. WP78 modeled 4 of the 5 computable ones (all cyberware) and WP80 the 5th (the
+    # one bioware row), so no bioware row is NOT_YET_SUPPORTED at all any more and the registry side
+    # is untouched. Pinned as numbers so a catalog change that shifts them is visible as more than a
+    # name-set diff above.
     cyberware = [e for e in CYBERWARE_ENTRIES if e.bonus_support is BonusSupport.NOT_YET_SUPPORTED]
     bioware = [b for b in BIOWARE if b.bonus_support is BonusSupport.NOT_YET_SUPPORTED]
-    assert (len(cyberware), len(bioware)) == (10, 1)
-    assert (len(REGISTERED_UNMODELED), len(MODELED_BUT_UNCLASSIFIED)) == (10, 1)
+    assert (len(cyberware), len(bioware)) == (10, 0)
+    assert (len(REGISTERED_UNMODELED), len(MODELED_BUT_UNCLASSIFIED)) == (10, 0)
 
 
 def test_the_rows_wp78_modeled_are_gone_from_both_buckets_and_grant_real_improvements() -> None:
@@ -143,8 +143,7 @@ def test_the_rows_wp78_modeled_are_gone_from_both_buckets_and_grant_real_improve
 
 def test_registry_rows_split_5_offered_in_the_ui_and_5_import_only() -> None:
     # The `Kind` column's reachability marker, checked against the catalog the picker actually
-    # renders (WP31's flat 60) rather than asserted in prose. Bucket A's `Reflex Recorder` is
-    # offered too, but it is not a registry row -- see this module's docstring.
+    # renders (WP31's flat 60) rather than asserted in prose.
     offered = {c.name for c in FLAT_CYBERWARE} | {b.name for b in BIOWARE}
     assert REGISTERED_UNMODELED & offered == REGISTERED_AND_OFFERED_IN_UI
     assert len(REGISTERED_UNMODELED - offered) == 5
@@ -203,12 +202,15 @@ def test_no_row_outside_the_registry_carries_a_note() -> None:
         assert (entry.unmodeled_effect_note is not None) == (entry.name in named), entry.name
 
 
-def test_no_bioware_row_carries_a_note_including_the_one_still_unclassified() -> None:
+def test_no_bioware_row_carries_a_note_and_reflex_recorder_is_modeled_instead() -> None:
     # `chummer5.data.bioware`'s own mirror is deliberately empty: no bioware row is in the registry,
-    # and `Reflex Recorder` specifically must not be added to it (WP80 models it instead).
+    # and `Reflex Recorder` specifically must never be added to it -- WP80 models it, which is the
+    # remedy the policy asks for, and a note would launder that fix into an accepted gap.
     assert all(b.unmodeled_effect_note is None for b in BIOWARE)
-    reflex_recorder = next(b for b in BIOWARE if b.name in MODELED_BUT_UNCLASSIFIED)
+    reflex_recorder = next(b for b in BIOWARE if b.name == "Reflex Recorder")
     assert reflex_recorder.unmodeled_effect_note is None
+    assert reflex_recorder.bonus_support is BonusSupport.SELECT_SKILL
+    assert reflex_recorder.select_skill_bonus is not None
 
 
 def test_registered_rows_carry_no_partially_classified_bonus() -> None:
