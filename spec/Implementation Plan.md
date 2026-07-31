@@ -109,7 +109,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | H | Smallest-scope content expansions | done (WP20-23) | [phase-h-content-expansions.md](plan/phase-h-content-expansions.md) |
 | I | Magic (Magicians & Adepts) | done (WP24-29) | [phase-i-magic.md](plan/phase-i-magic.md) |
 | J | Cyberware | done (WP30-35) | [phase-j-cyberware.md](plan/phase-j-cyberware.md) |
-| K | Cyberware modifications (Capacity, subsystems, conditional bonuses) | in progress (WP36-41, WP77 done) — off hold as of 2026-07-29; WP78, WP79 then WP42 remain, in that order | [phase-k-cyberware-mods.md](plan/phase-k-cyberware-mods.md) |
+| K | Cyberware modifications (Capacity, subsystems, conditional bonuses) | in progress (WP36-41, WP77-78 done) — off hold as of 2026-07-29; WP79, then WP42, remain, with WP80-81 claimed but not gating WP42 | [phase-k-cyberware-mods.md](plan/phase-k-cyberware-mods.md) |
 | L | Easy wins (Karma-to-Nuyen, Sum-to-Ten, Bioware) | done (WP43-45) | [phase-l-easy-wins.md](plan/phase-l-easy-wins.md) |
 | M | Magic expansion (Bound Spirits, Foci, Mentor Spirits) | done (WP46-48) | [phase-m-magic-expansion.md](plan/phase-m-magic-expansion.md) |
 | N | Expanded skill support (Knowledge/Language, specializations) | done (WP49-50) | [phase-n-skill-support.md](plan/phase-n-skill-support.md) |
@@ -122,11 +122,13 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | U | UI bugfixes round 2 | done (WP64-66) | [phase-u-ui-bugfixes-2.md](plan/phase-u-ui-bugfixes-2.md) |
 | V | UI improvement requests | scoped, WP67-71 not started | [phase-v-ui-improvements.md](plan/phase-v-ui-improvements.md) |
 
-Next unclaimed WP number: **WP80** (see Phase P's own file for why WP57-59 were claimed; Phase T
+Next unclaimed WP number: **WP82** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V
 claimed WP64-71 on 2026-07-27 from a second manual-testing pass — see those phase files for scope;
 Phase S's WP59 research pass claimed WP72-76 on 2026-07-29 for its synthetic-fixture WP list;
 Phase K claimed WP77-78 on 2026-07-31 from WP41's augmentation-`<bonus>` coverage audit, and
 sequences both *before* its own already-written WP42 — see that phase file; WP77 itself claimed
 WP79 the same day, for the half of its registry backfill that turned out to need code to reach a
-player).
+player; WP78 claimed WP80 and WP81 the same day too — the one Bucket A row whose bonus is a
+purchase-time player choice, and the natural-vs-augmented attribute-maximum split its four modeled
+rows made reachable from a second direction).

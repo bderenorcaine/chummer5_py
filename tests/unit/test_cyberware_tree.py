@@ -24,6 +24,7 @@ from chummer5.data.cyberware_formula import CyberwareFormula, parse_cyberware_fo
 from chummer5.data.cyberware_subsystems import CyberwareEntry, load_cyberware_entries
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
+from chummer5.data.skills import load_skills
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.cyberware_subsystems import (
     CYBERLIMB_BASE_ATTRIBUTE,
@@ -36,13 +37,17 @@ from chummer5.engine.cyberware_subsystems import (
 )
 from chummer5.engine.derived import (
     BASE_ESSENCE,
+    BASE_INITIATIVE_DICE,
     essence,
+    initiative_dice,
+    initiative_value,
     mental_limit,
     physical_condition_monitor,
     physical_limit,
     social_limit,
 )
 from chummer5.engine.improvements import ImprovementType, ResolutionContext
+from chummer5.engine.skills import create_skill_allocation, skill_rating
 
 ENTRIES = load_cyberware_entries()
 BY_NAME = {entry.name: entry for entry in ENTRIES}
@@ -719,3 +724,115 @@ def test_conditional_bonuses_leave_every_unconditional_derived_stat_untouched() 
     assert (mental_limit(character), physical_limit(character)) == before[:2]
     # social_limit moves only because Essence dropped, which is WP30/WP32 behaviour, not WP40's.
     assert social_limit(character) <= before[2]
+
+
+# --------------------------------------------------------------------------------------------
+# WP78: the flat attribute/skill/Initiative-Dice bonuses reaching a real Character
+# --------------------------------------------------------------------------------------------
+
+
+def test_reaction_enhancers_raise_reaction_initiative_and_the_physical_limit() -> None:
+    """p. 455: "Add the Rating of reaction enhancers to your Reaction attribute (and remember to
+    adjust Initiative and Physical limit accordingly)." The parenthesis is the point -- both
+    follow-on effects fall out of REA being a real attribute, with no separate wiring.
+    """
+    character = _human_character()
+    before = (
+        character.attribute_value("REA"),
+        initiative_value(character),
+        physical_limit(character),
+    )
+
+    selection = create_cyberware_tree_selection(
+        [_real_rated("Reaction Enhancers", 3)], ENTRIES, 1_000_000
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert character.attribute_value("REA") == before[0] + 3
+    assert initiative_value(character) == before[1] + 3  # Initiative is REA + INT
+    # Physical limit is ceil((STR*2 + BOD + REA) / 3), so +3 REA is +1 limit.
+    assert physical_limit(character) == before[2] + 1
+    assert initiative_dice(character) == 1  # untouched: reaction enhancers grant no dice
+
+
+def test_wired_reflexes_raise_both_reaction_and_initiative_dice() -> None:
+    """p. 455: "each rating point of wired reflexes gives you +1 Reaction (and accompanying bonus
+    to Initiative) and +1D6 Initiative Die."
+    """
+    character = _human_character()
+    reaction_before = character.attribute_value("REA")
+
+    selection = create_cyberware_tree_selection(
+        [_real_rated("Wired Reflexes", 2)], ENTRIES, 1_000_000
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert character.attribute_value("REA") == reaction_before + 2
+    assert initiative_dice(character) == BASE_INITIATIVE_DICE + 2
+
+
+def test_reaction_enhancers_and_wired_reflexes_do_not_stack() -> None:
+    """p. 455, twice over: reaction enhancers "are incompatible with all other enhancements to
+    Reaction, including wired reflexes," and wired reflexes are "incompatible with augmentations
+    that affect Reaction or Initiative." Both carry `precedence="0"`, so the highest single bonus
+    wins rather than the two adding -- `SCSi.chum5` is the legacy-computed proof (see
+    `tests/integration/test_cyberware_augmentation_fixtures.py`).
+
+    The Initiative *Dice* half is unaffected: only wired reflexes grants any, so there is nothing
+    for it to compete with.
+    """
+    character = _human_character()
+    reaction_before = character.attribute_value("REA")
+
+    selection = create_cyberware_tree_selection(
+        [_real_rated("Wired Reflexes", 1), _real_rated("Reaction Enhancers", 3)],
+        ENTRIES,
+        1_000_000,
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert character.attribute_value("REA") == reaction_before + 3  # 3, not 1 + 3
+    assert initiative_dice(character) == BASE_INITIATIVE_DICE + 1
+
+
+def test_muscle_replacement_raises_agility_and_strength_together() -> None:
+    """p. 455: "It increases both your Strength and Agility attributes by its rating." Its two
+    bonuses share `unique="muscle"` but target different attributes, so both apply in full --
+    the dedup group only collapses bonuses competing for the *same* target.
+    """
+    character = _human_character()
+    before = (character.attribute_value("AGI"), character.attribute_value("STR"))
+
+    selection = create_cyberware_tree_selection(
+        [_real_rated("Muscle Replacement", 2)], ENTRIES, 1_000_000
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert character.attribute_value("AGI") == before[0] + 2
+    assert character.attribute_value("STR") == before[1] + 2
+
+
+def test_voice_modulator_raises_exactly_impersonation() -> None:
+    """p. 452: "Add the Rating of the modulator to your dice pool for Impersonation skill tests."
+    Every other skill must be untouched -- an `ImprovementType.SKILL` improvement is resolved per
+    skill name, so a mis-targeted one would be invisible except as a wrong number elsewhere.
+    """
+    character = _human_character()
+    skills = load_skills()
+    allocation = create_skill_allocation(
+        letter="C",
+        priorities=PRIORITIES,
+        skills=skills,
+        skill_points={},
+        group_points={},
+    )
+    by_name = {s.name: s for s in skills}
+
+    selection = create_cyberware_tree_selection(
+        [_real_rated("Voice Modulator", 4)], ENTRIES, 1_000_000
+    )
+    apply_cyberware_tree_improvements(character, selection)
+
+    assert skill_rating(character, allocation, by_name["Impersonation"]) == 4
+    for other in ("Con", "Perception", "Longarms"):
+        assert skill_rating(character, allocation, by_name[other]) == 0

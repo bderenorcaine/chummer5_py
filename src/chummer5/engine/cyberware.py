@@ -36,12 +36,16 @@ from chummer5.engine.improvements import (
 )
 
 # CyberwareFlatBonus/CyberwareConditionalBonus.target_kind -> ImprovementType. `physical_cm` is
-# WP31's Cyberlimb condition-monitor bonus; the two Limit kinds are WP40's conditional bonuses.
+# WP31's Cyberlimb condition-monitor bonus; the two Limit kinds are WP40's conditional bonuses;
+# `attribute`/`skill`/`initiative_dice` are WP78's.
 # See chummer5.data.cyberware's module docstring for why the data layer names these as strings.
 _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "physical_cm": ImprovementType.PHYSICAL_CM,
     "mental_limit": ImprovementType.MENTAL_LIMIT,
     "physical_limit": ImprovementType.PHYSICAL_LIMIT,
+    "attribute": ImprovementType.ATTRIBUTE,
+    "skill": ImprovementType.SKILL,
+    "initiative_dice": ImprovementType.INITIATIVE_DICE,
 }
 
 # The legacy <condition> key -> WP39's compiled predicate. One entry per member of
@@ -56,9 +60,11 @@ _CONDITION_KEY_TO_CONDITION = {
     "LimitCondition_CyberwareHydraulicJacks": ImprovementCondition.JUMPING_OR_SPRINTING_ONLY,
 }
 
-# Every ImprovementType this module produces resolves against a single, character-wide total (there
-# is only one Essence pool, one Physical CM per character) -- the same _GLOBAL_TARGET sentinel
-# chummer5.engine.derived already resolves both of these against.
+# The character-wide ImprovementTypes this module produces (Physical CM, the two Limits, Initiative
+# Dice) resolve against a single total -- the same _GLOBAL_TARGET sentinel chummer5.engine.derived
+# already resolves them against. WP78's `attribute`/`skill` kinds are the first per-target ones
+# here; their target is the bonus's own `target_name`, which the data layer leaves as exactly this
+# empty string for every character-wide kind, so one expression covers both cases.
 _GLOBAL_TARGET = ""
 
 
@@ -79,18 +85,25 @@ def cyberware_bonus_improvements(
     purchase and a plugin are priced differently in Essence (see `chummer5.engine
     .cyberware_subsystems`' dual-costing section), so each caller owns that record.
 
-    `rating` resolves a `<value>Rating</value>` conditional bonus. WP31's flat catalog has no
-    rating dimension at all (none of its 60 rows carries a `<rating>` tag), so its caller passes
-    1 -- and a rating-scaled conditional bonus appearing there would be data drift, which
-    `apply_cyberware_improvements` rejects rather than silently applying as +1.
+    `rating` resolves a `Rating`-valued bonus, flat (WP78) or conditional (WP40). WP31's flat
+    catalog has no rating dimension at all (none of its 60 rows carries a `<rating>` tag), so its
+    caller would pass 1 -- and no row in it carries a `Rating`-valued bonus of either kind
+    (verified by enumeration: all four `Rating`-valued rows are rating-scaled in `<cost>` or
+    `<ess>` too, which is exactly what excludes them from that catalog).
+
+    `unique_name` (WP78) is carried through from the data layer unchanged, so SR5's "these two
+    augmentations don't stack" rules land on `ImprovementIndex.resolve`'s existing highest-wins
+    dedup pass rather than needing a second mechanism.
     """
     improvements = [
         Improvement(
             improvement_type=_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
-            target=_GLOBAL_TARGET,
-            value=flat_bonus.value,
+            target=flat_bonus.target_name,
+            value=flat_bonus.resolve_value(rating),
             source_type=ImprovementSource.CYBERWARE,
             source_id=item_id,
+            rating=rating,
+            unique_name=flat_bonus.unique_name,
         )
         for flat_bonus in flat_bonuses
     ]

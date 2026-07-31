@@ -4,6 +4,7 @@ the full flat-cost/flat-Essence filter and `<bonus>`-classification reasoning th
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from decimal import Decimal
 
 from chummer5.data.cyberware import (
@@ -11,6 +12,7 @@ from chummer5.data.cyberware import (
     Cyberware,
     CyberwareConditionalBonus,
     CyberwareFlatBonus,
+    classify_bonus,
     count_by_support,
     load_cyberware,
 )
@@ -157,10 +159,136 @@ def test_full_leg_variants_keep_their_condition_monitor_bonus_despite_disablequa
         assert "disablequality" in item.raw_bonus
 
 
+# -- WP78: the three new flat `<bonus>` shapes, classified from synthetic XML ------------------
+#
+# Synthetic first, per WP78's own acceptance criteria and this project's general "prove the
+# mechanism, then point it at real content" posture. The real-catalog counterparts (the four rows
+# these shapes reclassify) live in `tests/unit/test_cyberware_subsystems.py`, because all four are
+# rating-scaled and so appear only in WP37's wider 87-row catalog, never in this module's 60.
+
+
+def _classify(xml: str):
+    return classify_bonus(ET.fromstring(xml))
+
+
+def test_specific_attribute_bonus_is_flat_with_a_real_target() -> None:
+    support, flat, conditional = _classify(
+        "<bonus><specificattribute precedence='0'>"
+        "<name>REA</name><val>Rating</val></specificattribute></bonus>"
+    )
+    assert support is BonusSupport.FLAT_BONUS
+    assert conditional == ()
+    assert flat == (
+        CyberwareFlatBonus(
+            target_kind="attribute", value=None, target_name="REA", unique_name="precedence0"
+        ),
+    )
+    # `value=None` is "the purchased Rating", not "no bonus" -- read it through resolve_value.
+    assert flat[0].resolve_value(3) == 3
+
+
+def test_a_literal_attribute_value_is_kept_as_the_literal() -> None:
+    _, flat, _ = _classify(
+        "<bonus><specificattribute><name>AGI</name><val>2</val></specificattribute></bonus>"
+    )
+    assert flat == (CyberwareFlatBonus(target_kind="attribute", value=2, target_name="AGI"),)
+    assert flat[0].resolve_value(5) == 2
+
+
+def test_specific_skill_bonus_is_flat_and_names_the_skill() -> None:
+    support, flat, _ = _classify(
+        "<bonus><specificskill><name>Impersonation</name><bonus>Rating</bonus>"
+        "</specificskill></bonus>"
+    )
+    assert support is BonusSupport.FLAT_BONUS
+    assert flat == (
+        CyberwareFlatBonus(target_kind="skill", value=None, target_name="Impersonation"),
+    )
+
+
+def test_initiativepass_maps_to_the_initiative_dice_kind() -> None:
+    # Legacy's `initiativepass` handler is a one-line delegation to `initiativedice`; the name is
+    # historical (SR4 "Initiative Passes"), the mechanic is Initiative Dice.
+    support, flat, _ = _classify(
+        "<bonus><initiativepass precedence='0'>Rating</initiativepass></bonus>"
+    )
+    assert support is BonusSupport.FLAT_BONUS
+    assert flat == (
+        CyberwareFlatBonus(
+            target_kind="initiative_dice", value=None, target_name="", unique_name="precedence0"
+        ),
+    )
+
+
+def test_the_bonus_elements_unique_attribute_is_the_default_dedup_group() -> None:
+    # Muscle Replacement's own shape: <bonus unique="muscle"> with two children that carry no
+    # `precedence` of their own, so both inherit "muscle".
+    _, flat, _ = _classify(
+        "<bonus unique='muscle'>"
+        "<specificattribute><name>AGI</name><val>Rating</val></specificattribute>"
+        "<specificattribute><name>STR</name><val>Rating</val></specificattribute>"
+        "</bonus>"
+    )
+    assert [b.unique_name for b in flat] == ["muscle", "muscle"]
+
+
+def test_a_childs_precedence_overrides_the_bonus_elements_unique() -> None:
+    # Legacy's handlers each start from the collection-wide `_strUnique` and overwrite it with
+    # "precedence" + value when the child carries one -- so the child wins.
+    _, flat, _ = _classify(
+        "<bonus unique='muscle'><specificattribute precedence='0'>"
+        "<name>STR</name><val>Rating</val></specificattribute></bonus>"
+    )
+    assert flat[0].unique_name == "precedence0"
+
+
+def test_no_dedup_marker_at_all_means_the_bonus_stacks() -> None:
+    _, flat, _ = _classify(
+        "<bonus><specificattribute><name>STR</name><val>1</val></specificattribute></bonus>"
+    )
+    assert flat[0].unique_name is None
+
+
+def test_an_attribute_bound_modifier_is_not_half_applied() -> None:
+    # Legacy's own `specificattribute` handler also reads <min>/<max>/<aug>/<affectbase>, which
+    # change an attribute's *bounds* rather than its value -- a mechanic this engine has no
+    # representation of. A row carrying one must fall through whole, not lose the bound silently.
+    # (No SR5 cyberware row carries one; this pins the behaviour for whenever data drifts.)
+    support, flat, conditional = _classify(
+        "<bonus><specificattribute><name>REA</name><val>1</val><max>1</max>"
+        "</specificattribute></bonus>"
+    )
+    assert support is BonusSupport.NOT_YET_SUPPORTED
+    assert (flat, conditional) == ((), ())
+
+
+def test_an_applytorating_skill_bonus_is_not_half_applied() -> None:
+    support, flat, _ = _classify(
+        "<bonus><specificskill><name>Longarms</name><bonus>1</bonus>"
+        "<applytorating>True</applytorating></specificskill></bonus>"
+    )
+    assert support is BonusSupport.NOT_YET_SUPPORTED
+    assert flat == ()
+
+
+def test_an_arithmetic_bonus_value_is_not_guessed_at() -> None:
+    # The whitelist is `Rating` or a bare integer. Anything else is a formula this loader does not
+    # evaluate, exactly as WP31's <cost>/<ess> filter refuses to.
+    support, _, _ = _classify(
+        "<bonus><specificattribute><name>REA</name><val>Rating * 2</val>"
+        "</specificattribute></bonus>"
+    )
+    assert support is BonusSupport.NOT_YET_SUPPORTED
+
+
 def test_supported_vs_unsupported_counts_are_visible() -> None:
     # FLAT_BONUS: 8 Cyberlimb condition-monitor items. CONDITIONAL_BONUS: Spatial Recognizer (WP40).
     # NOT_YET_SUPPORTED: Smartlink, Damper, 3 Bone Lacing variants = 5. NO_EFFECT: 60 - 8 - 1 - 5 =
     # 46 (42 genuinely empty/absent <bonus> + 4 disablequality-only).
+    #
+    # WP78 widened `classify_bonus`'s whitelist but left every one of these numbers untouched: all
+    # four rows it reclassifies are rating-scaled in <cost> and/or <ess>, so none of them is in this
+    # 60-row catalog to begin with. Asserted, not assumed -- this is the pin that says so.
     counts = count_by_support(CYBERWARE)
     assert counts[BonusSupport.FLAT_BONUS] == 8
     assert counts[BonusSupport.CONDITIONAL_BONUS] == 1

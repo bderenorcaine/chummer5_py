@@ -429,11 +429,13 @@ conversation's own request not to build placeholder UI that gets thrown away app
     unmodeled and is absent from the Project Overview's "Unmodeled real effects" registry. WP41 did
     not backfill it; see `spec/decisions-log.md`, 2026-07-31.
 
-**WP77 and WP78 are numbered after WP42 but sequenced *before* it** — they were claimed on
-2026-07-31, once WP41 had already been written. WP41's own follow-up is why: WP42 is the WP that
-puts the widest augmentation catalog this project has ever offered in front of a player, and it
-should not do that while 15 rows in that catalog are purchasable, priced, and mechanically silent
-with no record of the fact. See the two entries' own "Depends on" lines for the exact ordering.
+**WP77-WP81 are numbered after WP42 but sequenced *before* it** — they were claimed on 2026-07-31,
+once WP41 had already been written. WP41's own follow-up is why: WP42 is the WP that puts the widest
+augmentation catalog this project has ever offered in front of a player, and it should not do that
+while 15 rows in that catalog are purchasable, priced, and mechanically silent with no record of the
+fact. WP77 (audit + registry) and WP78 (model the computable ones) have landed; WP79 (show the
+notes), WP80 (`Reflex Recorder`'s player choice) and WP81 (natural vs. augmented attribute maximum)
+remain, and only WP79 is a hard prerequisite of WP42. See each entry's own "Depends on" line.
 
 - [x] **WP77 — Augmentation `<bonus>` coverage audit + "Unmodeled real effects" backfill.**
   Goal: close the gap WP38's worklog first flagged and WP41's widening made larger — every
@@ -521,7 +523,7 @@ with no record of the fact. See the two entries' own "Depends on" lines for the 
     WP56's `unmodeled_effect_note` mechanism exists and `derived.unmodeled_effect_notes` already
     walks cyberware/bioware for it, but no augmentation catalog populates the field.
 
-- [ ] **WP78 — Model the computable augmentation bonuses.**
+- [x] **WP78 — Model the computable augmentation bonuses.**
   Goal: fix WP77's Bucket A — make the 5 rows whose real SR5 effect this engine *can* compute
   actually compute it, so they stop being offered-but-inert. This is the first time the augmentation
   `<bonus>` grammar grows since WP31 defined it, and it is deliberately its own WP for the same
@@ -558,6 +560,44 @@ with no record of the fact. See the two entries' own "Depends on" lines for the 
   `SCSi`; `Wired Reflexes`: `Fuzzy-chargen`, `SCSi`), and an explicit test that every row this WP
   reclassifies has been removed from WP77's registry rows or was never in them.
 
+  **Landed 2026-07-31**, touching two `src/` modules (`chummer5.data.cyberware`,
+  `chummer5.engine.cyberware`) and no others — no new module, no save-format or web change, +33
+  tests (1145 total). Four of the five Bucket A rows are modeled; the fifth became WP80. What WP42
+  and WP79-WP81 need to know:
+  - **Four rows, not five: `Reflex Recorder` is now WP80**, decided early as the entry asked. Its
+    `<selectskill>` is a purchase-time *player choice* needing a persisted pick, load-time
+    re-validation, a legacy `<extra>` import path and a UI picker — WP55's four-layer shape, and
+    strictly larger than the other four combined. See `spec/decisions-log.md`, 2026-07-31.
+  - **`CyberwareFlatBonus` was widened, not siblinged** (the entry's open call). Two new fields,
+    both defaulted so no existing construction site changed: `target_name` (`""` for the
+    character-wide kinds, which is also the `_GLOBAL_TARGET` sentinel — so
+    `target=flat_bonus.target_name` covers both cases in one expression) and `unique_name`. `value`
+    became `int | None`, `None` meaning "the purchased Rating," mirroring
+    `CyberwareConditionalBonus` exactly; read it via `resolve_value(rating)`.
+  - **A skill *name* is the target, not an id.** No id resolution is needed at all —
+    `ImprovementType.SKILL` already resolves against `skill.name` everywhere in this engine
+    (`chummer5.engine.skills.skill_rating`). `Impersonation` confirmed present in `skills.xml`.
+  - **`precedence`/`unique` are the load-bearing part, and they are why the fixtures agree.**
+    `precedence="0"` on a `<bonus>` child becomes `unique_name="precedence0"`; a `<bonus
+    unique="...">` attribute becomes the default for children that don't override it. Without this,
+    `SCSi.chum5` (Wired Reflexes 1 + Reaction Enhancers 1 over a natural REA of 2) would compute
+    REA 4 against the legacy oracle's 3. p. 455 states the non-stacking rule outright, twice.
+  - **`<disablequality>` stayed out of scope, as directed, and the guid resolved.**
+    `3564b678-7721-4a8d-ac79-1600cf92dc14` is **Lightning Reflexes**, `source == "RF"` — so, like
+    `Celerity`, it is absent from the SR5 quality catalog and unreachable by any character this
+    engine builds. Nothing to register; a test pins the resolution so it can't rot.
+  - **Two engine gaps found, deliberately not closed, both now dated entries in
+    `spec/decisions-log.md`:** an attribute Improvement is capped at the *natural* maximum rather
+    than SR5's augmented (+4) one — pre-existing since WP27's `Improved Physical Attribute`, now
+    reachable from a second direction, and scoped as **WP81** because the fix requires a
+    natural-vs-augmented split that `create_karma_attribute_selection`'s "only one at its natural
+    maximum" rule also depends on; and legacy's `precedence0` *suppresses* unmarked bonuses where
+    this engine adds them, reachable only for an adept who takes Improved Physical Attribute (REA)
+    and also buys one of these implants.
+  - `tests/unit/test_augmentation_unmodeled_registry.py`'s `WP78_SCOPE` is renamed
+    `MODELED_BUT_UNCLASSIFIED` and holds one row (`Reflex Recorder`). WP79's "WP78's rows must have
+    **no** note" invariant is unchanged and still pinned there.
+
 - [ ] **WP79 — Surface augmentation unmodeled-effect notes on the character sheet.**
   Goal: make WP77's 8 registry rows visible where a player can act on them. WP56 built the whole
   mechanism for qualities — `Quality.unmodeled_effect_note`, mirrored by hand from the Project
@@ -587,6 +627,79 @@ with no record of the fact. See the two entries' own "Depends on" lines for the 
   Acceptance: a web test that a character owning Bone Lacing (Titanium) renders a non-empty
   "Unmodeled real effects" row for it (mirroring WP56's own quality-side test), and a data test that
   every name in that file's `REGISTERED_UNMODELED` resolves to a note in both cyberware catalogs.
+
+- [ ] **WP80 — `Reflex Recorder`: a purchase-time skill choice on an augmentation.**
+  Goal: finish WP77's Bucket A. `Reflex Recorder` (bioware, `source == "SR5"`, in the shipped
+  picker since WP45) carries `<bonus><selectskill limittoattribute="BOD,AGI,REA,STR"><val>1</val>
+  </selectskill></bonus>` — "+1 to one active skill linked to a physical attribute, chosen at
+  purchase." It is the **last** augmentation row that is offered, charged in full, and mechanically
+  silent, and it is a live departure from the Project Overview's 2026-07-24 "model it in full or
+  exclude it" policy for as long as it stays that way. Claimed 2026-07-31 by WP78, which modeled the
+  other four Bucket A rows and ruled this one out of its own scope because it is a different kind of
+  problem, not a fifth instance of the same one.
+  Deliverables:
+  - A `<selectskill>` classification in `chummer5.data.bioware._classify_bonus` carrying the
+    `limittoattribute` filter, *not* a resolved skill — the pick belongs to the purchase, not the
+    catalog. Mirrors `chummer5.data.qualities`' `SELECT_TEXT` split (WP55) rather than
+    `BiowareFlatBonus`'s fixed-name shape.
+  - A per-purchase chosen skill on the bioware selection, validated against the filter (an active
+    skill whose linked attribute is one of BOD/AGI/REA/STR — confirm the filter's semantics against
+    `chummer5.data.skills` before hardcoding, the same way WP55 confirmed its own), persisted in
+    `CharacterSave`, and re-validated on load.
+  - Legacy import: the chosen skill is the item's `<extra>` element (`Barrett.chum5` stores
+    `<extra>Longarms</extra>` — real fixture content, and the same fixture whose import positive
+    case must keep passing). An unresolvable `<extra>` should be itemized the way WP41 itemizes
+    every other blocking reason, not silently dropped.
+  - A browser picker, mirroring WP55's own quality-detail control.
+  - **Decide & document two things WP78 deliberately left open.** (a) Is the bonus applied as
+    `ImprovementType.SKILL` (this engine's established route, which folds it into the skill
+    *rating* and so caps at `MAX_SKILL_RATING_CREATE`) or does it need a genuine dice-pool
+    modifier? Legacy treats a `<specificskill>` without `<applytorating>` as a **pool** modifier,
+    and `Barrett.chum5`'s own copy of this bonus carries the comment "Hero Lab says this is not RAW
+    `<applytorating>True`" — so the distinction is live, and it applies equally to Voice Modulator
+    (WP78), Enhanced Articulation (WP45) and every focus/mentor skill bonus already shipped. (b)
+    `Reflex Recorder` carries `<pairinclude><name>Reflex Recorder</name></pairinclude>`; check
+    against p. 460 whether a matched pair behaves differently, the way WP40 found Hydraulic Jacks
+    does.
+  Depends on: WP78 (its classifier work is the pattern; nothing of its code is required).
+  Acceptance: a unit test that a purchase with a chosen skill raises exactly that skill's pool; a
+  rejection test for a skill outside the `limittoattribute` filter; a save/load round-trip carrying
+  the pick; an integration test that `Barrett.chum5` imports with `Longarms` chosen. Plus the check
+  WP77's pin already stands ready for: the row leaves
+  `tests/unit/test_augmentation_unmodeled_registry.py`'s `MODELED_BUT_UNCLASSIFIED`, emptying that
+  bucket for the first time since WP77 created it.
+
+- [ ] **WP81 — Natural vs. augmented attribute maximum.**
+  Goal: let an Improvement raise an attribute above its metatype maximum, up to SR5's augmented
+  maximum, without breaking the chargen rules that currently read `attribute_value` as the *natural*
+  rating. Claimed 2026-07-31 by WP78; see `spec/decisions-log.md`'s entry of that date for the full
+  finding.
+  The problem, stated once: `Character.attribute_value` returns
+  `min(minimum + points + karma + Σ improvements, attribute_range.maximum)`. SR5 caps the
+  *augmented* total at `metatype maximum + 4` instead (legacy `CharacterAttrib.AttributeModifiers`
+  clamps Σ attribute improvements to `MetatypeAugmentedMaximum - MetatypeMaximum`, and
+  `CalculatedTotalValue` then clamps to `TotalAugmentedMaximum`). `AttributeRange.augmented` is
+  already loaded by `chummer5.data.metatypes` and read nowhere.
+  **This is not a one-line cap change**, which is the whole reason it is its own WP:
+  `chummer5.engine.character.create_karma_attribute_selection` enforces SR5's "only one Mental or
+  Physical attribute may sit at its natural maximum" rule via
+  `candidate.attribute_value(code) >= candidate.attribute_range(code).maximum`, which becomes
+  silently wrong the moment `attribute_value` can exceed that maximum. `chummer5.engine.derived`
+  and the character sheet have the same natural-vs-augmented question.
+  Deliverables:
+  - A natural-vs-augmented split on `Character` (decide the shape: a second method, a named tuple,
+    or an `augmented=` flag — and document why), with every existing caller audited for which one
+    it actually wants.
+  - The augmented clamp itself, both halves (per-improvement `+4` ceiling and total cap).
+  - Character sheet display: an augmented attribute should read as such, not as a bare number
+    (WP35's "reduced from N by Essence loss" display is the nearest precedent).
+  Depends on: WP78 (its four rows are the second real producer of attribute Improvements, after
+  WP27's `Improved Physical Attribute`).
+  Acceptance: a test that a character at their natural REA maximum plus Reaction Enhancers 3 reaches
+  maximum + 3, and that Reaction Enhancers on top of a `+4`-worth of bonuses clamps at maximum + 4;
+  an explicit test that the "only one at its natural maximum" Karma rule still reads the *natural*
+  rating; `tests/integration/test_character_fixtures.py`'s existing skip of augmented attributes
+  revisited — some of what it skips should now be checkable.
 
 - [ ] **WP42 — Cyberware modification/subsystem UI.**
   Goal: expose subsystem/plugin purchase through the browser. Deliberately last, and deliberately

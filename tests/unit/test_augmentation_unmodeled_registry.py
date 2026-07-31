@@ -10,9 +10,17 @@ Overview's 2026-07-24 policy when the unmodeled effect is genuinely outside this
 
 - `REGISTERED_UNMODELED` -- effects this engine has no representation of at all (armor totals,
   attack tests, skillsofts, toxin resistance). Registry rows, added to the Project Overview by WP77.
-- `WP78_SCOPE` -- effects this engine *can* compute today (attribute, Initiative Dice and skill
-  bonuses). Not registry material: registering them would launder a policy violation into an
-  accepted gap. WP78 is the WP that models them.
+- `MODELED_BUT_UNCLASSIFIED` -- effects this engine *can* compute today (attribute, Initiative Dice
+  and skill bonuses). Not registry material: registering them would launder a policy violation into
+  an accepted gap.
+
+**WP78 emptied most of the second bucket** (this file's `WP78_SCOPE` as written by WP77): the four
+cyberware rows -- Reaction Enhancers, Wired Reflexes, Muscle Replacement, Voice Modulator -- now
+classify `FLAT_BONUS` and grant real Improvements, so they no longer appear in the live
+`NOT_YET_SUPPORTED` set at all and the constant naming them is gone rather than shrunk. **One row
+survives**, the bioware `Reflex Recorder`, whose `<selectskill>` is a purchase-time *player choice*
+(persisted, re-validated on load, picked in the UI) rather than a fixed bonus -- WP78 ruled that its
+own WP, **WP80**, for the same reason WP55 was one for `SELECT_TEXT` qualities.
 
 **Why a test rather than the one-off check WP77's entry allowed as an alternative.** The failure
 mode is a *future* catalog widening (WP42's UI, or any later `<bonus>` grammar change) quietly
@@ -54,17 +62,14 @@ REGISTERED_UNMODELED = frozenset(
     }
 )
 
-# WP77's Bucket A: a `<bonus>` that maps onto an `ImprovementType` this engine already has
-# (`ATTRIBUTE`, `INITIATIVE_DICE`, `SKILL`). Offered and inert today, which is a live departure from
-# the "model it in full or exclude it" policy rather than an accepted gap -- WP78 is the fix, and
-# these are deliberately not being excluded in the meantime.
-WP78_SCOPE = frozenset(
+# WP77's Bucket A, as it stands after WP78 modeled the four cyberware rows: a `<bonus>` that maps
+# onto an `ImprovementType` this engine already has, still offered and still inert. A live departure
+# from the "model it in full or exclude it" policy rather than an accepted gap -- WP80 is the fix,
+# and this row is deliberately not being excluded in the meantime (it has shipped in the bioware
+# picker since WP45 and is real content in `Barrett.chum5`'s import positive case).
+MODELED_BUT_UNCLASSIFIED = frozenset(
     {
-        "Reaction Enhancers",
-        "Wired Reflexes",
-        "Muscle Replacement",
-        "Voice Modulator",
-        "Reflex Recorder",  # bioware, and the one of the 5 the shipped UI offers
+        "Reflex Recorder",  # bioware; `<selectskill>` is a player choice -- see this file's header
     }
 )
 
@@ -92,25 +97,39 @@ def _not_yet_supported_names() -> frozenset[str]:
     return frozenset(cyberware | bioware)
 
 
-def test_every_not_yet_supported_row_is_registered_or_named_in_wp78s_scope() -> None:
+def test_every_not_yet_supported_row_is_registered_or_named_as_a_known_policy_violation() -> None:
     # The whole point of this file. A row that is neither is offered, charged, mechanically silent
     # and undocumented -- exactly the state WP77 existed to end.
-    assert _not_yet_supported_names() == REGISTERED_UNMODELED | WP78_SCOPE
+    assert _not_yet_supported_names() == REGISTERED_UNMODELED | MODELED_BUT_UNCLASSIFIED
 
 
 def test_the_two_buckets_are_disjoint() -> None:
     # WP78's acceptance criteria ask that every row it reclassifies "has been removed from WP77's
-    # registry rows or was never in them" -- this is that check, standing in advance.
-    assert not REGISTERED_UNMODELED & WP78_SCOPE
+    # registry rows or was never in them" -- this is that check, and the four rows it modeled were
+    # never in `REGISTERED_UNMODELED` to begin with, which is what kept the fix to one bucket.
+    assert not REGISTERED_UNMODELED & MODELED_BUT_UNCLASSIFIED
 
 
-def test_the_audited_split_is_still_14_cyberware_plus_1_bioware() -> None:
-    # WP77 re-ran WP41's audit rather than trusting its counts; this pins the result so a catalog
-    # change that shifts them is visible as a number, not just as a name-set diff above.
+def test_the_audited_split_is_now_10_cyberware_plus_1_bioware() -> None:
+    # WP77 re-ran WP41's audit rather than trusting its counts and got 14 + 1, split 10 registry /
+    # 5 computable. WP78 modeled 4 of the 5 computable ones (all cyberware), so the cyberware count
+    # drops by exactly 4 and the registry side is untouched. Pinned as numbers so a catalog change
+    # that shifts them is visible as more than a name-set diff above.
     cyberware = [e for e in CYBERWARE_ENTRIES if e.bonus_support is BonusSupport.NOT_YET_SUPPORTED]
     bioware = [b for b in BIOWARE if b.bonus_support is BonusSupport.NOT_YET_SUPPORTED]
-    assert (len(cyberware), len(bioware)) == (14, 1)
-    assert (len(REGISTERED_UNMODELED), len(WP78_SCOPE)) == (10, 5)
+    assert (len(cyberware), len(bioware)) == (10, 1)
+    assert (len(REGISTERED_UNMODELED), len(MODELED_BUT_UNCLASSIFIED)) == (10, 1)
+
+
+def test_the_rows_wp78_modeled_are_gone_from_both_buckets_and_grant_real_improvements() -> None:
+    # WP78's own acceptance criterion, standing as a regression test: a row that regressed to
+    # NOT_YET_SUPPORTED (a `<bonus>` grammar change, a data update) would be silently inert again.
+    modeled = {"Reaction Enhancers", "Wired Reflexes", "Muscle Replacement", "Voice Modulator"}
+    assert not modeled & (REGISTERED_UNMODELED | MODELED_BUT_UNCLASSIFIED)
+    by_name = {e.name: e for e in CYBERWARE_ENTRIES}
+    for name in modeled:
+        assert by_name[name].bonus_support is BonusSupport.FLAT_BONUS
+        assert by_name[name].flat_bonuses != ()
 
 
 def test_registry_rows_split_5_offered_in_the_ui_and_5_import_only() -> None:

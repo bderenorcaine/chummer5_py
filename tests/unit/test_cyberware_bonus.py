@@ -54,6 +54,60 @@ def test_flat_bonus_translates_to_an_unconditional_improvement() -> None:
     assert improvement.source_id == "item"
 
 
+def test_attribute_bonus_targets_the_named_attribute_code() -> None:
+    # WP78: the first CyberwareFlatBonus kind with a real target rather than the _GLOBAL_TARGET
+    # sentinel -- `ImprovementType.ATTRIBUTE` resolves against the attribute code.
+    (improvement,) = _improvements(
+        flat_bonuses=(
+            CyberwareFlatBonus(
+                target_kind="attribute", value=None, target_name="REA", unique_name="precedence0"
+            ),
+        ),
+        rating=3,
+    )
+    assert improvement.improvement_type is ImprovementType.ATTRIBUTE
+    assert improvement.target == "REA"
+    assert improvement.value == 3  # `<val>Rating</val>` resolved against the purchase
+    assert improvement.rating == 3
+    assert improvement.unique_name == "precedence0"
+    assert improvement.condition is None
+
+
+def test_skill_bonus_targets_the_named_skill() -> None:
+    (improvement,) = _improvements(
+        flat_bonuses=(
+            CyberwareFlatBonus(target_kind="skill", value=None, target_name="Impersonation"),
+        ),
+        rating=4,
+    )
+    assert improvement.improvement_type is ImprovementType.SKILL
+    assert improvement.target == "Impersonation"
+    assert improvement.value == 4
+    assert improvement.unique_name is None
+
+
+def test_initiative_dice_bonus_targets_the_character_wide_total() -> None:
+    (improvement,) = _improvements(
+        flat_bonuses=(
+            CyberwareFlatBonus(
+                target_kind="initiative_dice", value=None, unique_name="precedence0"
+            ),
+        ),
+        rating=2,
+    )
+    assert improvement.improvement_type is ImprovementType.INITIATIVE_DICE
+    assert improvement.target == ""  # _GLOBAL_TARGET, which is also the default target_name
+    assert improvement.value == 2
+
+
+def test_a_literal_valued_flat_bonus_ignores_the_purchased_rating() -> None:
+    # `value=None` means "ask the purchase"; an int means exactly that int, at any rating.
+    (improvement,) = _improvements(
+        flat_bonuses=(CyberwareFlatBonus(target_kind="physical_cm", value=1),), rating=5
+    )
+    assert improvement.value == 1
+
+
 def test_conditional_bonus_carries_the_compiled_condition_not_the_legacy_string() -> None:
     (improvement,) = _improvements(
         conditional_bonuses=(
@@ -118,3 +172,22 @@ def test_every_supported_condition_key_maps_to_an_improvement_condition() -> Non
 
     assert set(_CONDITION_KEY_TO_CONDITION) == set(_SUPPORTED_BONUS_CONDITIONS)
     assert set(_CONDITION_KEY_TO_CONDITION.values()) == set(ImprovementCondition)
+
+
+def test_every_target_kind_the_loader_produces_has_an_improvement_type() -> None:
+    # The same pin as above, for the other string -> enum map. WP78 is the WP that made this map
+    # grow for the first time since WP40, so an unmapped `target_kind` is now a live failure mode
+    # rather than a theoretical one: it would raise a KeyError deep inside a purchase.
+    from chummer5.data.cyberware import load_cyberware
+    from chummer5.data.cyberware_subsystems import load_cyberware_entries
+    from chummer5.engine.cyberware import _TARGET_KIND_TO_IMPROVEMENT_TYPE
+
+    produced = {
+        bonus.target_kind
+        for catalog in (load_cyberware(), load_cyberware_entries())
+        for item in catalog
+        for bonus in (*item.flat_bonuses, *item.conditional_bonuses)
+    }
+    assert produced <= set(_TARGET_KIND_TO_IMPROVEMENT_TYPE)
+    # Every kind the maps carry is one real SR5 content actually uses -- no dead entries.
+    assert produced == set(_TARGET_KIND_TO_IMPROVEMENT_TYPE)

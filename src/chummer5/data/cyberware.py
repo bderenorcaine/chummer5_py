@@ -36,7 +36,10 @@ of the 60 flat items' raw `<bonus>` node:
   bullet), to exactly one `<conditionmonitor><physical>1</physical></conditionmonitor>` child --
   maps directly onto the existing `ImprovementType.PHYSICAL_CM`, the same type WP10 already wired
   into `chummer5.engine.derived.physical_condition_monitor`. Every one of these 8 carries the
-  identical value (`1`), confirmed directly rather than assumed.
+  identical value (`1`), confirmed directly rather than assumed. **WP78 adds three more flat
+  shapes** -- `<specificattribute>`, `<initiativepass>` and `<specificskill>` -- see its own
+  section at the bottom of this docstring; none of them appears on a row `load_cyberware()` keeps,
+  so the flat catalog's own 8/42/1/5 split is untouched by that WP.
 - **A verified-inert bonus child, `<disablequality>`, is stripped before classification rather than
   disqualifying the item to `NOT_YET_SUPPORTED`.** 6 of the 60 flat items (the same 8 Cyberlimb
   FLAT_BONUS items above, minus the 2 that carry *only* `<conditionmonitor>`, plus 4 more --
@@ -51,6 +54,14 @@ of the 60 flat items' raw `<bonus>` node:
   `FLAT_BONUS`) and the 4 Foot/Lower-Leg items reduce to nothing at all (`NO_EFFECT`, the same
   bucket as a genuinely empty `<bonus>`) -- 8 `FLAT_BONUS` + 4 of these = the 12 Cyberlimb items
   that carry *any* `<bonus>` at all, out of 16 total flat Cyberlimb entries.
+  **WP78 re-checked this exclusion against the wider (87-row) catalog and it still holds, but for a
+  second reason the WP31 text above doesn't cover:** two of the rating-scaled rows
+  (`Wired Reflexes`, and `Cybereyes Basic System`'s 7-strong list) name their disabled quality by
+  **raw guid** rather than by name. The one that matters is
+  `3564b678-7721-4a8d-ac79-1600cf92dc14`, resolved against `qualities.xml` -- it is
+  **Lightning Reflexes**, `source == "RF"`, so it is excluded from the SR5 quality catalog on
+  source grounds exactly as `Celerity` is, and is likewise unreachable by any character this
+  engine can build. Stripping it therefore drops nothing real.
 - `CONDITIONAL_BONUS` (WP40 -- Phase K) -- a `<limitmodifier>` whose `<condition>` is one of the
   four named conditions `chummer5.engine.improvements.ImprovementCondition` compiles (see below).
   Exactly 1 of the 60 flat items: **Spatial Recognizer**, which WP31 classified `NOT_YET_SUPPORTED`
@@ -77,6 +88,57 @@ exactly as an unrecognized `<bonus>` child already does. The condition key is ca
 its **verbatim legacy string**, not as an engine enum: this module is the data layer and does not
 import from `chummer5.engine`, the same split `CyberwareFlatBonus.target_kind`'s string already
 uses (`chummer5.engine.cyberware` owns both string -> enum maps).
+
+## WP78 (Phase K) -- the three flat shapes that make four rating-scaled rows stop being inert
+
+WP77's audit split the `NOT_YET_SUPPORTED` rows into "genuinely outside this engine's scope"
+(registered in the Project Overview's "Unmodeled real effects" table) and "computable today, and
+therefore a live policy violation while it stays unmodeled." WP78 is the second bucket's fix for the
+four cyberware rows in it. Three new `<bonus>` child shapes, whitelisted the same "classify known,
+named shapes" way everything above already is -- **not** a general `<bonus>` interpreter:
+
+- `<specificattribute><name>REA</name><val>Rating</val></specificattribute>` -- `target_kind
+  "attribute"`, `target_name` the attribute code. Reaction Enhancers (REA), Wired Reflexes (REA),
+  Muscle Replacement (AGI **and** STR, one child each). Exactly `{name, val}` and nothing else is
+  accepted: legacy's own handler also reads `<min>`/`<max>`/`<aug>`/`<affectbase>` children, which
+  modify an attribute's *bounds* rather than its value and are a different mechanic this engine has
+  no representation of -- a row carrying one falls through to `NOT_YET_SUPPORTED` rather than being
+  half-applied. No SR5 cyberware row carries one (verified by enumeration).
+- `<initiativepass>Rating</initiativepass>` -- `target_kind "initiative_dice"`, no target name.
+  Wired Reflexes only. Named "initiative *pass*" for historical reasons; legacy's own
+  `AddImprovementCollection.initiativepass` is a one-line delegation to `initiativedice`, so this
+  maps onto `ImprovementType.INITIATIVE_DICE`, not `INITIATIVE`.
+- `<specificskill><name>Impersonation</name><bonus>Rating</bonus></specificskill>` -- `target_kind
+  "skill"`, `target_name` the skill's **name** (which is what `ImprovementType.SKILL` resolves
+  against throughout this engine -- see `chummer5.engine.skills.skill_rating`). Voice Modulator
+  only. The identical shape `chummer5.data.qualities`/`chummer5.data.bioware`/`chummer5.data.powers`
+  already classify; the one new thing here is that cyberware's value may be the literal string
+  `Rating` rather than an integer.
+
+**A value of `Rating` is carried as `value=None`, not as the number 1** -- mirroring
+`CyberwareConditionalBonus.value` exactly, and for the same reason: the magnitude isn't known until
+a rating is purchased. Read it through `resolve_value(rating)`.
+
+**Stacking: `precedence`/`unique` become `Improvement.unique_name`.** Three of the four rows carry a
+legacy dedup marker, and dropping it would produce numbers the rulebook explicitly forbids:
+
+- `precedence="0"` on a `<bonus>` child (Reaction Enhancers' and Wired Reflexes' REA bonuses, Wired
+  Reflexes' Initiative Dice bonus) -> `unique_name "precedence0"`. This is what stops a character
+  who owns both from getting +2 REA: p. 455 says reaction enhancers "are incompatible with all other
+  enhancements to Reaction, including wired reflexes," and wired reflexes are likewise "incompatible
+  with augmentations that affect Reaction or Initiative." `SCSi.chum5` is the fixture proof -- it
+  owns both at Rating 1 and its legacy-computed REA `<totalvalue>` is 3, not 4.
+- `unique="muscle"` on the `<bonus>` *element* (Muscle Replacement) -> the same `unique_name` for
+  every child that doesn't override it with its own `precedence`. p. 455: muscle replacement "cannot
+  be combined with other augmentations to the muscles, including muscle augmentation or muscle toner
+  bioware" -- both of which carry the same `unique="muscle"` marker in `bioware.xml`.
+
+The legacy semantics of `precedence0` are marginally stronger than `Improvement.unique_name`'s
+plain "highest wins": legacy takes `max(sum of unmarked improvements, highest precedence0)` rather
+than adding the two. The difference is only reachable when an *unmarked* bonus to the same attribute
+coexists (in this engine's scope: an adept's Improved Physical Attribute alongside cyberware), and
+closing it means changing `ImprovementIndex.resolve` itself. Recorded rather than silently
+differing -- see `spec/decisions-log.md`, 2026-07-31.
 
 WP32 is what actually turns `FLAT_BONUS` items into real `Improvement` records (mirroring
 `chummer5.engine.qualities.apply_quality_improvements`'s shape) -- this module only classifies.
@@ -131,9 +193,15 @@ _VERIFIED_INERT_BONUS_TAGS = frozenset({"disablequality"})
 # through to NOT_YET_SUPPORTED rather than being mapped on the assumption it works the same way.
 _LIMIT_TARGET_KINDS = {"Mental": "mental_limit", "Physical": "physical_limit"}
 
-# <limitmodifier><value>Rating</value>: the bonus is the purchased Rating, not a literal. The only
-# non-literal value shape in the SR5 rows.
+# <limitmodifier><value>Rating</value>, <specificattribute><val>Rating</val>, ...: the bonus is the
+# purchased Rating, not a literal. The only non-literal value shape in the SR5 rows.
 _RATING_VALUE = "Rating"
+
+# WP78's three flat-bonus shapes, each accepted only with exactly this child-tag set -- see the
+# module docstring for why an extra child (legacy's <min>/<max>/<aug>, <applytorating>, ...) sends
+# the whole item to NOT_YET_SUPPORTED instead of being ignored.
+_SPECIFIC_ATTRIBUTE_FIELDS = frozenset({"name", "val"})
+_SPECIFIC_SKILL_FIELDS = frozenset({"name", "bonus"})
 
 # Every <condition> string appearing in the SR5 cyberware rows, verified by enumeration (WP39's
 # learnings entry has the item/limit/condition/English-text table). A whitelist, not a parser --
@@ -166,13 +234,36 @@ class BonusSupport(Enum):
 class CyberwareFlatBonus:
     """One unconditional, flat point bonus produced by a cyberware item.
 
-    `target_kind` is only ever `"physical_cm"` so far (the Cyberlimb condition-monitor bonus) --
-    see module docstring. `value` is the flat point value (always `1` among today's real entries,
-    but not hardcoded as such, mirroring `chummer5.data.qualities.FlatBonus`'s own shape).
+    `target_kind` is `"physical_cm"` (WP31's Cyberlimb condition-monitor bonus) or, since WP78,
+    one of `"attribute"`, `"skill"`, `"initiative_dice"`. `chummer5.engine.cyberware` maps it to an
+    `ImprovementType`, the same string -> enum split `CyberwareConditionalBonus.target_kind`
+    already uses.
+
+    `target_name` names *which* attribute (`"REA"`) or skill (`"Impersonation"`) is affected, and
+    is `""` for the character-wide kinds (`physical_cm`, `initiative_dice`) -- which is also the
+    `_GLOBAL_TARGET` sentinel `chummer5.engine` resolves those against, so a caller can pass it
+    through unconditionally. Mirrors `chummer5.data.bioware.BiowareFlatBonus`/`chummer5.data
+    .qualities.FlatBonus`, which made the same "empty name for a global target" choice.
+
+    `value` is `None` when the bonus is the item's own purchased Rating (`<val>Rating</val>`)
+    rather than a literal -- identical to `CyberwareConditionalBonus.value`, and read the same way,
+    through `resolve_value(rating)`. A `None` here is "ask the purchase," not "no bonus."
+
+    `unique_name` is the legacy dedup group (`"precedence0"` from a child's `precedence` attribute,
+    or a `<bonus unique="...">` value), passed straight through to `Improvement.unique_name` so
+    SR5's "these don't stack" rules land on the existing highest-bonus-wins pass. `None` means the
+    bonus stacks additively -- the correct answer for the Cyberlimb condition-monitor bonus, where
+    a second cyberlimb really does add a second box.
     """
 
     target_kind: str
-    value: int
+    value: int | None
+    target_name: str = ""
+    unique_name: str | None = None
+
+    def resolve_value(self, rating: int) -> int:
+        """This bonus's magnitude for a purchase at `rating`."""
+        return rating if self.value is None else self.value
 
 
 @dataclass(frozen=True)
@@ -233,6 +324,81 @@ def _is_flat_physical_cm_bonus(elem: ET.Element) -> bool:
     return {child.tag for child in elem} == {"physical"} and physical.text is not None
 
 
+def _parse_rating_or_literal(text: str | None) -> tuple[bool, int | None]:
+    """`(recognized, value)` for a `Rating`-or-bare-integer bonus value, where `value is None`
+    means "the purchased Rating" -- see `CyberwareFlatBonus.value`.
+    """
+    if text is None:
+        return False, None
+    stripped = text.strip()
+    if stripped == _RATING_VALUE:
+        return True, None
+    if _FLAT_INT_RE.fullmatch(stripped) is not None:
+        return True, int(stripped)
+    return False, None
+
+
+def _unique_name(bonus_elem: ET.Element, child: ET.Element) -> str | None:
+    """The legacy dedup group for one `<bonus>` child, or `None` if it stacks additively.
+
+    A child's own `precedence` attribute wins over the `<bonus>` element's `unique` attribute --
+    which is exactly what legacy's own handlers do (each starts from the collection-wide
+    `_strUnique`, read from `<bonus unique="...">`, then overwrites it with `"precedence" + value`
+    when the child carries one). See the module docstring's WP78 stacking section.
+    """
+    precedence = child.get("precedence")
+    if precedence is not None:
+        return f"precedence{precedence.strip()}"
+    unique = bonus_elem.get("unique")
+    return unique.strip() if unique else None
+
+
+def _parse_specific_attribute_bonus(
+    elem: ET.Element, *, unique_name: str | None
+) -> CyberwareFlatBonus | None:
+    """Parse a `<specificattribute>` child (WP78), or `None` if it isn't the supported shape."""
+    if {child.tag for child in elem} != _SPECIFIC_ATTRIBUTE_FIELDS:
+        return None
+    name = elem.findtext("name", "").strip()
+    recognized, value = _parse_rating_or_literal(elem.findtext("val"))
+    if not name or not recognized:
+        return None
+    return CyberwareFlatBonus(
+        target_kind="attribute", value=value, target_name=name, unique_name=unique_name
+    )
+
+
+def _parse_specific_skill_bonus(
+    elem: ET.Element, *, unique_name: str | None
+) -> CyberwareFlatBonus | None:
+    """Parse a `<specificskill>` child (WP78), or `None` if it isn't the supported shape."""
+    if {child.tag for child in elem} != _SPECIFIC_SKILL_FIELDS:
+        return None
+    name = elem.findtext("name", "").strip()
+    recognized, value = _parse_rating_or_literal(elem.findtext("bonus"))
+    if not name or not recognized:
+        return None
+    return CyberwareFlatBonus(
+        target_kind="skill", value=value, target_name=name, unique_name=unique_name
+    )
+
+
+def _parse_initiative_dice_bonus(
+    elem: ET.Element, *, unique_name: str | None
+) -> CyberwareFlatBonus | None:
+    """Parse an `<initiativepass>` leaf (WP78), or `None` if it isn't the supported shape.
+
+    Maps to Initiative *Dice*, not Initiative -- legacy's `initiativepass` handler is a straight
+    delegation to `initiativedice`. See the module docstring.
+    """
+    if len(elem) != 0:
+        return None
+    recognized, value = _parse_rating_or_literal(elem.text)
+    if not recognized:
+        return None
+    return CyberwareFlatBonus(target_kind="initiative_dice", value=value, unique_name=unique_name)
+
+
 def _parse_conditional_limit_bonus(elem: ET.Element) -> CyberwareConditionalBonus | None:
     """Parse a `<limitmodifier>` child, or return `None` if it isn't a shape WP40 supports.
 
@@ -246,15 +412,11 @@ def _parse_conditional_limit_bonus(elem: ET.Element) -> CyberwareConditionalBonu
 
     target_kind = _LIMIT_TARGET_KINDS.get(elem.findtext("limit", "").strip())
     condition = elem.findtext("condition", "").strip()
-    raw_value = elem.findtext("value", "").strip()
     if target_kind is None or condition not in _SUPPORTED_BONUS_CONDITIONS:
         return None
 
-    if raw_value == _RATING_VALUE:
-        value = None
-    elif _FLAT_INT_RE.fullmatch(raw_value) is not None:
-        value = int(raw_value)
-    else:
+    recognized, value = _parse_rating_or_literal(elem.findtext("value"))
+    if not recognized:
         return None
     return CyberwareConditionalBonus(target_kind=target_kind, value=value, condition=condition)
 
@@ -277,6 +439,12 @@ def classify_bonus(
     mixed case rather than one any current row exercises -- said out loud because "which support
     value wins" would otherwise be invisible guesswork for whoever hits the first mixed row.
 
+    Supported flat children: `<conditionmonitor><physical>` (WP31) and, since WP78,
+    `<specificattribute>`, `<specificskill>` and `<initiativepass>` -- see the module docstring for
+    each shape, its rulebook citation, and how `precedence`/`unique` become a dedup group. An item
+    may carry several (Muscle Replacement carries two `<specificattribute>` children, Wired
+    Reflexes one of those plus an `<initiativepass>`), and every recognized one is collected.
+
     Public (unlike `chummer5.data.qualities`/`powers`/`mentors`' identically-named private
     classifiers) because WP37's `chummer5.data.cyberware_subsystems` reads the *same* rows out of
     the *same* file and so shares this grammar verbatim -- see that module's docstring for why it
@@ -292,14 +460,31 @@ def classify_bonus(
     flat_bonuses = []
     conditional_bonuses = []
     for child in children:
+        unique_name = _unique_name(bonus_elem, child)
         if child.tag == "conditionmonitor" and _is_flat_physical_cm_bonus(child):
             flat_bonuses.append(
                 CyberwareFlatBonus(
                     target_kind="physical_cm",
                     value=int(child.findtext("physical", "0")),
+                    unique_name=unique_name,
                 )
             )
             continue
+        if child.tag == "specificattribute":
+            attribute_bonus = _parse_specific_attribute_bonus(child, unique_name=unique_name)
+            if attribute_bonus is not None:
+                flat_bonuses.append(attribute_bonus)
+                continue
+        if child.tag == "specificskill":
+            skill_bonus = _parse_specific_skill_bonus(child, unique_name=unique_name)
+            if skill_bonus is not None:
+                flat_bonuses.append(skill_bonus)
+                continue
+        if child.tag == "initiativepass":
+            dice_bonus = _parse_initiative_dice_bonus(child, unique_name=unique_name)
+            if dice_bonus is not None:
+                flat_bonuses.append(dice_bonus)
+                continue
         if child.tag == "limitmodifier":
             conditional = _parse_conditional_limit_bonus(child)
             if conditional is not None:

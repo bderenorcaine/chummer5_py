@@ -732,3 +732,57 @@ exactly the mechanism for it — `Quality.unmodeled_effect_note`, surfaced on th
 so a player who buys Bone Lacing (Titanium) sees an empty section where a Low-Light Vision quality
 would show a note. WP77 is documentation-only by its own scope and WP78's is the 5 computable rows,
 so neither covers this. **Scoped as WP79** (Phase K, before WP42) rather than left as worklog prose.
+
+## 2026-07-31 — Phase K, WP78: four of WP77's five policy-violating rows are fixed; `Reflex
+Recorder` becomes WP80; two engine gaps this WP surfaced and deliberately did *not* close
+
+**Four of the five are modeled, and WP77's Bucket A is nearly empty.** `Reaction Enhancers`,
+`Wired Reflexes`, `Muscle Replacement` and `Voice Modulator` now classify `FLAT_BONUS` and grant
+real `ATTRIBUTE`/`INITIATIVE_DICE`/`SKILL` Improvements, so the 2026-07-24 "model it in full or
+exclude it" policy holds for them again. `chummer5.data.cyberware.classify_bonus`'s whitelist grew
+by three shapes (`<specificattribute>`, `<initiativepass>`, `<specificskill>`); the 60-row flat
+catalog's classification is byte-for-byte unchanged, because all four rows are rating-scaled and so
+live only in WP37's wider 87-row catalog.
+
+**`Reflex Recorder` is deferred to WP80 rather than stretched into this WP.** WP78's own entry asked
+for this call to be made early and recorded either way. It is the only Bucket A row whose `<bonus>`
+is a *player choice* — `<selectskill limittoattribute="BOD,AGI,REA,STR"><val>1</val></selectskill>`,
+i.e. "+1 to one active skill linked to a physical attribute, chosen at purchase." Modeling it needs
+a chosen skill persisted in `CharacterSave`, re-validated on load, imported from a legacy
+`<extra>` field (`Barrett.chum5` stores `<extra>Longarms</extra>`) and picked in the browser — the
+same four-layer increment WP55 needed for `SELECT_TEXT` qualities, and a strictly larger job than
+the four fixed-bonus rows put together. It stays offered and inert in the meantime for exactly the
+reason WP77 recorded: excluding it would remove shipped functionality and break a passing import
+test on the way to fixing it properly. `tests/unit/test_augmentation_unmodeled_registry.py`'s
+`WP78_SCOPE` is renamed `MODELED_BUT_UNCLASSIFIED` and now holds this one row.
+
+**Gap 1, not closed: an attribute Improvement is capped at the *natural* maximum, not the augmented
+one.** SR5 allows an augmented attribute to exceed its metatype maximum by up to +4 (legacy:
+`CharacterAttrib.AttributeModifiers` clamps Σ attribute improvements to `MetatypeAugmentedMaximum -
+MetatypeMaximum`, then `CalculatedTotalValue` clamps the total to `TotalAugmentedMaximum`). This
+engine's `Character.attribute_value` caps `base + points + Σ improvements` at
+`attribute_range.maximum` — the natural one — and `AttributeRange.augmented` is loaded but read
+nowhere. So a character at REA 6 buying Reaction Enhancers 3 gets 6 here and 9 in SR5.
+
+This is **pre-existing, not introduced by WP78**: WP27's `Improved Physical Attribute` adept power
+has produced `ImprovementType.ATTRIBUTE` improvements since Phase I and hits the same ceiling. WP78
+makes it reachable from a second direction, which is why it is being written down now. It is
+deliberately out of this WP's scope because the fix is not a one-line cap change: `create_karma_
+attribute_selection`'s "only one Mental or Physical attribute may sit at its natural maximum" rule
+reads `attribute_value(code) >= attribute_range(code).maximum`, which silently becomes wrong the
+moment `attribute_value` can exceed the natural maximum. Closing it properly means introducing a
+natural-vs-augmented split across `Character`, `chummer5.engine.derived` and the character sheet —
+scoped as **WP81**. None of the three fixtures WP78 checks against reaches the boundary (BLUE 3/6,
+SCSi 3/6, Fuzzy 6/6 — the last sits exactly *on* it), so the oracle has nothing to say about it
+either way.
+
+**Gap 2, not closed: `precedence0` suppression vs. plain addition.** Legacy's `ValueOf` treats a
+`precedence0` dedup group as `max(Σ unmarked improvements, highest precedence0 + Σ precedence-1)`;
+this engine's `ImprovementIndex.resolve` computes `Σ unmarked + highest per unique_name`. The two
+agree whenever every competing bonus carries the marker — which covers the case the rulebook
+actually names (reaction enhancers vs. wired reflexes, both `precedence="0"`, confirmed against
+`SCSi.chum5`'s REA total of 3). They diverge only when an *unmarked* bonus to the same target
+coexists: in this project's scope, an adept with `Improved Physical Attribute` (REA) who also buys
+one of these implants. Closing it means teaching `resolve()` a magic `"precedence0"` string, i.e.
+pushing a legacy serialization detail into the engine primitive WP5/WP39 deliberately kept clean —
+so it is recorded here instead, with the modeled half being the one the book states outright.

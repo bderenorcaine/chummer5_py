@@ -11,12 +11,21 @@ Two deliberate layers, mirroring `tests/unit/test_cyberware_formula.py`'s own sp
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from collections import Counter
 from decimal import Decimal
 
-from chummer5.data.cyberware import BonusSupport, CyberwareConditionalBonus, load_cyberware
+from chummer5.data.cyberware import (
+    BonusSupport,
+    CyberwareConditionalBonus,
+    CyberwareFlatBonus,
+    load_cyberware,
+)
 from chummer5.data.cyberware_formula import FormulaKind
 from chummer5.data.cyberware_subsystems import CyberwareEntry, load_cyberware_entries
+from chummer5.data.metatypes import load_metatypes
+from chummer5.data.qualities import DEFAULT_QUALITIES_PATH, load_qualities
+from chummer5.data.skills import load_skills
 
 ENTRIES = load_cyberware_entries()
 BY_NAME = {entry.name: entry for entry in ENTRIES}
@@ -370,3 +379,112 @@ def test_no_row_carries_an_unclassified_limitmodifier() -> None:
     for entry in ENTRIES:
         if entry.raw_bonus is not None and "<limitmodifier>" in entry.raw_bonus:
             assert entry.bonus_support is BonusSupport.CONDITIONAL_BONUS, entry.name
+
+
+# --------------------------------------------------------------------------------------------
+# WP78: the four rows the widened flat-bonus whitelist reclassifies
+# --------------------------------------------------------------------------------------------
+
+
+def test_wp78s_four_rows_carry_their_hand_checked_flat_bonuses() -> None:
+    # Each value hand-checked against the printed entry (p. 452/455), not against the XML string
+    # it was parsed from -- see `spec/rulebooks/learnings/phase-k.md`'s WP78 entry for the quotes.
+    assert {
+        name: BY_NAME[name].flat_bonuses
+        for name in (
+            "Reaction Enhancers",
+            "Wired Reflexes",
+            "Muscle Replacement",
+            "Voice Modulator",
+        )
+    } == {
+        # p. 455: "Add the Rating of reaction enhancers to your Reaction attribute."
+        "Reaction Enhancers": (
+            CyberwareFlatBonus(
+                target_kind="attribute", value=None, target_name="REA", unique_name="precedence0"
+            ),
+        ),
+        # p. 455: "each rating point ... gives you +1 Reaction ... and +1D6 Initiative Die."
+        # Order follows the raw <bonus>: <initiativepass> precedes <specificattribute>.
+        "Wired Reflexes": (
+            CyberwareFlatBonus(
+                target_kind="initiative_dice", value=None, unique_name="precedence0"
+            ),
+            CyberwareFlatBonus(
+                target_kind="attribute", value=None, target_name="REA", unique_name="precedence0"
+            ),
+        ),
+        # p. 455: "It increases both your Strength and Agility attributes by its rating."
+        "Muscle Replacement": (
+            CyberwareFlatBonus(
+                target_kind="attribute", value=None, target_name="AGI", unique_name="muscle"
+            ),
+            CyberwareFlatBonus(
+                target_kind="attribute", value=None, target_name="STR", unique_name="muscle"
+            ),
+        ),
+        # p. 452: "Add the Rating of the modulator to your dice pool for Impersonation skill tests."
+        "Voice Modulator": (
+            CyberwareFlatBonus(target_kind="skill", value=None, target_name="Impersonation"),
+        ),
+    }
+    for name in ("Reaction Enhancers", "Wired Reflexes", "Muscle Replacement", "Voice Modulator"):
+        assert BY_NAME[name].bonus_support is BonusSupport.FLAT_BONUS
+
+
+def test_the_not_yet_supported_count_drops_from_14_to_10() -> None:
+    # WP77's audit found 14 NOT_YET_SUPPORTED cyberware rows: 10 genuinely out of scope (its
+    # registry rows) and 4 computable today. This WP models the 4.
+    unsupported = {e.name for e in ENTRIES if e.bonus_support is BonusSupport.NOT_YET_SUPPORTED}
+    assert len(unsupported) == 10
+    assert unsupported.isdisjoint(
+        {"Reaction Enhancers", "Wired Reflexes", "Muscle Replacement", "Voice Modulator"}
+    )
+
+
+def test_wp31s_flat_catalog_classification_is_untouched() -> None:
+    # WP37 pinned "load_cyberware() is completely unchanged" and WP40 narrowed that pin once (it
+    # reclassified Spatial Recognizer). WP78 does not narrow it again: all four rows it touches are
+    # rating-scaled, so none of them is in the 60.
+    flat_by_name = {c.name: c for c in load_cyberware()}
+    assert not {
+        "Reaction Enhancers",
+        "Wired Reflexes",
+        "Muscle Replacement",
+        "Voice Modulator",
+    } & set(flat_by_name)
+    assert sum(1 for c in flat_by_name.values() if c.bonus_support is BonusSupport.FLAT_BONUS) == 8
+
+
+def test_every_attribute_and_skill_target_resolves_against_real_catalog_content() -> None:
+    # The data layer deliberately does not whitelist attribute codes or skill names (mirroring
+    # `chummer5.data.qualities`/`bioware`, neither of which does either) -- so this is the check
+    # that a typo'd target would otherwise silently produce an Improvement nothing ever reads.
+    skill_names = {s.name for s in load_skills()}
+    attribute_codes = set(load_metatypes()[0].attributes)
+    for entry in ENTRIES:
+        for bonus in entry.flat_bonuses:
+            if bonus.target_kind == "attribute":
+                assert bonus.target_name in attribute_codes, entry.name
+            elif bonus.target_kind == "skill":
+                assert bonus.target_name in skill_names, entry.name
+            else:
+                assert bonus.target_name == "", entry.name
+
+
+def test_the_disabled_quality_guid_resolves_to_a_non_sr5_quality() -> None:
+    # `Wired Reflexes`' <bonus> carries <disablequality>3564b678-...</disablequality> -- a raw guid
+    # rather than Celerity's plain name, which is why WP31's own "verified moot" note didn't cover
+    # it. It resolves to Lightning Reflexes (source "RF"), so it is excluded from the SR5 quality
+    # catalog on source grounds exactly as Celerity is, and stripping it drops nothing reachable.
+    disabled_guid = "3564b678-7721-4a8d-ac79-1600cf92dc14"
+    assert BY_NAME["Wired Reflexes"].raw_bonus is not None
+    assert disabled_guid in BY_NAME["Wired Reflexes"].raw_bonus
+    # load_qualities() is already source-filtered to SR5, so "absent from it" *is* the finding.
+    assert disabled_guid not in {q.id for q in load_qualities()}
+    # ... and the name behind the guid, read straight from the unfiltered file so the test says
+    # which quality this is rather than only that it's missing.
+    root = ET.parse(DEFAULT_QUALITIES_PATH).getroot()
+    quality = next(q for q in root.iter("quality") if q.findtext("id") == disabled_guid)
+    assert quality.findtext("name") == "Lightning Reflexes"
+    assert quality.findtext("source") == "RF"
