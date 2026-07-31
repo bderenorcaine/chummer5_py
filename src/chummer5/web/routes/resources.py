@@ -252,13 +252,9 @@ async def submit_resources(request: Request) -> HTMLResponse:
         rating_gear = _parse_rating_gear(form, STARTER_GEAR_CATALOG)
         karma_converted = _parse_karma_converted(form)
         lifestyle_selection = session.character.lifestyle_selection
-        lifestyle_cost = (
-            lifestyle_selection.total_cost if lifestyle_selection is not None else 0
-        )
+        lifestyle_cost = lifestyle_selection.total_cost if lifestyle_selection is not None else 0
         cyberware_selection = session.character.cyberware_selection
-        cyberware_cost = (
-            cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
-        )
+        cyberware_cost = cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
         bioware_selection = session.character.bioware_selection
         bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
         try:

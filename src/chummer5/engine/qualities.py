@@ -271,9 +271,7 @@ def create_quality_selection(
         if mentor_spirit_archetype_id is None:
             raise ValueError("Mentor Spirit requires an archetype to be selected")
         if magic_type not in ("Magician", "Adept"):
-            raise ValueError(
-                "Mentor Spirit requires a magic-active (Magician or Adept) character"
-            )
+            raise ValueError("Mentor Spirit requires a magic-active (Magician or Adept) character")
         archetype_by_id = {a.id: a for a in mentor_catalog}
         archetype = archetype_by_id.get(mentor_spirit_archetype_id)
         if archetype is None:
@@ -414,8 +412,6 @@ def offerable_quality_catalog(
     `create_quality_selection`'s caller aren't always the same code path.
     """
     already_granted = {q.id for q in character.metatype_qualities}
-    offered = {
-        q.id: q for q in mvp_quality_catalog(catalog) if q.id not in already_granted
-    }
+    offered = {q.id: q for q in mvp_quality_catalog(catalog) if q.id not in already_granted}
     offered = _add_mentor_spirit_if_eligible(offered, catalog, character.magic_type)
     return tuple(offered.values())

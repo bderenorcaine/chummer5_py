@@ -122,9 +122,7 @@ def test_magician_requires_a_tradition() -> None:
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="B")
 
-    response = client.post(
-        "/ui/talent", data={"talent_letter": "B", "talent_codename": "Magician"}
-    )
+    response = client.post("/ui/talent", data={"talent_letter": "B", "talent_codename": "Magician"})
 
     assert "Magician requires a tradition" in response.text
 
@@ -269,9 +267,7 @@ def test_spell_selection_within_budget_shows_on_the_sheet() -> None:
         },
     )
 
-    response = client.post(
-        "/ui/spells", data={"spell_id": [s.id for s in SOME_SPELLS]}
-    )
+    response = client.post("/ui/spells", data={"spell_id": [s.id for s in SOME_SPELLS]})
 
     assert response.status_code == 200
     assert f"Spells chosen: {len(SOME_SPELLS)} / 7" in response.text  # letter B Magician: spells=7
@@ -440,9 +436,7 @@ def test_attribute_resubmission_preserves_the_carried_forward_magic_selection() 
         "/ui/talent",
         data={"talent_letter": "B", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
     )
-    client.post(
-        "/ui/powers", data={f"power_rating_{IMPROVED_POTENTIAL_PHYSICAL.id}": "1"}
-    )
+    client.post("/ui/powers", data={f"power_rating_{IMPROVED_POTENTIAL_PHYSICAL.id}": "1"})
 
     response = client.post("/ui/attributes", data={"attr_BOD": "2"})
 
@@ -591,9 +585,7 @@ def test_confirming_an_unoffered_codename_is_rejected() -> None:
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="E")
 
-    response = client.post(
-        "/ui/talent", data={"talent_letter": "E", "talent_codename": "Adept"}
-    )
+    response = client.post("/ui/talent", data={"talent_letter": "E", "talent_codename": "Adept"})
 
     assert "is not an offered Talent option at letter" in response.text
 

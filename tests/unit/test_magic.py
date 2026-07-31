@@ -72,8 +72,13 @@ def test_magician_letter_a_resolves_magic_rating_tradition_and_free_skills() -> 
     # Hand-checked against priorities.xml (also matches Miko.chum5): letter A's Magician grants 6
     # Magic and 2 free skills at rating 5, drawn from the "magic" skilltype filter.
     selection = create_magic_selection(
-        "A", "Magician", HERMETIC_ID, [COUNTERSPELLING_ID, SPELLCASTING_ID],
-        PRIORITIES, TRADITIONS, SKILLS,
+        "A",
+        "Magician",
+        HERMETIC_ID,
+        [COUNTERSPELLING_ID, SPELLCASTING_ID],
+        PRIORITIES,
+        TRADITIONS,
+        SKILLS,
     )
     assert selection.magic_type == "Magician"
     assert selection.magic_rating == 6
@@ -111,8 +116,13 @@ def test_magician_free_skill_grant_rejects_ineligible_skill() -> None:
     # skilltype grant.
     with pytest.raises(ValueError, match="not eligible"):
         create_magic_selection(
-            "A", "Magician", HERMETIC_ID, [COUNTERSPELLING_ID, PISTOLS_ID],
-            PRIORITIES, TRADITIONS, SKILLS,
+            "A",
+            "Magician",
+            HERMETIC_ID,
+            [COUNTERSPELLING_ID, PISTOLS_ID],
+            PRIORITIES,
+            TRADITIONS,
+            SKILLS,
         )
 
 
@@ -126,8 +136,13 @@ def test_magician_free_skill_grant_rejects_wrong_count() -> None:
 def test_magician_free_skill_grant_rejects_duplicates() -> None:
     with pytest.raises(ValueError, match="selected more than once"):
         create_magic_selection(
-            "A", "Magician", HERMETIC_ID, [COUNTERSPELLING_ID, COUNTERSPELLING_ID],
-            PRIORITIES, TRADITIONS, SKILLS,
+            "A",
+            "Magician",
+            HERMETIC_ID,
+            [COUNTERSPELLING_ID, COUNTERSPELLING_ID],
+            PRIORITIES,
+            TRADITIONS,
+            SKILLS,
         )
 
 
@@ -442,9 +457,7 @@ def test_power_selection_select_attribute_rejects_ineligible_attribute() -> None
 
 def test_power_selection_rejects_selected_attribute_when_not_needed() -> None:
     with pytest.raises(ValueError, match="does not accept a selected attribute"):
-        create_power_selection(
-            [(ENHANCED_PERCEPTION_ID, 1, "BOD")], POWERS, power_point_budget=4
-        )
+        create_power_selection([(ENHANCED_PERCEPTION_ID, 1, "BOD")], POWERS, power_point_budget=4)
 
 
 def test_power_selection_select_attribute_success() -> None:

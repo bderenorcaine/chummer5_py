@@ -142,9 +142,7 @@ def create_bound_spirit_selection(
                 f"got {resolved_force}"
             )
         if services < 1:
-            raise ValueError(
-                f"{spirit_type!r}: services must be at least 1, got {services}"
-            )
+            raise ValueError(f"{spirit_type!r}: services must be at least 1, got {services}")
         spirits.append(
             BoundSpirit(spirit_type=spirit_type, force=resolved_force, services=services)
         )

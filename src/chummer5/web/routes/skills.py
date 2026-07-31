@@ -220,9 +220,7 @@ async def submit_skills(request: Request) -> HTMLResponse:
         specializations = parse_specializations(form, (s.id for s in skills_for_form), "spec_")
         # WP53: Karma-funded points/specializations, submitted in the same form (mirrors
         # WP52's karma_attr_{code} precedent).
-        karma_skill_points = parse_points(
-            form, (s.id for s in skills_for_form), "karma_skill_"
-        )
+        karma_skill_points = parse_points(form, (s.id for s in skills_for_form), "karma_skill_")
         karma_group_points = parse_points(form, groups_for_form, "karma_group_")
         karma_specializations = parse_specializations(
             form, (s.id for s in skills_for_form), "karma_spec_"

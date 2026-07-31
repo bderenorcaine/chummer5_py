@@ -240,9 +240,7 @@ def _character_sheet_context(
     )
     contact_selection = create_contact_selection(character, committed_contacts)
     committed_gear = (
-        character.resources_selection.gear
-        if character.resources_selection is not None
-        else ()
+        character.resources_selection.gear if character.resources_selection is not None else ()
     )
     lifestyle_selection = character.lifestyle_selection
     cyberware_selection = character.cyberware_selection
@@ -605,9 +603,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         else None
     )
     quality_text = (
-        character.quality_selection.quality_text
-        if character.quality_selection is not None
-        else {}
+        character.quality_selection.quality_text if character.quality_selection is not None else {}
     )
     knowledge_selection = character.knowledge_selection
     knowledge_skill_picks = (
@@ -868,8 +864,7 @@ async def import_chum5_route(request: Request) -> HTMLResponse:
                     )
                 if result.dropped_powers:
                     messages.append(
-                        "Dropped powers (not MVP-supported): "
-                        + ", ".join(result.dropped_powers)
+                        "Dropped powers (not MVP-supported): " + ", ".join(result.dropped_powers)
                     )
                 info = " ".join(messages)
     context = _character_sheet_context(session, error=error, info=info)

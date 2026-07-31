@@ -301,15 +301,13 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
             resources_selection.karma_converted if resources_selection is not None else 0
         )
         lifestyle_selection = session.character.lifestyle_selection
-        lifestyle_cost = (
-            lifestyle_selection.total_cost if lifestyle_selection is not None else 0
-        )
+        lifestyle_cost = lifestyle_selection.total_cost if lifestyle_selection is not None else 0
         # WP47: Foci's own committed nuyen cost shares this same pool now too.
         foci_selection = session.character.foci_selection
         foci_cost = foci_selection.nuyen_cost if foci_selection is not None else 0
-        nuyen_available = available_nuyen(
-            session.resources_letter, PRIORITIES, karma_converted
-        ) - (gear_cost + lifestyle_cost + foci_cost)
+        nuyen_available = available_nuyen(session.resources_letter, PRIORITIES, karma_converted) - (
+            gear_cost + lifestyle_cost + foci_cost
+        )
         try:
             # Fixed evaluation order (chummer5.engine.bioware's own docstring): cyberware
             # first, unaware of bioware; bioware second, aware of cyberware's own nuyen/Essence

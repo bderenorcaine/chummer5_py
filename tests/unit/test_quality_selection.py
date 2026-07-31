@@ -783,9 +783,7 @@ def test_create_quality_selection_rejects_orphaned_select_text() -> None:
 def test_create_quality_selection_rejects_text_for_a_non_select_text_quality() -> None:
     catlike = _by_name("Catlike")
     with pytest.raises(ValueError, match="wasn't selected or doesn't use one"):
-        create_quality_selection(
-            [catlike.id], QUALITIES, quality_text={catlike.id: "whatever"}
-        )
+        create_quality_selection([catlike.id], QUALITIES, quality_text={catlike.id: "whatever"})
 
 
 def test_create_quality_selection_rejects_sinner_mutual_exclusion() -> None:
@@ -865,8 +863,6 @@ def test_apply_quality_improvements_select_text_quality_adds_no_improvements() -
     # construction, mirroring NO_EFFECT's identical shape.
     character = _mundane_human_character()
     sinner = _by_name("SINner (National)")
-    selection = create_quality_selection(
-        [sinner.id], QUALITIES, quality_text={sinner.id: "UCAS"}
-    )
+    selection = create_quality_selection([sinner.id], QUALITIES, quality_text={sinner.id: "UCAS"})
     apply_quality_improvements(character, selection.qualities)
     assert character.improvements.improvements == ()

@@ -116,7 +116,6 @@ def knowledge_category(name: str) -> KnowledgeCategory:
     category = _CATEGORY_BY_NAME.get(name)
     if category is None:
         raise ValueError(
-            f"not a knowledge-skill category: {name!r} (expected one of "
-            f"{KNOWLEDGE_CATEGORY_NAMES})"
+            f"not a knowledge-skill category: {name!r} (expected one of {KNOWLEDGE_CATEGORY_NAMES})"
         )
     return category

@@ -464,9 +464,7 @@ def test_submitting_karma_group_points_matches_engine_output() -> None:
     _confirm_human(client)
 
     group = "Firearms"
-    response = client.post(
-        "/ui/skills", data={f"group_{group}": "1", f"karma_group_{group}": "1"}
-    )
+    response = client.post("/ui/skills", data={f"group_{group}": "1", f"karma_group_{group}": "1"})
 
     assert response.status_code == 200
     # 1->2 costs new_rating x 5 = 10 Karma.

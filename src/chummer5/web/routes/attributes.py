@@ -268,9 +268,7 @@ async def submit_attributes(request: Request) -> HTMLResponse:
                     previous.special_attribute_points,
                     attribute_points.get("EDG", 0),
                 )
-            character = replace(
-                previous, attribute_points=MappingProxyType(dict(attribute_points))
-            )
+            character = replace(previous, attribute_points=MappingProxyType(dict(attribute_points)))
             karma_attribute_selection = create_karma_attribute_points(
                 character, karma_points, karma_budget
             )

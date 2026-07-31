@@ -210,8 +210,10 @@ def _classify_bonus(
     if not children:
         return BonusSupport.NO_EFFECT, ()
 
-    if len(children) == 1 and children[0].tag == "specificskill" and _is_flat_skill_bonus(
-        children[0]
+    if (
+        len(children) == 1
+        and children[0].tag == "specificskill"
+        and _is_flat_skill_bonus(children[0])
     ):
         return (
             BonusSupport.FLAT_BONUS,

@@ -77,9 +77,7 @@ def _adept(talent_letter: str = "D") -> Character:
     picks noise -- see `chummer5.data.priorities`)."""
     character = _mundane_human()
     selection = create_magic_selection(talent_letter, "Adept", None, [], PRIORITIES, TRADITIONS, ())
-    return replace(
-        character, magic_type=selection.magic_type, magic_rating=selection.magic_rating
-    )
+    return replace(character, magic_type=selection.magic_type, magic_rating=selection.magic_rating)
 
 
 # -- create_foci_selection ------------------------------------------------------------------------
@@ -88,8 +86,9 @@ def _adept(talent_letter: str = "D") -> Character:
 def test_empty_picks_is_always_fine_even_for_a_mundane_character() -> None:
     mundane = _mundane_human()
     selection = create_foci_selection([], mundane, FOCI, nuyen_budget=0, karma_budget=0)
-    assert selection == FociSelection(picks=(), nuyen_cost=0, karma_cost=0, nuyen_budget=0,
-                                       karma_budget=0)
+    assert selection == FociSelection(
+        picks=(), nuyen_cost=0, karma_cost=0, nuyen_budget=0, karma_budget=0
+    )
 
 
 def test_rejects_any_pick_for_a_mundane_character() -> None:
@@ -156,7 +155,10 @@ def test_allows_partial_spend() -> None:
 def test_allows_binding_two_of_the_same_focus() -> None:
     character = _magician()
     selection = create_foci_selection(
-        [(ALCHEMICAL.id, 1), (ALCHEMICAL.id, 1)], character, FOCI, nuyen_budget=10**6,
+        [(ALCHEMICAL.id, 1), (ALCHEMICAL.id, 1)],
+        character,
+        FOCI,
+        nuyen_budget=10**6,
         karma_budget=100,
     )
     assert len(selection.picks) == 2

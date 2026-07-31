@@ -141,9 +141,7 @@ async def submit_spells(request: Request) -> HTMLResponse:
             )
         else:
             session.character = replace(session.character, spell_selection=selection)
-            context = _spell_selection_context(
-                session.character, session.talent_letter, spell_ids
-            )
+            context = _spell_selection_context(session.character, session.talent_letter, spell_ids)
     context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_spell_selection.html", context)
     if new_cookie is not None:

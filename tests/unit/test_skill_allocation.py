@@ -494,9 +494,10 @@ def test_karma_specialization_on_group_member_breaks_the_group() -> None:
     assert skill_rating(character, allocation, AUTOMATICS) == 3
     assert skill_rating(character, allocation, LONGARMS) == 3
     assert skill_rating(character, allocation, PISTOLS) == 3
-    assert dice_pool(character, allocation, AUTOMATICS) == dice_pool(
-        character, allocation, LONGARMS
-    ) + SPECIALIZATION_BONUS
+    assert (
+        dice_pool(character, allocation, AUTOMATICS)
+        == dice_pool(character, allocation, LONGARMS) + SPECIALIZATION_BONUS
+    )
 
 
 def test_karma_skill_points_on_group_member_breaks_the_group_without_a_specialization() -> None:

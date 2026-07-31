@@ -166,9 +166,7 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
             resources_selection.karma_converted if resources_selection is not None else 0
         )
         cyberware_selection = session.character.cyberware_selection
-        cyberware_cost = (
-            cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
-        )
+        cyberware_cost = cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
         bioware_selection = session.character.bioware_selection
         bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
         try:

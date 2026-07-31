@@ -506,9 +506,7 @@ def create_resources_selection(
             raise ValueError(
                 f"{name}: rating must be between 1 and {item.max_rating}, got {rating}"
             )
-        rating_selected.append(
-            replace(item, cost=rating * item.cost_per_rating, rating=rating)
-        )
+        rating_selected.append(replace(item, cost=rating * item.cost_per_rating, rating=rating))
 
     selected = flat_selected + tuple(rating_selected)
     budget = starting_nuyen(letter, priorities)

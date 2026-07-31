@@ -242,4 +242,3 @@ def test_adept_can_pick_a_mentor_spirit() -> None:
     assert response.status_code == 200
     sheet = client.get("/character/sheet")
     assert DOG.adept_choice.name in sheet.text
-

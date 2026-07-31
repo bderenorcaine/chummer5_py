@@ -390,10 +390,7 @@ def create_karma_skill_selection(
                 s.id
                 for s in skills
                 if s.skill_group == group
-                and (
-                    existing_skill_points.get(s.id, 0) > 0
-                    or karma_skill_points.get(s.id, 0) > 0
-                )
+                and (existing_skill_points.get(s.id, 0) > 0 or karma_skill_points.get(s.id, 0) > 0)
             )
             if members_with_points:
                 raise ValueError(
@@ -414,15 +411,12 @@ def create_karma_skill_selection(
             raise ValueError(f"{skill_id}: a specialization's name must not be blank")
         if skill_id in existing_specializations:
             raise ValueError(
-                f"{skill_id}: already has a specialization "
-                f"({existing_specializations[skill_id]!r})"
+                f"{skill_id}: already has a specialization ({existing_specializations[skill_id]!r})"
             )
         skill = skills_by_id[skill_id]
         group = skill.skill_group
         if group is not None and group in broken_groups:
-            rating_after = existing_group_points.get(group, 0) + karma_skill_points.get(
-                skill_id, 0
-            )
+            rating_after = existing_group_points.get(group, 0) + karma_skill_points.get(skill_id, 0)
         else:
             rating_after = existing_skill_points.get(skill_id, 0) + karma_skill_points.get(
                 skill_id, 0

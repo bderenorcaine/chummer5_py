@@ -205,18 +205,14 @@ async def submit_foci(request: Request) -> HTMLResponse:
             resources_selection.karma_converted if resources_selection is not None else 0
         )
         lifestyle_selection = character.lifestyle_selection
-        lifestyle_cost = (
-            lifestyle_selection.total_cost if lifestyle_selection is not None else 0
-        )
+        lifestyle_cost = lifestyle_selection.total_cost if lifestyle_selection is not None else 0
         cyberware_selection = character.cyberware_selection
-        cyberware_cost = (
-            cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
-        )
+        cyberware_cost = cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
         bioware_selection = character.bioware_selection
         bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
-        nuyen_available = available_nuyen(
-            session.resources_letter, PRIORITIES, karma_converted
-        ) - (gear_cost + lifestyle_cost + cyberware_cost + bioware_cost)
+        nuyen_available = available_nuyen(session.resources_letter, PRIORITIES, karma_converted) - (
+            gear_cost + lifestyle_cost + cyberware_cost + bioware_cost
+        )
         # WP51: budget excludes Foci's own currently-committed cost (about to be replaced by
         # this submission) -- see _foci_selection_context's own docstring for why this is
         # `karma_remaining` with that one term added back in.
@@ -225,9 +221,7 @@ async def submit_foci(request: Request) -> HTMLResponse:
         )
         karma_budget = character.karma_remaining + own_committed_cost
         try:
-            selection = create_foci_selection(
-                picks, character, FOCI, nuyen_available, karma_budget
-            )
+            selection = create_foci_selection(picks, character, FOCI, nuyen_available, karma_budget)
             new_resources_selection = create_resources_selection(
                 session.resources_letter,
                 PRIORITIES,

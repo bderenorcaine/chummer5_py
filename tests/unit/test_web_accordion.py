@@ -55,8 +55,8 @@ def test_fresh_session_shows_only_the_priority_section_open() -> None:
 
     response = client.get("/")
 
-    assert response.text.count('<details ') == 1
-    assert '<details open>' in response.text
+    assert response.text.count("<details ") == 1
+    assert "<details open>" in response.text
 
 
 def test_confirming_priorities_and_attributes_moves_the_open_section() -> None:
@@ -66,21 +66,21 @@ def test_confirming_priorities_and_attributes_moves_the_open_section() -> None:
     response = client.get("/")
     priority_idx = response.text.find('id="priority-section"')
     priority_segment = response.text[priority_idx : priority_idx + 200]
-    assert '<details open>' in priority_segment
+    assert "<details open>" in priority_segment
 
     client.post("/ui/attributes", data={"attr_BOD": "2"})
     response2 = client.get("/")
 
     priority_idx2 = response2.text.find('id="priority-section"')
     priority_segment2 = response2.text[priority_idx2 : priority_idx2 + 200]
-    assert '<details open>' not in priority_segment2
+    assert "<details open>" not in priority_segment2
 
     attribute_idx = response2.text.find('id="attribute-allocation"')
     attribute_segment = response2.text[attribute_idx : attribute_idx + 200]
-    assert '<details open>' in attribute_segment
+    assert "<details open>" in attribute_segment
 
     # Exactly one section open at a time across the whole page.
-    assert response2.text.count('<details open>') == 1
+    assert response2.text.count("<details open>") == 1
 
 
 def test_submitting_a_sections_own_form_reopens_it_even_on_a_validation_error() -> None:
@@ -97,7 +97,7 @@ def test_submitting_a_sections_own_form_reopens_it_even_on_a_validation_error() 
     index = client.get("/")
     skill_idx = index.text.find('id="skill-allocation"')
     skill_segment = index.text[skill_idx : skill_idx + 200]
-    assert '<details open>' in skill_segment
+    assert "<details open>" in skill_segment
     assert budget >= 0  # sanity: PRIORITIES loaded correctly for this session
 
 
@@ -129,7 +129,7 @@ def test_collapsed_section_with_an_active_warning_shows_a_marker_on_its_summary(
 
     attribute_idx = response.text.find('id="attribute-allocation"')
     attribute_segment = response.text[attribute_idx : attribute_idx + 200]
-    assert '<details >' in attribute_segment  # collapsed, not open
+    assert "<details >" in attribute_segment  # collapsed, not open
     assert "<summary>Attributes ⚠</summary>" in attribute_segment
 
 

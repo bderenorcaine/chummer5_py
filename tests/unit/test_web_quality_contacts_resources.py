@@ -398,9 +398,7 @@ def test_buying_rating_priced_gear_scales_cost_with_chosen_rating() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.post(
-        "/ui/resources", data={"gear_Fake SIN": "1", "rating_Fake SIN": "4"}
-    )
+    response = client.post("/ui/resources", data={"gear_Fake SIN": "1", "rating_Fake SIN": "4"})
 
     assert response.status_code == 200
     budget = PRIORITIES.resources["D"].nuyen
@@ -417,9 +415,10 @@ def test_rating_priced_gear_shows_availability_capped_rating_selector() -> None:
 
     assert 'name="rating_Fake SIN"' in response.text
     # A rough check that the option range stops at 4: option value 5 for that select must not exist.
-    assert '<option value="5"' not in response.text.split('name="rating_Fake SIN"')[1].split(
-        "</select>"
-    )[0]
+    assert (
+        '<option value="5"'
+        not in response.text.split('name="rating_Fake SIN"')[1].split("</select>")[0]
+    )
 
 
 def test_save_load_round_trips_rating_priced_gear() -> None:

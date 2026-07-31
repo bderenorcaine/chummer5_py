@@ -533,8 +533,7 @@ def _purchases_from_dict(data: Mapping[str, Any]) -> tuple[CyberwarePurchaseRequ
     if "cyberware_purchases" in data:
         return tuple(_purchase_from_dict(p) for p in data["cyberware_purchases"])
     return tuple(
-        CyberwarePurchaseRequest(item_id=item_id)
-        for item_id in data.get("cyberware_item_ids", ())
+        CyberwarePurchaseRequest(item_id=item_id) for item_id in data.get("cyberware_item_ids", ())
     )
 
 
@@ -674,9 +673,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         karma_specializations=data.get("karma_specializations", {}),
         karma_knowledge_points=data.get("karma_knowledge_points", {}),
         quality_text=data.get("quality_text", {}),
-        rating_gear_picks=(
-            (p["name"], p["rating"]) for p in data.get("rating_gear_picks", ())
-        ),
+        rating_gear_picks=((p["name"], p["rating"]) for p in data.get("rating_gear_picks", ())),
     )
 
 

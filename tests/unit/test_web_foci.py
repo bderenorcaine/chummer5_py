@@ -215,9 +215,7 @@ def test_bound_spirits_and_foci_share_the_karma_pool() -> None:
     # paragraph, applied here to the web layer's symmetric re-validation instead).
     client = TestClient(create_app())
     _confirm_magician(client)
-    client.post(
-        "/ui/spirits", data={"spirit_type_0": "Spirit of Fire", "spirit_services_0": "20"}
-    )
+    client.post("/ui/spirits", data={"spirit_type_0": "Spirit of Fire", "spirit_services_0": "20"})
 
     response = client.post("/ui/foci", data={f"focus_force_{ALCHEMICAL.id}": "2"})
 

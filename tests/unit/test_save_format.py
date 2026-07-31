@@ -1070,9 +1070,7 @@ def test_from_json_defaults_mentor_spirit_fields_for_a_pre_wp48_save() -> None:
 
 
 def test_build_character_applies_mentor_spirit_pick() -> None:
-    save = _magician_save(
-        quality_ids=(MENTOR_SPIRIT_ID,), mentor_spirit_archetype_id=DOG_ID
-    )
+    save = _magician_save(quality_ids=(MENTOR_SPIRIT_ID,), mentor_spirit_archetype_id=DOG_ID)
     character = _build_magician(save)
     assert character.quality_selection is not None
     pick = character.quality_selection.mentor_spirit
@@ -1527,9 +1525,7 @@ def _mundane_save_with_quality_text(
 
 
 def test_json_round_trip_preserves_quality_text() -> None:
-    save = _mundane_save_with_quality_text(
-        (SINNER_NATIONAL_ID,), {SINNER_NATIONAL_ID: "UCAS"}
-    )
+    save = _mundane_save_with_quality_text((SINNER_NATIONAL_ID,), {SINNER_NATIONAL_ID: "UCAS"})
     assert from_json(to_json(save)) == save
     assert json.loads(to_json(save))["quality_text"] == {SINNER_NATIONAL_ID: "UCAS"}
 
@@ -1542,9 +1538,7 @@ def test_from_json_defaults_quality_text_for_a_pre_wp55_save() -> None:
 
 
 def test_build_character_applies_quality_text() -> None:
-    save = _mundane_save_with_quality_text(
-        (SINNER_NATIONAL_ID,), {SINNER_NATIONAL_ID: "UCAS"}
-    )
+    save = _mundane_save_with_quality_text((SINNER_NATIONAL_ID,), {SINNER_NATIONAL_ID: "UCAS"})
     character = _build_mundane(save)
     assert character.quality_selection is not None
     assert character.quality_selection.quality_text == {SINNER_NATIONAL_ID: "UCAS"}

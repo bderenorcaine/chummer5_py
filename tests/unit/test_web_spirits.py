@@ -190,9 +190,7 @@ def test_rejects_exceeding_the_karma_budget() -> None:
 def test_talent_change_resets_bound_spirit_selection() -> None:
     client = TestClient(create_app())
     _confirm_magician(client)
-    client.post(
-        "/ui/spirits", data={"spirit_type_0": "Spirit of Fire", "spirit_services_0": "3"}
-    )
+    client.post("/ui/spirits", data={"spirit_type_0": "Spirit of Fire", "spirit_services_0": "3"})
 
     # Switch from Magician to Adept (letter B offers both; letter B never offers "Mundane" at all --
     # only letter E does, see chummer5.engine.magic's module docstring) -- resets spell/power/spirit
@@ -209,9 +207,7 @@ def test_talent_change_resets_bound_spirit_selection() -> None:
 def test_save_load_round_trip_preserves_bound_spirits() -> None:
     client = TestClient(create_app())
     _confirm_magician(client)
-    client.post(
-        "/ui/spirits", data={"spirit_type_0": "Spirit of Fire", "spirit_services_0": "3"}
-    )
+    client.post("/ui/spirits", data={"spirit_type_0": "Spirit of Fire", "spirit_services_0": "3"})
     client.post("/ui/skills", data={})
 
     save_response = client.get("/character/save")
