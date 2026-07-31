@@ -140,6 +140,28 @@ coexists (in this engine's scope: an adept's Improved Physical Attribute alongsi
 closing it means changing `ImprovementIndex.resolve` itself. Recorded rather than silently
 differing -- see `spec/decisions-log.md`, 2026-07-31.
 
+## WP79 (Phase K) -- `unmodeled_effect_note`, and why one dict serves both cyberware catalogs
+
+WP77 wrote the Project Overview's "Unmodeled real effects" rows for augmentation content; nothing
+*showed* them to a player. `UNMODELED_EFFECT_NOTES` below is the hand-kept mirror of that markdown
+table (the same posture `chummer5.data.qualities._UNMODELED_EFFECT_NOTES` established in WP56 --
+runtime code never reads a `.md` file as data), keyed by catalog name and surfaced through
+`chummer5.engine.derived.unmodeled_effect_notes` on the character sheet.
+
+**One constant, not one per catalog.** `Cyberware` (this module's flat 60) and
+`chummer5.data.cyberware_subsystems.CyberwareEntry` (all 87) are two views of the *same rows of the
+same file*, so two dicts would be two mirrors of one registry table, free to drift apart while both
+looked maintained. `cyberware_subsystems` imports this one, exactly as it already imports
+`classify_bonus`/`BonusSupport`/`CyberwareFlatBonus` from here. (`chummer5.data.bioware` keeps its
+own, because it loads a different file -- it happens to be empty today; see its docstring.)
+
+**A note is independent of `bonus_support`, and covers two different situations.** Ten of the
+sixteen named rows are `NOT_YET_SUPPORTED` (WP77's registry rows: the effect is absent entirely).
+The other six are `NO_EFFECT`/`CONDITIONAL_BONUS` rows whose effect this engine models *in part* --
+WP38's cyberlimb Customization/Enhancement and WP40's four conditional limit bonuses -- so their
+note is the unmodeled **remainder**, and is worded to say what *is* applied too, since "Enhanced
+Agility: adds its Rating to the limb's Agility" read as a bare gap would be actively misleading.
+
 WP32 is what actually turns `FLAT_BONUS` items into real `Improvement` records (mirroring
 `chummer5.engine.qualities.apply_quality_improvements`'s shape) -- this module only classifies.
 `NOT_YET_SUPPORTED` items are still loaded (unlike qualities'/powers' catalogs, which exclude them
@@ -214,6 +236,110 @@ _SUPPORTED_BONUS_CONDITIONS = frozenset(
         "LimitCondition_CyberwareHydraulicJacks",  # Hydraulic Jacks
     }
 )
+
+# WP79: the Project Overview's "Unmodeled real effects" rows for `cyberware.xml` content, mirrored
+# by hand and keyed by catalog name -- see the module docstring for why this is one constant shared
+# with `chummer5.data.cyberware_subsystems` rather than one per catalog, and why six of the sixteen
+# rows describe a *remainder* rather than a total absence. Page numbers are the printed core
+# rulebook's; the extracted quotes behind each are in `spec/rulebooks/learnings/phase-k.md`
+# (WP38/WP39/WP40's entries for the six partial rows, WP77's for the ten absent ones).
+UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
+    # --- WP77's registry rows: nothing of the printed effect is modeled ---------------------------
+    "Bone Lacing (Plastic)": (
+        "+1 Body dice for resisting physical damage, +1 Armor, and an unarmed Damage Value of "
+        "(STR + 1)P (p. 454) -- no character-level Armor total exists for the bonus to add to, and "
+        "there is no damage-resistance test or unarmed-combat representation at all."
+    ),
+    "Bone Lacing (Aluminum)": (
+        "+2 Body dice for resisting physical damage, +2 Armor, and an unarmed Damage Value of "
+        "(STR + 2)P (p. 454) -- no character-level Armor total exists for the bonus to add to, and "
+        "there is no damage-resistance test or unarmed-combat representation at all."
+    ),
+    "Bone Lacing (Titanium)": (
+        "+3 Body dice for resisting physical damage, +3 Armor, and an unarmed Damage Value of "
+        "(STR + 3)P (p. 454) -- no character-level Armor total exists for the bonus to add to, and "
+        "there is no damage-resistance test or unarmed-combat representation at all."
+    ),
+    "Smartlink": (
+        "+2 to a smartgun's Accuracy while you fire it (p. 433, via the p. 444 accessory this "
+        "implant is the eyeware version of) -- no weapon, Accuracy or attack-test representation "
+        "exists. The legacy engine reads the same data as a wireless-gated ranged dice-pool "
+        "modifier instead; both readings are equally unmodeled here."
+    ),
+    "Damper": (
+        "+2 dice resisting sonic attacks, including flashbangs (p. 454) -- no test-resolution or "
+        "sonic/damage-resistance subsystem exists."
+    ),
+    "Dermal Plating": (
+        "+Rating Armor, cumulative with other armor and without adding Encumbrance (p. 454) -- no "
+        "character-level Armor total exists for the bonus to add to."
+    ),
+    "Armor": (  # the Cyberlimb Enhancement, not a gear/armor item
+        "+Rating Armor on the limb, cumulative and without adding Encumbrance (p. 456) -- no "
+        'character-level Armor total exists for the bonus to add to. Its "one enhancement of each '
+        'type per limb" cap belongs to the same unmodeled per-limb attribute system Customized/'
+        "Enhanced Agility and Strength are registered for."
+    ),
+    "Internal Air Tank": (
+        "Holding your breath for up to Rating hours, and complete protection from "
+        "inhalation-vector toxin attacks while you do (p. 455) -- no breath/environmental or "
+        "toxin/pathogen resistance subsystem exists."
+    ),
+    "Skillwires": (
+        "Use of activesofts up to the skillwire's Rating, and only while they run on an implanted "
+        "skilljack (p. 455) -- no skillsoft subsystem exists, and no skillsoft is purchasable to "
+        "run in the first place."
+    ),
+    "Skilljack": (
+        "Interpreting knowsofts and linguasofts and running activesofts, capped at Rating x 2 "
+        "skills in total and Rating per skill (p. 452) -- no skillsoft subsystem exists, and no "
+        "skillsoft is purchasable to run in the first place."
+    ),
+    # --- WP38/WP40's partly-modeled rows: the note is the unmodeled remainder ---------------------
+    "Customized Agility": (
+        "Raises the *limb's own* Agility above its cyberlimb base of 3 (p. 456) -- cyberlimbs have "
+        "a per-limb attribute system this engine does not represent, so nothing downstream reads "
+        "that value. The purchase's nuyen cost and its cap at your natural Agility maximum are "
+        "modeled."
+    ),
+    "Customized Strength": (
+        "Raises the *limb's own* Strength above its cyberlimb base of 3 (p. 456) -- cyberlimbs "
+        "have a per-limb attribute system this engine does not represent, so nothing downstream "
+        "reads that value. The purchase's nuyen cost and its cap at your natural Strength maximum "
+        "are modeled."
+    ),
+    "Enhanced Agility": (
+        "Adds its Rating to the limb's own Agility (p. 456) -- the same unmodeled per-limb "
+        "attribute system as Customized Agility. The purchase's nuyen and Capacity costs are "
+        "modeled."
+    ),
+    "Enhanced Strength": (
+        "Adds its Rating to the limb's own Strength (p. 456) -- the same unmodeled per-limb "
+        "attribute system as Customized Strength. The purchase's nuyen and Capacity costs are "
+        "modeled."
+    ),
+    "Vision Enhancement": (
+        "Its Wireless clause's separate +Rating dice pool modifier on visual Perception tests "
+        "(p. 444) -- no wireless state and no test-resolution system exists. The +Rating Mental "
+        "limit on those same tests is modeled."
+    ),
+    "Audio Enhancement": (
+        "Its Wireless clause's separate +Rating dice pool modifier on audio Perception tests "
+        "(p. 444) -- no wireless state and no test-resolution system exists. The +Rating Mental "
+        "limit on those same tests is modeled."
+    ),
+    "Spatial Recognizer": (
+        "Its Wireless clause's separate dice pool modifier on Perception tests to find the source "
+        "of a sound (p. 444) -- no wireless state and no test-resolution system exists. The +2 "
+        "Mental limit on that test is modeled."
+    ),
+    "Hydraulic Jacks": (
+        "Twenty percent added to your maximum jump distance, and two metres taken off your falling "
+        "distance for falling-damage purposes (p. 457) -- no movement or falling-damage system "
+        "exists. The +Rating Physical limit for jumping and sprinting, granted once per matched "
+        "pair, is modeled."
+    ),
+}
 
 
 class BonusSupport(Enum):
@@ -307,6 +433,9 @@ class Cyberware:
     # populated only when bonus_support is CONDITIONAL_BONUS (WP40)
     conditional_bonuses: tuple[CyberwareConditionalBonus, ...]
     raw_bonus: str | None  # serialized <bonus> element, kept for future parser work; None if absent
+    # WP79: this item's real, unmodeled (or partly-modeled) SR5 effect, from UNMODELED_EFFECT_NOTES;
+    # None for an item with no such gap. Independent of `bonus_support` -- see module docstring.
+    unmodeled_effect_note: str | None = None
 
 
 def _is_flat_cost(text: str | None) -> bool:
@@ -502,9 +631,10 @@ def _parse_cyberware(elem: ET.Element) -> Cyberware:
     raw_bonus = (
         ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
     )
+    name = elem.findtext("name", "")
     return Cyberware(
         id=elem.findtext("id", ""),
-        name=elem.findtext("name", ""),
+        name=name,
         category=elem.findtext("category", ""),
         cost=int(elem.findtext("cost", "0")),
         essence_cost=Decimal(elem.findtext("ess", "0")),
@@ -514,6 +644,7 @@ def _parse_cyberware(elem: ET.Element) -> Cyberware:
         flat_bonuses=flat_bonuses,
         conditional_bonuses=conditional_bonuses,
         raw_bonus=raw_bonus,
+        unmodeled_effect_note=UNMODELED_EFFECT_NOTES.get(name),
     )
 
 

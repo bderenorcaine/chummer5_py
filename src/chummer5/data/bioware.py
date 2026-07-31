@@ -65,6 +65,19 @@ module only classifies, mirroring `chummer5.data.cyberware`'s own loader/engine 
 that module's "keep `NOT_YET_SUPPORTED` items in the loaded catalog" decision: Reflex Recorder's
 Essence/nuyen cost is real, correctly-modeled content even though its skill bonus isn't applied --
 see `chummer5.data.cyberware`'s own docstring for the full reasoning this reuses unchanged.
+
+**WP79: `unmodeled_effect_note`, and why this module's mirror is empty.** Cyberware and bioware both
+carry the field now, populated by hand from the Project Overview's "Unmodeled real effects" table
+(WP56's posture: runtime code never reads a `.md` file as data). `_UNMODELED_EFFECT_NOTES` below is
+this file's own mirror rather than a share of `chummer5.data.cyberware.UNMODELED_EFFECT_NOTES`,
+because the two catalogs load different files with independent name spaces -- and it is **empty**,
+which is a fact about the registry, not an oversight: no `bioware.xml` row is in it. Of the 6
+offered rows, 5 have their whole printed effect modeled or genuinely have none, and the 6th
+(`Reflex Recorder`) is deliberately *not* registry material -- its `<selectskill>` bonus is
+computable by this engine and merely unimplemented, which WP77 classified as a live policy
+violation for WP80 to fix rather than an accepted gap. Registering it would launder the one into
+the other. The field and the dict exist so that a future bioware row that *is* registry material is
+a one-line data change here, matching the other two augmentation catalogs.
 """
 
 from __future__ import annotations
@@ -112,6 +125,11 @@ _LIMIT_BONUS_TAGS = {
     "sociallimit": "social_limit",
 }
 
+# WP79: this file's by-name mirror of the Project Overview's "Unmodeled real effects" rows --
+# deliberately empty, see the module docstring for why (no bioware row is in that table, and
+# `Reflex Recorder` specifically must not be added to it).
+_UNMODELED_EFFECT_NOTES: Mapping[str, str] = {}
+
 
 @dataclass(frozen=True)
 class BiowareFlatBonus:
@@ -139,6 +157,9 @@ class Bioware:
     bonus_support: BonusSupport
     flat_bonuses: tuple[BiowareFlatBonus, ...]  # populated only when bonus_support is FLAT_BONUS
     raw_bonus: str | None  # serialized <bonus> element, kept for future parser work; None if absent
+    # WP79: this item's real, unmodeled SR5 effect, from _UNMODELED_EFFECT_NOTES -- None for every
+    # SR5 bioware row today, deliberately. See module docstring.
+    unmodeled_effect_note: str | None = None
 
 
 def _is_flat_cost(text: str | None) -> bool:
@@ -214,9 +235,10 @@ def _parse_bioware(elem: ET.Element, availability: int) -> Bioware:
     raw_bonus = (
         ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
     )
+    name = elem.findtext("name", "")
     return Bioware(
         id=elem.findtext("id", ""),
-        name=elem.findtext("name", ""),
+        name=name,
         category=elem.findtext("category", ""),
         cost=int(elem.findtext("cost", "0")),
         essence_cost=Decimal(elem.findtext("ess", "0")),
@@ -226,6 +248,7 @@ def _parse_bioware(elem: ET.Element, availability: int) -> Bioware:
         bonus_support=support,
         flat_bonuses=flat_bonuses,
         raw_bonus=raw_bonus,
+        unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(name),
     )
 
 

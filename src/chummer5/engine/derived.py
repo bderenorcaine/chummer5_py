@@ -245,9 +245,12 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
     `Focus`/`LifestyleTier`/etc.'s own catalog dataclass (mirroring `Quality`'s WP56 field exactly)
     needs to touch only that catalog module -- this function's own walk already covers every
     selection `Character` holds a name-bearing catalog object in, and doesn't care whether any given
-    kind's catalog has started populating the field yet. Today only `Quality` does, so only
-    quality-sourced notes actually surface -- see this function's own tests for the "walks
-    cyberware/bioware/powers/foci without crashing, contributes nothing" case that pins this down.
+    kind's catalog has started populating the field yet. **WP79 is the first WP to take that up**,
+    and it did so without touching this function: adding the field to `chummer5.data.cyberware
+    .Cyberware`/`chummer5.data.cyberware_subsystems.CyberwareEntry` (and, empty, to
+    `chummer5.data.bioware.Bioware`) was the entire change, and cyberware notes now surface here.
+    `Power`/`Focus`/`LifestyleTier`/`StarterGearItem`/`Spell` still populate nothing, so the
+    "walks them without crashing, contributes nothing" case below still holds for those kinds.
     """
     notes: dict[str, str] = {}
 

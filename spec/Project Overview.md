@@ -162,6 +162,17 @@ one reachable only by importing a legacy `.chum5` file are not the same severity
 retro-labelled, because getting it right per row needs the same per-catalog reachability check WP77
 only ran over its own 10.
 
+**These rows also reach the player, not just this document.** A row whose aspect carries an
+`unmodeled_effect_note` in its own catalog module — every Quality row (WP56) and every
+cyberware row (WP79) below — renders in the character sheet's collapsible "Unmodeled real effects"
+section for a character who actually holds it, collected by
+`chummer5.engine.derived.unmodeled_effect_notes`. Those notes are a **hand-kept mirror** of this
+table: runtime code never parses this file, so a WP that edits a row here must edit the matching
+catalog dict (`chummer5.data.qualities._UNMODELED_EFFECT_NOTES`,
+`chummer5.data.cyberware.UNMODELED_EFFECT_NOTES`, `chummer5.data.bioware._UNMODELED_EFFECT_NOTES`)
+in the same commit. `tests/unit/test_augmentation_unmodeled_registry.py` pins *which* augmentation
+rows must have a note and which must not; it cannot pin the wording against this table.
+
 | Aspect | Kind | What's modeled | What's not (and why) | Source |
 |---|---|---|---|---|
 | Gearhead | Quality (Positive) | Karma cost only | Vehicle/drone Speed/Handling/dice-pool bonus during vehicle or chase combat (p. 74) — no vehicle/combat subsystem exists | WP22 |

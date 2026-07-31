@@ -32,7 +32,11 @@ sentence is about the flat-only catalog, and interleaving a second, wider catalo
 would make both harder to read. `BonusSupport`, `CyberwareFlatBonus` and `classify_bonus` are
 imported from there rather than re-implemented -- the `<bonus>` grammar is identical (same file,
 same rows), so `chummer5.data.bioware`'s "reuse `BonusSupport`, re-implement the classifier"
-split does not apply here; there is nothing to re-implement.
+split does not apply here; there is nothing to re-implement. **WP79 adds
+`UNMODELED_EFFECT_NOTES` to that same import list**, for the same "same file, same rows" reason --
+one hand-kept mirror of the Project Overview's "Unmodeled real effects" table serves both catalogs,
+and this one's copy is the one that reaches a `Character` (see `CyberwareEntry
+.unmodeled_effect_note`).
 
 ## `<capacity>`: budget vs. cost vs. bundled-free, confirmed against the legacy C#
 
@@ -137,6 +141,7 @@ from pathlib import Path
 from chummer5.data.cyberware import (
     CORE_RULEBOOK_SOURCE,
     DEFAULT_CYBERWARE_PATH,
+    UNMODELED_EFFECT_NOTES,
     BonusSupport,
     CyberwareConditionalBonus,
     CyberwareFlatBonus,
@@ -209,6 +214,12 @@ class CyberwareEntry:
     # Enhancement and Hydraulic Jacks are rating-scaled and so live *only* in this wider catalog.
     conditional_bonuses: tuple[CyberwareConditionalBonus, ...]
     raw_bonus: str | None  # serialized <bonus> element; None if absent
+    # WP79: this row's real, unmodeled (or partly-modeled) SR5 effect, from the same by-name
+    # `chummer5.data.cyberware.UNMODELED_EFFECT_NOTES` the flat catalog reads (one constant for two
+    # views of the same file -- see that module's docstring). This is the copy that actually reaches
+    # a `Character`: `chummer5.engine.derived.unmodeled_effect_notes` walks the purchase tree, whose
+    # nodes hold `CyberwareEntry`.
+    unmodeled_effect_note: str | None = None
 
     @property
     def is_rated(self) -> bool:
@@ -334,6 +345,7 @@ def _parse_entry(elem: ET.Element) -> CyberwareEntry:
         raw_bonus=(
             ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
         ),
+        unmodeled_effect_note=UNMODELED_EFFECT_NOTES.get(name),
     )
 
 

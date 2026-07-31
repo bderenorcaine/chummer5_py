@@ -32,6 +32,15 @@ into code by hand, never read from disk at runtime.
 
 A new `NOT_YET_SUPPORTED` row therefore fails this file until somebody decides, deliberately, which
 bucket it belongs in.
+
+**WP79 adds the other direction to this file.** WP77's rows existed only in the Project Overview's
+markdown; nothing showed them to a player. WP79 populates `unmodeled_effect_note` on both cyberware
+catalogs (and, empty, on the bioware one) so the character sheet's WP56 disclosure section renders
+them, and the tests at the bottom pin the correspondence *both* ways: every registered row resolves
+to a note, and no unregistered row carries one -- the second being what keeps WP78's four modeled
+rows, and `Reflex Recorder`, out of a table they must not be laundered into. The 6 augmentation
+rows that predate WP77 (WP38/WP40's partly-modeled ones) get notes here too; they are named in
+`PARTLY_MODELED_WITH_NOTES` below because no `bonus_support` value identifies them.
 """
 
 from __future__ import annotations
@@ -139,6 +148,67 @@ def test_registry_rows_split_5_offered_in_the_ui_and_5_import_only() -> None:
     offered = {c.name for c in FLAT_CYBERWARE} | {b.name for b in BIOWARE}
     assert REGISTERED_UNMODELED & offered == REGISTERED_AND_OFFERED_IN_UI
     assert len(REGISTERED_UNMODELED - offered) == 5
+
+
+# --- WP79: the notes that make the registry visible to a player ----------------------------------
+
+# The 6 augmentation rows that were already in the Project Overview's registry before WP77, from
+# WP38 (cyberlimb Customization/Enhancement) and WP40 (the four conditional limit bonuses). Their
+# effect is *partly* modeled, so they need a note too -- and it must read as the unmodeled
+# remainder, not as "this does nothing." Named here rather than derived, because there is no
+# `bonus_support` value that identifies them: two are NO_EFFECT and one is CONDITIONAL_BONUS.
+PARTLY_MODELED_WITH_NOTES = frozenset(
+    {
+        "Customized Agility",
+        "Customized Strength",
+        "Enhanced Agility",
+        "Enhanced Strength",
+        "Vision Enhancement",
+        "Audio Enhancement",
+        "Spatial Recognizer",
+        "Hydraulic Jacks",
+    }
+)
+
+
+def test_every_registered_row_resolves_to_a_note_in_both_cyberware_catalogs() -> None:
+    # WP79's acceptance criterion. Both catalogs, because they are two views of the same rows and a
+    # note that reached only one of them would be a mirror that had already drifted -- the exact
+    # failure the single shared `UNMODELED_EFFECT_NOTES` constant exists to make impossible.
+    entries = {e.name: e for e in CYBERWARE_ENTRIES}
+    flat = {c.name: c for c in FLAT_CYBERWARE}
+    for name in REGISTERED_UNMODELED:
+        assert entries[name].unmodeled_effect_note, name
+        if name in flat:  # 5 of the 10 are import-only and absent from WP31's flat catalog
+            assert flat[name].unmodeled_effect_note == entries[name].unmodeled_effect_note, name
+
+
+def test_partly_modeled_registry_rows_carry_a_note_naming_what_is_modeled() -> None:
+    # WP79's "their note is the unmodeled remainder, not 'this does nothing'" requirement, pinned
+    # as something checkable: each of these says, in words, that part of the effect *is* applied.
+    entries = {e.name: e for e in CYBERWARE_ENTRIES}
+    for name in PARTLY_MODELED_WITH_NOTES:
+        note = entries[name].unmodeled_effect_note
+        assert note, name
+        assert "modeled" in note, name
+
+
+def test_no_row_outside_the_registry_carries_a_note() -> None:
+    # The other half of the invariant: a note is a claim that the Project Overview's table has a row
+    # for this item, so an unregistered one would be documentation with no source. In particular
+    # WP78's four newly-modeled rows must have none -- registering them would launder a live policy
+    # violation into an accepted gap, which is the distinction this whole file exists to keep.
+    named = REGISTERED_UNMODELED | PARTLY_MODELED_WITH_NOTES
+    for entry in CYBERWARE_ENTRIES:
+        assert (entry.unmodeled_effect_note is not None) == (entry.name in named), entry.name
+
+
+def test_no_bioware_row_carries_a_note_including_the_one_still_unclassified() -> None:
+    # `chummer5.data.bioware`'s own mirror is deliberately empty: no bioware row is in the registry,
+    # and `Reflex Recorder` specifically must not be added to it (WP80 models it instead).
+    assert all(b.unmodeled_effect_note is None for b in BIOWARE)
+    reflex_recorder = next(b for b in BIOWARE if b.name in MODELED_BUT_UNCLASSIFIED)
+    assert reflex_recorder.unmodeled_effect_note is None
 
 
 def test_registered_rows_carry_no_partially_classified_bonus() -> None:

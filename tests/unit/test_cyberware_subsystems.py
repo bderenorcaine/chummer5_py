@@ -304,7 +304,9 @@ def test_wp31s_loader_is_completely_unchanged() -> None:
     # WP37's acceptance criteria: additive to WP31/32/33, not a breaking change. The flat catalog's
     # count, field set and a hand-checked row all stay exactly as tests/unit/test_cyberware.py
     # pinned them. (WP40 adds one field, `conditional_bonuses` -- a deliberate, additive widening
-    # of the shared classifier, not a change to which rows load or what any of them cost.)
+    # of the shared classifier, not a change to which rows load or what any of them cost. WP79 adds
+    # a second, `unmodeled_effect_note`, on the same terms: a defaulted documentation field, no
+    # change to which rows load or what they cost.)
     flat = load_cyberware()
     assert len(flat) == 60
     commlink = next(item for item in flat if item.name == "Commlink")
@@ -321,6 +323,7 @@ def test_wp31s_loader_is_completely_unchanged() -> None:
         "flat_bonuses",
         "conditional_bonuses",
         "raw_bonus",
+        "unmodeled_effect_note",
     }
 
 

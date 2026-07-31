@@ -109,7 +109,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | H | Smallest-scope content expansions | done (WP20-23) | [phase-h-content-expansions.md](plan/phase-h-content-expansions.md) |
 | I | Magic (Magicians & Adepts) | done (WP24-29) | [phase-i-magic.md](plan/phase-i-magic.md) |
 | J | Cyberware | done (WP30-35) | [phase-j-cyberware.md](plan/phase-j-cyberware.md) |
-| K | Cyberware modifications (Capacity, subsystems, conditional bonuses) | in progress (WP36-41, WP77-78 done) — off hold as of 2026-07-29; WP79, then WP42, remain, with WP80-81 claimed but not gating WP42 | [phase-k-cyberware-mods.md](plan/phase-k-cyberware-mods.md) |
+| K | Cyberware modifications (Capacity, subsystems, conditional bonuses) | in progress (WP36-41, WP77-79 done) — off hold as of 2026-07-29; WP42 remains and its prerequisites are now met, with WP80-81 claimed but not gating it | [phase-k-cyberware-mods.md](plan/phase-k-cyberware-mods.md) |
 | L | Easy wins (Karma-to-Nuyen, Sum-to-Ten, Bioware) | done (WP43-45) | [phase-l-easy-wins.md](plan/phase-l-easy-wins.md) |
 | M | Magic expansion (Bound Spirits, Foci, Mentor Spirits) | done (WP46-48) | [phase-m-magic-expansion.md](plan/phase-m-magic-expansion.md) |
 | N | Expanded skill support (Knowledge/Language, specializations) | done (WP49-50) | [phase-n-skill-support.md](plan/phase-n-skill-support.md) |

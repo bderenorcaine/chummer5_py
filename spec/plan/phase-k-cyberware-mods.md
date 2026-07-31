@@ -433,9 +433,10 @@ conversation's own request not to build placeholder UI that gets thrown away app
 once WP41 had already been written. WP41's own follow-up is why: WP42 is the WP that puts the widest
 augmentation catalog this project has ever offered in front of a player, and it should not do that
 while 15 rows in that catalog are purchasable, priced, and mechanically silent with no record of the
-fact. WP77 (audit + registry) and WP78 (model the computable ones) have landed; WP79 (show the
-notes), WP80 (`Reflex Recorder`'s player choice) and WP81 (natural vs. augmented attribute maximum)
-remain, and only WP79 is a hard prerequisite of WP42. See each entry's own "Depends on" line.
+fact. WP77 (audit + registry), WP78 (model the computable ones) and WP79 (show the notes) have
+landed — so WP42's hard prerequisite among them is met. WP80 (`Reflex Recorder`'s player choice) and
+WP81 (natural vs. augmented attribute maximum) remain and do not gate WP42. See each entry's own
+"Depends on" line.
 
 - [x] **WP77 — Augmentation `<bonus>` coverage audit + "Unmodeled real effects" backfill.**
   Goal: close the gap WP38's worklog first flagged and WP41's widening made larger — every
@@ -598,7 +599,7 @@ remain, and only WP79 is a hard prerequisite of WP42. See each entry's own "Depe
     `MODELED_BUT_UNCLASSIFIED` and holds one row (`Reflex Recorder`). WP79's "WP78's rows must have
     **no** note" invariant is unchanged and still pinned there.
 
-- [ ] **WP79 — Surface augmentation unmodeled-effect notes on the character sheet.**
+- [x] **WP79 — Surface augmentation unmodeled-effect notes on the character sheet.**
   Goal: make WP77's 8 registry rows visible where a player can act on them. WP56 built the whole
   mechanism for qualities — `Quality.unmodeled_effect_note`, mirrored by hand from the Project
   Overview's table into `chummer5.data.qualities._UNMODELED_EFFECT_NOTES`, collected by
@@ -627,6 +628,34 @@ remain, and only WP79 is a hard prerequisite of WP42. See each entry's own "Depe
   Acceptance: a web test that a character owning Bone Lacing (Titanium) renders a non-empty
   "Unmodeled real effects" row for it (mirroring WP56's own quality-side test), and a data test that
   every name in that file's `REGISTERED_UNMODELED` resolves to a note in both cyberware catalogs.
+
+  **Landed 2026-07-31**, data-layer only as scoped: three `src/chummer5/data` modules gained a
+  defaulted field, `chummer5.engine.derived` gained only a docstring correction, and no template,
+  route, engine or save-format code changed at all. +6 tests (1151 total). What WP42 and WP80-81
+  need to know:
+  - **The prediction held exactly: populate the field, and the sheet lights up.** WP56's
+    `getattr(item, "unmodeled_effect_note", None)` collector needed no change, and neither did
+    `_character_sheet.html`. Buying Bone Lacing (Titanium) now renders a real row where WP77 left
+    an empty section.
+  - **One shared constant, not two** (the entry's open call): `chummer5.data.cyberware
+    .UNMODELED_EFFECT_NOTES` is public and imported by `chummer5.data.cyberware_subsystems`
+    alongside `classify_bonus`. Two views of the same rows of the same file would otherwise be two
+    mirrors of one registry table, free to drift while both looked maintained. `chummer5.data
+    .bioware` keeps its own (different file) — and it is **empty**, deliberately: no bioware row is
+    registry material, and `Reflex Recorder` specifically must not become one (that would launder
+    WP77's Bucket A policy violation into an accepted gap; WP80 models it instead).
+  - **16 names carry notes, not 10.** WP77's 10 registry names plus the 6 pre-existing WP38/WP40
+    rows as 8 names (Customized/Enhanced Agility *and* Strength are 4 separate catalog rows). The
+    partly-modeled 8 each end with a sentence saying what *is* applied, and a test asserts the
+    word "modeled" appears in each — the cheapest available proxy for "this reads as a remainder,
+    not as 'this does nothing'".
+  - **The correspondence is pinned in both directions.** Every registered row resolves to a note in
+    both cyberware catalogs, *and* no unregistered row carries one — the second being what keeps
+    WP78's four modeled rows out of a table they must not be in. A future WP that models a
+    registered row must delete its note in the same commit, or that test fails.
+  - **Still not pinned: the note *wording* against the markdown table.** Closing that needs parsing
+    `Project Overview.md` at test time, which WP56 rejected and this WP did not reopen. The
+    Project Overview's registry preamble now states the hand-mirror obligation explicitly instead.
 
 - [ ] **WP80 — `Reflex Recorder`: a purchase-time skill choice on an augmentation.**
   Goal: finish WP77's Bucket A. `Reflex Recorder` (bioware, `source == "SR5"`, in the shipped

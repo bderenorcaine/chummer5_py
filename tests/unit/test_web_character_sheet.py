@@ -284,3 +284,43 @@ def test_unmodeled_effects_section_shows_purchased_no_effect_quality_without_dup
     assert "Unmodeled real effects (2)" in response.text
     assert "Guts" in response.text
     assert "fear/intimidation" in response.text
+
+
+# --- WP79: the same disclosure section, now carrying augmentation rows ----------------------------
+
+
+def test_unmodeled_effects_section_shows_purchased_cyberware() -> None:
+    """WP79's acceptance criterion, mirroring WP56's quality-side test above.
+
+    Bone Lacing (Titanium) is one of the 5 registry rows a player can actually buy from the browser
+    today (30,000 nuyen, Essence 1.5 -- both inside Resources D's budget), and until this WP it was
+    purchasable, charged in full and mechanically silent with nothing on the sheet saying so.
+    """
+    from chummer5.web.app import CYBERWARE
+
+    client = TestClient(create_app())
+    _confirm_human(client)
+    bone_lacing = next(c for c in CYBERWARE if c.name == "Bone Lacing (Titanium)")
+
+    client.post("/ui/cyberware", data={f"cyberware_{bone_lacing.id}": "1"})
+    response = client.get("/character/sheet")
+
+    assert "Unmodeled real effects (1)" in response.text
+    assert "Bone Lacing (Titanium)" in response.text
+    assert "no character-level Armor total" in response.text
+
+
+def test_unmodeled_effects_section_stays_empty_for_cyberware_with_nothing_unmodeled() -> None:
+    # The counterpart: a Datajack's whole printed effect is its Essence/nuyen cost, so the section
+    # must not appear at all. Without this, "the sheet has an unmodeled-effects row" would pass for
+    # a note attached to every purchase indiscriminately.
+    from chummer5.web.app import CYBERWARE
+
+    client = TestClient(create_app())
+    _confirm_human(client)
+    datajack = next(c for c in CYBERWARE if c.name == "Datajack")
+
+    client.post("/ui/cyberware", data={f"cyberware_{datajack.id}": "1"})
+    response = client.get("/character/sheet")
+
+    assert "Unmodeled real effects" not in response.text
