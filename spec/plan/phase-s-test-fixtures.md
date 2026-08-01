@@ -358,7 +358,7 @@ Next unclaimed WP number is **WP85** (Phase V claimed WP83-84 on 2026-08-01 — 
 Plan index's tail note). WP85 lands the input; WP86/WP87 widen the harness on two independent axes;
 WP88 authors the fixture on top of all three.
 
-- [ ] **WP85 — Land the save file as the project's first on-disk save-format fixture.**
+- [x] **WP85 — Land the save file as the project's first on-disk save-format fixture.**
   Goal: get the character into the repo as *data* — and get a regression guard on the save format
   itself, which has never had one.
   Notes: the file is already committed at `tests/fixtures/saves/razorboy.json` (added with this

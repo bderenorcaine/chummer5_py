@@ -112,8 +112,30 @@ new metric key: `Character` carries no build-method field (that's session/save s
 assignment is asserted by construction plus the explicit Priority-rejection test. Tests live in
 `tests/integration/test_synthetic_fixtures.py`.
 
+## Native save-format fixtures (Phase S / WP85)
+
+`saves/` holds files in **this project's own save format**, kept byte-for-byte as the web UI wrote
+them. The first is `razorboy.json` — a Human Sum-to-Ten street samurai built by a player rather than
+derived from the implementation plan, which is exactly why it's here: shopping for a *character*
+walked it straight through six things the plan's own coverage inventory never enumerated (a cyberware
+purchase *tree* with plugins and full Capacity budgets, an Essence floor of 0.10, an augmentation
+that raises an attribute, conditional Improvements, the spend side of every budget, and a skill
+pushed past the chargen maximum by an Improvement). See `spec/plan/phase-s-test-fixtures.md` §6.
+
+This is the only regression guard the save *format* itself has. Every other save test builds a
+`CharacterSave` in code and round-trips it, which can only prove the writer and reader agree with
+each other — it cannot catch a change that leaves both self-consistent while breaking a file an
+older build already wrote. A checked-in file can, and `tests/integration/test_native_save_fixtures
+.py` fails loudly (never skips) if one stops loading.
+
+**Copied, not referenced** — the inverse of the `.chum5` corpus's choice above, for the mirror-image
+reason: these files are *ours* and a few KB each, with no upstream source of truth to drift from, so
+there is nowhere else for them to live.
+
 ### Files
 
+- `native_saves.py` — `NATIVE_SAVE_FIXTURES` (the names), `RAZORBOY_SAVE`, `native_save_path()`
+  (name -> path under `saves/`).
 - `mundane_chum5.py` — `MUNDANE_FIXTURES` (the 11 names), `PRIORITY_BUILD_FIXTURE` (Yeti),
   `MAGIC_PRIORITY_BUILD_FIXTURES` (Miko, Wesson — WP25), `mundane_fixture_path()` (name -> path
   under `legacy/Chummer.Tests/TestFiles/`, works for any fixture name in the corpus, not just the
