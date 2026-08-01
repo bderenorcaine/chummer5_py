@@ -213,7 +213,7 @@ lands").
 
 Next unclaimed WP number after this block is **WP97**.
 
-- [ ] **WP91 — `chummer5.data.vehicles`: load the SR5 vehicle/drone catalog.** Closes nothing on its
+- [x] **WP91 — `chummer5.data.vehicles`: load the SR5 vehicle/drone catalog.** Closes nothing on its
   own; it's the substrate, mirroring how WP21's loader preceded WP9's purchase flow.
   Goal: a literal XML→frozen-dataclass pass over `legacy/Chummer/data/vehicles.xml`, restricted to
   `source == "SR5"`, in the shape `chummer5.data.gear` established.
@@ -234,6 +234,16 @@ Next unclaimed WP number after this block is **WP97**.
   `spec/rulebooks/vehicles_and_riggers_chapter.md` §6 for at least one row per printed table, plus
   the full Harley-Davidson Scorpion row cross-checked against `Wesson.chum5`'s own legacy-computed
   `<vehicle>` node (§6).
+  Landed as `chummer5.data.vehicles` (`Vehicle` + `load_vehicles()`), 42 rows / 29 vehicles + 13
+  drones. Acceptance was met past its own bar: rather than one row per printed table,
+  `tests/unit/test_vehicles.py` transcribes **all four tables in full** and asserts every one of the
+  40 printed rows stat-by-stat. Two payoffs. First, the printed tables cover exactly 40 of the 42
+  rows and the 2 they miss are precisely §2's unprintable pair, so WP92's exclusion list is
+  *derived* by a test rather than asserted. Second, it found a real data error — `vehicles.xml`
+  gives the Renault-Fiat Fokker Tundra-9 Handling **2** where p. 465 prints **3**, correcting WP90
+  §2's "all four printed tables agree with the XML stat-for-stat." The loader stays literal;
+  **WP92 must apply the printed 3 in its catalog builder**, per the 2026-08-01 ruling in
+  `spec/decisions-log.md`. See `spec/worklogs/WP91.md`.
 
 - [ ] **WP92 — Engine: `VehicleSelection`, the Condition Monitor, and save/load.**
   Goal: make a stock vehicle/drone purchase a real, budget-checked part of a `Character`.

@@ -1151,3 +1151,27 @@ Priority-built character carrying an SR5 vehicle (`Wesson.chum5`'s Harley-Davids
 therefore validates against the printed tables plus that one stat block, with a synthetic
 whole-character fixture (WP96) as the regression guard — which also closes Phase S §5's own recorded
 "Known gap: no Rigger."
+
+**2026-08-01 (WP91, Phase P) — `vehicles.xml` gets one printed stat wrong; the book wins, at the
+policy layer.** WP91 transcribed all four printed vehicle/drone catalog tables (pp. 462–466) and
+asserted every one of the 40 printed rows against the loader stat-by-stat — the exhaustive version
+of the comparison WP90 had done spot-check-shaped. 39 rows agree exactly. The `Renault-Fiat Fokker
+Tundra-9 (Amphibious Jet)` does not: p. 465 prints Handling **3**, `vehicles.xml` says **2**, with
+every other stat in the row (and the row's own `<page>464</page>`) matching the printed line. There
+is exactly one Tundra-9 row in the file across all sourcebooks, so this isn't Chummer preferring a
+later book's reprint — it's a transcription slip.
+
+**Ruling: the printed value wins, and the correction lives in the engine's catalog builder, not the
+loader.** `chummer5.data.vehicles` stays what every other `chummer5.data.*` module is — a literal
+XML→dataclass pass that reports what the file says — and `chummer5.engine.vehicles` applies the fix
+alongside the Availability≤12 cap and the two unprintable-row exclusions, which is where this
+project already puts policy (cf. `build_starter_gear_catalog`, WP42's
+`_UNPURCHASABLE_CYBERWARE_NAMES`). `test_vehicles.KNOWN_XML_DIVERGENCES` pins the pair in both
+directions so the exemption cannot go stale: if a data drop ever fixes the XML, the test fails
+loudly rather than letting the catalog silently double-correct.
+
+**Scope note:** this is a one-row exemption, deliberately not a general "reconcile every catalog
+against the printed tables" programme. No other catalog in this project (gear, cyberware, bioware,
+qualities) has ever been checked exhaustively against its printed table, and doing so is not
+scheduled — WP91 only did it here because a 40-row table is small enough to transcribe in full and
+Phase P had the extract on hand.
