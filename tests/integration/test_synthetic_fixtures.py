@@ -29,6 +29,7 @@ from tests.fixtures.synthetic_fixtures import (
     SHAMAN_FACE_FIXTURE,
     STREET_SAMURAI_FIXTURE,
     SYNTHETIC_FIXTURES,
+    WETWORK_FIXTURE,
 )
 
 from chummer5.data.cyberware_subsystems import load_cyberware_entries
@@ -45,6 +46,7 @@ from chummer5.engine.build_method import (
 )
 from chummer5.engine.knowledge import KnowledgeSkillPick, LanguageSkillPick
 from chummer5.engine.resources import Contact
+from chummer5.engine.skills import MAX_SKILL_RATING_CREATE
 from chummer5.io.save_format import build_character, from_json
 
 
@@ -410,3 +412,100 @@ def test_native_language_has_no_dice_pool() -> None:
     character = build_synthetic(_razorboy_spend_side())
     with pytest.raises(KeyError, match="native language"):
         resolve_metric(character, "languages:pool:English")
+
+
+def test_wetwork_fixture_closes_its_gaps_explicitly() -> None:
+    """The three §6 gaps whose closure isn't proved by a number matching alone (G10, G11, G13).
+
+    `assert_fixture` already checks every `expected` value; what it can't state is *why* three of
+    them are interesting. A natural/augmented pair that only asserted the augmented total would pass
+    equally well if the bonus had been folded into the natural value; a Sneaking of 7 says nothing
+    unless it's compared to the cap it exceeds; and a conditional limit is only meaningful next to
+    the unconditional one it differs from.
+    """
+    character = build_synthetic(WETWORK_FIXTURE)
+
+    # G10: Wired Reflexes 2 raises REA without touching the natural rating (WP81).
+    assert character.natural_attribute_value("REA") == 4
+    assert character.attribute_value("REA") == 6
+    assert resolve_metric(character, "initiative_dice") == 3
+
+    # G13: an Improvement may carry a rating past the chargen purchase cap (WP82).
+    assert resolve_metric(character, "rating:Sneaking") == MAX_SKILL_RATING_CREATE + 1
+
+    # G11: three conditional Mental-limit bonuses, each applying to exactly one kind of test and
+    # none of them to the headline figure.
+    assert resolve_metric(character, "limit:mental") == 4
+    assert resolve_metric(character, "limit:mental@PERCEPTION_VISUAL") == 7
+    assert resolve_metric(character, "limit:mental@PERCEPTION_HEARING") == 7
+    assert resolve_metric(character, "limit:mental@PERCEPTION_SOUND_SOURCE") == 6
+    # A context with no bonus of its own falls back to the unconditional value -- the conditions
+    # don't subsume one another (`engine/improvements.py`'s "no subsumption" rule).
+    assert resolve_metric(character, "limit:mental@GYMNASTICS_JUMPING") == 4
+
+
+def test_wetwork_fixture_agrees_with_the_save_file_it_was_transcribed_from() -> None:
+    """The fixture and `razorboy.json` describe the same character, and the engine agrees.
+
+    This is what makes the transcription auditable: every figure the fixture cites by hand is also
+    produced by the real load path from the player's own file. The one deliberate divergence is the
+    Step Seven spend -- the save leaves its Karma unspent, the fixture spends all 15 (WP88) -- so
+    `karma_remaining` and the two Karma-funded Knowledge ratings are excluded here and asserted
+    against their own citations in the `expected` table instead.
+    """
+    save = from_json(native_save_path(RAZORBOY_SAVE).read_text(encoding="utf-8"))
+    from_save = build_character(
+        save,
+        metatypes=load_metatypes(),
+        priorities=load_priorities(),
+        skills=load_skills(),
+        qualities=load_qualities(),
+        lifestyles=load_lifestyles(),
+        cyberware=load_cyberware_entries(),
+    )
+    from_fixture = build_synthetic(WETWORK_FIXTURE)
+
+    for key in (
+        "attr:BOD",
+        "attr:AGI",
+        "attr:REA",
+        "attr:STR",
+        "attr:CHA",
+        "attr:INT",
+        "attr:LOG",
+        "attr:WIL",
+        "attr:EDG",
+        "rating:Sneaking",
+        "pool:Blades",
+        "pool:Gymnastics",
+        "pool:Pilot Ground Craft",
+        "initiative",
+        "initiative_dice",
+        "limit:physical",
+        "limit:mental",
+        "limit:social",
+        "limit:mental@PERCEPTION_VISUAL",
+        "limit:mental@PERCEPTION_SOUND_SOURCE",
+        "cm:physical",
+        "cm:stun",
+        "essence",
+        "cyberware:essence_spent",
+        "cyberware:nuyen_spent",
+        "cyberware:Cyberears:capacity_spent",
+        "cyberware:Cybereyes Basic System:capacity_spent",
+        "nuyen:available",
+        "nuyen:gear_spent",
+        "nuyen:lifestyle_cost",
+        "nuyen:remaining",
+        "contacts:free_points",
+        "contacts:points_spent",
+        "contacts:karma_cost",
+        "knowledge:free_points",
+        "knowledge:points_spent",
+    ):
+        assert resolve_metric(from_fixture, key) == resolve_metric(from_save, key), key
+
+    # The divergence, stated rather than hidden: the save banks its leftover Karma, the fixture
+    # spends it. WP89 is why the figure is 15 and not the 19 the planning entry recorded.
+    assert from_save.karma_remaining == 15
+    assert from_fixture.karma_remaining == 0

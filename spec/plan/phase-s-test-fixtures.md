@@ -272,7 +272,9 @@ magician; a Sum-to-Ten cyberware build is a Decker) — while making the set leg
 as a table-ready party. A future reader who wants "a team" has one; a WP author who wants "the fixture
 that tests X" still has that too.
 
-All five are now authored, so the "Metatype" column below records what each fixture actually took.
+All six are now authored, so the "Metatype" column below records what each fixture actually took.
+WP88's own runner joined from outside this design (§6) rather than being scoped from a gap, which is
+why his row is the only one whose "Covers" column reads as a loadout rather than a role brief.
 
 | Fixture | Runner | Metatype | Role | Covers |
 |---|---|---|---|---|
@@ -281,20 +283,33 @@ All five are now authored, so the "Metatype" column below records what each fixt
 | WP74 | Sabine "Cinder" Aumann | Human | Artillery / Astral | Combat spells, astral recon, magical defense, healing |
 | WP75 | Yseult "Wren" Marchetti | Elf | Face / secondary magic | Negotiation/Con/Etiquette, manipulation spells |
 | WP76 | Bakari "Nullsec" Osei | Dwarf | Matrix | Hacking, Matrix overwatch, data search, electronic B&E |
+| WP88 | Jacob "Tithe" Smith | Human | Wetwork / rooftop approach | Implanted blades (12 dice), climbing, urban infiltration, augmented senses |
 
-**Role coverage check.** Combat: Sam (primary) + Mage (spells) + Cheshire (backup pistols 12-dice).
-Stealth/infiltration: Cheshire. Matrix: Decker (fills Cheshire's deliberate gap — she has Simsense
-Vertigo). Magic/astral/healing: Combat Mage + Shaman. Social/Face: Shaman-Face (fills Cheshire's
-CHA-2 gap). Legwork/Perception: Cheshire + Decker. Two magic users is normal for a Shadowrun team and
-they don't overlap (Hermetic artillery vs Shamanic Face). **Known gap: no Rigger** — deliberate,
-since rigger support (Phase P) isn't built, so there's no vehicle/drone subsystem for such a fixture
-to exercise; not a hole to plug until Phase P lands.
+**Role coverage check.** Combat: Sam (primary) + Mage (spells) + Cheshire (backup pistols 12-dice)
++ Tithe (melee, 12 dice with Blades). Stealth/infiltration: Cheshire + Tithe, and they are different
+lanes rather than duplicates — Cheshire is the B&E specialist (locks, Palming, legwork), Tithe the
+climber who arrives from above and kills quietly (Gymnastics/Climbing 11, Sneaking 13). Matrix:
+Decker (fills Cheshire's deliberate gap — she has Simsense Vertigo). Magic/astral/healing: Combat
+Mage + Shaman. Social/Face: Shaman-Face (fills Cheshire's CHA-2 gap). Legwork/Perception: Cheshire +
+Decker + Tithe, whose three conditional Mental-limit implants make him the team's sensor platform
+even at Perception 3. **Known gap: no Rigger** — deliberate, since rigger support (Phase P) isn't
+built, so there's no vehicle/drone subsystem for such a fixture to exercise; not a hole to plug until
+Phase P lands.
 
 **Complementary attribute/skill spread (not just roles).** Cheshire is AGI/INT-heavy and CHA-2 (no
 Face) and LOG-3 (no decker) *on purpose* — those gaps are exactly what the Face and Decker fill, so
 the fixtures were designed against each other, not in isolation. Each of WP73-76 was sanity-checked
 against this table as it was authored so the team stayed balanced (e.g. the Decker is AGI 2 / CHA 2,
 not a second climber or a second face); any *future* fixture WP should do the same.
+
+**Tithe is the one runner not designed against this table**, because he wasn't designed against
+anything — he is a transcription of a player's own build (§6), and the check was run *after* the
+fact rather than as a constraint. It passes: he is the set's only LOG-2 melee specialist and its
+only Essence-0.10 character, he duplicates nobody's attribute peak (STR 5 is his, where Rebar's is
+BOD/STR 6 with far more soak and no stealth at all), and his AGI 4 sits deliberately below
+Cheshire's. Worth recording as a small piece of evidence that §5's design-against-each-other
+discipline was producing a genuinely spread set rather than one that merely looked spread from
+inside its own table.
 
 ---
 
@@ -420,7 +435,7 @@ WP88 authors the fixture on top of all three.
   (all four decline every new field, and their `expected` tables must not shift); the new metric
   keys reproduce `razorboy.json`'s own ¥580 remaining and 12/12 Knowledge points.
 
-- [ ] **WP88 — The fixture: Jacob "Tithe" Smith, the wetwork specialist.** Closes G8-G13.
+- [x] **WP88 — The fixture: Jacob "Tithe" Smith, the wetwork specialist.** Closes G8-G13.
   Goal: author `WETWORK_FIXTURE` in `synthetic_fixtures.py` from the save file, with the full
   hand-derived `expected`/`citations` treatment WP72-76 established, and add him to §5's roster.
   **Naming (decided here so WP88 doesn't re-litigate it):** the character's SINner (National)
@@ -451,3 +466,17 @@ WP88 authors the fixture on top of all three.
   §5's roster table and its role-coverage/attribute-spread paragraphs updated to six runners;
   `spec/worklogs/WP88.md` written, and any figure that needed the PDF recorded in
   `spec/rulebooks/learnings/phase-s.md`.
+
+**Phase S is complete with WP88.** WP85 landed the save file as the project's first save-format
+regression guard; WP86 and WP87 widened the harness on their two independent axes; WP88 authored the
+fixture on top of all three, closing G8-G13. Every gap in both inventories (§2's G1-G7, §6's G8-G13)
+now has a whole-character fixture behind it, and WP89 — claimed from the same planning pass, executed
+in Phase O — closed the stale WP43 deferral that made this character's Karma ledger wrong.
+
+Two things stay out, both deliberate and both still true:
+- **Phase K's Cyber Implant Weapon → Weapon Accessory two-level nesting.** WP86 makes it expressible
+  for the first time, but Tithe's Hand Blade and Shock Hand carry no accessory (and he has ¥580 left,
+  not enough to buy one), so closing it needs a *different* fixture, not this one. Unscheduled.
+- **WP43's Karma-to-Nuyen conversion** is no longer on this list: Tithe converts 4 Karma, and WP89
+  made that a real ledger debit, so the mechanic now has whole-character coverage as a side effect of
+  §6's fixture rather than needing its own.

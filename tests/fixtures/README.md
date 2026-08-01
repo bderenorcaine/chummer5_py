@@ -81,8 +81,10 @@ The fixtures double as **playable Shadowrun characters** — legal, fully-spent 
 name and concept, not degenerate test artifacts, and authored as **one coherent runner team** (see
 `phase-s-test-fixtures.md` §5): WP72's Renata "Cheshire" Vance (human infiltrator), WP73's Dražen
 "Rebar" Kovač (Ork street samurai), WP74's Sabine "Cinder" Aumann (Human Hermetic combat mage),
-WP75's Yseult "Wren" Marchetti (Elf Shamanic face), and WP76's Bakari "Nullsec" Osei (Dwarf decker,
-and the set's one Sum-to-Ten build). This
+WP75's Yseult "Wren" Marchetti (Elf Shamanic face), WP76's Bakari "Nullsec" Osei (Dwarf decker, and the
+first of the set's two Sum-to-Ten builds), and WP88's Jacob "Tithe" Smith (Human wetwork
+specialist, chromed to Essence 0.10 — the only one transcribed from a real player's save rather
+than designed). This
 costs nothing in rigour: a fully-spent budget hits the engine's validators at their exact limits, and
 a coherent character touches more interaction paths. Only the mechanically derived numbers are
 asserted; a fixture's loadout/contacts/lifestyle prose is flavour, not engine-checked.
@@ -135,6 +137,17 @@ rather than the raw priority figure — identical for WP73-76, which buy no gear
 `nuyen:*`, `contacts:*` and `knowledge:*`/`languages:*` metric keys read the results; the two
 free-point budgets deliberately read **natural**, not augmented, attributes (p. 95).
 
+**WP88 (landed)** adds `WETWORK_FIXTURE` — Jacob "Tithe" Smith, transcribed from `saves/razorboy
+.json` — closing gaps G8-G13 on top of WP86/WP87's harness work. He is the first fixture **not**
+designed from a coverage gap: a player built him in the web UI while shopping for a character, and
+that provenance is why he reaches six things the phase's own inventory never enumerated. The one
+new metric key is `limit:<name>@<CONTEXT>` (a `ResolutionContext` member name), without which the
+three WP39/WP40 conditional Mental-limit bonuses on a cybered character are present but
+unassertable. `test_wetwork_fixture_agrees_with_the_save_file_it_was_transcribed_from` checks the
+hand-derived table against the real load path's output from the player's own file, so the
+transcription is auditable rather than merely plausible; the one deliberate divergence is that the
+save banks its leftover Karma and the fixture spends all 15 of it.
+
 ## Native save-format fixtures (Phase S / WP85)
 
 `saves/` holds files in **this project's own save format**, kept byte-for-byte as the web UI wrote
@@ -169,6 +182,6 @@ there is nowhere else for them to live.
   `assert_fixture()` (WP72); `CyberwarePick`/`cyberware_purchase_request()` (WP86).
 - `synthetic_fixtures.py` — the hand-authored `SyntheticCharacter` literals and `SYNTHETIC_FIXTURES`
   tuple (WP72's `REFERENCE_MUNDANE_FIXTURE`, WP73's `STREET_SAMURAI_FIXTURE`, WP74's
-  `COMBAT_MAGE_FIXTURE`, WP75's `SHAMAN_FACE_FIXTURE`, WP76's `DECKER_FIXTURE` — Phase S's full
-  five-fixture list, all landed).
+  `COMBAT_MAGE_FIXTURE`, WP75's `SHAMAN_FACE_FIXTURE`, WP76's `DECKER_FIXTURE`, WP88's
+  `WETWORK_FIXTURE`).
 - This README.

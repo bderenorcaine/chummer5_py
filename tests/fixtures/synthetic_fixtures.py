@@ -65,9 +65,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from tests.fixtures.synthetic import SyntheticCharacter
+from tests.fixtures.synthetic import CyberwarePick, SyntheticCharacter
 
 from chummer5.engine.build_method import SUM_TO_TEN_BUILD_METHOD
+from chummer5.engine.knowledge import KnowledgeSkillPick, LanguageSkillPick
+from chummer5.engine.resources import Contact
 
 # ==================================================================================================
 # WP72 reference fixture — Renata "Cheshire" Vance, human infiltrator / cat burglar.
@@ -1273,6 +1275,435 @@ DECKER_FIXTURE = SyntheticCharacter(
 )
 
 
+# ==================================================================================================
+# WP88 -- Jacob "Tithe" Smith, human wetwork specialist (Sum-to-Ten E/B/A/B/E)
+#
+# The first fixture **not** designed from a coverage gap. It is a transcription of
+# `tests/fixtures/saves/razorboy.json`, a character a player built in this project's own web UI
+# while shopping for a *character*, and that provenance is the point: it walks straight through six
+# things Phase S's own §2 gap inventory never enumerated, because §2 reasoned about which
+# subsystems lacked a fixture rather than which *inputs* the harness could not express (see
+# `phase-s-test-fixtures.md` §6, and `spec/worklogs/WP88.md`).
+#
+# Gaps closed, and where each is asserted:
+#   G8  -- cyberware bought as a **tree**: two Rating-3 parents each carrying four plugins plus one
+#          engine-installed bundled freebie, with both Capacity budgets landing **exactly** full at
+#          12/12 (`cyberware:*:capacity_*`, WP86's keys). Every prior fixture bought rating-1,
+#          plugin-free leaves because the field could say nothing else.
+#   G9  -- a build at the **Essence floor**: 5.90 of 6.00 spent, 0.10 left, the tightest margin
+#          `create_cyberware_tree_selection`'s `>= BASE_ESSENCE` reject has ever been held to. Not
+#          just a big number: `ceil(0.10) = 1` is what puts the Social limit on 5 instead of 4.
+#   G10 -- an augmentation that **moves an attribute**: Wired Reflexes 2 leaves natural REA 4 and
+#          augmented REA 6, and 3 Initiative Dice. Both REA readings are asserted separately -- a
+#          test that checked only the augmented total would pass equally if the bonus had been
+#          folded into the natural value, which is exactly the distinction WP81 drew.
+#   G11 -- **conditional Improvements** on a finished character: Vision Enhancement 3, Audio
+#          Enhancement 3 and Spatial Recognizer each raise the Mental limit for one specific kind of
+#          Perception test and nothing else, asserted via WP88's own `limit:mental@<CONTEXT>` key
+#          against the unconditional `limit:mental` of 4.
+#   G12 -- the **spend side** of every budget (WP87's fields): ¥283,000 in, ¥580 left; 9 free
+#          contact points against 12 spent; 12 free Knowledge points spent to the pin.
+#   G13 -- a skill **past the chargen maximum** by way of an Improvement: Stealth group 5 +
+#          Catlike's +2 puts Sneaking at 7, above `MAX_SKILL_RATING_CREATE`. The cap bounds what may
+#          be bought, not what a bonus may add (WP82).
+#
+# Build shape:
+#   Priorities -- Sum-to-Ten E/B/A/B/E = 0+3+4+3+0 = exactly 10. Heritage E and Talent E both at 0,
+#     i.e. he pays for Skills A and takes a Human with a single special attribute point.
+#   Attributes -- 20/20 spent (Attributes B), 1/1 special on EDG. STR 5 / AGI 4 / REA 4 natural.
+#   Skills -- 46/46 (Skills A: 43 skill points + 3 specializations) and 10/10 group points on
+#     Firearms 5 + Stealth 5. Every budget on this character is spent to the pin, which is what puts
+#     the engine's validators at their exact limits.
+#   Qualities -- Positive 23 of the 25 cap (Catlike 7 + Indomitable (Physical) 8 + Indomitable
+#     (Social) 8); Negative 20 of 25 (Code of Honor 15 + SINner (National) 5). Net +3.
+#   Step Six -- gear ¥17,420 (incl. a Rating-4 Fake SIN at ¥2,500/rating) + one month of Medium
+#     Lifestyle ¥5,000 + ¥260,000 of chrome = ¥282,420 of ¥283,000. The pool only reaches ¥283,000
+#     because 4 Karma were converted at ¥2,000 each (p. 94).
+#   Step Seven -- the player's file left 19 Karma unspent, which WP89 re-derived to **15** once
+#     converted Karma began debiting the ledger. All 15 are spent here, and that is the one
+#     deliberate divergence from the save file (see `spec/worklogs/WP88.md`):
+#       - Sneaking specialization "Urban": 7 Karma (flat). Sneaking is a Stealth member and Stealth
+#         *was* group-bought, so this **breaks** the group -- and it does so on a skill already
+#         above the chargen maximum, a combination neither WP75 (group-breaking at rating 5) nor
+#         WP76 (a specialization breaking nothing) reaches.
+#       - Combat Tactics 3 -> 4 and Area Knowledge (Seattle) 3 -> 4: 4 Karma each
+#         (`new Rating x 1`).
+#         The first fixture to spend Karma on Knowledge skills at all -- §4's own closing note
+#         recorded that as a deliberate hole for want of any fixture with a Knowledge roster.
+#     karma_spent = qualities 3 + contacts 3 + conversion 4 + specialization 7 + knowledge 8 = 25.
+# ==================================================================================================
+
+WETWORK_FIXTURE = SyntheticCharacter(
+    name='Jacob "Tithe" Smith — human wetwork specialist (WP88, from a player-authored save)',
+    metatype="Human",
+    build_method=SUM_TO_TEN_BUILD_METHOD,
+    heritage_letter="E",
+    attributes_letter="B",
+    skills_letter="A",
+    resources_letter="B",
+    attribute_points={
+        "BOD": 2,
+        "AGI": 3,
+        "REA": 3,
+        "STR": 4,
+        "CHA": 2,
+        "INT": 3,
+        "LOG": 1,
+        "WIL": 2,
+        "EDG": 1,
+    },
+    skill_points={
+        "Blades": 6,
+        "Unarmed Combat": 5,
+        "Gymnastics": 5,
+        "Etiquette": 4,
+        "Throwing Weapons": 4,
+        "Clubs": 3,
+        "First Aid": 3,
+        "Intimidation": 3,
+        "Perception": 3,
+        "Running": 3,
+        "Demolitions": 2,
+        "Pilot Ground Craft": 2,
+    },
+    group_points={"Firearms": 5, "Stealth": 5},
+    specializations={
+        "Blades": "Implanted",
+        "Gymnastics": "Climbing",
+        "Intimidation": "Physical",
+    },
+    qualities=(
+        "Catlike",
+        "Indomitable (Physical)",
+        "Indomitable (Social)",
+        "Code of Honor",
+        "SINner (National)",
+    ),
+    quality_text={
+        # He is a SINner, not a nobody: Jacob Smith is the real, government-registered identity,
+        # and the Rating-4 Fake SIN below is the alias. "Tithe" is what he has left -- one tenth.
+        "SINner (National)": "Jacob Smith",
+        "Code of Honor": "Assassins Creed",
+    },
+    contacts=(
+        Contact(name="Heterodyne", connection=4, loyalty=1),
+        Contact(name="Stitch", connection=4, loyalty=3),
+    ),
+    gear=(
+        "Ammo: Gel Rounds",
+        "Ammo: Regular Ammo",
+        "Armor Jacket",
+        "Ares Alpha",
+        "Hermes Ikon",
+        "Ares Predator V",
+    ),
+    rating_gear=(("Fake SIN", 4),),
+    lifestyle=("Medium", 1),
+    karma_converted=4,
+    cyberware=(
+        "Bone Lacing (Titanium)",
+        CyberwarePick("Wired Reflexes", rating=2),
+        "Hand Blade",
+        "Shock Hand",
+        # Sound Link / Image Link are each bundled free with their parent and are installed by the
+        # engine, not declared here -- see `CyberwarePick`'s docstring.
+        CyberwarePick(
+            "Cyberears",
+            rating=3,
+            plugins=(
+                CyberwarePick("Audio Enhancement", rating=3),
+                "Balance Augmenter",
+                CyberwarePick("Select Sound Filter", rating=3),
+                "Spatial Recognizer",
+            ),
+        ),
+        CyberwarePick(
+            "Cybereyes Basic System",
+            rating=3,
+            plugins=(
+                "Flare Compensation",
+                "Low-Light Vision",
+                "Ocular Drone",
+                CyberwarePick("Vision Enhancement", rating=3),
+            ),
+        ),
+        "Datajack",
+    ),
+    knowledge_skills=(
+        KnowledgeSkillPick(name="Trivia Games", category="Interest", rating=3),
+        KnowledgeSkillPick(name="Combat Tactics", category="Professional", rating=3),
+        KnowledgeSkillPick(name="Underground Fight Scene", category="Interest", rating=3),
+        KnowledgeSkillPick(name="Area Knowledge (Seattle)", category="Street", rating=3),
+    ),
+    languages=(LanguageSkillPick(name="English", rating=0, native=True),),
+    karma_specializations={"Sneaking": "Urban"},
+    karma_knowledge_points={"Combat Tactics": 1, "Area Knowledge (Seattle)": 1},
+    expected={
+        "attr:BOD": 3,
+        "attr:AGI": 4,
+        "attr:REA": 6,
+        "attr:STR": 5,
+        "attr:CHA": 3,
+        "attr:INT": 4,
+        "attr:LOG": 2,
+        "attr:WIL": 3,
+        "attr:EDG": 3,
+        # G13: bought at 5 (the group), delivered at 7 by an Improvement.
+        "rating:Sneaking": 7,
+        "rating:Palming": 5,
+        "rating:Disguise": 5,
+        "rating:Pistols": 5,
+        "rating:Automatics": 5,
+        "rating:Longarms": 5,
+        "rating:Blades": 6,
+        "pool:Blades": 12,
+        "pool:Unarmed Combat": 9,
+        "pool:Gymnastics": 11,
+        "pool:Sneaking": 13,
+        "pool:Palming": 9,
+        "pool:Pistols": 9,
+        "pool:Etiquette": 7,
+        "pool:Throwing Weapons": 8,
+        "pool:Clubs": 7,
+        "pool:First Aid": 5,
+        "pool:Intimidation": 8,
+        "pool:Perception": 7,
+        "pool:Running": 8,
+        "pool:Demolitions": 4,
+        # G10 reaching a dice pool: REA-linked, so it reads the *augmented* 6, not the natural 4.
+        "pool:Pilot Ground Craft": 8,
+        "initiative": 10,
+        "initiative_dice": 3,
+        "limit:physical": 8,
+        "limit:mental": 4,
+        "limit:social": 5,
+        # G11: the same Mental limit asked for three specific tests.
+        "limit:mental@PERCEPTION_VISUAL": 7,
+        "limit:mental@PERCEPTION_HEARING": 7,
+        "limit:mental@PERCEPTION_SOUND_SOURCE": 6,
+        "cm:physical": 10,
+        "cm:stun": 10,
+        # G9.
+        "essence": Decimal("0.10"),
+        "cyberware:essence_spent": Decimal("5.90"),
+        "cyberware:nuyen_spent": 260000,
+        # G8.
+        "cyberware:Cyberears:capacity_budget": Decimal(12),
+        "cyberware:Cyberears:capacity_spent": Decimal(12),
+        "cyberware:Cyberears:capacity_remaining": Decimal(0),
+        "cyberware:Cybereyes Basic System:capacity_budget": Decimal(12),
+        "cyberware:Cybereyes Basic System:capacity_spent": Decimal(12),
+        "cyberware:Cybereyes Basic System:capacity_remaining": Decimal(0),
+        "cyberware:Cyberears/Audio Enhancement:capacity_cost": Decimal(3),
+        "cyberware:Cybereyes Basic System/Ocular Drone:capacity_cost": Decimal(6),
+        # G12.
+        "nuyen:budget": 275000,
+        "nuyen:available": 283000,
+        "nuyen:gear_spent": 17420,
+        "nuyen:lifestyle_cost": 5000,
+        "nuyen:remaining": 580,
+        "contacts:free_points": 9,
+        "contacts:points_spent": 12,
+        "contacts:karma_cost": 3,
+        "knowledge:free_points": 12,
+        "knowledge:points_spent": 12,
+        "knowledge:native_language_limit": 1,
+        "knowledge:pool:Trivia Games": 7,
+        "knowledge:pool:Combat Tactics": 6,
+        "knowledge:pool:Underground Fight Scene": 7,
+        "knowledge:pool:Area Knowledge (Seattle)": 8,
+        "karma_skill:karma_cost": 7,
+        "karma_skill:broken_groups": frozenset({"Stealth"}),
+        "karma_knowledge:karma_cost": 8,
+        "karma_spent": 25,
+        "karma_remaining": 0,
+    },
+    citations={
+        "attr:BOD": "priorities.xml Attributes B = 20 pts; Human BOD min 1 (+2)",
+        "attr:AGI": "priorities.xml Attributes B; Human AGI min 1 (+3)",
+        "attr:REA": (
+            "Human REA min 1 (+3) = natural 4; +2 from Wired Reflexes rating 2 "
+            "(cyberware.xml <specificattribute><name>REA</name><val>Rating</val>, WP78) = "
+            "augmented 6. Natural vs. augmented split per WP81"
+        ),
+        "attr:STR": "priorities.xml Attributes B; Human STR min 1 (+4)",
+        "attr:CHA": "priorities.xml Attributes B; Human CHA min 1 (+2)",
+        "attr:INT": "priorities.xml Attributes B; Human INT min 1 (+3)",
+        "attr:LOG": "priorities.xml Attributes B; Human LOG min 1 (+1)",
+        "attr:WIL": "priorities.xml Attributes B; Human WIL min 1 (+2)",
+        "attr:EDG": "priorities.xml Heritage E/Human = 1 special pt; Human EDG min 2 (+1)",
+        "rating:Sneaking": (
+            "Skills A group pts: Stealth group 5, +2 Catlike (qualities.xml <specificskill>"
+            "<name>Sneaking</name><bonus>2</bonus>, FLAT_BONUS) = 7, above "
+            "MAX_SKILL_RATING_CREATE 6 -- the cap bounds purchases, not Improvement-added "
+            "ratings (WP82)"
+        ),
+        "rating:Palming": "Skills A group pts; Stealth group 5 (proves the group, Catlike-free)",
+        "rating:Disguise": "Skills A group pts; Stealth group 5 (proves the group)",
+        "rating:Pistols": "Skills A group pts; Firearms group 5",
+        "rating:Automatics": "Skills A group pts; Firearms group 5 (proves the group)",
+        "rating:Longarms": "Skills A group pts; Firearms group 5 (proves the group)",
+        "rating:Blades": "Skills A skill pts; 6 base = the chargen cap (Close Combat unbought)",
+        "pool:Blades": (
+            "learnings/phase-d.md (dice pool): rating 6 + AGI 4 + 2 specialization 'Implanted'"
+        ),
+        "pool:Unarmed Combat": "learnings/phase-d.md: rating 5 + AGI 4",
+        "pool:Gymnastics": "learnings/phase-d.md: rating 5 + AGI 4 + 2 specialization 'Climbing'",
+        "pool:Sneaking": (
+            "learnings/phase-d.md: rating 7 (5 group + 2 Catlike) + AGI 4 + 2 Karma "
+            "specialization 'Urban'"
+        ),
+        "pool:Palming": "learnings/phase-d.md: rating 5 + AGI 4",
+        "pool:Pistols": "learnings/phase-d.md: rating 5 + AGI 4",
+        "pool:Etiquette": "learnings/phase-d.md: rating 4 + CHA 3",
+        "pool:Throwing Weapons": "learnings/phase-d.md: rating 4 + AGI 4",
+        "pool:Clubs": "learnings/phase-d.md: rating 3 + AGI 4",
+        "pool:First Aid": "learnings/phase-d.md: rating 3 + LOG 2 (First Aid is LOG-linked)",
+        "pool:Intimidation": (
+            "learnings/phase-d.md: rating 3 + CHA 3 + 2 specialization 'Physical'"
+        ),
+        "pool:Perception": "learnings/phase-d.md: rating 3 + INT 4",
+        "pool:Running": "learnings/phase-d.md: rating 3 + STR 5 (Running is STR-linked)",
+        "pool:Demolitions": "learnings/phase-d.md: rating 2 + LOG 2",
+        "pool:Pilot Ground Craft": (
+            "learnings/phase-d.md: rating 2 + REA 6 -- the *augmented* REA, since a dice pool "
+            "reads attribute_value, not natural_attribute_value (WP81)"
+        ),
+        "initiative": (
+            "learnings/phase-d.md (Character.cs InitiativeValue): augmented REA 6 + INT 4"
+        ),
+        "initiative_dice": (
+            "learnings/phase-d.md: base 1, +2 from Wired Reflexes rating 2 (cyberware.xml "
+            "<initiativepass precedence='0'>Rating</initiativepass>, WP78)"
+        ),
+        "limit:physical": (
+            "learnings/phase-d.md LimitPhysical: ceil((STR*2+BOD+REA)/3) = ceil((10+3+6)/3) = 7, "
+            "+1 Indomitable (Physical) (qualities.xml FLAT_BONUS physical_limit)"
+        ),
+        "limit:mental": (
+            "learnings/phase-d.md LimitMental: ceil((LOG*2+INT+WIL)/3) = ceil((4+4+3)/3) = 4; "
+            "no unconditional Mental bonus (the three cyberware ones are all conditional)"
+        ),
+        "limit:social": (
+            "learnings/phase-d.md LimitSocial: ceil((CHA*2+WIL+ceil ESS)/3) = ceil((6+3+1)/3) = 4, "
+            "+1 Indomitable (Social). Essence 0.10 ceils to 1 -- a flat 0 would give 3+1 = 4"
+        ),
+        "limit:mental@PERCEPTION_VISUAL": (
+            "mental 4 + Vision Enhancement rating 3, conditional on "
+            "LimitCondition_SkillsActivePerceptionVisual (p. 444; WP39/WP40)"
+        ),
+        "limit:mental@PERCEPTION_HEARING": (
+            "mental 4 + Audio Enhancement rating 3, conditional on "
+            "LimitCondition_SkillsActivePerceptionHearing (p. 444; WP39/WP40)"
+        ),
+        "limit:mental@PERCEPTION_SOUND_SOURCE": (
+            "mental 4 + Spatial Recognizer 2, conditional on "
+            "LimitCondition_SkillsActivePerceptionSpatialRecognizer (p. 444). Not cumulative with "
+            "Audio Enhancement's hearing bonus -- the conditions do not subsume one another "
+            "(improvements.py's 'no subsumption' rule)"
+        ),
+        "cm:physical": "learnings/phase-d.md (PhysicalCM): 8 + ceil(BOD 3/2) = 8 + 2",
+        "cm:stun": "learnings/phase-d.md (StunCM): 8 + ceil(WIL 3/2) = 8 + 2",
+        "essence": (
+            "derived.py essence = BASE_ESSENCE 6 - 5.90 = 0.10, i.e. 0.10 clear of "
+            "create_cyberware_tree_selection's >= BASE_ESSENCE reject"
+        ),
+        "cyberware:essence_spent": (
+            "cyberware.xml <ess>: Bone Lacing (Titanium) 1.5 + Wired Reflexes FixedValues(2,3,5)"
+            "[r2] 3 + Hand Blade 0.25 + Shock Hand 0.25 + Cyberears (3*0.1)+0.1 = 0.4 + Cybereyes "
+            "Basic System 0.4 + Datajack 0.1 = 5.90. Plugins cost Capacity, not Essence"
+        ),
+        "cyberware:nuyen_spent": (
+            "cyberware.xml <cost>: 30000 + FixedValues(39000,149000,217000)[r2] 149000 + 2500 + "
+            "5000 + Cyberears 7500 & plugins 34500 + Cybereyes 10000 & plugins 20500 + 1000 = "
+            "260000"
+        ),
+        "cyberware:Cyberears:capacity_budget": "cyberware.xml <capacity>Rating * 4 at rating 3",
+        "cyberware:Cyberears:capacity_spent": (
+            "Audio Enhancement [Rating]=3 + Balance Augmenter [4] + Select Sound Filter "
+            "[Rating]=3 + Spatial Recognizer [2] = 12; Sound Link is bundled free at [0]"
+        ),
+        "cyberware:Cyberears:capacity_remaining": "12 - 12 = 0, i.e. exactly full",
+        "cyberware:Cybereyes Basic System:capacity_budget": (
+            "cyberware.xml <capacity>(Rating * 4) at rating 3"
+        ),
+        "cyberware:Cybereyes Basic System:capacity_spent": (
+            "Flare Compensation [1] + Low-Light Vision [2] + Ocular Drone [6] + Vision "
+            "Enhancement [Rating]=3 = 12; Image Link is bundled free at [0]"
+        ),
+        "cyberware:Cybereyes Basic System:capacity_remaining": "12 - 12 = 0, i.e. exactly full",
+        "cyberware:Cyberears/Audio Enhancement:capacity_cost": (
+            "cyberware.xml <capacity>[Rating] at rating 3 -- what the plugin charges its parent"
+        ),
+        "cyberware:Cybereyes Basic System/Ocular Drone:capacity_cost": (
+            "cyberware.xml <capacity>[6], flat"
+        ),
+        "nuyen:budget": "priorities.xml Resources B = 275000",
+        "nuyen:available": (
+            "resources.py available_nuyen: 275000 + karma_to_nuyen(4) = 275000 + 8000 (p. 94, "
+            "2000 nuyen per Karma point, max 10)"
+        ),
+        "nuyen:gear_spent": (
+            "gear.xml <cost>: 25 + 20 + 1000 + 2650 + 3000 + 725 = 7420, + Fake SIN rating 4 x "
+            "2500/rating = 10000 (WP66 Rating-priced gear) = 17420"
+        ),
+        "nuyen:lifestyle_cost": (
+            "lifestyles.xml Medium 5000/month x 1 month (engine/lifestyle.py total_cost)"
+        ),
+        "nuyen:remaining": (
+            "283000 - 17420 gear - 5000 Lifestyle - 260000 cyberware = 580, within p. 94's "
+            "'5,000 nuyen or less' carry-over allowance"
+        ),
+        "contacts:free_points": (
+            "resources.py FREE_CONTACT_POINTS_PER_CHARISMA 3 x natural CHA 3 (p. 95: augmented "
+            "attributes do not affect the calculation)"
+        ),
+        "contacts:points_spent": (
+            "Contact.points = Connection + Loyalty: Heterodyne 4+1 = 5, Stitch 4+3 = 7"
+        ),
+        "contacts:karma_cost": (
+            "KARMA_PER_EXCESS_CONTACT_POINT 1 x (12 spent - 9 free) = 3 (p. 98's contact table)"
+        ),
+        "knowledge:free_points": (
+            "knowledge.py free_knowledge_points: (natural INT 4 + natural LOG 2) x 2 (p. 95, and "
+            "legacy's {INTUnaug}+{LOGUnaug} expression)"
+        ),
+        "knowledge:points_spent": "four Knowledge skills at rating 3 each = 12, spent to the pin",
+        "knowledge:native_language_limit": (
+            "knowledge.py BASE_NATIVE_LANGUAGE_LIMIT 1 (no Bilingual)"
+        ),
+        "knowledge:pool:Trivia Games": (
+            "knowledge.py knowledge_dice_pool: rating 3 + INT 4 (Interest links to INT, p. 89)"
+        ),
+        "knowledge:pool:Combat Tactics": (
+            "rating 3 + 1 Karma point + LOG 2 (Professional links to LOG, p. 89)"
+        ),
+        "knowledge:pool:Underground Fight Scene": "rating 3 + INT 4 (Interest, p. 89)",
+        "knowledge:pool:Area Knowledge (Seattle)": (
+            "rating 3 + 1 Karma point + INT 4 (Street links to INT, p. 89)"
+        ),
+        "karma_skill:karma_cost": (
+            "KARMA_SPECIALIZATION_COST 7, flat (p. 106-107 Character Improvement Table, "
+            "learnings/phase-o.md WP53)"
+        ),
+        "karma_skill:broken_groups": (
+            "Sneaking is a Stealth member and Stealth was group-purchased, so specializing it "
+            "breaks the group (skills.py create_karma_skill_selection; p. 98 'skill groups can "
+            "only be broken up during Step Seven')"
+        ),
+        "karma_knowledge:karma_cost": (
+            "KARMA_KNOWLEDGE_PER_RATING 1: new rating 4 x 1 for each of Combat Tactics and Area "
+            "Knowledge (Seattle) = 8 (learnings/phase-o.md WP53)"
+        ),
+        "karma_spent": (
+            "p. 64 (25 Karma); qualities 23 - 20 = 3 + contacts 3 + Karma-to-Nuyen 4 (WP89, p. 94) "
+            "+ specialization 7 + knowledge 8 = 25"
+        ),
+        "karma_remaining": "STARTING_KARMA 25 - karma_spent 25 = 0 (fully spent)",
+    },
+)
+
+
 # Every synthetic fixture, for the parametrized regression test.
 SYNTHETIC_FIXTURES = (
     REFERENCE_MUNDANE_FIXTURE,
@@ -1280,4 +1711,5 @@ SYNTHETIC_FIXTURES = (
     COMBAT_MAGE_FIXTURE,
     SHAMAN_FACE_FIXTURE,
     DECKER_FIXTURE,
+    WETWORK_FIXTURE,
 )

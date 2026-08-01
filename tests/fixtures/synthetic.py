@@ -97,7 +97,7 @@ through.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 
@@ -143,6 +143,7 @@ from chummer5.engine.derived import (
     stun_condition_monitor,
 )
 from chummer5.engine.foci import apply_foci_improvements, create_foci_selection
+from chummer5.engine.improvements import ResolutionContext
 from chummer5.engine.knowledge import (
     KnowledgeSelection,
     KnowledgeSkillPick,
@@ -760,6 +761,15 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
     return character
 
 
+# The three limits that take a `ResolutionContext` (WP39/WP40). Keyed by the same names the
+# unconditional `limit:*` metrics use, so `limit:mental` and `limit:mental@PERCEPTION_VISUAL` read
+# as the same figure asked two different ways.
+_CONDITIONAL_LIMITS: dict[str, Callable[[Character, ResolutionContext], int]] = {
+    "limit:physical": lambda c, ctx: physical_limit(c, context=ctx),
+    "limit:mental": lambda c, ctx: mental_limit(c, context=ctx),
+    "limit:social": lambda c, ctx: social_limit(c, context=ctx),
+}
+
 _CAPACITY_FIELDS = {
     "capacity_budget": lambda p: p.capacity_budget,
     "capacity_spent": lambda p: p.capacity_spent,
@@ -866,6 +876,12 @@ def resolve_metric(character: Character, key: str) -> object:
       resulting *value* is already visible through `attr:<CODE>`, which sums both point sources)
     - `karma_skill:karma_cost` / `karma_skill:broken_groups` (WP75) — the Step Seven skill-side
       spend's own Karma cost, and the set of skill-group names it broke (a `frozenset[str]`)
+    - `limit:physical@<CONTEXT>` / `limit:mental@<CONTEXT>` / `limit:social@<CONTEXT>` (WP88) —
+      the same limit resolved *for one specific test*, so a WP39/WP40 conditional Improvement is
+      observable at all. `<CONTEXT>` is a `chummer5.engine.improvements.ResolutionContext` member
+      name (`PERCEPTION_VISUAL`, `PERCEPTION_HEARING`, `PERCEPTION_SOUND_SOURCE`,
+      `GYMNASTICS_JUMPING`, `RUNNING_SPRINTING`). The context-free `limit:*` key stays the plain,
+      unconditional figure a character sheet's headline shows
     - `karma_knowledge:karma_cost` (WP87) — Step Seven's Knowledge/Language spend's own Karma cost
     - `karma_spent` / `karma_remaining`
     - `nuyen:available` / `nuyen:budget` / `nuyen:gear_spent` / `nuyen:lifestyle_cost` /
@@ -925,6 +941,23 @@ def resolve_metric(character: Character, key: str) -> object:
     if key == "spells:karma_cost":
         assert character.spell_selection is not None
         return character.spell_selection.karma_cost
+    if "@" in key:
+        # WP88: a *conditional* limit — `limit:mental@PERCEPTION_VISUAL` resolves the Mental limit
+        # for a visual Perception test specifically, which is the only way a WP39/WP40 conditional
+        # Improvement is observable at all. Without this key the three conditional bonuses on a
+        # cybered character are present-but-unasserted, the "hand-verified, no fixture" failure mode
+        # this phase exists to end.
+        limit_key, _, context_name = key.partition("@")
+        resolve_limit = _CONDITIONAL_LIMITS.get(limit_key)
+        if resolve_limit is None:
+            raise KeyError(f"resolve_metric: {limit_key!r} takes no resolution context")
+        try:
+            context = ResolutionContext[context_name]
+        except KeyError:
+            raise KeyError(
+                f"resolve_metric: unrecognised resolution context {context_name!r}"
+            ) from None
+        return resolve_limit(character, context)
     if key.startswith("knowledge:pool:"):
         assert character.knowledge_selection is not None
         name = key[len("knowledge:pool:") :]
