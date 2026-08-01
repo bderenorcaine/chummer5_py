@@ -428,8 +428,79 @@ class Character:
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]
 
+    def natural_attribute_value(self, code: str) -> int:
+        """WP81: `metatype minimum + points spent + Karma points`, capped at the metatype
+        (**natural**) maximum -- the rating the character actually *bought*, with no Improvement
+        contribution at all. `attribute_value` is the augmented total that everything else reads;
+        see that method's own docstring for the split and where each side belongs.
+
+        Three callers want this one specifically, and each is a rules citation rather than a
+        preference:
+        - `create_karma_attribute_points`'s "only one Mental or Physical attribute may sit at its
+          natural maximum" rule (p. 99/100 -- the word "natural" is the rulebook's own).
+        - `chummer5.engine.resources`'s free contact points (`CHA x 3`) and
+          `chummer5.engine.knowledge`'s free Knowledge points (`(INT + LOG) x 2`). Core rulebook
+          p. 95: "Attributes boosted by cyberware or bioware do not affect the calculation for
+          things such as points for Knowledge skills or Contacts. However, other in-game mechanics
+          such as Initiative and Inherent Limits are modified by these augmentations" -- which is
+          also why `chummer5.engine.derived` deliberately keeps reading `attribute_value`. Legacy
+          agrees from the other direction: `CharacterSettings.ContactPointsExpression` /
+          `KnowledgeSkillPointsExpression` default to `{CHAUnaug} * 3` /
+          `({INTUnaug} + {LOGUnaug}) * 2`.
+
+        **`"MAG"` returns `attribute_value("MAG")` unchanged**, i.e. Magic has no natural/augmented
+        split in this engine -- and cannot have a meaningful one, because every SR5-core metatype's
+        `magaug` equals its `magmax` (6 = 6, checked for all of Human/Elf/Dwarf/Ork/Troll), so no
+        Improvement can push MAG past its natural maximum in the first place. The one rule that
+        actually asks the question, p. 99's "only one at its natural maximum," explicitly excludes
+        Magic/Edge/Resonance from itself anyway.
+        """
+        if code == "MAG":
+            return self.attribute_value("MAG")
+        attribute_range = self.attribute_range(code)
+        points = self.attribute_points.get(code, 0)
+        karma_points = (
+            self.karma_attribute_selection.points.get(code, 0)
+            if self.karma_attribute_selection is not None
+            else 0
+        )
+        return min(attribute_range.minimum + points + karma_points, attribute_range.maximum)
+
+    def attribute_augmented_maximum(self, code: str) -> int:
+        """WP81: the highest this attribute may reach once Improvements are counted --
+        `AttributeRange.augmented`, i.e. `metatypes.xml`'s own `<bodaug>`/`<agiaug>`/... field,
+        loaded by `chummer5.data.metatypes` since WP2 and (until WP81) read nowhere.
+
+        For every SR5-core metatype this is exactly `attribute_range(code).maximum + 4` on the 8
+        primary attributes and exactly `maximum` on EDG/MAG/RES -- which is the rulebook's own rule
+        without needing a hardcoded `+ 4` here: core rulebook p. 94, "each attribute rating (Mental
+        and Physical) can only receive an augmentation bonus of up to +4. If the attribute being
+        raised has not reached its natural maximum limit, the attribute can be raised naturally
+        with Karma; but at no point can augmentations exceed the +4 bonus cap." Edge is not a
+        Mental or Physical attribute and its data carries no headroom, so an EDG Improvement is
+        clamped to zero by construction rather than by a special case.
+        """
+        return self.attribute_range(code).augmented
+
     def attribute_value(self, code: str) -> int:
-        """`metatype minimum + points spent + Σ improvements`, capped at the metatype maximum.
+        """The **augmented** attribute total: `natural_attribute_value` plus Σ `ATTRIBUTE`
+        improvements, with both halves of SR5's augmented cap applied (WP81).
+
+        The two clamps, mirroring legacy `CharacterAttrib` exactly (`AttributeModifiers` then
+        `CalculatedTotalValue`, read directly):
+        1. Σ improvements is clamped to `attribute_augmented_maximum(code) - attribute_range(code)
+           .maximum` -- the per-attribute augmentation headroom, `+4` on every Mental/Physical
+           attribute and `0` on EDG/MAG/RES (see `attribute_augmented_maximum`'s citation). Legacy
+           comments this line "The most that any attribute can be increased by is 4."
+        2. The result is clamped to `attribute_augmented_maximum(code)` itself.
+        Before WP81 there was only one clamp, at the *natural* maximum, which silently swallowed
+        any augmentation bought for an attribute already at its metatype maximum -- see
+        `spec/decisions-log.md`, 2026-07-31 (WP78's "Gap 1"), for the finding this closes.
+
+        This is the value **everything except the three callers named in
+        `natural_attribute_value`** wants: dice pools, Initiative, the three Limits, both condition
+        monitors. Core rulebook p. 95 is explicit that Initiative and the Inherent Limits *are*
+        modified by augmentations while Knowledge/Contact points are not.
 
         **WP25/post-WP29**: `"MAG"` is a special case, not this formula -- see the class docstring's
         Phase I paragraph and its post-WP29 correction. Dispatching here (rather than teaching every
@@ -453,14 +524,10 @@ class Character:
             # -- so no separate "reduced maximum" cap is needed here, only the floor at 0.
             return max(self.magic_rating_before_essence_loss - self.magic_essence_loss, 0)
         attribute_range = self.attribute_range(code)
-        points = self.attribute_points.get(code, 0)
-        karma_points = (
-            self.karma_attribute_selection.points.get(code, 0)
-            if self.karma_attribute_selection is not None
-            else 0
-        )
+        natural = self.natural_attribute_value(code)
         bonus = self.improvements.resolve(ImprovementType.ATTRIBUTE, code)
-        return min(attribute_range.minimum + points + karma_points + bonus, attribute_range.maximum)
+        headroom = max(attribute_range.augmented - attribute_range.maximum, 0)
+        return min(natural + min(bonus, headroom), attribute_range.augmented)
 
     @property
     def power_points(self) -> int:
@@ -686,10 +753,14 @@ def create_karma_attribute_points(
     # that would touch a Mental/Physical rating is actually checked against the rule.
     if any(code in PRIMARY_ATTRIBUTES for code in nonzero_points):
         candidate = replace(character, karma_attribute_selection=selection)
+        # WP81: `natural_attribute_value`, not `attribute_value`. The rulebook's word is "natural"
+        # and this engine can now tell the two apart -- an augmented REA of 7 on a natural 5 must
+        # not count against this rule, and before WP81 it silently would have (the augmented value
+        # was clamped at the natural maximum, so `>= maximum` was true for both cases).
         at_natural_maximum = sum(
             1
             for code in PRIMARY_ATTRIBUTES
-            if candidate.attribute_value(code) >= candidate.attribute_range(code).maximum
+            if candidate.natural_attribute_value(code) >= candidate.attribute_range(code).maximum
         )
         if at_natural_maximum > 1:
             raise ValueError(

@@ -32,7 +32,7 @@
           <th>Attribute</th>
           <th>Points</th>
           <th>Karma points</th>
-          <th>Value</th>
+          <th>Value (augmented)</th>
           <th>Metatype range</th>
         </tr>
       </thead>
@@ -60,7 +60,7 @@
             />
             {% endif %}
           </td>
-          <td>{{ row.value }}</td>
+          <td>{{ row.natural }}{% if row.value != row.natural %} ({{ row.value }}){% endif %}</td>
           <td>{{ row.minimum }}–{{ row.maximum }}</td>
         </tr>
         {% endfor %}

@@ -307,8 +307,16 @@ def _character_sheet_context(
                 f"{session.talent_letter} — {PRIORITIES.talent[session.talent_letter].name}"
             ),
         },
+        # WP81: `natural` alongside `value` so the sheet can render `4 (6)` for an augmented
+        # attribute rather than a bare `6` -- the core rulebook's own notation (p. 95: "Record
+        # augmentation ratings in parentheses next to the natural attribute rating"). Identical
+        # shape to `_attribute_allocation_context`'s own rows, so both screens read the same.
         "attribute_rows": [
-            {"code": code, "value": character.attribute_value(code)}
+            {
+                "code": code,
+                "natural": character.natural_attribute_value(code),
+                "value": character.attribute_value(code),
+            }
             for code in ALLOCATABLE_ATTRIBUTES
         ],
         "sheet_skill_rows": skill_rows,

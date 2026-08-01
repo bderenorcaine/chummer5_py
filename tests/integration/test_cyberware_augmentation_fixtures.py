@@ -90,9 +90,21 @@ def _character(metatype_name: str, points: dict[str, int]) -> Character:
 
 def _replay(fixture_name: str, metatype_name: str, purchases: list[tuple[str, int]]) -> Character:
     attributes = _fixture_attributes(fixture_name)
-    character = _character(
-        metatype_name, {code: attributes[code][0] for code in _SPENDABLE if code in attributes}
+    return _replay_with_points(
+        metatype_name,
+        {code: attributes[code][0] for code in _SPENDABLE if code in attributes},
+        purchases,
     )
+
+
+def _replay_with_points(
+    metatype_name: str, points: dict[str, int], purchases: list[tuple[str, int]]
+) -> Character:
+    """`_replay` with the attribute spend supplied directly instead of read off a fixture -- for
+    the WP81 case that needs one attribute moved to its natural maximum while everything else
+    about the replay stays the fixture's own.
+    """
+    character = _character(metatype_name, points)
     selection = create_cyberware_tree_selection(
         [
             CyberwarePurchaseRequest(item_id=BY_NAME[name].id, rating=rating)
@@ -179,3 +191,33 @@ def test_each_fixture_item_is_really_the_sr5_catalog_row_this_wp_models(
         if item.findtext("name") == item_name
     }
     assert source_ids == {BY_NAME[item_name].id}
+
+
+def test_wp81_lets_fuzzys_wired_reflexes_push_reaction_past_its_natural_maximum() -> None:
+    """WP81's acceptance case, built from a real fixture's own numbers rather than a synthetic
+    character. `Fuzzy-chargen.chum5` buys REA to Human's natural maximum of 6 and installs Wired
+    Reflexes Rating 1, which the legacy engine resolves to exactly 6 -- the boundary case the
+    docstring of `test_fuzzys_wired_reflexes_match_its_legacy_reaction_total` above already flags.
+
+    That fixture agreed with this engine both before and after WP81 (its natural rating already
+    *was* 6), so it proves nothing about the clamp on its own. Buying the *same* implant at
+    Rating 3 instead is the one-variable change that separates the two readings: pre-WP81 this
+    engine returned 6 (clamped at the natural maximum, silently discarding all 3 points of a
+    purchase the player paid nuyen and Essence for); post-WP81 it returns 9, and the natural
+    rating the chargen rules read is still 6.
+    """
+    attributes = _fixture_attributes("Fuzzy-chargen.chum5")
+    assert attributes["REA"] == (4, 6)  # 4 points on Human's minimum of 1, plus the implant's +1
+
+    character = _replay("Fuzzy-chargen.chum5", "Human", [("Wired Reflexes", 3)])
+    assert character.natural_attribute_value("REA") == 5
+    assert character.attribute_value("REA") == 8
+
+    # ... and with the fixture's REA bought all the way to Human's natural maximum, the same
+    # Rating 3 implant lands on top of it rather than being swallowed by it.
+    at_maximum = _replay_with_points("Human", {"REA": 5}, [("Wired Reflexes", 3)])
+    assert at_maximum.natural_attribute_value("REA") == 6
+    assert at_maximum.attribute_value("REA") == 9
+    # 9 is inside Human's augmented REA maximum of 10, so this is the bonus landing in full, not
+    # a second clamp coincidentally producing the same number.
+    assert at_maximum.attribute_augmented_maximum("REA") == 10

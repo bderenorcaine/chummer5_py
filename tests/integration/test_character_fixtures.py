@@ -211,6 +211,8 @@ def test_cross_corpus_attribute_value_matches_when_unaugmented() -> None:
             )
             if natural_value != legacy_attribute.total_value:
                 # Augmented by cyberware/gear this WP doesn't model -- not a formula mismatch.
+                # WP81 revisits what *can* be said about these rows without modeling their
+                # source; see `test_cross_corpus_augmented_totals_respect_the_augmented_maximum`.
                 continue
             checked_at_least_one = True
             assert character.attribute_value(code) == legacy_attribute.total_value, (
@@ -219,6 +221,81 @@ def test_cross_corpus_attribute_value_matches_when_unaugmented() -> None:
             )
 
     assert checked_at_least_one
+
+
+def test_cross_corpus_augmented_totals_respect_the_augmented_maximum() -> None:
+    """WP81's own oracle pass over the rows the test above skips.
+
+    That test skips any attribute whose legacy `<totalvalue>` exceeds `metatype minimum + base +
+    karma`, because this engine doesn't model whatever augmentation produced the difference (most
+    are cyberlimb averages or non-SR5 bioware). It can't assert the *number*, but it can assert
+    the two invariants WP81 implements -- and this is the only place in the project where real,
+    legacy-computed augmented attributes are available to check them against:
+
+    1. No augmented total exceeds the metatype's own augmented maximum
+       (`Character.attribute_augmented_maximum`, i.e. `metatypes.xml`'s `<bodaug>`/... field).
+    2. No augmented total exceeds its natural rating by more than the augmentation headroom
+       (`augmented maximum - natural maximum`, `+4` on every Mental/Physical attribute) -- core
+       rulebook p. 94's "+4 bonus cap", checked against legacy output rather than assumed from
+       the printed rule alone.
+
+    22 rows across 6 fixtures are augmented. Invariant 1 holds for all 22. **Invariant 2 holds
+    for 17 of them, and the 5 exceptions are all AGI or STR on a fixture with cyberlimbs**
+    (Barrett, Bastion, Blindfire -- e.g. Bastion's natural AGI 1 against a legacy total of 8, a
+    gap of 7). That is not a violation of p. 94: legacy applies the `+4` clamp inside
+    `CharacterAttrib.AttributeModifiers` (Σ *Improvements*), and then
+    `CalculatedTotalValueCore` **replaces** the result outright with a per-limb weighted average
+    for the two `Cyberware.CyberlimbAttributeAbbrevs` (AGI, STR) before the single remaining
+    `TotalAugmentedMaximum` clamp. So a cyberlimb average is bounded by invariant 1 only. This
+    engine has no per-limb attribute system at all (already registered in the Project Overview's
+    "Unmodeled real effects" table by WP38, for Customized/Enhanced Agility/Strength), so it can
+    never produce such a total -- AGI/STR are excluded from invariant 2 here rather than the test
+    pretending the rule is universal.
+
+    Neither invariant held of this engine's own `attribute_value` through WP80, which clamped at
+    the *natural* maximum instead and so could not have reproduced any of these totals at all.
+    """
+    # legacy `Cyberware.CyberlimbAttributeAbbrevs` -- the two attributes whose total is a per-limb
+    # average rather than base + Σ improvements. See this test's own docstring.
+    cyberlimb_attributes = {"AGI", "STR"}
+    metatypes_by_name: dict[str, Metatype] = {m.name: m for m in sr5_metatypes(METATYPES)}
+    augmented_rows = 0
+    headroom_checked_rows = 0
+
+    for fixture_name in MUNDANE_FIXTURES:
+        legacy = load_chum5(mundane_fixture_path(fixture_name))
+        if legacy.metavariant is not None:
+            continue
+        metatype = metatypes_by_name[legacy.metatype]
+        character = Character(
+            metatype=metatype,
+            heritage_letter="",
+            attributes_letter="",
+            special_attribute_points=0,
+            attribute_points=MappingProxyType(
+                {
+                    code: legacy.attributes[code].base + legacy.attributes[code].karma
+                    for code in ALLOCATABLE_ATTRIBUTES
+                }
+            ),
+            improvements=ImprovementIndex(),
+        )
+
+        for code in ALLOCATABLE_ATTRIBUTES:
+            total_value = legacy.attributes[code].total_value
+            natural_value = character.natural_attribute_value(code)
+            if total_value <= natural_value:
+                continue
+            augmented_rows += 1
+            augmented_maximum = character.attribute_augmented_maximum(code)
+            assert total_value <= augmented_maximum, (fixture_name, code, total_value)
+            if code in cyberlimb_attributes:
+                continue
+            headroom_checked_rows += 1
+            headroom = augmented_maximum - character.attribute_range(code).maximum
+            assert total_value - natural_value <= headroom, (fixture_name, code, total_value)
+
+    assert (augmented_rows, headroom_checked_rows) == (22, 11)
 
 
 def test_blindfire_catlike_quality_matches_engine_end_to_end() -> None:

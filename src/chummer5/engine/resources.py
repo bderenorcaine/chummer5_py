@@ -112,9 +112,17 @@ from chummer5.engine.character import Character
 # CharacterSettings.ContactPointsExpression (legacy default: `"{CHAUnaug} * 3"`) -- confirmed
 # against the core rulebook ("Making Connections", p. 98: "This Karma is equal to a Character's
 # Charisma rating x 3") and against every mundane fixture's <contactpoints> tag (see module
-# docstring). MVP has no cyberware/gear that could make augmented CHA differ from unaugmented, so
-# `Character.attribute_value("CHA")` is used directly rather than needing a separate "unaugmented"
-# read.
+# docstring).
+#
+# **WP81**: the `Unaug` in that legacy expression is now honoured -- `create_contact_selection`
+# reads `Character.natural_attribute_value("CHA")`, not `attribute_value("CHA")`. Through WP80 the
+# two were the same number by construction (nothing this engine offers augments CHA), and this
+# constant's own comment said so; WP81 makes the distinction real for every attribute at once, and
+# the core rulebook states this specific exclusion outright (p. 95: "Attributes boosted by
+# cyberware or bioware do not affect the calculation for things such as points for Knowledge skills
+# or Contacts"). Still a no-op for every character this engine can build today -- no SR5 quality,
+# power, cyberware or bioware row in any loaded catalog grants a CHA `ImprovementType.ATTRIBUTE`
+# bonus -- but correct by construction rather than by that coincidence holding.
 FREE_CONTACT_POINTS_PER_CHARISMA = 3
 
 # CharacterSettings.KarmaContact (legacy default: `_intKarmaContact = 1`) -- Karma cost per point of
@@ -209,7 +217,7 @@ def create_contact_selection(character: Character, contacts: Iterable[Contact]) 
                 f"Loyalty={contact.loyalty}"
             )
 
-    free_points = character.attribute_value("CHA") * FREE_CONTACT_POINTS_PER_CHARISMA
+    free_points = character.natural_attribute_value("CHA") * FREE_CONTACT_POINTS_PER_CHARISMA
     points_spent = sum(contact.points for contact in contacts_t)
     karma_cost = max(0, points_spent - free_points) * KARMA_PER_EXCESS_CONTACT_POINT
 

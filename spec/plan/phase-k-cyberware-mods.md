@@ -742,7 +742,7 @@ and WP82 (the same for skills, claimed by WP80) remain and do not gate WP42. See
     from today's shipped UI, and shared by every skill Improvement this project grants. See
     `spec/decisions-log.md`, 2026-07-31.
 
-- [ ] **WP81 — Natural vs. augmented attribute maximum.**
+- [x] **WP81 — Natural vs. augmented attribute maximum.**
   Goal: let an Improvement raise an attribute above its metatype maximum, up to SR5's augmented
   maximum, without breaking the chargen rules that currently read `attribute_value` as the *natural*
   rating. Claimed 2026-07-31 by WP78; see `spec/decisions-log.md`'s entry of that date for the full
@@ -773,6 +773,38 @@ and WP82 (the same for skills, claimed by WP80) remain and do not gate WP42. See
   an explicit test that the "only one at its natural maximum" Karma rule still reads the *natural*
   rating; `tests/integration/test_character_fixtures.py`'s existing skip of augmented attributes
   revisited — some of what it skips should now be checkable.
+
+  **Landed 2026-08-01**, across engine + web + templates with no new module
+  (`chummer5.engine.{character,knowledge,resources}`, `chummer5.web.routes.{attributes,character,
+  contacts}`, `_attribute_allocation.html`, `_character_sheet.html`), +10 tests (1183 total). What
+  WP82 and WP42 need to know:
+  - **A second method, not a flag or a tuple** (the shape call this entry left open).
+    `Character.natural_attribute_value(code)` is the bought rating; `attribute_value(code)` keeps
+    its name and becomes the *augmented* total; `attribute_augmented_maximum(code)` names the
+    ceiling. Chosen on where the default should sit: ~40 existing call sites want the augmented
+    number and exactly 3 want the natural one, so a flag would have made every call site restate a
+    choice it doesn't care about and made "forgot to pass it" a silent wrong answer.
+  - **The `+4` is never hardcoded.** `AttributeRange.augmented` (`metatypes.xml`'s `<bodaug>`/…,
+    loaded since WP2 and read nowhere until now) *is* `maximum + 4` on all eight primary attributes
+    of all five SR5-core metatypes, and exactly `maximum` on EDG/MAG/RES — so Edge and Magic are
+    un-augmentable by construction, no special case. Both clamps (Σ improvements → headroom, then
+    total → augmented maximum) mirror legacy `AttributeModifiers`/`CalculatedTotalValueCore`.
+  - **Three callers moved to the natural rating, and p. 95 names all three**: free Knowledge points,
+    free contact points (engine + the web layer's own mirror), and the "only one at its natural
+    maximum" Karma rule. `chummer5.engine.derived` deliberately did *not* move — the same sentence
+    says Initiative and the Inherent Limits *are* modified by augmentations. The first two are a
+    no-op for every character buildable today (nothing augments CHA/INT/LOG) but no longer depend
+    on that holding.
+  - **Display is `natural (augmented)`, collapsing to a bare number when equal** — the book's own
+    notation (p. 95, "Strength 4 (6)"), on both the sheet and the attribute form. **WP82 should
+    mirror this if it renders a split at all**; see its own landed note for why it doesn't.
+  - **A corpus finding: legacy's `+4` clamp does not bound a cyberlimb average.** The new oracle
+    test finds 22 augmented rows in the mundane corpus; all 22 respect the augmented maximum, 17
+    respect the `+4` headroom, and the 5 that don't are all AGI/STR on the three cyberlimbed
+    fixtures — legacy *replaces* the clamped total with a per-limb average for those two attributes
+    before its last clamp. Recorded in `spec/rulebooks/learnings/phase-k.md` and excluded from that
+    half of the test rather than asserted as universal.
+  - WP78's "Gap 2" (`precedence0` suppression) is untouched and neither more nor less reachable.
 
 - [ ] **WP82 — Natural vs. augmented skill rating.**
   Goal: WP81's question, asked of skills instead of attributes. `chummer5.engine.skills.skill_rating`

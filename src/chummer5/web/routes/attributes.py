@@ -140,6 +140,12 @@ def _attribute_allocation_context(
             "maximum": display.attribute_range(code).maximum,
             "points": attribute_points.get(code, 0),
             "karma_points": karma_points.get(code, 0),
+            # WP81: two numbers, not one. `natural` is what the points above actually bought;
+            # `value` is the augmented total. The template shows `natural (value)` -- the core
+            # rulebook's own notation, p. 95: "Record augmentation ratings in parentheses next to
+            # the natural attribute rating (e.g. Strength 4 (6) ...)" -- and collapses to a bare
+            # number when they're equal, which is every character with no attribute augmentation.
+            "natural": display.natural_attribute_value(code),
             "value": display.attribute_value(code),
         }
         for code in ALLOCATABLE_ATTRIBUTES
@@ -152,6 +158,9 @@ def _attribute_allocation_context(
                 "maximum": display.attribute_range("MAG").maximum,
                 "points": magic_points,
                 "karma_points": None,  # WP52: MAG is not Karma-allocatable, no input to render
+                # MAG has no natural/augmented split (its `magaug` equals its `magmax` for every
+                # SR5-core metatype) -- see `Character.natural_attribute_value`'s own docstring.
+                "natural": display.attribute_value("MAG"),
                 "value": display.attribute_value("MAG"),
             }
         )

@@ -86,8 +86,11 @@ def _contacts_context(
     """Context for `_contacts.html`. `points_spent`/`karma_cost` are computed directly from
     `Contact.points` (never by calling `create_contact_selection`, which raises on the very
     Connection/Loyalty-below-1 input an error-echo render needs to display) -- `free_points` reads
-    `character.attribute_value("CHA")` fresh on every render, so it always reflects the character's
-    *current* CHA even if an attribute submission changed it since contacts were last saved.
+    `character.natural_attribute_value("CHA")` fresh on every render, so it always reflects the
+    character's *current* CHA even if an attribute submission changed it since contacts were last
+    saved. WP81: `natural_`, matching `chummer5.engine.resources.create_contact_selection`'s own
+    switch (p. 95 -- augmented CHA does not fund contact points); this render must compute the same
+    number that function would, so the two move together.
     """
     if character is None:
         return {"character": None, "contact_error": error}
@@ -102,7 +105,7 @@ def _contacts_context(
         }
         for i in range(MAX_CONTACT_ROWS)
     ]
-    free_points = character.attribute_value("CHA") * FREE_CONTACT_POINTS_PER_CHARISMA
+    free_points = character.natural_attribute_value("CHA") * FREE_CONTACT_POINTS_PER_CHARISMA
     points_spent = sum(contact.points for contact in contacts)
     karma_cost = max(0, points_spent - free_points) * KARMA_PER_EXCESS_CONTACT_POINT
     return {

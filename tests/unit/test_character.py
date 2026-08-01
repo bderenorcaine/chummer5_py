@@ -189,7 +189,12 @@ def test_attribute_value_sums_improvements_on_top_of_points_spent() -> None:
     assert character.attribute_value("BOD") == 5  # 1 (metatype min) + 3 (spent) + 1 (improvement)
 
 
-def test_attribute_value_caps_at_metatype_maximum_even_with_improvements() -> None:
+def test_improvements_raise_an_at_maximum_attribute_past_its_natural_maximum() -> None:
+    """WP81, replacing this test's own pre-WP81 assertion (`== 6`, "capped at the metatype
+    maximum even with improvements"). SR5 caps the *augmented* total at the metatype maximum + 4
+    (p. 94), not at the natural maximum -- an implant bought for an attribute already at its
+    metatype cap has to do something. The natural rating is unchanged by it.
+    """
     human = _human_choice("D")
     character = create_character(
         metatype_choice=human,
@@ -207,7 +212,8 @@ def test_attribute_value_caps_at_metatype_maximum_even_with_improvements() -> No
             source_id="quality-toughness",
         )
     )
-    assert character.attribute_value("BOD") == 6
+    assert character.natural_attribute_value("BOD") == 6
+    assert character.attribute_value("BOD") == 9
 
 
 def test_allocatable_attribute_constants_partition_primary_and_special() -> None:
@@ -642,3 +648,126 @@ def test_karma_spent_sums_karma_skill_and_knowledge_selections() -> None:
     )
     assert character.karma_spent == 14 + 3
     assert character.karma_remaining == STARTING_KARMA - 17
+
+
+# -- WP81: natural vs. augmented attribute maximum --------------------------------------------
+
+
+def _with_attribute_improvement(character: Character, code: str, value: int) -> Character:
+    character.improvements.add(
+        Improvement(
+            improvement_type=ImprovementType.ATTRIBUTE,
+            target=code,
+            value=value,
+            source_type=ImprovementSource.CYBERWARE,
+            source_id=f"implant-{code}-{value}",
+        )
+    )
+    return character
+
+
+def test_augmented_maximum_is_the_metatype_data_field_not_a_hardcoded_plus_four() -> None:
+    # metatypes.xml carries `<bodaug>`/`<agiaug>`/... per metatype; WP2 has loaded it since the
+    # start and nothing read it before WP81. For every SR5-core metatype it happens to be
+    # `maximum + 4` on the 8 primary attributes (p. 94's "+4 bonus cap") and exactly `maximum` on
+    # EDG/MAG/RES -- so Edge needs no special case to be un-augmentable.
+    character = _base_character()
+    for code in PRIMARY_ATTRIBUTES:
+        assert (
+            character.attribute_augmented_maximum(code)
+            == character.attribute_range(code).maximum + 4
+        )
+    assert character.attribute_augmented_maximum("EDG") == character.attribute_range("EDG").maximum
+
+
+def test_natural_attribute_value_excludes_improvements() -> None:
+    character = _with_attribute_improvement(
+        replace(_base_character(), attribute_points=MappingProxyType({"REA": 2})), "REA", 3
+    )
+    assert character.natural_attribute_value("REA") == 3  # Human minimum 1 + 2 points
+    assert character.attribute_value("REA") == 6
+
+
+def test_reaction_enhancers_on_an_at_maximum_attribute_reach_maximum_plus_three() -> None:
+    # WP81's headline acceptance case: Human REA maximum is 6 (5 points on top of the minimum of
+    # 1), and Rating 3 Reaction Enhancers add 3 on top of that -- 9, not the 6 this engine
+    # computed through WP80. p. 94: "If the attribute being raised has not reached its natural
+    # maximum limit, the attribute can be raised naturally with Karma; but at no point can
+    # augmentations exceed the +4 bonus cap."
+    character = _with_attribute_improvement(
+        replace(_base_character(), attribute_points=MappingProxyType({"REA": 5})), "REA", 3
+    )
+    assert character.natural_attribute_value("REA") == 6
+    assert character.attribute_value("REA") == 9
+
+
+def test_attribute_improvements_are_clamped_to_the_plus_four_augmentation_headroom() -> None:
+    # Two stacking implants worth +6 between them: the *sum* is clamped to the augmentation
+    # headroom (Human 10 - 6 = 4), mirroring legacy `CharacterAttrib.AttributeModifiers`' own
+    # `Math.Min(intReturn, intModifiersClamp)` line ("The most that any attribute can be increased
+    # by is 4").
+    character = replace(_base_character(), attribute_points=MappingProxyType({"REA": 5}))
+    _with_attribute_improvement(character, "REA", 4)
+    _with_attribute_improvement(character, "REA", 2)
+    assert character.natural_attribute_value("REA") == 6
+    assert character.attribute_value("REA") == 10 == character.attribute_augmented_maximum("REA")
+
+
+def test_the_augmented_total_never_exceeds_the_augmented_maximum_below_natural_max() -> None:
+    # The clamp is on the *bonus*, not on "how far past the natural maximum you ended up": a
+    # natural 2 plus a +4-worth of implants is 6, well inside the augmented maximum of 10.
+    character = _with_attribute_improvement(
+        replace(_base_character(), attribute_points=MappingProxyType({"REA": 1})), "REA", 4
+    )
+    assert character.natural_attribute_value("REA") == 2
+    assert character.attribute_value("REA") == 6
+
+
+def test_edge_cannot_be_augmented_at_all() -> None:
+    # Human EDG is 2/7/7 -- maximum and augmented maximum are the same number, so the headroom is
+    # zero and an EDG improvement contributes nothing. Edge is not a Mental or Physical attribute,
+    # which is exactly the set p. 94's +4 rule names.
+    character = _with_attribute_improvement(
+        replace(_base_character(), attribute_points=MappingProxyType({"EDG": 2})), "EDG", 3
+    )
+    assert character.natural_attribute_value("EDG") == 4
+    assert character.attribute_value("EDG") == 4
+
+
+def test_magic_has_no_natural_augmented_split() -> None:
+    # Every SR5-core metatype's magaug equals its magmax (6 = 6), so MAG cannot be augmented past
+    # its natural maximum and `natural_attribute_value` deliberately returns the same number
+    # `attribute_value` does -- see that method's own docstring.
+    character = _base_character()
+    assert character.attribute_augmented_maximum("MAG") == character.attribute_range("MAG").maximum
+    assert character.natural_attribute_value("MAG") == character.attribute_value("MAG") == 0
+
+    adept = replace(character, magic_type="Adept", magic_rating=4)
+    assert adept.natural_attribute_value("MAG") == adept.attribute_value("MAG") == 4
+
+
+def test_only_one_at_natural_maximum_reads_the_natural_rating_not_the_augmented_one() -> None:
+    # The rule the WP entry names as the reason this could not be a one-line cap change. BOD sits
+    # at its natural maximum of 6; REA is a natural 5 that an implant pushes to 8. Raising STR to
+    # its own maximum must still be rejected (BOD is already there), and the *augmented* REA must
+    # not count as a second attribute at its natural maximum -- which, pre-WP81, it would have,
+    # since the augmented value was itself clamped at the natural maximum.
+    character = _with_attribute_improvement(
+        replace(_base_character(), attribute_points=MappingProxyType({"REA": 4, "STR": 4})),
+        "REA",
+        3,
+    )
+    assert character.natural_attribute_value("REA") == 5
+    assert character.attribute_value("REA") == 8  # at the natural maximum by the old reading
+
+    # One attribute (STR) reaching its maximum is fine -- the augmented REA is not a competitor.
+    selection = create_karma_attribute_points(character, {"STR": 1}, karma_budget=999)
+    assert selection.points == {"STR": 1}
+
+    # ... and the rule still bites once a *natural* second one would be there.
+    with_bod = replace(
+        character,
+        attribute_points=MappingProxyType({"BOD": 5, "REA": 4, "STR": 4}),
+    )
+    with pytest.raises(ValueError, match="only one Mental or Physical attribute"):
+        create_karma_attribute_points(with_bod, {"STR": 1}, karma_budget=999)

@@ -845,3 +845,67 @@ holding a `Reflex Recorder`: its pick was never persisted, so the save now fails
 "Reflex Recorder requires a chosen skill" instead of loading a character whose bonus is silently
 dropped. Nothing is recoverable in that case — the pick was never written — and WP45-WP79 never
 applied the bonus either, so the failure loses nothing but announces itself.
+
+## 2026-08-01 — Phase K, WP81: the augmented attribute maximum lands; three formulas move to the
+natural rating; the cyberlimb average is confirmed exempt from the `+4` clamp
+
+**WP78's "Gap 1" is closed.** `Character.attribute_value` no longer clamps at the metatype
+(natural) maximum. It is now the *augmented* total — natural rating plus Σ `ATTRIBUTE`
+improvements, with the improvement sum clamped to the augmentation headroom
+(`AttributeRange.augmented - AttributeRange.maximum`) and the result clamped to
+`AttributeRange.augmented`. Both clamps mirror legacy `CharacterAttrib.AttributeModifiers` /
+`CalculatedTotalValueCore` line for line, and both come out of `metatypes.xml`'s own `<bodaug>`/…
+field (loaded since WP2, read nowhere until now) rather than a hardcoded `+ 4` — which is exactly
+`maximum + 4` on all eight primary attributes of all five SR5-core metatypes, and exactly `maximum`
+on EDG/MAG/RES, so Edge and Magic are un-augmentable by construction rather than by special case.
+Core rulebook p. 94 is the rule; see `spec/rulebooks/learnings/phase-k.md`'s WP81 entry.
+
+**A second method, not a flag or a tuple** (the shape question the WP entry left open).
+`Character.natural_attribute_value(code)` is what the points actually bought;
+`attribute_value(code)` keeps its name and becomes the augmented total. Chosen because the *default*
+matters more than the symmetry: every one of the ~40 existing call sites that reads
+`attribute_value` wants the augmented number (dice pools, Initiative, the Limits, the condition
+monitors), and only three want the natural one. A flag or a tuple would have made every one of
+those call sites re-state a choice it has no interest in, and would have made "forgot to pass the
+flag" a silent wrong answer instead of an unwritten line. `attribute_augmented_maximum(code)` is a
+third, trivial method so the ceiling has a name at its call sites.
+
+**Three callers moved to the natural rating, and the rulebook names all three.** p. 95: "Attributes
+boosted by cyberware or bioware do not affect the calculation for things such as points for
+Knowledge skills or Contacts. However, other in-game mechanics such as Initiative and Inherent
+Limits are modified by these augmentations." So `chummer5.engine.knowledge.free_knowledge_points`,
+`chummer5.engine.resources.create_contact_selection` (plus the web layer's own mirror of the latter
+in `chummer5.web.routes.contacts`) read `natural_attribute_value`; nothing in
+`chummer5.engine.derived` changed. Both modules' docstrings already said this rule was real and
+currently unobservable — no SR5 quality, power, cyberware or bioware row in any loaded catalog
+grants a CHA/INT/LOG `ImprovementType.ATTRIBUTE` bonus — so this is a no-op for every buildable
+character today, and simply no longer *depends* on that coincidence holding.
+
+The fourth caller is the one the WP entry named as the reason this could not be a one-line cap
+change: `create_karma_attribute_points`'s "only one Mental or Physical attribute may sit at its
+natural maximum" rule (p. 99/100) now reads `natural_attribute_value`. Pre-WP81 the distinction was
+invisible because the augmented value was itself clamped at the natural maximum; post-WP81, an
+augmented REA of 8 on a natural 5 must not count as an attribute "at its natural maximum," and
+without this change it silently would have.
+
+**Display: `natural (augmented)`, from the book's own notation** (p. 95: "Record augmentation
+ratings in parentheses next to the natural attribute rating (e.g. Strength 4 (6) …)"), on both the
+character sheet and the attribute-allocation form, collapsing to a bare number when the two are
+equal — which is every character with no attribute augmentation, so the common case is unchanged.
+This is the WP35 "reduced from N by Essence loss" precedent applied in the other direction.
+
+**A corpus finding worth recording: legacy's `+4` clamp does not bound a cyberlimb average.** The
+new oracle test over the mundane corpus (`test_cross_corpus_augmented_totals_respect_the_augmented_
+maximum`) finds 22 augmented attribute rows. All 22 respect the augmented maximum. **17 respect the
+`+4` headroom and 5 do not — all AGI or STR, all on the three fixtures with cyberlimbs** (Bastion's
+natural AGI 1 against a legacy total of 8). That is not a rules violation: legacy clamps Σ
+improvements to `+4` inside `AttributeModifiers`, then `CalculatedTotalValueCore` *replaces* the
+result with a per-limb weighted average for AGI/STR before the single remaining
+`TotalAugmentedMaximum` clamp. This engine has no per-limb attribute system at all (already a WP38
+row in the Project Overview's "Unmodeled real effects" table), so it cannot produce such a total;
+the test excludes AGI/STR from that half of its check rather than asserting a rule that isn't
+universal.
+
+**Not closed, and not reopened: WP78's "Gap 2" (`precedence0` suppression vs. plain addition).**
+Untouched by this WP — it lives in `ImprovementIndex.resolve`, one layer below where the clamp
+sits, and nothing here made it more or less reachable.

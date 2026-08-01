@@ -391,7 +391,19 @@ def test_power_selection_select_attribute_shape_raises_the_chosen_attribute() ->
 
     assert response.status_code == 200
     sheet = client.get("/character/sheet")
-    assert "<tr><td>BOD</td><td>3</td></tr>" in _compact(sheet.text)
+    # WP81: `natural (augmented)`. Human's BOD minimum is 1 and no points were spent, so the
+    # natural rating is 1 and the Power's +2 makes the augmented total 3 -- the same total this
+    # assertion checked before WP81, now shown in the rulebook's own parenthesised notation
+    # (p. 95) rather than as a bare number that hides where it came from.
+    assert "<tr><td>BOD</td><td>1 (3)</td></tr>" in _compact(sheet.text)
+
+    # WP81: the attribute-allocation form uses the same notation, so the buy screen and the sheet
+    # agree on what the player is looking at. Its rows carry the points inputs, so the assertion
+    # anchors on the Value cell followed by the metatype-range cell.
+    allocation = client.post("/ui/attributes", data={"attr_BOD": "0"})
+    assert "<td>1 (3)</td><td>1–6</td>" in _compact(allocation.text)
+    # An unaugmented attribute stays a bare number -- no parenthetical noise on the common case.
+    assert "<td>1</td><td>1–6</td>" in _compact(allocation.text)
 
 
 def test_power_selection_over_budget_is_rejected() -> None:

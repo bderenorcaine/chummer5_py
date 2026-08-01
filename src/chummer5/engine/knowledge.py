@@ -45,13 +45,15 @@ language.** Every mundane/magic-capable Priority-built fixture (`Yeti-#ffffff2.c
 still models native-language selection correctly (per the rulebook text above); it just can't be
 exercised against real corpus data, only hand-verified.
 
-**Cyberware/bioware-boosted INT/LOG do not affect this budget** (p. 90: "Cyberware/bioware-boosted
-attributes do not affect Knowledge-skill-point or Contact-point formulas"). `character.attribute_
-value(...)` is used directly anyway, mirroring `chummer5.engine.resources`'s identical choice for
-CHA/contact points -- nothing in this engine's current scope ever produces an `ImprovementType
-.ATTRIBUTE` bonus targeting INT or LOG (checked directly: no offered SR5 quality/power/cyberware/
-bioware item does), so the distinction has no observable effect yet, the same "real rule, currently
-unobservable" note `chummer5.engine.resources`'s own docstring already makes for CHA.
+**Cyberware/bioware-boosted INT/LOG do not affect this budget** (p. 95: "Attributes boosted by
+cyberware or bioware do not affect the calculation for things such as points for Knowledge skills
+or Contacts"). **WP81 makes that real**: `free_knowledge_points` reads
+`character.natural_attribute_value(...)`, mirroring `chummer5.engine.resources`'s identical switch
+for CHA/contact points. Through WP80 both read the augmented `attribute_value` instead and got away
+with it, since nothing in this engine's scope ever produces an `ImprovementType.ATTRIBUTE` bonus
+targeting INT or LOG (checked directly: no offered SR5 quality/power/cyberware/bioware item does) --
+the distinction still has no observable effect on any buildable character, it is simply no longer
+load-bearing that it doesn't.
 
 **WP53 — Step Seven's Karma-funded Knowledge/Language rating increases.** Core rulebook p.106-107,
 "KARMA ADVANCEMENT TABLE FOR SKILLS": Knowledge Skills and Language Skills share one row,
@@ -140,10 +142,18 @@ def native_language_limit(character: Character) -> int:
 
 def free_knowledge_points(character: Character) -> int:
     """`(Intuition + Logic) * 2` -- see module docstring for the rulebook citation and why
-    augmented INT/LOG (were anything in this engine's scope to produce one) would be excluded.
+    augmented INT/LOG are excluded.
+
+    **WP81**: reads `natural_attribute_value`, not `attribute_value`, now that the two can differ.
+    Core rulebook p. 95 names this calculation specifically ("Attributes boosted by cyberware or
+    bioware do not affect the calculation for things such as points for Knowledge skills or
+    Contacts"), and legacy's `CharacterSettings.KnowledgeSkillPointsExpression` default says the
+    same thing in its own vocabulary: `({INTUnaug} + {LOGUnaug}) * 2`. A no-op for every character
+    this engine can build today (nothing in any loaded SR5 catalog augments INT or LOG), but
+    correct by construction rather than by that coincidence.
     """
     return (
-        character.attribute_value("INT") + character.attribute_value("LOG")
+        character.natural_attribute_value("INT") + character.natural_attribute_value("LOG")
     ) * FREE_POINTS_PER_INT_LOG
 
 
