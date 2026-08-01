@@ -399,7 +399,7 @@ WP88 authors the fixture on top of all three.
   a round-trip check that the widened field can express `razorboy.json`'s `cyberware_purchases`
   exactly (same Essence, same nuyen, same Capacity per parent).
 
-- [ ] **WP87 — Harness: express the spend side of the budgets.** Closes the harness half of G12.
+- [x] **WP87 — Harness: express the spend side of the budgets.** Closes the harness half of G12.
   Goal: add the `SyntheticCharacter` fields for everything a character *buys* that isn't
   cyberware/bioware/foci — gear, Rating-priced gear, Lifestyle, contacts, Knowledge skills,
   languages, and Karma-to-Nuyen conversion — so a fixture can assert that a build's budgets balance,

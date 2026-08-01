@@ -16,6 +16,7 @@ from tests.fixtures.native_saves import RAZORBOY_SAVE, native_save_path
 from tests.fixtures.synthetic import (
     CyberwareEntryPick,
     CyberwarePick,
+    SyntheticCharacter,
     assert_fixture,
     build_synthetic,
     cyberware_purchase_request,
@@ -30,13 +31,21 @@ from tests.fixtures.synthetic_fixtures import (
     SYNTHETIC_FIXTURES,
 )
 
+from chummer5.data.cyberware_subsystems import load_cyberware_entries
+from chummer5.data.lifestyle import load_lifestyles
+from chummer5.data.metatypes import load_metatypes
+from chummer5.data.priorities import load_priorities
+from chummer5.data.qualities import load_qualities
+from chummer5.data.skills import load_skills
 from chummer5.engine.build_method import (
     PRIORITY_BUILD_METHOD,
     SUM_TO_TEN_BUILD_METHOD,
     SUM_TO_TEN_TARGET,
     sum_to_ten_total,
 )
-from chummer5.io.save_format import from_json
+from chummer5.engine.knowledge import KnowledgeSkillPick, LanguageSkillPick
+from chummer5.engine.resources import Contact
+from chummer5.io.save_format import build_character, from_json
 
 
 @pytest.mark.parametrize("fixture", SYNTHETIC_FIXTURES, ids=lambda f: f.name)
@@ -278,3 +287,126 @@ def test_declaring_a_bundled_subsystem_is_an_error() -> None:
     """
     with pytest.raises(ValueError, match="bundled free"):
         cyberware_purchase_request(CyberwarePick("Cyberears", rating=3, plugins=("Sound Link",)))
+
+
+# `razorboy.json`'s own spend side, re-expressed in WP87's widened authoring fields. WP88 authors
+# the whole character; this is the narrow proof that the *fields* can say what the save says, landed
+# before the fixture that depends on them.
+RAZORBOY_GEAR = (
+    "Ammo: Gel Rounds",
+    "Ammo: Regular Ammo",
+    "Armor Jacket",
+    "Ares Alpha",
+    "Hermes Ikon",
+    "Ares Predator V",
+)
+RAZORBOY_KNOWLEDGE = (
+    KnowledgeSkillPick(name="Trivia Games", category="Interest", rating=3),
+    KnowledgeSkillPick(name="Combat Tactics", category="Professional", rating=3),
+    KnowledgeSkillPick(name="Underground Fight Scene", category="Interest", rating=3),
+    KnowledgeSkillPick(name="Area Knowledge (Seattle)", category="Street", rating=3),
+)
+
+
+def _razorboy_spend_side() -> SyntheticCharacter:
+    """A Sum-to-Ten fixture carrying razorboy.json's exact priorities, attributes and spend side.
+
+    Deliberately *not* the whole character — the skills, qualities and cyberware are WP88's job.
+    What this pins down is that the new fields, wired in `build_character`'s own order, reproduce
+    the same budget arithmetic the real load path does off the same inputs.
+    """
+    return SyntheticCharacter(
+        name="razorboy spend-side (WP87)",
+        metatype="Human",
+        heritage_letter="E",
+        attributes_letter="B",
+        skills_letter="A",
+        resources_letter="B",
+        build_method=SUM_TO_TEN_BUILD_METHOD,
+        attribute_points={
+            "BOD": 2,
+            "AGI": 3,
+            "REA": 3,
+            "STR": 4,
+            "CHA": 2,
+            "INT": 3,
+            "LOG": 1,
+            "WIL": 2,
+            "EDG": 1,
+        },
+        gear=RAZORBOY_GEAR,
+        rating_gear=(("Fake SIN", 4),),
+        lifestyle=("Medium", 1),
+        karma_converted=4,
+        cyberware=RAZORBOY_CYBERWARE,
+        contacts=(
+            Contact(name="Heterodyne", connection=4, loyalty=1),
+            Contact(name="Stitch", connection=4, loyalty=3),
+        ),
+        knowledge_skills=RAZORBOY_KNOWLEDGE,
+        languages=(LanguageSkillPick(name="English", rating=0, native=True),),
+        expected={},
+        citations={},
+    )
+
+
+def test_spend_side_fields_reproduce_the_saves_nuyen_and_knowledge_budgets() -> None:
+    """WP87's acceptance criterion: the new fields reproduce `razorboy.json`'s ¥580 remaining and
+    its 12/12 Knowledge points.
+
+    Asserted against the save's *own* rebuilt character, not against transcribed constants — if the
+    harness and `build_character` ever disagree about the evaluation order or which budget a cost
+    lands in, this fails, which is the whole point of following that function's order rather than
+    inventing one.
+    """
+    save = from_json(native_save_path(RAZORBOY_SAVE).read_text(encoding="utf-8"))
+    from_save = build_character(
+        save,
+        metatypes=load_metatypes(),
+        priorities=load_priorities(),
+        skills=load_skills(),
+        qualities=load_qualities(),
+        lifestyles=load_lifestyles(),
+        cyberware=load_cyberware_entries(),
+    )
+    character = build_synthetic(_razorboy_spend_side())
+
+    # ¥275,000 from Resources B, topped up to ¥283,000 by converting 4 Karma; ¥580 survives gear,
+    # Rating-priced gear, a month of Medium Lifestyle and ¥260,000 of chrome.
+    assert resolve_metric(character, "nuyen:budget") == 275000
+    assert resolve_metric(character, "nuyen:available") == 283000
+    assert resolve_metric(character, "nuyen:lifestyle_cost") == 5000
+    assert resolve_metric(character, "nuyen:remaining") == 580
+    assert from_save.resources_selection is not None
+    assert (
+        resolve_metric(character, "nuyen:remaining")
+        == from_save.resources_selection.nuyen_remaining
+    )
+
+    # (natural INT 4 + natural LOG 2) x 2 = 12, spent to the pin on four Rating-3 Knowledge skills;
+    # the native language is free and doesn't count against it (p. 95).
+    assert resolve_metric(character, "knowledge:free_points") == 12
+    assert resolve_metric(character, "knowledge:points_spent") == 12
+    assert resolve_metric(character, "knowledge:native_language_limit") == 1
+    assert from_save.knowledge_selection is not None
+    assert (
+        resolve_metric(character, "knowledge:free_points")
+        == from_save.knowledge_selection.free_points
+    )
+
+    # natural CHA 3 x 3 = 9 free contact points; 5 + 7 = 12 spent, so 3 excess at 1 Karma each.
+    assert resolve_metric(character, "contacts:free_points") == 9
+    assert resolve_metric(character, "contacts:points_spent") == 12
+    assert resolve_metric(character, "contacts:karma_cost") == 3
+
+    # Knowledge dice pools: Interest/Street link to INT, Academic/Professional to LOG (p. 89).
+    assert resolve_metric(character, "knowledge:pool:Trivia Games") == 7  # 3 + INT 4
+    assert resolve_metric(character, "knowledge:pool:Combat Tactics") == 5  # 3 + LOG 2
+
+
+def test_native_language_has_no_dice_pool() -> None:
+    """A native pick carries fluency "N", not a rating, so asking for its pool is an error rather
+    than a silently wrong `0 + INT`."""
+    character = build_synthetic(_razorboy_spend_side())
+    with pytest.raises(KeyError, match="native language"):
+        resolve_metric(character, "languages:pool:English")

@@ -123,6 +123,18 @@ installs those itself. The new `cyberware:<name path>:capacity_budget`/`:capacit
 catalog names, which is what makes "these plugins fill the parent exactly" assertable at all: the
 engine only ever checks that they *fit*.
 
+**WP87 (landed)** adds the *spend* side — `gear`, `rating_gear`, `lifestyle`, `karma_converted`,
+`contacts`, `knowledge_skills`, `languages`, `karma_knowledge_points` — closing the harness half of
+gap G12. Every one of these already had an engine function `build_synthetic()` simply never called,
+so a fixture could prove its dice pools were right but not that its *budgets balanced*. They're
+wired in `io/save_format.build_character`'s own evaluation order, not a new one: knowledge after
+qualities (Bilingual's `NATIVE_LANGUAGE_LIMIT` Improvement must already be on the index), contacts
+and Lifestyle before Resources, Resources before cyberware (which now draws from `nuyen_remaining`
+rather than the raw priority figure — identical for WP73-76, which buy no gear), and
+`create_resources_selection` re-called as each later shared-budget spender becomes known. The
+`nuyen:*`, `contacts:*` and `knowledge:*`/`languages:*` metric keys read the results; the two
+free-point budgets deliberately read **natural**, not augmented, attributes (p. 95).
+
 ## Native save-format fixtures (Phase S / WP85)
 
 `saves/` holds files in **this project's own save format**, kept byte-for-byte as the web UI wrote

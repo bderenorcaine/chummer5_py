@@ -64,6 +64,18 @@ field at a time rather than speculatively modelling shapes no fixture yet exerci
   `:capacity_cost`), which is what makes "this parent's plugins fill it exactly" assertable rather
   than merely "the engine didn't reject them" — the boundary case a real player build turned out to
   sit on.
+- WP87 — the spend side of the budgets (the harness half of G12) — **landed**: adds the `gear`/
+  `rating_gear`/`lifestyle`/`karma_converted`/`contacts`/`knowledge_skills`/`languages`/
+  `karma_knowledge_points` fields below. Every one of these already had an engine function
+  `build_synthetic()` simply never called, so a fixture could assert that its dice pools were right
+  but not that its *budgets balanced*. Wired in `chummer5.io.save_format.build_character`'s own
+  order rather than a new one — knowledge after qualities (Bilingual's `NATIVE_LANGUAGE_LIMIT`
+  Improvement must already be on the index), contacts and Lifestyle before Resources, Resources
+  before cyberware (which draws from `nuyen_remaining`, not from the raw priority figure), and the
+  same "re-call `create_resources_selection` once the next shared-budget spender is known" pattern
+  after cyberware/bioware and again after foci. A fixture that disagrees with the save path is a
+  fixture that proves nothing. Adds the `nuyen:*`/`contacts:*`/`knowledge:*`/`languages:*` metric
+  keys, including the two budgets that read **natural**, not augmented, attributes (p. 95).
 - WP76 — Sum-to-Ten whole-character (G7) — **landed**: adds the `build_method` field below, which
   selects *which validity rule* `build_synthetic()` applies to the same five priority letters —
   Priority's bijection (distinct A-E, the only rule WP72-75 knew) or Sum-to-Ten's repeats-allowed,
@@ -92,6 +104,7 @@ from decimal import Decimal
 from chummer5.data.bioware import Bioware, load_bioware
 from chummer5.data.cyberware_subsystems import CyberwareEntry, load_cyberware_entries
 from chummer5.data.foci import Focus, load_foci
+from chummer5.data.lifestyle import load_lifestyles
 from chummer5.data.mentors import load_mentors
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
@@ -130,6 +143,17 @@ from chummer5.engine.derived import (
     stun_condition_monitor,
 )
 from chummer5.engine.foci import apply_foci_improvements, create_foci_selection
+from chummer5.engine.knowledge import (
+    KnowledgeSelection,
+    KnowledgeSkillPick,
+    LanguageSkillPick,
+    create_karma_knowledge_selection,
+    create_knowledge_selection,
+    free_knowledge_points,
+    knowledge_dice_pool,
+    language_dice_pool,
+)
+from chummer5.engine.lifestyle import create_lifestyle_selection
 from chummer5.engine.magic import (
     apply_magic_skill_grant_improvements,
     create_magic_selection,
@@ -140,6 +164,14 @@ from chummer5.engine.qualities import (
     apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
+)
+from chummer5.engine.resources import (
+    Contact,
+    ContactSelection,
+    ResourcesSelection,
+    available_nuyen,
+    create_contact_selection,
+    create_resources_selection,
 )
 from chummer5.engine.skills import (
     create_karma_skill_selection,
@@ -160,6 +192,7 @@ _TRADITIONS = load_traditions()
 _SPELLS = load_spells()
 _MENTORS = load_mentors()
 _FOCI = load_foci()
+_LIFESTYLES = load_lifestyles()
 
 _SKILLS_BY_NAME = {s.name: s for s in _SKILLS}
 _QUALITIES_BY_NAME = {q.name: q for q in _QUALITIES}
@@ -269,6 +302,24 @@ class SyntheticCharacter:
       count cap (<= Magic) and total-Force cap (<= Magic x 2) read the Essence-reduced Magic rating;
       nuyen is drawn from whatever the Resources pool has left after cyberware/bioware, Karma from
       `character.karma_remaining`.
+    - `gear` / `rating_gear` / `lifestyle` / `karma_converted` (WP87): the *spend* side of Step
+      Six's shared nuyen pool. `gear` is flat starter-gear catalog names (repeats = quantity);
+      `rating_gear` is `(name, Rating)` pairs for the Rating-priced catalog rows (WP66), whose cost
+      is `Rating x cost_per_rating`; `lifestyle` is a `(tier name, months)` pair, `None` meaning
+      "this fixture doesn't model one" — note SR5 makes the choice mandatory in play
+      (`chummer5.engine.lifestyle`), so `None` is a statement about the fixture's scope, not about a
+      legal character; `karma_converted` is Step Six's Karma-to-Nuyen conversion, which *enlarges*
+      the pool at 2,000¥ a point.
+    - `contacts` (WP87): `chummer5.engine.resources.Contact` values, reused directly rather than
+      mirrored — a contact has no catalog to key a name against (the player invents it), which is
+      the same reason `chummer5.io.save_format` reuses the type too. Spending past the free
+      `natural CHA x 3` budget costs Karma from the unified ledger.
+    - `knowledge_skills` / `languages` / `karma_knowledge_points` (WP87): the Knowledge/Language
+      spend, likewise reusing `chummer5.engine.knowledge.KnowledgeSkillPick`/`LanguageSkillPick`
+      for the same no-catalog reason. Resolved *after* qualities, so Bilingual's
+      `NATIVE_LANGUAGE_LIMIT` Improvement is already on the index when the native-language cap is
+      read — the ordering `build_character` documents. `karma_knowledge_points` is Step Seven's
+      Karma top-up on a committed pick, at `new Rating x 1` per step.
 
     `expected` maps a metric key (see `resolve_metric`) to its hand-derived target value;
     `citations` maps each of those keys to the source the value was derived from (a `priorities.xml`
@@ -306,6 +357,15 @@ class SyntheticCharacter:
     karma_skill_points: Mapping[str, int] = field(default_factory=dict)
     karma_group_points: Mapping[str, int] = field(default_factory=dict)
     karma_specializations: Mapping[str, str] = field(default_factory=dict)
+    # WP87 -- the spend side of the Step Six nuyen pool and the free Contact/Knowledge budgets.
+    gear: tuple[str, ...] = ()
+    rating_gear: tuple[tuple[str, int], ...] = ()
+    lifestyle: tuple[str, int] | None = None
+    karma_converted: int = 0
+    contacts: tuple[Contact, ...] = ()
+    knowledge_skills: tuple[KnowledgeSkillPick, ...] = ()
+    languages: tuple[LanguageSkillPick, ...] = ()
+    karma_knowledge_points: Mapping[str, int] = field(default_factory=dict)
 
 
 def _skill_by_name(name: str) -> Skill:
@@ -514,13 +574,70 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
             apply_mentor_spirit_improvements(character, selection.mentor_spirit)
         character = replace(character, quality_selection=selection)
 
+    # Knowledge/Language (WP87) resolves *here*, after quality improvements and before anything
+    # else — the same position `build_character` puts it in, and for its stated reason: Bilingual's
+    # NATIVE_LANGUAGE_LIMIT Improvement has to already be on the index when
+    # `create_knowledge_selection` reads the native-language cap. Built unconditionally (an empty
+    # roster is a valid, zero-spend selection) so `knowledge:free_points` is assertable on a fixture
+    # that deliberately buys nothing.
+    knowledge_selection = create_knowledge_selection(
+        character, fixture.knowledge_skills, fixture.languages
+    )
+    character = replace(character, knowledge_selection=knowledge_selection)
+
+    # Contacts (WP87), likewise unconditional: an empty selection costs 0 Karma and still reports
+    # the free `natural CHA x 3` budget. Spending past that budget draws on the unified Karma
+    # ledger, so this must precede every Step Seven spend below.
+    character = replace(
+        character, contact_selection=create_contact_selection(character, fixture.contacts)
+    )
+
+    # Step Six's shared nuyen pool (WP87). Lifestyle is priced first (its cost is an input to the
+    # Resources check, not a separate budget — see `chummer5.engine.lifestyle`), then gear and
+    # Rating-priced gear are validated against the priority nuyen plus whatever Karma-to-Nuyen
+    # conversion added. Cyberware/bioware/foci are folded in by the later re-calls below, exactly
+    # the sequence `build_character` performs.
+    lifestyle_selection = (
+        create_lifestyle_selection(fixture.lifestyle[0], fixture.lifestyle[1], _LIFESTYLES)
+        if fixture.lifestyle is not None
+        else None
+    )
+    lifestyle_cost = lifestyle_selection.total_cost if lifestyle_selection is not None else 0
+
+    def _resources(
+        cyberware_cost: int = 0, bioware_cost: int = 0, foci_cost: int = 0
+    ) -> ResourcesSelection:
+        """Re-derive the Resources selection with the shared-budget spenders known so far.
+
+        Called once up front (so cyberware has a real `nuyen_remaining` to draw against), again
+        once cyberware/bioware are resolved, and a third time once foci are — the "re-call the
+        whole check as each later spender becomes known" pattern `build_character` documents, rather
+        than a running subtraction that would never re-validate the combined total.
+        """
+        return create_resources_selection(
+            fixture.resources_letter,
+            _PRIORITIES,
+            gear_names=fixture.gear,
+            rating_gear=fixture.rating_gear,
+            lifestyle_cost=lifestyle_cost,
+            cyberware_cost=cyberware_cost,
+            bioware_cost=bioware_cost,
+            foci_cost=foci_cost,
+            karma_converted=fixture.karma_converted,
+        )
+
+    resources_selection = _resources()
+    character = replace(
+        character, resources_selection=resources_selection, lifestyle_selection=lifestyle_selection
+    )
+
     if fixture.cyberware or fixture.bioware:
         # Cyberware and bioware draw from one shared Resources-priority nuyen pool and reduce one
         # shared Essence pool. The engine resolves them in a fixed order — cyberware first (unaware
         # of bioware), bioware second (aware of cyberware) — see chummer5.engine.bioware's docstring
-        # for why. The fixture models no gear/Lifestyle spend, so the full Resources nuyen is
-        # available to the two of them; bioware sees what cyberware left, mirroring the web layer.
-        nuyen_budget = _PRIORITIES.resources[fixture.resources_letter].nuyen
+        # for why. WP87: the budget is whatever gear/Lifestyle left of the (possibly Karma-topped)
+        # pool, not the raw priority figure — identical for the WP73-76 fixtures, which buy neither.
+        nuyen_budget = resources_selection.nuyen_remaining
 
         cyberware_selection = create_cyberware_tree_selection(
             [cyberware_purchase_request(pick) for pick in fixture.cyberware],
@@ -539,6 +656,15 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
         )
         apply_bioware_improvements(character, bioware_selection)
         character = replace(character, bioware_selection=bioware_selection)
+
+        # Fold both back into the Resources selection so `nuyen:remaining` reflects the true
+        # gear + Lifestyle + cyberware + bioware spend (WP34/WP45's own re-call pattern). Guaranteed
+        # to re-validate: the two checks above already confirmed the combined spend fits.
+        resources_selection = _resources(
+            cyberware_cost=cyberware_selection.nuyen_spent,
+            bioware_cost=bioware_selection.nuyen_spent,
+        )
+        character = replace(character, resources_selection=resources_selection)
 
     # Step Seven's leftover-Karma spend (WP75), in the fixed order
     # `chummer5.io.save_format.build_character` documents: attributes first, then skills, each
@@ -573,6 +699,16 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
             ),
         )
 
+    # WP87: the Knowledge/Language half of Step Seven, third in `build_character`'s own order
+    # (attributes, then Active skills, then Knowledge) and against the budget those two left.
+    if fixture.karma_knowledge_points:
+        character = replace(
+            character,
+            karma_knowledge_selection=create_karma_knowledge_selection(
+                character, dict(fixture.karma_knowledge_points), character.karma_remaining
+            ),
+        )
+
     # Spells and Foci (WP74) come *after* cyberware/bioware so both read the Essence-reduced Magic
     # rating (`attribute_value("MAG")`): the "Magic Rating x 2" spell cap and the foci count/Force
     # caps all key off the finished MAG, so the Essence→Magic loss (G3) actually constrains them.
@@ -598,24 +734,28 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
         character = replace(character, spell_selection=spell_selection)
 
     if fixture.foci:
-        # Foci draw nuyen from whatever the Resources pool has left after cyberware/bioware, and
-        # Karma from the unified ledger (Phase O) — the same shared-pool accounting the web layer
-        # does. No bound spirits in any current fixture, so nothing precedes foci in the Karma
-        # order.
-        spent_nuyen = 0
-        if character.cyberware_selection is not None:
-            spent_nuyen += character.cyberware_selection.nuyen_spent
-        if character.bioware_selection is not None:
-            spent_nuyen += character.bioware_selection.nuyen_spent
+        # Foci draw nuyen from whatever the Resources pool has left after gear/Lifestyle/cyberware/
+        # bioware, and Karma from the unified ledger (Phase O) — the same shared-pool accounting the
+        # web layer does. WP87: `nuyen_remaining` already nets out all four (the re-call above), so
+        # this reads it rather than re-subtracting the augmentation spend by hand. No bound spirits
+        # in any current fixture, so nothing precedes foci in the Karma order.
         foci_selection = create_foci_selection(
             [(_focus_by_name(n).id, force) for n, force in fixture.foci],
             character,
             _FOCI,
-            nuyen_budget=_PRIORITIES.resources[fixture.resources_letter].nuyen - spent_nuyen,
+            nuyen_budget=resources_selection.nuyen_remaining,
             karma_budget=character.karma_remaining,
         )
         apply_foci_improvements(character, foci_selection)
-        character = replace(character, foci_selection=foci_selection)
+        # The last shared-budget spender: fold its cost in too, so `nuyen:remaining` is final.
+        resources_selection = _resources(
+            cyberware_cost=resources_selection.cyberware_cost,
+            bioware_cost=resources_selection.bioware_cost,
+            foci_cost=foci_selection.nuyen_cost,
+        )
+        character = replace(
+            character, foci_selection=foci_selection, resources_selection=resources_selection
+        )
 
     return character
 
@@ -660,6 +800,38 @@ def _capacity_metric(
     return read(node)
 
 
+def _resources_of(character: Character) -> ResourcesSelection:
+    assert character.resources_selection is not None
+    return character.resources_selection
+
+
+def _contacts_of(character: Character) -> ContactSelection:
+    assert character.contact_selection is not None
+    return character.contact_selection
+
+
+def _knowledge_of(character: Character) -> KnowledgeSelection:
+    assert character.knowledge_selection is not None
+    return character.knowledge_selection
+
+
+def _nuyen_available(character: Character) -> int:
+    """The whole Step Six pool: the Resources priority's nuyen plus whatever Karma was converted."""
+    selection = _resources_of(character)
+    return available_nuyen(selection.resources_letter, _PRIORITIES, selection.karma_converted)
+
+
+def _karma_knowledge_points(character: Character, name: str) -> int:
+    """Step Seven Karma points added to one committed Knowledge/Language pick, 0 if none.
+
+    `KarmaKnowledgeSelection` records the *increase* rather than rewriting the underlying pick, so
+    a finished rating (and therefore a dice pool) is the pick's own rating plus this.
+    """
+    if character.karma_knowledge_selection is None:
+        return 0
+    return character.karma_knowledge_selection.points.get(name, 0)
+
+
 def resolve_metric(character: Character, key: str) -> object:
     """Compute one named derived metric off a finalized synthetic `Character`.
 
@@ -694,7 +866,21 @@ def resolve_metric(character: Character, key: str) -> object:
       resulting *value* is already visible through `attr:<CODE>`, which sums both point sources)
     - `karma_skill:karma_cost` / `karma_skill:broken_groups` (WP75) — the Step Seven skill-side
       spend's own Karma cost, and the set of skill-group names it broke (a `frozenset[str]`)
+    - `karma_knowledge:karma_cost` (WP87) — Step Seven's Knowledge/Language spend's own Karma cost
     - `karma_spent` / `karma_remaining`
+    - `nuyen:available` / `nuyen:budget` / `nuyen:gear_spent` / `nuyen:lifestyle_cost` /
+      `nuyen:remaining` (WP87) — the Step Six pool and its bottom line. `available` is the whole
+      pool (priority nuyen + Karma-to-Nuyen), `budget` the priority half alone, `gear_spent` gear +
+      Rating-priced gear only, and `remaining` what's left once gear, Lifestyle, cyberware, bioware
+      and foci are all accounted for — the one figure that proves a build's budgets balance
+    - `contacts:free_points` / `contacts:points_spent` / `contacts:karma_cost` (WP87) — the free
+      `natural CHA x 3` budget, the spend against it, and the Karma the overspend cost
+    - `knowledge:free_points` / `knowledge:points_spent` / `knowledge:native_language_limit` (WP87)
+      — likewise for `(natural INT + natural LOG) x 2`; both budgets read **natural**, not
+      augmented, attributes (p. 95)
+    - `knowledge:pool:<Name>` / `languages:pool:<Name>` (WP87) — one Knowledge/Language pick's dice
+      pool at its *finished* rating (its own plus any Step Seven Karma top-up). A native language
+      raises rather than returning a pool, since fluency "N" has no rating
 
     A key naming a skill requires the fixture to have committed a `skill_allocation` (every WP72
     fixture does); a `cyberware:`/`bioware:`/`karma_attribute:`/`karma_skill:` key requires the
@@ -739,6 +925,27 @@ def resolve_metric(character: Character, key: str) -> object:
     if key == "spells:karma_cost":
         assert character.spell_selection is not None
         return character.spell_selection.karma_cost
+    if key.startswith("knowledge:pool:"):
+        assert character.knowledge_selection is not None
+        name = key[len("knowledge:pool:") :]
+        pick = next(
+            (p for p in character.knowledge_selection.knowledge_skills if p.name == name), None
+        )
+        if pick is None:
+            raise KeyError(f"resolve_metric: no knowledge skill named {name!r}")
+        # WP87: read the *finished* rating -- a Step Seven Karma top-up raises the committed pick's
+        # rating without rewriting the pick itself, so the pool must add it back in.
+        rating = pick.rating + _karma_knowledge_points(character, name)
+        return knowledge_dice_pool(character, pick.category, rating)
+    if key.startswith("languages:pool:"):
+        assert character.knowledge_selection is not None
+        name = key[len("languages:pool:") :]
+        pick = next((p for p in character.knowledge_selection.languages if p.name == name), None)
+        if pick is None:
+            raise KeyError(f"resolve_metric: no language named {name!r}")
+        if pick.native:
+            raise KeyError(f"resolve_metric: {name!r} is a native language and has no dice pool")
+        return language_dice_pool(character, pick.rating + _karma_knowledge_points(character, name))
     if key == "karma_attribute:karma_cost":
         assert character.karma_attribute_selection is not None
         return character.karma_attribute_selection.karma_cost
@@ -748,6 +955,9 @@ def resolve_metric(character: Character, key: str) -> object:
     if key == "karma_skill:broken_groups":
         assert character.karma_skill_selection is not None
         return character.karma_skill_selection.broken_groups
+    if key == "karma_knowledge:karma_cost":
+        assert character.karma_knowledge_selection is not None
+        return character.karma_knowledge_selection.karma_cost
 
     fixed = {
         "initiative": initiative_value,
@@ -765,6 +975,24 @@ def resolve_metric(character: Character, key: str) -> object:
         "power_points": lambda c: c.power_points,
         "karma_spent": lambda c: c.karma_spent,
         "karma_remaining": lambda c: c.karma_remaining,
+        # WP87 -- the spend side. `nuyen:available` is the whole pool (priority + Karma-to-Nuyen);
+        # `nuyen:budget` the priority half alone; `nuyen:gear_spent` gear + Rating-priced gear only;
+        # `nuyen:remaining` what's left once gear, Lifestyle, cyberware, bioware and foci are all
+        # accounted for -- the one figure that proves a build's budgets actually balance.
+        "nuyen:available": _nuyen_available,
+        "nuyen:budget": lambda c: _resources_of(c).nuyen_budget,
+        "nuyen:gear_spent": lambda c: _resources_of(c).nuyen_spent,
+        "nuyen:remaining": lambda c: _resources_of(c).nuyen_remaining,
+        "nuyen:lifestyle_cost": lambda c: _resources_of(c).lifestyle_cost,
+        # Free-point budgets. Both read *natural* attributes, not augmented ones (p. 95: attributes
+        # boosted by cyberware/bioware don't affect the point calculations for Contacts or Knowledge
+        # skills) -- exactly the distinction G12 exists to pin down.
+        "contacts:free_points": lambda c: _contacts_of(c).free_points,
+        "contacts:points_spent": lambda c: _contacts_of(c).points_spent,
+        "contacts:karma_cost": lambda c: _contacts_of(c).karma_cost,
+        "knowledge:free_points": free_knowledge_points,
+        "knowledge:points_spent": lambda c: _knowledge_of(c).points_spent,
+        "knowledge:native_language_limit": lambda c: _knowledge_of(c).native_language_limit,
     }
     if key in fixed:
         return fixed[key](character)
