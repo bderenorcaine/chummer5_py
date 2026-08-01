@@ -114,7 +114,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | M | Magic expansion (Bound Spirits, Foci, Mentor Spirits) | done (WP46-48) | [phase-m-magic-expansion.md](plan/phase-m-magic-expansion.md) |
 | N | Expanded skill support (Knowledge/Language, specializations) | done (WP49-50) | [phase-n-skill-support.md](plan/phase-n-skill-support.md) |
 | O | Karma-buying (chargen-time leftover-Karma spend) | done (WP51-56, WP89) | [phase-o-karma-buying.md](plan/phase-o-karma-buying.md) |
-| P | Rigger support | research-intro only, no WPs assigned | [phase-p-rigger-support.md](plan/phase-p-rigger-support.md) |
+| P | Rigger support | research pass done (WP90); WP91-96 scoped, unstarted | [phase-p-rigger-support.md](plan/phase-p-rigger-support.md) |
 | Q | Spec reorganization (phase-cut point) | done (WP57) | [phase-q-docs-reorg.md](plan/phase-q-docs-reorg.md) |
 | R | Architecture cleanup / refactoring | done (WP58, WP62-63) | [phase-r-architecture-cleanup.md](plan/phase-r-architecture-cleanup.md) |
 | S | Test fixture expansion | done (WP59, WP72-76, WP85-88) | [phase-s-test-fixtures.md](plan/phase-s-test-fixtures.md) |
@@ -122,7 +122,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | U | UI bugfixes round 2 | done (WP64-66) | [phase-u-ui-bugfixes-2.md](plan/phase-u-ui-bugfixes-2.md) |
 | V | UI improvement requests | done (WP67-71, WP83-84) | [phase-v-ui-improvements.md](plan/phase-v-ui-improvements.md) |
 
-Next unclaimed WP number: **WP90** (see Phase P's own file for why WP57-59 were claimed; Phase T
+Next unclaimed WP number: **WP97** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V
 claimed WP64-71 on 2026-07-27 from a second manual-testing pass — see those phase files for scope;
 Phase S's WP59 research pass claimed WP72-76 on 2026-07-29 for its synthetic-fixture WP list;
@@ -137,4 +137,6 @@ claimed WP83-84 on 2026-08-01 from a second manual-testing pass over the now-com
 Phase S claimed WP85-88 the same day, reopening a phase marked complete after a player-authored
 save file walked through six gaps its own §2 inventory never enumerated — see that file's §6; and
 Phase O claimed WP89 from the same pass, for a stale WP43 deferral that WP51 silently made live).
-WP85-89 all landed the same day, closing both of those reopened phases.
+WP85-89 all landed the same day, closing both of those reopened phases. Phase P then claimed
+**WP90-96** the same day: WP90 is its long-pending research pass (landed), and WP91-96 are the
+implementation breakdown that pass produced — see that phase file's own §7.

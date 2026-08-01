@@ -1090,3 +1090,64 @@ the flat 0-10 rulebook cap, since that one is a property of the conversion alone
 the intended direction, not a regression: legacy's own `<karma>2</karma>` for the same character is
 likewise net of the conversion. No other fixture or test shifted — the five synthetic fixtures all
 convert 0.
+
+## 2026-08-01 — Phase P, WP90: the rigger research pass, and three corrections it forced
+
+**Correction: the modification-slot system Phase P was scoped around is Rigger 5.0, not SR5 core.**
+Phase P's 2026-07-21 intro justified excluding vehicle modifications partly by their shape —
+"multiple separate per-category modification-slot pools (Cosmetic/Powertrain/Protection/Weapons,
+each sized differently per vehicle)." Searched the full 489-page core rulebook: `powertrain`,
+`modification slot` and `mod slot` appear **nowhere**. That system is `source=R5`; `vehicles.xml`
+carries it (`<modcategories>`, `<powertrainmodslots>`, …) because Chummer supports every book. Of
+that file's 197 `<mods>` rows, 170 are `R5` and exactly **2** are `SR5` — Rigger Interface
+(1,000¥/Avail 4) and Manual Operation (+500¥/+1) — plus 7 weapon-mount rows. **The ruling stands;
+its premise doesn't.** Recorded because a future reader would otherwise reasonably conclude the
+exclusion bought more than it did.
+
+**The one thing that exclusion actually costs, now known:** p. 265 — "Drones are designed for use by
+riggers, and have been designed with the rigger interface built in. Nearly all vehicles need to have
+the interface added as an after-factory option." `vehicles.xml` agrees exactly (all 13 SR5 drone rows
+bundle a `Rigger Interface`; none of the 29 vehicle rows do). So under the no-mods ruling a bought
+*drone* is riggable and a bought *vehicle* is not. **Ruling: this becomes a documented registry row
+(Phase P's WP95), not a carve-out.** Reversing it for one 1,000¥ item would reopen the whole
+modification system for the sake of a flag no in-play subsystem reads.
+
+**Finding, not a decision: Rigger Command Consoles and cyberdecks have been purchasable since WP21,
+with their entire stat block discarded.** `STARTER_GEAR_CATALOG` already offers 11 RCCs, 9
+cyberdecks and 7 commlinks as flat-cost gear; `StarterGearItem` has no field for `<devicerating>`,
+`<attack>`, `<sleaze>`, `<dataprocessing>`, `<firewall>`, `<programs>` or `<attributearray>`, so
+none of it is loaded or shown. This materially reshapes Phase P: the RCC/cyberdeck half of the phase
+is a *display and verification* job (WP94), not a new-subsystem one, and the phase's only genuinely
+new purchase flow is vehicles/drones.
+
+**Ruling on what a stock Matrix device needs: record and display, derive nothing.** Every
+RCC/cyberdeck/commlink number is a printed constant of the item, and no Matrix rules exist to consume
+it — the same "don't build machinery nothing downstream needs yet" call WP27 made for Adept Powers.
+**The one exception, and the only computed number the phase adds:** vehicle Condition Monitor
+`12 + ⌈Body/2⌉`, drone `6 + ⌈Body/2⌉` (p. 199) — the one printed-page value a player can't read off
+the catalog table.
+
+**Finding: `Control Rig` is offered by today's UI with 100% of its effect unmodeled and no registry
+row.** It entered the picker with WP42's full 87-row catalog (the same commit that made five of
+WP77's rows reachable) and carries no `unmodeled_effect_note`. Its entire printed payload (p. 266) is
+an in-play, jumped-in limit bonus to a *device*; there is no character-level term at all. Under the
+2026-07-24 policy that is fine to offer — but only *with* the row, which is missing. Filed as WP95.
+
+**The Availability ≤ 12 backfill, sized rather than re-flagged.** Project Overview has carried "no WP
+currently scheduled to backfill that" since 2026-07-21 without numbers. Concretely, today:
+`build_starter_gear_catalog` enforces the cap **only** on WP66's Rating-priced half — flat-cost gear
+and the whole cyberware catalog are unfiltered. That leaves 3 of 11 RCCs, 2 of 9 cyberdecks and 1 of
+7 commlinks over the cap, plus **7 flat cyberware rows** (Bone Lacing (Titanium) 16R, Cranial Bomb
+- Area Bomb 20F, Cranial Bomb - Microbomb 16F, Grenade Launcher 20F, Obvious Skull 16, Retinal
+Duplication 16F, Synthetic Skull 16) and **17 rating-scaled cyberware rows** whose top ratings exceed
+it (Wired Reflexes r3 = 20R, Control Rig r3 = 15R, Muscle Replacement / Reaction Enhancers r3 = 15R,
+Dermal Plating r4 = 16R, …). **Ruling: WP94 closes only the three rigger-adjacent gear categories**;
+the rest stays unscheduled, on the same reasoning as before (it retroactively changes what existing
+saves and fixtures contain), but is now costed instead of gestured at.
+
+**Fixture honesty standard for this phase, decided up front:** the corpus has exactly one
+Priority-built character carrying an SR5 vehicle (`Wesson.chum5`'s Harley-Davidson Scorpion), and its
+7 mods are all `R5`, so it can corroborate a *stat block* but never a *nuyen ledger*. Phase P
+therefore validates against the printed tables plus that one stat block, with a synthetic
+whole-character fixture (WP96) as the regression guard — which also closes Phase S §5's own recorded
+"Known gap: no Rigger."
