@@ -112,6 +112,17 @@ new metric key: `Character` carries no build-method field (that's session/save s
 assignment is asserted by construction plus the explicit Priority-rejection test. Tests live in
 `tests/integration/test_synthetic_fixtures.py`.
 
+**WP86 (landed)** retypes `cyberware` from a flat name list to `tuple[str | CyberwarePick, ...]`,
+closing the harness half of gap G8. WP73-76 could only buy rating-1, plugin-free leaves; WP38/WP41/
+WP42 built purchase *trees*, and the `razorboy.json` save proves players use them. A bare
+`"Datajack"` still means what it always did, so those four fixtures' literals are unchanged; a
+`CyberwarePick("Cyberears", rating=3, plugins=(...))` says the rest. Declaring a parent's *bundled*
+free subsystem (Sound Link, Image Link) is an error rather than a second paid copy — the engine
+installs those itself. The new `cyberware:<name path>:capacity_budget`/`:capacity_spent`/
+`:capacity_remaining`/`:capacity_cost` keys address one node of the tree by a `/`-separated path of
+catalog names, which is what makes "these plugins fill the parent exactly" assertable at all: the
+engine only ever checks that they *fit*.
+
 ## Native save-format fixtures (Phase S / WP85)
 
 `saves/` holds files in **this project's own save format**, kept byte-for-byte as the web UI wrote
@@ -143,7 +154,7 @@ there is nowhere else for them to live.
   `__init__.py` needed; `pytest`'s `python -m pytest` invocation, already this project's documented
   workaround for the workspace-path mismatch, puts the repo root on `sys.path`).
 - `synthetic.py` — the `SyntheticCharacter` dataclass, `build_synthetic()`, `resolve_metric()`, and
-  `assert_fixture()` (WP72).
+  `assert_fixture()` (WP72); `CyberwarePick`/`cyberware_purchase_request()` (WP86).
 - `synthetic_fixtures.py` — the hand-authored `SyntheticCharacter` literals and `SYNTHETIC_FIXTURES`
   tuple (WP72's `REFERENCE_MUNDANE_FIXTURE`, WP73's `STREET_SAMURAI_FIXTURE`, WP74's
   `COMBAT_MAGE_FIXTURE`, WP75's `SHAMAN_FACE_FIXTURE`, WP76's `DECKER_FIXTURE` — Phase S's full

@@ -12,7 +12,15 @@ from dataclasses import replace
 from decimal import Decimal
 
 import pytest
-from tests.fixtures.synthetic import assert_fixture, build_synthetic, resolve_metric
+from tests.fixtures.native_saves import RAZORBOY_SAVE, native_save_path
+from tests.fixtures.synthetic import (
+    CyberwareEntryPick,
+    CyberwarePick,
+    assert_fixture,
+    build_synthetic,
+    cyberware_purchase_request,
+    resolve_metric,
+)
 from tests.fixtures.synthetic_fixtures import (
     COMBAT_MAGE_FIXTURE,
     DECKER_FIXTURE,
@@ -28,6 +36,7 @@ from chummer5.engine.build_method import (
     SUM_TO_TEN_TARGET,
     sum_to_ten_total,
 )
+from chummer5.io.save_format import from_json
 
 
 @pytest.mark.parametrize("fixture", SYNTHETIC_FIXTURES, ids=lambda f: f.name)
@@ -184,3 +193,88 @@ def test_unrecognised_metric_key_raises() -> None:
     character = build_synthetic(REFERENCE_MUNDANE_FIXTURE)
     with pytest.raises(KeyError):
         resolve_metric(character, "not:a:metric")
+
+
+# The cyberware tree `tests/fixtures/saves/razorboy.json` carries, re-expressed in WP86's widened
+# authoring shape: two rated parents with four plugins each (their bundled Sound Link / Image Link
+# deliberately absent — the engine installs those), three flat implants, and one rated standalone.
+# WP88 authors the whole character as a `SyntheticCharacter`; this constant is the narrow proof that
+# the *field* can say what the save file says, landed before the fixture that depends on it.
+RAZORBOY_CYBERWARE: tuple[CyberwareEntryPick, ...] = (
+    "Bone Lacing (Titanium)",
+    CyberwarePick("Wired Reflexes", rating=2),
+    "Hand Blade",
+    "Shock Hand",
+    CyberwarePick(
+        "Cyberears",
+        rating=3,
+        plugins=(
+            CyberwarePick("Audio Enhancement", rating=3),
+            "Balance Augmenter",
+            CyberwarePick("Select Sound Filter", rating=3),
+            "Spatial Recognizer",
+        ),
+    ),
+    CyberwarePick(
+        "Cybereyes Basic System",
+        rating=3,
+        plugins=(
+            "Flare Compensation",
+            "Low-Light Vision",
+            "Ocular Drone",
+            CyberwarePick("Vision Enhancement", rating=3),
+        ),
+    ),
+    "Datajack",
+)
+
+
+def test_cyberware_picks_express_a_real_save_file_exactly() -> None:
+    """WP86's acceptance criterion: the widened `cyberware` field can express `razorboy.json`'s
+    `cyberware_purchases` *exactly*.
+
+    Asserted as structural equality against the save's own request tree, not merely as matching
+    totals — two different trees can coincidentally cost the same, and it's the tree shape (which
+    plugin sits in which parent, at what rating) that WP38/WP41/WP42 built and that WP73-76's flat
+    name list could not say at all.
+    """
+    save = from_json(native_save_path(RAZORBOY_SAVE).read_text(encoding="utf-8"))
+    assert [cyberware_purchase_request(pick) for pick in RAZORBOY_CYBERWARE] == list(
+        save.cyberware_purchases
+    )
+
+
+def test_cyberware_picks_reproduce_the_saves_essence_nuyen_and_capacity() -> None:
+    """The same tree, resolved through `build_synthetic()`, produces the save's own Essence, nuyen
+    and per-parent Capacity figures — so the harness and the real load path agree on what this
+    purchase costs, not just on how it's spelled.
+
+    The synthetic side is given a Resources letter with enough nuyen to carry the ¥260,000 tree on
+    its own (the save also spends on gear, Lifestyle and Rating-priced gear, which WP87 adds and
+    this WP deliberately doesn't), so the comparison is cyberware-to-cyberware.
+    """
+    fixture = replace(DECKER_FIXTURE, cyberware=RAZORBOY_CYBERWARE, resources_letter="A")
+    # Sum-to-Ten totals shift when a letter changes; restore the exact-10 sum via Attributes.
+    fixture = replace(fixture, attributes_letter="E", attribute_points={})
+    character = build_synthetic(fixture)
+
+    assert character.cyberware_selection is not None
+    assert character.cyberware_selection.essence_spent == Decimal("5.90")
+    assert character.cyberware_selection.nuyen_spent == 260000
+    for parent in ("Cyberears", "Cybereyes Basic System"):
+        assert resolve_metric(character, f"cyberware:{parent}:capacity_budget") == Decimal(12)
+        assert resolve_metric(character, f"cyberware:{parent}:capacity_spent") == Decimal(12)
+        assert resolve_metric(character, f"cyberware:{parent}:capacity_remaining") == Decimal(0)
+    # A plugin's own charge against its parent, addressed through the same path grammar.
+    assert resolve_metric(
+        character, "cyberware:Cybereyes Basic System/Ocular Drone:capacity_cost"
+    ) == Decimal(6)
+
+
+def test_declaring_a_bundled_subsystem_is_an_error() -> None:
+    """Cyberears bundles Sound Link free; naming it as a plugin would buy a second, paid copy and
+    silently inflate the nuyen and Capacity totals a fixture exists to pin down. Rejected at
+    authoring time rather than resolved into a duplicate.
+    """
+    with pytest.raises(ValueError, match="bundled free"):
+        cyberware_purchase_request(CyberwarePick("Cyberears", rating=3, plugins=("Sound Link",)))

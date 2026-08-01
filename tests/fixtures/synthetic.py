@@ -55,6 +55,15 @@ field at a time rather than speculatively modelling shapes no fixture yet exerci
   skill spends left). Adds the `karma_attribute:karma_cost`/`karma_skill:karma_cost`/
   `karma_skill:broken_groups` metric keys; the Karma-funded-spell side needed no new field at all
   (a fixture simply declares more `spells` than its Talent option's free budget).
+- WP86 — cyberware purchase *trees* (the harness half of G8) — **landed**: retypes the `cyberware`
+  field from a flat name list to `tuple[str | CyberwarePick, ...]`, so a fixture can declare a
+  rating and nested plugins instead of only the rating-1, plugin-free leaves WP73-76 could express.
+  A bare `"Datajack"` stays legal and means exactly what it always did (`CyberwarePick(name,
+  rating=1, plugins=())`), so WP73-76's own literals are untouched. Adds the per-purchase Capacity
+  metric keys (`cyberware:<path>:capacity_budget`/`:capacity_spent`/`:capacity_remaining`/
+  `:capacity_cost`), which is what makes "this parent's plugins fill it exactly" assertable rather
+  than merely "the engine didn't reject them" — the boundary case a real player build turned out to
+  sit on.
 - WP76 — Sum-to-Ten whole-character (G7) — **landed**: adds the `build_method` field below, which
   selects *which validity rule* `build_synthetic()` applies to the same five priority letters —
   Priority's bijection (distinct A-E, the only rule WP72-75 knew) or Sum-to-Ten's repeats-allowed,
@@ -104,6 +113,7 @@ from chummer5.engine.character import (
 )
 from chummer5.engine.cyberware_subsystems import (
     CyberwarePurchaseRequest,
+    PurchasedCyberware,
     apply_cyberware_tree_improvements,
     create_cyberware_tree_selection,
     cyberlimb_attribute_maximums,
@@ -170,6 +180,32 @@ _MVP_LETTERS = frozenset("ABCDE")
 
 
 @dataclass(frozen=True)
+class CyberwarePick:
+    """One node of a fixture's cyberware purchase tree (WP86) — a name, a rating, and its plugins.
+
+    The name-keyed authoring mirror of `chummer5.engine.cyberware_subsystems
+    .CyberwarePurchaseRequest`, which is what `build_synthetic()` resolves this into. A plugin may
+    itself be a bare name string, so a rated parent carrying rating-1 plugins reads as
+    `CyberwarePick("Cyberears", 3, ("Balance Augmenter", "Spatial Recognizer"))` rather than three
+    nested constructor calls.
+
+    **A bundled subsystem is never declared here.** Rows like Cyberears/Cybereyes Basic System carry
+    a free bundled item (Sound Link / Image Link) that `create_cyberware_tree_selection` installs
+    itself; naming one explicitly is rejected by `cyberware_purchase_request()` rather than silently
+    installing a second, paid-for copy alongside the free one.
+    """
+
+    name: str
+    rating: int = 1
+    plugins: tuple[CyberwarePick | str, ...] = ()
+
+
+# What a fixture may write in `SyntheticCharacter.cyberware` and in a `CyberwarePick.plugins`: a
+# bare catalog name (rating 1, no plugins -- every WP73-76 entry) or a full `CyberwarePick`.
+CyberwareEntryPick = CyberwarePick | str
+
+
+@dataclass(frozen=True)
 class SyntheticCharacter:
     """A hand-authored whole-character chargen input, fed through the real engine by
     `build_synthetic()`. See this module's docstring for why this exists and how later Phase-S WPs
@@ -188,14 +224,16 @@ class SyntheticCharacter:
       one (a `BonusSupport.SELECT_TEXT` quality — e.g. SINner's SIN description, WP55). Must be
       present for exactly those and absent for every other quality, mirroring
       `create_quality_selection`'s own both-directions check.
-    - `cyberware` / `bioware` (WP73): catalog names of the purchased cyberware/bioware items. Both
-      may name the same item more than once (a matched pair of cyberlimbs, say — duplicate purchases
-      are legal, see `chummer5.engine.cyberware_subsystems`). Each name is bought as a zero-plugin
-      purchase tree at rating 1 (WP41); no synthetic fixture installs a plugin yet. `build_
-      synthetic()` resolves cyberware first (its
-      Essence cost unaware of bioware) then bioware second (aware of cyberware's Essence via
-      `other_essence_spent`), the fixed shared-pool evaluation order both engine modules document,
-      and both draw from the fixture's Resources-priority nuyen (bioware from what cyberware left).
+    - `cyberware` / `bioware` (WP73, cyberware widened in WP86): the purchased cyberware/bioware.
+      Both may name the same item more than once (a matched pair of cyberlimbs, say — duplicate
+      purchases are legal, see `chummer5.engine.cyberware_subsystems`). A bioware entry is always a
+      bare catalog name; a cyberware entry is a bare name (rating 1, no plugins — the only shape
+      WP73-76 could express) *or* a `CyberwarePick` carrying a rating and nested plugins, which is
+      what WP38/WP41/WP42 actually built and what a real player save contains. `build_synthetic()`
+      resolves cyberware first (its Essence cost unaware of bioware) then bioware second (aware of
+      cyberware's Essence via `other_essence_spent`), the fixed shared-pool evaluation order both
+      engine modules document, and both draw from the fixture's Resources-priority nuyen (bioware
+      from what cyberware left).
     - `magic_type` / `talent_letter` / `tradition` / `magic_granted_skills` (WP74): a magic build's
       Talent selection. `magic_type` is `"Magician"`/`"Adept"` (`None` = mundane, the default);
       `talent_letter` the Talent priority letter (a magic build's fifth priority slot — required
@@ -255,7 +293,7 @@ class SyntheticCharacter:
     specializations: Mapping[str, str] = field(default_factory=dict)
     qualities: tuple[str, ...] = ()
     quality_text: Mapping[str, str] = field(default_factory=dict)
-    cyberware: tuple[str, ...] = ()
+    cyberware: tuple[CyberwareEntryPick, ...] = ()
     bioware: tuple[str, ...] = ()
     magic_type: str | None = None
     talent_letter: str | None = None
@@ -282,6 +320,35 @@ def _cyberware_by_name(name: str) -> CyberwareEntry:
     if item is None:
         raise KeyError(f"synthetic fixture names an unknown cyberware item: {name!r}")
     return item
+
+
+def cyberware_purchase_request(pick: CyberwareEntryPick) -> CyberwarePurchaseRequest:
+    """Resolve one authoring-side `CyberwarePick` (or bare name) into the engine's own request type.
+
+    Names resolve to ids here, the same "fixtures are name-keyed, the engine is id-keyed" split
+    every other field follows, so an unknown name raises a clear `KeyError` instead of reaching
+    `create_cyberware_tree_selection` as an id it can't find.
+
+    A pick naming its parent's *bundled* subsystem is rejected: those are resolved by the engine
+    (`CyberwareEntry.bundled_subsystem_names` -> a `bundled_free` install), so declaring one would
+    quietly buy a second copy at full price and silently inflate both the nuyen and the Capacity
+    figures a fixture exists to pin down. WP86's own acceptance criteria call this out as an error
+    rather than a duplicate.
+    """
+    if isinstance(pick, str):
+        pick = CyberwarePick(name=pick)
+    item = _cyberware_by_name(pick.name)
+    bundled = {name.casefold() for name in item.bundled_subsystem_names}
+    plugins = []
+    for plugin in pick.plugins:
+        plugin_name = plugin if isinstance(plugin, str) else plugin.name
+        if plugin_name.casefold() in bundled:
+            raise ValueError(
+                f"synthetic fixture declares {plugin_name!r} as a plugin of {pick.name!r}, but "
+                f"that item is bundled free with its parent and is installed by the engine"
+            )
+        plugins.append(cyberware_purchase_request(plugin))
+    return CyberwarePurchaseRequest(item_id=item.id, rating=pick.rating, plugins=tuple(plugins))
 
 
 def _bioware_by_name(name: str) -> Bioware:
@@ -456,7 +523,7 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
         nuyen_budget = _PRIORITIES.resources[fixture.resources_letter].nuyen
 
         cyberware_selection = create_cyberware_tree_selection(
-            [CyberwarePurchaseRequest(item_id=_cyberware_by_name(n).id) for n in fixture.cyberware],
+            [cyberware_purchase_request(pick) for pick in fixture.cyberware],
             _CYBERWARE,
             nuyen_budget,
             attribute_maximums=cyberlimb_attribute_maximums(character),
@@ -553,6 +620,46 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
     return character
 
 
+_CAPACITY_FIELDS = {
+    "capacity_budget": lambda p: p.capacity_budget,
+    "capacity_spent": lambda p: p.capacity_spent,
+    "capacity_remaining": lambda p: p.capacity_remaining,
+    "capacity_cost": lambda p: p.capacity_cost,
+}
+
+
+def _capacity_metric(
+    purchases: tuple[PurchasedCyberware, ...], path: str, field_name: str
+) -> Decimal:
+    """Read one Capacity figure off the purchase tree, addressed by a `/`-separated name path.
+
+    `Cyberears` names a top-level purchase; `Cyberears/Audio Enhancement` names the plugin installed
+    into it. An ambiguous path (two purchases of the same name — legal, e.g. a matched pair of
+    cyberlimbs) raises rather than silently answering for the first: a fixture that means one of two
+    identical limbs needs a way to say *which*, and inventing an index here before any fixture needs
+    one would be building past the ask. The same "extend when a fixture needs it" discipline every
+    field on `SyntheticCharacter` already follows.
+    """
+    read = _CAPACITY_FIELDS.get(field_name)
+    if read is None:
+        raise KeyError(f"resolve_metric: unrecognised cyberware Capacity field {field_name!r}")
+    node: PurchasedCyberware | None = None
+    level = purchases
+    for segment in path.split("/"):
+        matches = [p for p in level if p.item.name == segment]
+        if not matches:
+            raise KeyError(f"resolve_metric: no purchased cyberware named {segment!r} in {path!r}")
+        if len(matches) > 1:
+            raise KeyError(
+                f"resolve_metric: {segment!r} is ambiguous in {path!r} "
+                f"({len(matches)} purchases share that name)"
+            )
+        node = matches[0]
+        level = node.plugins
+    assert node is not None  # a path always has at least one segment
+    return read(node)
+
+
 def resolve_metric(character: Character, key: str) -> object:
     """Compute one named derived metric off a finalized synthetic `Character`.
 
@@ -566,6 +673,13 @@ def resolve_metric(character: Character, key: str) -> object:
     - `cm:physical` / `cm:stun`
     - `essence`             — the exact `Decimal` Essence (unrounded) of the whole character
     - `cyberware:essence_spent` / `cyberware:nuyen_spent` (WP73) — this selection's own totals
+    - `cyberware:<name path>:capacity_budget` / `:capacity_spent` / `:capacity_remaining` /
+      `:capacity_cost` (WP86) — one node of the purchase tree's Capacity figures, addressed by a
+      `/`-separated path of catalog names (`Cyberears`, `Cyberears/Audio Enhancement`).
+      `capacity_budget`/`capacity_spent`/`capacity_remaining` are what a *parent* offers, has taken,
+      and has left; `capacity_cost` is what a *plugin* charges its parent. Asserting a parent's
+      `capacity_remaining` as 0 is the only way to state "the plugins fill it exactly" — the engine
+      itself only ever checks that they fit
     - `bioware:essence_spent` / `bioware:nuyen_spent` (WP73) — likewise, so the shared-pool split is
       asserted per-source, not only via the combined `essence`
     - `magic:rating` (WP74) — the finished, Essence-reduced Magic rating (`attribute_value("MAG")`)
@@ -597,6 +711,10 @@ def resolve_metric(character: Character, key: str) -> object:
         assert character.skill_allocation is not None
         skill = _skill_by_name(key[len("pool:") :])
         return dice_pool(character, character.skill_allocation, skill)
+    if key.startswith("cyberware:") and key.count(":") == 2:
+        _, path, field_name = key.split(":")
+        assert character.cyberware_selection is not None
+        return _capacity_metric(character.cyberware_selection.purchases, path, field_name)
     if key == "cyberware:essence_spent":
         assert character.cyberware_selection is not None
         return character.cyberware_selection.essence_spent

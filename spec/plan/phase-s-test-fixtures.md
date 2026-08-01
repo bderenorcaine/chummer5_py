@@ -380,7 +380,7 @@ WP88 authors the fixture on top of all three.
   is missing or stops loading; no engine or `io` change is needed to make it pass — if one turns
   out to be, stop and log it, because it means the format regressed at some point since WP41.
 
-- [ ] **WP86 — Harness: express a cyberware purchase *tree*.** Closes the harness half of G8.
+- [x] **WP86 — Harness: express a cyberware purchase *tree*.** Closes the harness half of G8.
   Goal: `SyntheticCharacter.cyberware` is a flat `tuple[str, ...]` that `build_synthetic()` turns
   into rating-1, plugin-free `CyberwarePurchaseRequest`s. Widen it so a fixture can declare
   ratings and nested plugins, which is what WP38/WP41/WP42 actually built.
