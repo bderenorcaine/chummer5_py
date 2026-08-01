@@ -35,13 +35,13 @@
   {% if sheet_skill_rows %}
   <table>
     <thead>
-      <tr><th>Skill</th><th>Rating</th><th>Specialization</th><th>Pool</th></tr>
+      <tr><th>Skill</th><th>Rating (with bonuses)</th><th>Specialization</th><th>Pool</th></tr>
     </thead>
     <tbody>
       {% for row in sheet_skill_rows %}
       <tr>
         <td>{{ row.skill.name }}</td>
-        <td>{{ row.rating }}</td>
+        <td>{{ row.natural_rating }}{% if row.rating != row.natural_rating %} ({{ row.rating }}){% endif %}</td>
         <td>{{ row.specialization or "—" }}</td>
         <td>{{ row.pool }}</td>
       </tr>

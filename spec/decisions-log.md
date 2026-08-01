@@ -909,3 +909,51 @@ universal.
 **Not closed, and not reopened: WP78's "Gap 2" (`precedence0` suppression vs. plain addition).**
 Untouched by this WP — it lives in `ImprovementIndex.resolve`, one layer below where the clamp
 sits, and nothing here made it more or less reachable.
+
+## 2026-08-01 — Phase K, WP82: SR5's 6 caps purchases, not ratings; the clamp was costing real dice
+pools; the skill display says "bonuses", not "augmented"
+
+**The ceiling question the WP entry left open is answered by the book, and 6 is not the answer.**
+p. 131's Skill Rating Table calls Rating 6 "the maximum skill level for starting player characters"
+and then describes ratings 7 through 13; p. 129 defines the scale itself as "ranging from 1 … to 12
+(or 13 with the Aptitude quality)". So `MAX_SKILL_RATING_CREATE` (6) is a *purchase* cap and stays
+exactly where it already was — on `create_skill_allocation` and `create_karma_skill_selection`,
+both of which read purchased points directly and needed no change — and `skill_rating` now clamps at
+a new `MAX_SKILL_RATING` (12) instead. `natural_skill_rating` is the new public function for the
+purchased rating, the skill-side twin of WP81's `natural_attribute_value`.
+
+**Legacy clamps neither, and this project's 12 is a deliberate divergence.**
+`Skill.RatingMaximum` (6 at creation) bounds `Base` and `Karma` individually; `TotalBaseRating` is
+`LearnedRating + RatingModifiers(Attribute)` with no clamp at all, and `Rating` is
+`Math.Max(CyberwareRating, TotalBaseRating)`, likewise unclamped. Bounding the augmented total at 12
+is a guard-rail against a future catalog widening rather than a port or a live formula — nothing
+today's catalogs can stack comes close, and it takes an artificial +20 improvement to see it in a
+test. **Aptitude's 13 is not modeled**: legacy implements it as a per-skill `Improvement.Maximum`
+folded into the *purchase* cap, this project has no such field, and `Aptitude` is
+`NOT_YET_SUPPORTED` in the quality catalog anyway.
+
+**The clamp was not merely hiding an unspent implant — it was costing dice pools.** WP80's finding
+framed this as "a Reflex Recorder bought for a rating-6 skill changes nothing," which is true but
+understates it. Lifting the clamp moved two synthetic fixtures: Renata's Gymnastics and Running
+(Athletics group 5 + Natural Athlete +2) and Sabine's Counterspelling (Talent grant 5 + Mountain
+mentor +2) each went from rating 6 to 7 — and each *pool* from a value that was a die short to the
+correct one. Every skill bonus this project grants was being silently truncated whenever it landed
+on a skill at or near 6, not just augmentation bonuses. Those fixtures' `expected` values and
+citations encoded the bug and were corrected in this WP.
+
+**The display mirrors WP81's notation but deliberately not its label.** The character sheet and the
+skill picker now render `bought (with bonuses)` — `3 (4)` for a Longarms 3 with a Reflex Recorder,
+`0 (2)` for a Catlike-boosted Sneaking nobody bought, `0 (4)` for a Talent-granted Spellcasting —
+under a "Rating (with bonuses)" header. WP81's attribute equivalent says "augmented" because every
+contributor there genuinely is an augmentation or an adept power. `ImprovementType.SKILL` is not
+that clean: it currently carries the Magician/Adept Talent free-skill *grant* (a granted natural
+rating that WP25 routed through the Improvement index purely for convenience), quality and Mentor
+Spirit bonuses whose printed effect is a **dice-pool** modifier rather than a rating one, and
+genuine rating augmentations (`Reflex Recorder`, p. 460). Calling that delta "augmentation" would
+assert the classification WP80 explicitly recorded as still open and still nobody's WP; "bonuses" is
+true of all three kinds. Recorded here because it is a judgment call, not an implementation detail —
+whoever settles the rating-vs-pool question inherits this label along with it.
+
+**Not in scope and not touched:** `chummer5.engine.knowledge`'s Knowledge/Language ratings, which
+have their own `MAX_SKILL_RATING_CREATE` purchase cap and no Improvement producer at all, so the
+same distinction has nothing to bite on there yet.

@@ -99,10 +99,37 @@ from chummer5.engine.character import Character, karma_advancement_cost
 from chummer5.engine.improvements import ImprovementType
 
 # CharacterSettings.MaxSkillRatingCreate (legacy default, confirmed in CharacterSettings.cs:
-# `_intMaxSkillRatingCreate = 6`) -- the chargen-time cap on both individual skill and skill group
-# rating; SR5's post-creation cap (`MaxSkillRating = 12`) doesn't apply to MVP, which only builds
-# freshly-created characters.
+# `_intMaxSkillRatingCreate = 6`) -- the cap on what may be *bought* at character creation, for
+# both an individual skill and a skill group. Core rulebook p. 131's Skill Rating Table calls
+# Rating 6 "the maximum skill level for starting player characters" and then goes on to describe
+# ratings 7-13, so this is explicitly a purchase cap, not a ceiling on the rating itself.
+#
+# **WP82**: it is no longer `skill_rating`'s clamp -- see `MAX_SKILL_RATING` below and
+# `natural_skill_rating`. It remains the bound enforced by the two purchase-side validators
+# (`create_skill_allocation`, `create_karma_skill_selection`), which read purchased points directly
+# and so were natural-only by construction all along.
 MAX_SKILL_RATING_CREATE = 6
+
+# WP82: the ceiling on an *augmented* skill rating. Core rulebook p. 129, "SKILL RATINGS": "The
+# skill Rating is a numerical value ranging from 1, representing the most rudimentary skill, to 12
+# (or 13 with the Aptitude quality) representing the height of sentient achievement." Matches
+# legacy's own `CharacterSettings.MaxSkillRating = 12` (the post-creation setting the pre-WP82
+# comment here dismissed as inapplicable -- it is, as the *purchase* cap for a played character,
+# but 12 is also where the printed rating scale itself stops).
+#
+# Aptitude's 13 is deliberately not modeled: legacy implements it as a per-skill
+# `Improvement.Maximum` term folded into `Skill.RatingMaximum` (a *purchase* cap), this project has
+# no `Improvement.Maximum` field at all, and `Aptitude` classifies `NOT_YET_SUPPORTED` in the
+# quality catalog, so no character this engine builds can hold it.
+#
+# **Legacy does not apply this bound where this engine does.** `Skill.TotalBaseRating` is
+# `LearnedRating + RatingModifiers(Attribute)`, unclamped -- legacy clamps only the *purchased*
+# halves (`Base`, `Karma`) at `RatingMaximum`. Bounding the augmented total here is therefore this
+# project's own call rather than a port: an unbounded rating would be a number the book's own scale
+# doesn't define, and nothing in SR5 describes what a Rating 14 skill would mean. Unreachable in
+# practice today (the largest stack this engine can build is well short of 12), so this is a
+# guard-rail, not a live formula -- see `spec/worklogs/WP82.md`.
+MAX_SKILL_RATING = 12
 
 # CharacterSettings.SpecializationBonus -- flat dice pool bonus for a specialized test with that
 # skill. (Legacy also has `ExpertiseBonus` for a stacked "Expertise" specialization tier; not
@@ -441,9 +468,22 @@ def create_karma_skill_selection(
     )
 
 
-def skill_rating(character: Character, allocation: SkillAllocation, skill: Skill) -> int:
-    """`Skill.Rating`: a skill's group rating if its group has points spent, else its own points,
-    plus Σ improvements, capped at `MAX_SKILL_RATING_CREATE`.
+def natural_skill_rating(character: Character, allocation: SkillAllocation, skill: Skill) -> int:
+    """WP82: the rating this skill was actually *bought* at -- its group's rating if its group has
+    points spent, else its own points, priority-funded and Karma-funded summed, capped at
+    `MAX_SKILL_RATING_CREATE`. No Improvement contribution at all.
+
+    This is `skill_rating` minus the `ImprovementType.SKILL` term, and it is the skill-side twin of
+    `Character.natural_attribute_value` (WP81) -- with one deliberate asymmetry worth knowing
+    before reusing it. The attribute split has exactly two clean sides: points bought from a budget,
+    and Improvements that are all augmentations or adept powers. `ImprovementType.SKILL` is *not*
+    that clean -- it currently carries the Magician/Adept Talent free-skill grant (a granted natural
+    rating, routed through the Improvement index by WP25 purely as a convenience, see
+    `chummer5.engine.magic.apply_magic_skill_grant_improvements`' own docstring), quality bonuses
+    whose printed effect is a **dice-pool** modifier rather than a rating one (Catlike, Natural
+    Athlete), and genuine rating augmentations (`Reflex Recorder`, p. 460). So "everything not in
+    this function is an augmentation" is false, and WP82 deliberately does not build a display on
+    that premise -- see `spec/worklogs/WP82.md` and `spec/decisions-log.md`'s 2026-08-01 entry.
 
     **WP53**: `character.karma_skill_selection` -- if set -- adds Karma-funded points on top,
     reading its own `broken_groups` to decide whether a group member's rating is still group-wide
@@ -470,8 +510,28 @@ def skill_rating(character: Character, allocation: SkillAllocation, skill: Skill
         points = allocation.skill_points.get(skill.id, 0)
         if karma is not None:
             points += karma.skill_points.get(skill.id, 0)
+    return min(points, MAX_SKILL_RATING_CREATE)
+
+
+def skill_rating(character: Character, allocation: SkillAllocation, skill: Skill) -> int:
+    """`Skill.Rating`: `natural_skill_rating` plus Σ `SKILL` improvements, capped at
+    `MAX_SKILL_RATING`.
+
+    **WP82 moved that cap** from `MAX_SKILL_RATING_CREATE` (6) to `MAX_SKILL_RATING` (12). SR5's 6
+    bounds what you may *buy* at character creation, not what an implant may add on top of it
+    (p. 131's Skill Rating Table calls 6 "the maximum skill level for starting player characters"
+    and then describes ratings 7-13); the old clamp silently swallowed the bonus of any skill
+    augmentation bought for a skill already at 6 -- a `Reflex Recorder` for a rating-6 skill cost
+    14,000 nuyen and 0.1 Essence and changed nothing. See `spec/decisions-log.md`, 2026-07-31
+    (WP80's own finding) and 2026-08-01.
+
+    The two purchase-side validators (`create_skill_allocation`, `create_karma_skill_selection`)
+    are unaffected and were never in scope: both read purchased points directly rather than going
+    through this function, so both are natural-only by construction and still reject a purchase
+    above 6.
+    """
     bonus = character.improvements.resolve(ImprovementType.SKILL, skill.name)
-    return min(points + bonus, MAX_SKILL_RATING_CREATE)
+    return min(natural_skill_rating(character, allocation, skill) + bonus, MAX_SKILL_RATING)
 
 
 def dice_pool(

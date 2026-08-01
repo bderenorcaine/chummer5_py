@@ -104,7 +104,8 @@ from chummer5.engine.build_method import SUM_TO_TEN_BUILD_METHOD
 #
 # Skills — Skills B = 36 skill + 5 group points, ALL spent.
 #   Athletics group = 5 -> Gymnastics/Running/Swimming base 5 (Natural Athlete adds +2 to Gymnastics
-#     & Running -> both capped at the chargen max of 6; Swimming stays 5).
+#     & Running -> both end at 7 post-WP82, since the chargen max of 6 bounds what may be *bought*,
+#     not what an Improvement adds on top; Swimming stays 5).
 #   Individual skills (ratings): Sneaking 3 (+2 Catlike = 5), Palming 3, Perception 4 (+"Visual"
 #     specialization +1 pt), Pistols 6, Locksmith 5, Escape Artist 3, Hacking 3, Con 4, Etiquette 4.
 #     skill points: 3+3+4+6+5+3+3+4+4 = 35, +1 specialization = 36 (fully spent); group points: 5.
@@ -163,17 +164,20 @@ REFERENCE_MUNDANE_FIXTURE = SyntheticCharacter(
         "attr:LOG": 3,
         "attr:WIL": 4,
         "attr:EDG": 7,
-        # Skill ratings — group members (+ Natural Athlete, capped), Catlike-boosted, plain.
-        "rating:Gymnastics": 6,  # group 5 + Natural Athlete 2, capped at 6
-        "rating:Running": 6,  # group 5 + Natural Athlete 2, capped at 6
+        # Skill ratings — group members (+ Natural Athlete), Catlike-boosted, plain.
+        # WP82: 7, not 6. SR5's 6 caps what may be *bought*; an Improvement on top of a bought 5
+        # is no longer clamped away (see `chummer5.engine.skills.MAX_SKILL_RATING`). This also
+        # corrects both pools below by 1 — they were a die short before WP82.
+        "rating:Gymnastics": 7,  # group 5 + Natural Athlete 2
+        "rating:Running": 7,  # group 5 + Natural Athlete 2
         "rating:Swimming": 5,  # group 5, no bonus
         "rating:Sneaking": 5,  # 3 base + 2 Catlike
         "rating:Pistols": 6,
         "rating:Locksmith": 5,
         "rating:Perception": 4,
         # Dice pools: rating + linked attribute (+2 if specialized).
-        "pool:Gymnastics": 12,  # 6 + AGI 6
-        "pool:Running": 9,  # 6 + STR 3
+        "pool:Gymnastics": 13,  # 7 + AGI 6
+        "pool:Running": 10,  # 7 + STR 3
         "pool:Swimming": 8,  # 5 + STR 3
         "pool:Sneaking": 11,  # 5 + AGI 6
         "pool:Palming": 9,  # 3 + AGI 6
@@ -207,15 +211,21 @@ REFERENCE_MUNDANE_FIXTURE = SyntheticCharacter(
         "attr:LOG": "priorities.xml Attributes A; Human LOG min 1 (+2)",
         "attr:WIL": "priorities.xml Attributes A; Human WIL min 1 (+3)",
         "attr:EDG": "priorities.xml Heritage C/Human = 5 special pts; Human EDG min 2 (+5) = max 7",
-        "rating:Gymnastics": "Athletics group 5 + Natural Athlete 2 (qualities.xml), capped at 6",
-        "rating:Running": "Athletics group 5 + Natural Athlete 2 (qualities.xml), capped at 6",
+        "rating:Gymnastics": (
+            "Athletics group 5 + Natural Athlete 2 (qualities.xml); WP82: not capped at 6, "
+            "which bounds purchases only (p. 131)"
+        ),
+        "rating:Running": (
+            "Athletics group 5 + Natural Athlete 2 (qualities.xml); WP82: not capped at 6, "
+            "which bounds purchases only (p. 131)"
+        ),
         "rating:Swimming": "Athletics group 5, no quality bonus",
         "rating:Sneaking": "Skills B skill pts; 3 base + 2 Catlike improvement (qualities.xml)",
         "rating:Pistols": "Skills B skill pts; 6 base, Firearms group unbought",
         "rating:Locksmith": "Skills B skill pts; 5 base (no group)",
         "rating:Perception": "Skills B skill pts; 4 base (no group)",
-        "pool:Gymnastics": "learnings/phase-d.md (WP7 dice pool): rating 6 + AGI 6",
-        "pool:Running": "learnings/phase-d.md: rating 6 + STR 3 (Running is STR-linked)",
+        "pool:Gymnastics": "learnings/phase-d.md (WP7 dice pool): rating 7 + AGI 6",
+        "pool:Running": "learnings/phase-d.md: rating 7 + STR 3 (Running is STR-linked)",
         "pool:Swimming": "learnings/phase-d.md: rating 5 + STR 3",
         "pool:Sneaking": "learnings/phase-d.md: rating 5 + AGI 6",
         "pool:Palming": "learnings/phase-d.md: rating 3 + AGI 6",
@@ -501,8 +511,9 @@ STREET_SAMURAI_FIXTURE = SyntheticCharacter(
 #     Group: Conjuring 2 -> Summoning/Banishing/Binding at rating 2.
 #     Individual (28): Assensing 4, Astral Combat 3, Arcana 3, Perception 4, Survival 2, Pistols 3,
 #       Sneaking 2, Con 2, Negotiation 2, First Aid 3.  (4+3+3+4+2+3+2+2+2+3 = 28.)
-#   Counterspelling ends at rating 6, not 7: the Talent grant (5) + Mountain's Magician slot (+2)
-#     would be 7, capped at the chargen maximum of 6 — the mentor-on-a-granted-skill cap case.
+#   Counterspelling ends at rating 7: the Talent grant (5) + Mountain's Magician slot (+2).
+#     Pre-WP82 this read 6, clamped at the chargen maximum — which bounds purchases only
+#     (p. 131), and neither term is one, so the clamp was costing this pool a die.
 #   Survival ends at rating 4: 2 bought + Mountain's General slot (+2 Survival).
 #
 # Spells — 7 of the free 10-spell budget (all within the Magic-Rating-x2 = 10 cap, computed on the
@@ -588,7 +599,7 @@ COMBAT_MAGE_FIXTURE = SyntheticCharacter(
         "cyberware:nuyen_spent": 4000,  # 1000 + 1000 + 2000
         # Skill ratings — the mentor/grant interactions.
         "rating:Spellcasting": 5,  # Talent A grant (5), no mentor bonus
-        "rating:Counterspelling": 6,  # grant 5 + Mountain Magician +2 = 7, capped at 6
+        "rating:Counterspelling": 7,  # grant 5 + Mountain Magician +2; WP82: no longer capped
         "rating:Summoning": 2,  # Conjuring group 2
         "rating:Banishing": 2,  # Conjuring group 2 (proves the group)
         "rating:Survival": 4,  # 2 bought + Mountain General +2
@@ -596,7 +607,7 @@ COMBAT_MAGE_FIXTURE = SyntheticCharacter(
         "rating:Arcana": 3,
         # Dice pools: rating + linked attribute — MAG-linked ones read the *reduced* Magic 5.
         "pool:Spellcasting": 10,  # 5 + MAG 5
-        "pool:Counterspelling": 11,  # 6 + MAG 5
+        "pool:Counterspelling": 12,  # 7 + MAG 5
         "pool:Summoning": 7,  # 2 + MAG 5
         "pool:Assensing": 8,  # 4 + INT 4
         "pool:Astral Combat": 8,  # 3 + WIL 5
@@ -655,8 +666,8 @@ COMBAT_MAGE_FIXTURE = SyntheticCharacter(
         ),
         "rating:Spellcasting": "priorities.xml Talent A grant (skill_val 5); no mentor bonus",
         "rating:Counterspelling": (
-            "grant 5 + Mountain Magician slot +2 (mentors.xml) = 7, capped at MAX_SKILL_RATING_"
-            "CREATE 6 (skills.py)"
+            "grant 5 + Mountain Magician slot +2 (mentors.xml) = 7; WP82: MAX_SKILL_RATING_CREATE "
+            "6 bounds purchases only (p. 131), and neither term is one"
         ),
         "rating:Summoning": "Skills C group pts; Conjuring group 2",
         "rating:Banishing": "Skills C group pts; Conjuring group 2",
@@ -664,7 +675,7 @@ COMBAT_MAGE_FIXTURE = SyntheticCharacter(
         "rating:Assensing": "Skills C skill pts; 4 base (no group)",
         "rating:Arcana": "Skills C skill pts; 3 base (no group)",
         "pool:Spellcasting": "learnings/phase-d.md (dice pool): rating 5 + MAG 5 (reduced)",
-        "pool:Counterspelling": "learnings/phase-d.md: rating 6 (capped) + MAG 5 (reduced)",
+        "pool:Counterspelling": "learnings/phase-d.md: rating 7 + MAG 5 (reduced)",
         "pool:Summoning": "learnings/phase-d.md: rating 2 + MAG 5 (reduced)",
         "pool:Assensing": "learnings/phase-d.md: rating 4 + INT 4 (Assensing is INT-linked)",
         "pool:Astral Combat": "learnings/phase-d.md: rating 3 + WIL 5 (Astral Combat: WIL-linked)",

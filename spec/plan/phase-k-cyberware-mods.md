@@ -436,8 +436,11 @@ while 15 rows in that catalog are purchasable, priced, and mechanically silent w
 fact. WP77 (audit + registry), WP78 (model the computable ones), WP79 (show the notes) and WP80
 (`Reflex Recorder`'s player choice) have landed — so WP42's hard prerequisite among them is met, and
 no augmentation row is offered-and-inert any more. WP81 (natural vs. augmented attribute maximum)
-and WP82 (the same for skills, claimed by WP80) remain and do not gate WP42. See each entry's own
-"Depends on" line.
+and WP82 (the same for skills, claimed by WP80) landed on 2026-08-01 — neither gated WP42, but both
+change what WP42's own picker and character sheet will be rendering: an attribute reads
+`natural (augmented)` and a skill reads `bought (with bonuses)`, so any new augmentation display
+WP42 adds should match those two conventions rather than inventing a third. **WP42 is now the only
+open entry in this phase.**
 
 - [x] **WP77 — Augmentation `<bonus>` coverage audit + "Unmodeled real effects" backfill.**
   Goal: close the gap WP38's worklog first flagged and WP41's widening made larger — every
@@ -806,7 +809,7 @@ and WP82 (the same for skills, claimed by WP80) remain and do not gate WP42. See
     half of the test rather than asserted as universal.
   - WP78's "Gap 2" (`precedence0` suppression) is untouched and neither more nor less reachable.
 
-- [ ] **WP82 — Natural vs. augmented skill rating.**
+- [x] **WP82 — Natural vs. augmented skill rating.**
   Goal: WP81's question, asked of skills instead of attributes. `chummer5.engine.skills.skill_rating`
   returns `min(purchased points + Σ improvements, MAX_SKILL_RATING_CREATE)`, so an *augmentation's*
   bonus is silently swallowed once the purchased rating reaches 6 — a Reflex Recorder bought for a
@@ -835,6 +838,33 @@ and WP82 (the same for skills, claimed by WP80) remain and do not gate WP42. See
   *purchase* is still rejected at buy time; a test that the "no skill above 6 at creation" Karma and
   priority-point rules still read the purchased rating; every existing dice-pool assertion unchanged
   for characters with no skill Improvement.
+
+  **Landed 2026-08-01**, one engine module plus the two display call sites
+  (`chummer5.engine.skills`, `chummer5.web.routes.{skills,character}`, `_skill_allocation.html`,
+  `_character_sheet.html`), +7 tests (1190 total). What WP42 needs to know:
+  - **The ceiling is `MAX_SKILL_RATING = 12`, and 6 was never a rating cap.** p. 131's Skill Rating
+    Table calls 6 "the maximum skill level for starting player characters" and then describes
+    ratings 7-13; p. 129 defines the scale as running to 12 (13 with Aptitude).
+    `MAX_SKILL_RATING_CREATE` stays exactly where it was, on the two purchase-side validators.
+    `natural_skill_rating` is the new public function for the purchased rating.
+  - **Legacy clamps neither**, so the 12 is this project's own guard-rail rather than a port:
+    `Skill.TotalBaseRating` is unclamped and only the purchased halves see `RatingMaximum`.
+    Unreachable with today's catalogs; Aptitude's 13 is not modeled (no `Improvement.Maximum`
+    field, and `Aptitude` is `NOT_YET_SUPPORTED`).
+  - **The clamp was costing dice pools, not just hiding an unspent implant.** Two synthetic
+    fixtures moved (Renata's Gymnastics/Running, Sabine's Counterspelling) — each rating 6 → 7 and
+    each *pool* from a die short to correct. Every skill bonus this project grants was truncated
+    whenever it landed on a skill at or near 6, not only augmentation ones. Their `expected` values
+    and citations encoded the bug and were corrected.
+  - **The display says "bonuses", not "augmented", and that is deliberate.** Sheet and picker render
+    `bought (with bonuses)` — `3 (4)`, `0 (2)` for a Catlike-boosted Sneaking, `0 (4)` for a
+    Talent-granted skill — under a "Rating (with bonuses)" header. WP81 can say "augmented" because
+    every attribute contributor is one; `ImprovementType.SKILL` mixes a Talent *grant*, printed
+    dice-pool modifiers and genuine rating augmentations, and calling the delta an augmentation
+    would assert the rating-vs-pool classification WP80 left open. See `spec/decisions-log.md`,
+    2026-08-01.
+  - `chummer5.engine.knowledge` is untouched — its Knowledge/Language ratings have the same
+    purchase cap and no Improvement producer at all, so nothing to split yet.
 
 - [ ] **WP42 — Cyberware modification/subsystem UI.**
   Goal: expose subsystem/plugin purchase through the browser. Deliberately last, and deliberately

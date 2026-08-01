@@ -41,7 +41,7 @@ from chummer5.engine.resources import (
     resources_gear_args,
     starting_nuyen,
 )
-from chummer5.engine.skills import dice_pool, skill_rating
+from chummer5.engine.skills import dice_pool, natural_skill_rating, skill_rating
 from chummer5.io.legacy_import import UnsupportedLegacyCharacterError, import_chum5
 from chummer5.io.save_format import (
     DEFAULT_TALENT_CODENAME,
@@ -203,6 +203,11 @@ def _character_sheet_context(
             {
                 "skill": skill,
                 "rating": rating,
+                # WP82: the bought rating, so the sheet can show `5 (7)` for a skill an
+                # Improvement raises -- same notation as the skill picker and as WP81's attribute
+                # rows, under a "Rating (with bonuses)" header rather than "augmented" (see
+                # `chummer5.engine.skills.natural_skill_rating`'s docstring for the distinction).
+                "natural_rating": natural_skill_rating(character, allocation, skill),
                 "specialization": (
                     allocation.specializations.get(skill.id)
                     or (

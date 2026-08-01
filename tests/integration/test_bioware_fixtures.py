@@ -37,7 +37,13 @@ from chummer5.engine.bioware import (
 )
 from chummer5.engine.character import create_character, metatype_choices
 from chummer5.engine.derived import BASE_ESSENCE, essence, physical_limit
-from chummer5.engine.skills import create_skill_allocation, dice_pool, skill_rating
+from chummer5.engine.skills import (
+    MAX_SKILL_RATING_CREATE,
+    create_skill_allocation,
+    dice_pool,
+    natural_skill_rating,
+    skill_rating,
+)
 
 BIOWARE = load_bioware()
 BIOWARE_BY_NAME = {b.name: b for b in BIOWARE}
@@ -223,6 +229,44 @@ def test_barretts_real_reflex_recorder_raises_exactly_the_skill_she_chose() -> N
         i for i in character.improvements.improvements if i.improvement_type.name == "SKILL"
     ]
     assert [(i.target, i.value) for i in skill_improvements] == [("Longarms", 1)]
+
+
+def test_barretts_real_reflex_recorder_still_lands_on_a_fully_bought_skill() -> None:
+    """WP82's acceptance criterion, against the same real catalog row as the test above. Buying
+    Longarms all the way to the chargen maximum of 6 and *then* installing the recorder used to
+    produce a rating of 6 -- 14,000 nuyen and 0.1 Essence for nothing, because `skill_rating`
+    clamped at `MAX_SKILL_RATING_CREATE`. SR5's 6 caps what may be bought (p. 131), not what an
+    implant adds, so the rating is 7 and the pool follows.
+    """
+    character = _human_character()
+    longarms = next(s for s in SKILLS if s.name == BARRETT_REFLEX_RECORDER_SKILL)
+    allocation = create_skill_allocation(
+        "C",
+        PRIORITIES,
+        SKILLS,
+        skill_points={longarms.id: MAX_SKILL_RATING_CREATE},
+        group_points={},
+    )
+    character = replace(character, skill_allocation=allocation)
+
+    selection = create_bioware_selection(
+        [
+            BiowarePurchaseRequest(
+                item_id=BIOWARE_BY_NAME["Reflex Recorder"].id,
+                chosen_skill=BARRETT_REFLEX_RECORDER_SKILL,
+            )
+        ],
+        BIOWARE,
+        nuyen_budget=100000,
+        skills=SKILLS,
+    )
+    apply_bioware_improvements(character, selection)
+
+    assert natural_skill_rating(character, allocation, longarms) == MAX_SKILL_RATING_CREATE
+    assert skill_rating(character, allocation, longarms) == MAX_SKILL_RATING_CREATE + 1
+    assert dice_pool(character, allocation, longarms) == 7 + character.attribute_value(
+        longarms.attribute
+    )
 
 
 def test_enhanced_articulation_flat_bonus_raises_physical_limit_on_a_hand_built_character() -> None:

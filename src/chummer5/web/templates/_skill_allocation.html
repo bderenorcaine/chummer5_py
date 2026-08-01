@@ -104,7 +104,7 @@
               <th>Group</th>
               <th>Points</th>
               <th>Karma pts</th>
-              <th>Rating</th>
+              <th>Rating (with bonuses)</th>
               <th>Specialization</th>
               <th>Karma spec</th>
               <th>Pool</th>
@@ -134,7 +134,7 @@
                   max="{{ max_skill_rating }}"
                 />
               </td>
-              <td>{{ row.rating }}</td>
+              <td>{{ row.natural_rating }}{% if row.rating != row.natural_rating %} ({{ row.rating }}){% endif %}</td>
               <td>
                 <input
                   type="text"

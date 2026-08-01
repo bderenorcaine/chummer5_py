@@ -94,7 +94,9 @@ def test_combat_mage_essence_loss_reduces_magic_and_carries_foci_and_mentor() ->
     # G6: the mentor's General (+2 Survival) and Magician (+2 Counterspelling) FLAT_BONUS slots
     # both landed as Improvements; Counterspelling's grant (5) + mentor (2) caps at 6.
     assert resolve_metric(character, "rating:Survival") == 4  # 2 bought + 2 Mountain General
-    assert resolve_metric(character, "rating:Counterspelling") == 6  # grant 5 + mentor 2, capped
+    # WP82: 7, not 6. The Talent grant (5) and the Mountain mentor's Magician slot (+2) are both
+    # Improvements, and SR5's 6 caps what may be *bought* (p. 131) -- so neither is bounded by it.
+    assert resolve_metric(character, "rating:Counterspelling") == 7
     # The bonded Power Focus committed its nuyen/Karma cost.
     assert character.foci_selection.karma_cost == 12
 

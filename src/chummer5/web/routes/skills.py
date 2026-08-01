@@ -23,6 +23,7 @@ from chummer5.engine.skills import (
     create_karma_skill_selection,
     create_skill_allocation,
     dice_pool,
+    natural_skill_rating,
     skill_point_budget,
     skill_rating,
 )
@@ -122,6 +123,13 @@ def _skill_allocation_context(
             "specialization": allocation.specializations.get(skill.id, ""),
             "karma_points": karma_skill_points.get(skill.id, 0),
             "karma_specialization": karma_specializations.get(skill.id, ""),
+            # WP82: `natural_rating` is what the two inputs above actually bought; `rating` is the
+            # total once `ImprovementType.SKILL` bonuses are counted, and it can now exceed 6 (see
+            # `chummer5.engine.skills.MAX_SKILL_RATING`). The template renders `natural (rating)`
+            # when they differ, under a "Rating (with bonuses)" header -- deliberately *not*
+            # "augmented" the way WP81 labels the attribute equivalent; see `natural_skill_rating`'s
+            # own docstring for why this project can't yet claim the delta is an augmentation.
+            "natural_rating": natural_skill_rating(display, allocation, skill),
             "rating": skill_rating(display, allocation, skill),
             "pool": dice_pool(display, allocation, skill, specialized=False),
             "pool_specialized": (

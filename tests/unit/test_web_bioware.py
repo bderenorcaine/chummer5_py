@@ -279,7 +279,8 @@ def test_buying_a_reflex_recorder_with_a_chosen_skill_raises_that_skills_pool() 
 
     sheet = client.get("/character/sheet")
     assert "Reflex Recorder (Longarms) × 1" in sheet.text
-    assert "<td>Longarms</td> <td>4</td>" in _squash(sheet.text)
+    # WP82: `bought (with bonuses)` -- 3 points bought, the implant's +1 on top.
+    assert "<td>Longarms</td> <td>3 (4)</td>" in _squash(sheet.text)
 
 
 def test_buying_a_reflex_recorder_without_choosing_a_skill_is_an_error() -> None:

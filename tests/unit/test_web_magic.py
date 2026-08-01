@@ -156,8 +156,11 @@ def test_confirming_magician_sets_magic_rating_tradition_and_dice_pool_free_of_c
     assert "Tradition: Hermetic" in sheet.text
     # Hermetic Drain Resistance = LOG + WIL = 1 + 1 (Human's metatype minimums, no points spent).
     assert "Drain Resistance: 2" in sheet.text
-    assert "<td>Spellcasting</td><td>4</td>" in _compact(sheet.text)
-    assert "<td>Counterspelling</td><td>4</td>" in _compact(sheet.text)
+    # WP82: `bought (with bonuses)`. Nothing was bought here -- the whole rating is the Talent
+    # free-skill grant, which this engine routes through an Improvement (see
+    # `chummer5.engine.magic.apply_magic_skill_grant_improvements`), so the bought half is 0.
+    assert "<td>Spellcasting</td><td>0 (4)</td>" in _compact(sheet.text)
+    assert "<td>Counterspelling</td><td>0 (4)</td>" in _compact(sheet.text)
 
 
 def test_confirming_adept_sets_magic_rating_and_power_points() -> None:
@@ -184,7 +187,7 @@ def test_confirming_adept_sets_magic_rating_and_power_points() -> None:
     assert "Power Points: 6" in sheet.text
     # Adept Drain Resistance is fixed BOD + WIL = 1 + 1, independent of tradition.
     assert "Drain Resistance: 2" in sheet.text
-    assert "<td>Pistols</td><td>4</td>" in _compact(sheet.text)
+    assert "<td>Pistols</td><td>0 (4)</td>" in _compact(sheet.text)  # WP82: grant, nothing bought
 
 
 def test_magician_can_spend_regular_skill_points_on_a_magical_active_skill() -> None:
@@ -457,7 +460,7 @@ def test_attribute_resubmission_preserves_the_carried_forward_magic_selection() 
     sheet = client.get("/character/sheet")
     assert "Type: Adept" in sheet.text
     assert "Magic rating: 6" in sheet.text
-    assert "<td>Pistols</td><td>4</td>" in _compact(sheet.text)
+    assert "<td>Pistols</td><td>0 (4)</td>" in _compact(sheet.text)  # WP82
     # BOD rose from the attribute edit (1 -> 3), and physical_limit still reflects the carried
     # forward Improved Potential (Physical) power's +1 on top of the new BOD-derived total.
     assert "<tr><td>BOD</td><td>3</td></tr>" in _compact(sheet.text)
@@ -513,7 +516,7 @@ def test_attribute_resubmission_preserves_magic_cyberware_and_bioware_together()
     # survived *and* the essence-driven Magic reduction still sees the surviving cyberware/
     # bioware Essence cost.
     assert "Magic rating: 4 (reduced from 6 by Essence loss)" in sheet.text
-    assert "<td>Pistols</td><td>4</td>" in _compact(sheet.text)
+    assert "<td>Pistols</td><td>0 (4)</td>" in _compact(sheet.text)  # WP82
     assert "Synthetic Full Arm × 1" in sheet.text
     assert "Enhanced Articulation × 1" in sheet.text
     assert "Essence: 4.7 / 6." in sheet.text  # 6 - 1 - 0.3

@@ -8,18 +8,20 @@ import pytest
 
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
-from chummer5.data.skills import load_skills
+from chummer5.data.skills import Skill, load_skills
 from chummer5.engine.character import Character, create_character, metatype_choices
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
 from chummer5.engine.skills import (
     DEFAULT_MODIFIER,
     KARMA_SPECIALIZATION_COST,
+    MAX_SKILL_RATING,
     MAX_SKILL_RATING_CREATE,
     SPECIALIZATION_BONUS,
     SkillAllocation,
     create_karma_skill_selection,
     create_skill_allocation,
     dice_pool,
+    natural_skill_rating,
     skill_point_budget,
     skill_rating,
 )
@@ -189,7 +191,13 @@ def test_skill_rating_uses_own_points_when_group_unbought() -> None:
     assert skill_rating(character, allocation, LONGARMS) == 0
 
 
-def test_skill_rating_sums_improvements_and_caps_at_chargen_max() -> None:
+def test_skill_rating_sums_improvements_on_top_of_a_fully_bought_skill() -> None:
+    """WP82, replacing this test's own pre-WP82 assertion (`== MAX_SKILL_RATING_CREATE`, "caps at
+    chargen max"). SR5's 6 caps what may be *bought* at character creation (p. 131's Skill Rating
+    Table: "the maximum skill level for starting player characters", followed by ratings 7-13) --
+    an Improvement on top of a fully-bought skill has to do something, and before WP82 it was
+    silently discarded. The natural rating is unchanged by it.
+    """
     character = _human_with_agi(0)
     allocation = create_skill_allocation(
         letter="A",
@@ -207,7 +215,8 @@ def test_skill_rating_sums_improvements_and_caps_at_chargen_max() -> None:
             source_id="quality-test",
         )
     )
-    assert skill_rating(character, allocation, ARCHERY) == MAX_SKILL_RATING_CREATE
+    assert natural_skill_rating(character, allocation, ARCHERY) == MAX_SKILL_RATING_CREATE
+    assert skill_rating(character, allocation, ARCHERY) == MAX_SKILL_RATING_CREATE + 2
 
 
 def test_dice_pool_is_rating_plus_attribute() -> None:
@@ -656,3 +665,123 @@ def test_dice_pool_specialized_auto_detects_karma_funded_specialization() -> Non
     character = replace(character, karma_skill_selection=selection)
     unspecialized = dice_pool(character, allocation, ARCHERY, specialized=False)
     assert dice_pool(character, allocation, ARCHERY) == unspecialized + SPECIALIZATION_BONUS
+
+
+# -- WP82: natural vs. augmented skill rating -------------------------------------------------
+
+
+def _with_skill_improvement(character: Character, skill: Skill, value: int) -> Character:
+    character.improvements.add(
+        Improvement(
+            improvement_type=ImprovementType.SKILL,
+            target=skill.name,
+            value=value,
+            source_type=ImprovementSource.BIOWARE,
+            source_id=f"implant-{skill.id}-{value}",
+        )
+    )
+    return character
+
+
+def _archery_at(character: Character, points: int) -> SkillAllocation:
+    return create_skill_allocation(
+        letter="A",
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        skill_points={ARCHERY.id: points},
+        group_points={},
+    )
+
+
+def test_a_reflex_recorder_on_a_fully_bought_skill_reaches_seven() -> None:
+    """WP82's headline acceptance case (`spec/decisions-log.md`, 2026-07-31): a `Reflex Recorder`
+    bought for a rating-6 skill costs 14,000 nuyen and 0.1 Essence, and before WP82 changed
+    nothing at all because `skill_rating` clamped at `MAX_SKILL_RATING_CREATE`. Its bonus is +1
+    (p. 460, "adds 1 to the Rating of a specific skill linked to a Physical attribute").
+    """
+    character = _human_with_agi(3)
+    allocation = _archery_at(character, MAX_SKILL_RATING_CREATE)
+    _with_skill_improvement(character, ARCHERY, 1)
+
+    assert natural_skill_rating(character, allocation, ARCHERY) == 6
+    assert skill_rating(character, allocation, ARCHERY) == 7
+    # The pool follows, which is the point -- the bonus was being paid for and thrown away.
+    assert dice_pool(character, allocation, ARCHERY) == 7 + character.attribute_value("AGI")
+
+
+def test_buying_a_skill_above_six_is_still_rejected() -> None:
+    """The other half of the same acceptance criterion. SR5's 6 is a cap on what may be *bought*
+    at character creation (p. 131), and `create_skill_allocation` enforces it by reading purchased
+    points directly -- it never went through `skill_rating`, so WP82 did not touch it.
+    """
+    with pytest.raises(ValueError, match="exceeds the chargen skill rating maximum"):
+        create_skill_allocation(
+            letter="A",
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            skill_points={ARCHERY.id: MAX_SKILL_RATING_CREATE + 1},
+            group_points={},
+        )
+
+
+def test_karma_skill_spend_still_reads_the_purchased_rating_not_the_augmented_one() -> None:
+    """`create_karma_skill_selection`'s own "no skill above 6 at creation" check must keep reading
+    purchased points. Both directions are pinned: an Improvement must not consume the headroom a
+    Karma purchase is entitled to, and a purchase that would genuinely exceed 6 must still fail.
+    """
+    character = _human_with_agi(3)
+    allocation = _archery_at(character, 5)
+    character = replace(character, skill_allocation=allocation)
+    _with_skill_improvement(character, ARCHERY, 2)
+
+    # Augmented rating is already 7, but only 5 points were bought -- the 6th is still buyable.
+    assert skill_rating(character, allocation, ARCHERY) == 7
+    selection = create_karma_skill_selection(character, SKILLS, {ARCHERY.id: 1}, karma_budget=999)
+    assert selection.skill_points == {ARCHERY.id: 1}
+
+    # ... and the 7th still is not, Improvement or no Improvement.
+    with pytest.raises(ValueError, match="exceeds the chargen skill rating maximum"):
+        create_karma_skill_selection(character, SKILLS, {ARCHERY.id: 2}, karma_budget=999)
+
+
+def test_natural_skill_rating_ignores_improvements_and_clamps_at_the_purchase_cap() -> None:
+    character = _human_with_agi(3)
+    allocation = _archery_at(character, 4)
+    _with_skill_improvement(character, ARCHERY, 2)
+
+    assert natural_skill_rating(character, allocation, ARCHERY) == 4
+    assert skill_rating(character, allocation, ARCHERY) == 6
+
+
+def test_natural_skill_rating_reads_a_bought_group_the_same_way_skill_rating_does() -> None:
+    """A group-funded member's *natural* rating is the group's rating, not its own (zero) points --
+    otherwise the sheet would show `0 (5)` for every member of a bought skill group.
+    """
+    character = _human_with_agi(3)
+    allocation = create_skill_allocation(
+        letter="A",
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        skill_points={},
+        group_points={"Firearms": 5},
+    )
+    _with_skill_improvement(character, AUTOMATICS, 1)
+
+    assert natural_skill_rating(character, allocation, AUTOMATICS) == 5
+    assert skill_rating(character, allocation, AUTOMATICS) == 6
+    # A group member with no bonus of its own is unaffected in both readings.
+    assert natural_skill_rating(character, allocation, LONGARMS) == 5
+    assert skill_rating(character, allocation, LONGARMS) == 5
+
+
+def test_an_augmented_skill_rating_is_bounded_at_twelve() -> None:
+    """Core rulebook p. 129: the skill Rating scale runs "to 12 (or 13 with the Aptitude quality)".
+    Legacy leaves `Skill.TotalBaseRating` unbounded and clamps only the purchased halves, so this
+    ceiling is this project's own guard-rail rather than a port -- unreachable with today's
+    catalogs, which is why it takes an artificial +20 to see it.
+    """
+    character = _human_with_agi(3)
+    allocation = _archery_at(character, MAX_SKILL_RATING_CREATE)
+    _with_skill_improvement(character, ARCHERY, 20)
+
+    assert skill_rating(character, allocation, ARCHERY) == MAX_SKILL_RATING == 12

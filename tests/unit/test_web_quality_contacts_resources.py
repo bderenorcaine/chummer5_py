@@ -100,7 +100,8 @@ def test_selecting_catlike_grants_the_sneaking_bonus_matching_the_engine() -> No
     # Sneaking's rating comes solely from Catlike's +2 flat bonus (no points spent).
     expected_rating = 2
     expected_pool = expected_rating + character.attribute_value("AGI")
-    assert f"<td>{expected_rating}</td>" in skill_response.text
+    # WP82: the picker shows `bought (with bonuses)`; nothing was bought, so `0 (2)`.
+    assert f"<td>0 ({expected_rating})</td>" in skill_response.text
     assert f"<td>{expected_pool}</td>" in skill_response.text
 
 
@@ -146,7 +147,7 @@ def test_quality_improvements_survive_reconfirming_priorities() -> None:
     assert f'value="{_CATLIKE.id}"' in response.text
     assert "checked" in response.text
     skill_response = client.post("/ui/skills", data={})
-    assert "<td>2</td>" in skill_response.text
+    assert "<td>0 (2)</td>" in skill_response.text  # WP82: bought 0, Catlike +2
 
 
 def _confirm_elf(client: TestClient) -> None:
