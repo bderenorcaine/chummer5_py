@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Chummer5{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
     <!-- htmx 2.0.10, vendored — see static/vendor/htmx/VENDORED.md -->
     <script src="{{ url_for('static', path='vendor/htmx/htmx.min.js') }}"></script>
   </head>

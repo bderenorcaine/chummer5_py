@@ -404,3 +404,21 @@ def test_vendored_htmx_is_served_locally_not_from_a_cdn() -> None:
     script = client.get("/static/vendor/htmx/htmx.min.js")
     assert script.status_code == 200
     assert "htmx" in script.text
+
+
+def test_stylesheet_is_served_locally_and_separates_the_chargen_sections() -> None:
+    # The chargen page stacks ~14 sections in one #chargen-body (see _chargen_body.html); without
+    # a stylesheet they ran together as undifferentiated text. Served from the same local /static
+    # mount as htmx, for the same no-CDN reason.
+    client = TestClient(create_app())
+
+    index = client.get("/")
+    assert "/static/app.css" in index.text
+
+    sheet = client.get("/static/app.css")
+    assert sheet.status_code == 200
+    # Each section is its own box, and adjacent ones are told apart two ways (rule + alternating
+    # tint) so two *collapsed* neighbours still read as two things.
+    assert "#chargen-body > div {" in sheet.text
+    assert "border-top" in sheet.text
+    assert "#chargen-body > div:nth-child(even)" in sheet.text

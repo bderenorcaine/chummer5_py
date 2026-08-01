@@ -1,0 +1,137 @@
+/* The chargen page is one long stack of ~14 collapsible sections (see _chargen_body.html), which
+   with no styling at all ran together as undifferentiated text. This sheet exists to separate them
+   visually; it is deliberately small, and does not attempt to restyle the forms/tables inside a
+   section. */
+
+:root {
+  color-scheme: light dark;
+  --page-fg: #1c1c1e;
+  --page-bg: #ffffff;
+  --rule: #d3d6db;
+  --section-bg-a: #ffffff;
+  --section-bg-b: #f2f4f7;
+  --section-accent: #7a8595;
+  --summary-fg: #35404f;
+  --error-fg: #8c1d1d;
+  --error-bg: #fbeaea;
+  --warning-fg: #7a5300;
+  --warning-bg: #fdf3dd;
+  --info-fg: #17506b;
+  --info-bg: #e6f2f8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-fg: #e6e8eb;
+    --page-bg: #16181c;
+    --rule: #363b44;
+    --section-bg-a: #1c1f24;
+    --section-bg-b: #23272e;
+    --section-accent: #6b7686;
+    --summary-fg: #c6ccd6;
+    --error-fg: #f2b8b5;
+    --error-bg: #3a1f1f;
+    --warning-fg: #f0d08a;
+    --warning-bg: #382e12;
+    --info-fg: #a8d5e8;
+    --info-bg: #14303d;
+  }
+}
+
+body {
+  margin: 0 auto;
+  padding: 1rem 1.25rem 4rem;
+  max-width: 72rem;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.45;
+  color: var(--page-fg);
+  background: var(--page-bg);
+}
+
+nav {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* One box per chargen section. Alternating tints plus a rule between neighbours, so two adjacent
+   *collapsed* sections (the common case — the accordion opens one at a time) still read as two
+   separate things rather than two lines of text. */
+#chargen-body > div {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--rule);
+  border-left: 4px solid var(--section-accent);
+  background: var(--section-bg-a);
+}
+
+#chargen-body > div:nth-child(even) {
+  background: var(--section-bg-b);
+}
+
+#chargen-body > div:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+/* A section's own <summary> is its heading; the nested ones (skill categories, gear/cyberware
+   groups) are deliberately left plain so the two levels don't compete. */
+#chargen-body > div > details > summary {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--summary-fg);
+  cursor: pointer;
+}
+
+#chargen-body > div > details[open] > summary {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+#chargen-body summary summary {
+  cursor: pointer;
+}
+
+/* Sub-sections inside a section (skill categories, gear groups, cyberware slots). */
+#chargen-body > div details details {
+  margin: 0.35rem 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule);
+}
+
+/* The status classes the templates already emit (error/warning/info) had no styling at all. */
+.error,
+.warning,
+.info {
+  margin: 0.5rem 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: 3px;
+}
+
+.error {
+  color: var(--error-fg);
+  background: var(--error-bg);
+}
+
+.warning {
+  color: var(--warning-fg);
+  background: var(--warning-bg);
+}
+
+.info {
+  color: var(--info-fg);
+  background: var(--info-bg);
+}
+
+/* Just enough table styling that a section's rows read as rows against the section tint. */
+#chargen-body table {
+  border-collapse: collapse;
+}
+
+#chargen-body th,
+#chargen-body td {
+  padding: 0.15rem 0.4rem;
+  text-align: left;
+}
+
+#chargen-body thead th {
+  border-bottom: 1px solid var(--rule);
+}

@@ -81,3 +81,22 @@ ever had, prompted by the page having grown to ~14 stacked sections.
   carries the restore code (`tests/unit/test_web_attribute_skill_allocation.py`). Persists across
   htmx swaps but not a full page reload, matching WP64's own in-memory store rather than reaching
   for `localStorage`.
+
+- [x] **WP84 — Chargen page: separate the sections visually.**
+  Goal: `_chargen_body.html` stacks ~14 `<details>` sections in one `#chargen-body` with no
+  styling of any kind, so the page read as one undifferentiated column of text and it was hard to
+  tell where one chargen step ended and the next began.
+  Notes: the project had no stylesheet at all before this WP — only the vendored htmx under
+  `static/`. Keep it that small: this is section separation, not a visual redesign, and it must not
+  restyle the forms/tables *inside* a section (in particular nothing may set `display` on a
+  `tr`, which WP61/WP67's filters toggle via the `hidden` attribute).
+  Depends on: nothing.
+  Landed as `src/chummer5/web/static/app.css`, linked from `base.html` and served off the same
+  local `/static` mount as the vendored htmx (same no-CDN reason — `test_web_app.py` asserts both).
+  Each `#chargen-body > div` becomes its own box with a top rule, a left accent bar, and an
+  alternating background tint: two signals rather than one, because the accordion keeps at most one
+  section open, so adjacent *collapsed* sections have only their headers to be told apart by. Nested
+  `<details>` (skill categories, gear/cyberware groups) get a lighter indent + hairline so the two
+  levels don't compete, and the `error`/`warning`/`info` classes the templates have emitted since
+  WP14 finally have colours. Light and dark both handled via `prefers-color-scheme` + `color-scheme`.
+  Verified by serving and asserting rather than by eye — this devcontainer has no browser.
