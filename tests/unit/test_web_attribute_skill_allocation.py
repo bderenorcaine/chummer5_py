@@ -108,6 +108,27 @@ def test_skill_picker_offers_rated_only_filter_with_per_row_rating() -> None:
     assert 'data-skill-rating="0"' in response.text
 
 
+def test_skill_filter_state_survives_the_fragment_being_re_rendered() -> None:
+    # The whole #skill-allocation fragment (controls included) is re-rendered on every rating
+    # change, so both filter controls come back at their unfiltered defaults unless the client
+    # restores them -- the same swap-discards-state problem WP64's <details> store solves. The
+    # server contract is only that the re-rendered fragment carries the restore/re-apply code:
+    # the state itself lives on the client, never in the session.
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
+    response = client.post("/ui/skills", data={f"skill_{skill.id}": "3"})
+
+    assert response.status_code == 200
+    # Restored from a store that outlives the swapped subtree, not from the rendered markup.
+    assert "window.__skillFilterState" in response.text
+    assert "ratedOnly.checked = state.ratedOnly" in response.text
+    assert "filterInput.value = state.query" in response.text
+    # ...and re-applied immediately, so the freshly-rendered rows honour it without another click.
+    assert response.text.count("applyFilter();") == 1
+
+
 def test_submitting_valid_attribute_points_matches_engine_output() -> None:
     client = TestClient(create_app())
     _confirm_human(client)

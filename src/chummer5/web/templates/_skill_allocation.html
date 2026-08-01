@@ -166,9 +166,24 @@
       var filterInput = document.getElementById("skill-filter");
       var ratedOnly = document.getElementById("skill-rated-only");
       if (!filterInput || !ratedOnly) return;
+      // This whole fragment -- inputs, rows, and this script -- is rebuilt from server-rendered
+      // HTML on every hx-post to /ui/skills, so both filter controls reset to their (unfiltered)
+      // rendered defaults whenever a rating changes, and this closure's own state dies with them.
+      // Exactly the problem WP64's <details> store solves for open/closed state, so it takes the
+      // same shape: state lives outside the swapped subtree (on `window`, since only this fragment
+      // reads it), the freshly-rendered controls are restored from it, and the filter is re-applied
+      // immediately so the rebuilt rows match what the player last asked for.
+      var state = window.__skillFilterState;
+      if (!state) {
+        state = window.__skillFilterState = { query: "", ratedOnly: false };
+      }
+      filterInput.value = state.query;
+      ratedOnly.checked = state.ratedOnly;
       function applyFilter() {
         var query = filterInput.value.trim().toLowerCase();
         var onlyRated = ratedOnly.checked;
+        state.query = filterInput.value;
+        state.ratedOnly = onlyRated;
         document.querySelectorAll("#skill-tables details").forEach(function (details) {
           var anyVisible = false;
           details.querySelectorAll("tr[data-skill-name]").forEach(function (row) {
@@ -184,6 +199,7 @@
       }
       filterInput.addEventListener("input", applyFilter);
       ratedOnly.addEventListener("change", applyFilter);
+      applyFilter();
     })();
   </script>
   </details>

@@ -6,6 +6,11 @@ Feature requests captured 2026-07-27 in the same manual-testing session that rai
 QoL improvements to the chargen UI, not defects. Recorded here as future WPs; none is blocking and
 they can be picked up in any order. Numbered from WP67, after Phase U claims WP64-66.
 
+**2026-08-01 — WP83/WP84 added from a second manual-testing pass** on the now-complete chargen page
+(WP67-71 all landed). One is a defect in WP67's own filter rather than a new request, and is filed
+here with it rather than in a third UI-bugfix phase; the other is the first styling this project has
+ever had, prompted by the page having grown to ~14 stacked sections.
+
 - [x] **WP67 — Skill picker: filter to skills with a positive rating.**
   Goal: let a player narrow the active-skills list to only the skills they've actually put points in
   (rating > 0), on top of the existing by-name text filter.
@@ -55,3 +60,24 @@ they can be picked up in any order. Numbered from WP67, after Phase U claims WP6
   WP66 (Rating-priced gear) since a larger catalog makes a filter more valuable, but doesn't depend
   on it.
   Depends on: nothing.
+
+- [x] **WP83 — Skill picker: the filter controls must survive the section being re-rendered.**
+  Goal: WP67's "Only rated skills" checkbox (and WP61's by-name text filter alongside it) reset to
+  their unfiltered defaults on every skill change, so a player narrowing the picker to their rated
+  skills lost that narrowing the moment they edited a rating — exactly when they least want the
+  full 76-row list back.
+  Notes: not a filter bug — a swap-lifetime bug. `_skill_allocation.html`'s form posts with
+  `hx-swap="outerHTML"` on `#skill-allocation`, so htmx rebuilds the controls, the rows, *and* the
+  filter script itself from server-rendered HTML on every change; the checkbox comes back at its
+  rendered default and the script's closure state dies with the old subtree. Same problem WP64's
+  `<details>` store solves for open/closed state, so it takes the same shape: keep the state
+  outside the swapped subtree, restore the controls from it, re-apply immediately.
+  Depends on: WP67 (the checkbox), WP61 (the text filter).
+  Landed as a `window.__skillFilterState` store in `_skill_allocation.html`'s own filter script —
+  read back into both controls when the re-rendered script runs, written on every `applyFilter()`,
+  and re-applied at init so the rebuilt rows honour it without a second click. Deliberately *not*
+  session state: the filter is presentation-only and the server contract stays "render every
+  offered skill row", so the only new server-side assertion is that the re-rendered fragment
+  carries the restore code (`tests/unit/test_web_attribute_skill_allocation.py`). Persists across
+  htmx swaps but not a full page reload, matching WP64's own in-memory store rather than reaching
+  for `localStorage`.
