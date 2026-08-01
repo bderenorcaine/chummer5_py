@@ -439,8 +439,8 @@ no augmentation row is offered-and-inert any more. WP81 (natural vs. augmented a
 and WP82 (the same for skills, claimed by WP80) landed on 2026-08-01 — neither gated WP42, but both
 change what WP42's own picker and character sheet will be rendering: an attribute reads
 `natural (augmented)` and a skill reads `bought (with bonuses)`, so any new augmentation display
-WP42 adds should match those two conventions rather than inventing a third. **WP42 is now the only
-open entry in this phase.**
+WP42 adds should match those two conventions rather than inventing a third. **WP42 landed on
+2026-08-01 and closed this phase.**
 
 - [x] **WP77 — Augmentation `<bonus>` coverage audit + "Unmodeled real effects" backfill.**
   Goal: close the gap WP38's worklog first flagged and WP41's widening made larger — every
@@ -866,7 +866,7 @@ open entry in this phase.**
   - `chummer5.engine.knowledge` is untouched — its Knowledge/Language ratings have the same
     purchase cap and no Improvement producer at all, so nothing to split yet.
 
-- [ ] **WP42 — Cyberware modification/subsystem UI.**
+- [x] **WP42 — Cyberware modification/subsystem UI.**
   Goal: expose subsystem/plugin purchase through the browser. Deliberately last, and deliberately
   out of scope until WP36-41 are solid — this project's own "rules engine first, UI last" principle,
   applied here specifically because a placeholder UI built against an incomplete engine shape would
@@ -881,4 +881,54 @@ open entry in this phase.**
   Acceptance: manual walkthrough — install a Cybereyes system, buy a Vision Enhancement plugin into
   it, confirm Capacity remaining updates live and the Mental limit bonus is visibly conditional on
   the character sheet.
+
+  **Landed 2026-08-01**, across the web + template layers with two small public-surface changes in
+  the data/engine layers and no new module (`chummer5.data.cyberware`,
+  `chummer5.engine.cyberware_subsystems`, `chummer5.web.{catalogs, routes.cyberware,
+  routes.priorities, routes.character}`, `_cyberware.html`, `_character_sheet.html`), +20 tests
+  (1210 total) in a new `tests/unit/test_web_cyberware_subsystems.py`. **Phase K is complete.**
+  What a later WP needs to know:
+  - **The offered catalog widened from 60 rows to 76** (`chummer5.web.catalogs
+    .CYBERWARE_STANDALONE`): WP37's full 87 SR5 rows, minus the 9 `<requireparent>` rows (offered
+    inside a parent instead) and `Essence Hole`/`Essence Antihole`. The `<requireparent>` move is a
+    **bug fix**, not a narrowing — four of those 9 were in WP34's flat 60, and the engine rejects
+    every one of them bought standalone, so the shipped picker offered four controls that could only
+    produce an error. See `spec/decisions-log.md`, 2026-08-01, and the learnings entry for why the
+    two Essence Hole rows are engine bookkeeping despite `source == "SR5"`.
+  - **The form stayed backward compatible on purpose.** `cyberware_{item_id}` still means "how many
+    of this row," so all of WP34's `tests/unit/test_web_cyberware.py` passes unchanged; everything
+    per-unit hangs off that count by index (`cyberware_rating_{id}_{n}`, `plugin_{id}_{n}_{plugin}`,
+    `plugin_rating_{id}_{n}_{plugin}`), the shape WP80 established for bioware skill picks.
+  - **"Live Capacity" needed no new JS.** The section already re-posts itself on `change`, so a
+    ticked plugin checkbox re-renders the parent's `Capacity N of M remaining` line — the same
+    mechanism WP15's remaining-points display uses.
+  - **Two engine symbols were made public for the UI**: `cyberware_rating_bounds` (so the rating
+    control offers exactly the range `_build_purchase` validates — a control that can produce a
+    rejection is the one thing a rating picker must not be) and `PAIRED_BONUS_ITEM_NAMES` (so the
+    sheet can say a Hydraulic Jack's bonus is granted once per matched pair). Plus a new
+    `chummer5.data.cyberware.CONDITION_DESCRIPTIONS`, the four conditions' English text, mirrored
+    from `en-us.xml` beside `UNMODELED_EFFECT_NOTES` and pinned to the same whitelist by a test.
+  - **`_cyberware_context`'s third parameter changed shape** (flat ids → a `CyberwarePurchaseRequest`
+    tree), and `chummer5.web.routes.priorities` passes `to_requests()`. That is what makes a
+    committed limb's plugins survive a full-page re-render instead of being dropped by the next
+    submission.
+  - **The sheet's cyberware recap is nested and grouped**, one line per distinct top-level purchase
+    (same row, same rating, same subsystems) with its plugins beneath it, each conditional bonus
+    printed as `+N Mental limit — Only for Perception (Visual)`. The derived-stats table gained
+    conditional limit rows (`Mental limit, visual Perception tests`), emitted only when they differ
+    from the headline — **the first consumer of the `context=` parameter WP40 added to
+    `derived.physical_limit`/`mental_limit` and left unused**.
+  - **Display costs are resolved in the web layer, not read off the validated selection**, because
+    the picker must render the rejected state (over budget, over capacity) where no selection
+    exists. The same independent-tally shape WP34's subtotal column already had.
+  - **A plugin is a checkbox, not a quantity box** — the one place this UI is narrower than the
+    engine, with its one consequence (a legacy-imported duplicate plugin collapses on re-submit)
+    recorded in the decisions log rather than hidden.
+  - **Nine rows in the Project Overview's "Unmodeled real effects" registry changed reachability**
+    (WP77's five import-only augmentation rows, WP38's four cyberlimb-enhancement rows), updated in
+    the same commit; the registry preamble now states that a UI-widening WP owes that re-check.
+  - **A follow-up nobody has claimed:** `chummer5.data.cyberware.load_cyberware()` and its
+    `Cyberware` dataclass are now unused by `src/` outside tests/fixtures — WP41 kept them
+    explicitly because the picker still listed them, and that reason is gone. See the decisions-log
+    entry for the four test modules a retirement would touch.
 

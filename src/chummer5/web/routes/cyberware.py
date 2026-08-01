@@ -1,29 +1,48 @@
-"""Cyberware+Bioware chargen step: `POST /ui/cyberware` (WP34, widened by WP45).
+"""Cyberware+Bioware chargen step: `POST /ui/cyberware` (WP34, widened by WP45 and WP42).
 
 **WP62**: split out of the former `chummer5.web.app` -- see `spec/plan/phase-r-architecture-
 cleanup.md`'s WP58 audit for the target shape this module is part of.
 
-**WP41 retypes what this route commits, not what it offers.**
-`Character.cyberware_selection` is Phase K's purchase *tree* now
-(`chummer5.engine.cyberware_subsystems.CyberwareTreeSelection`), so this route builds
-`CyberwarePurchaseRequest`s and resolves them against `CYBERWARE_ENTRIES` (WP37's full 87-row
-catalog). The **picker is deliberately unchanged**: it still lists `CYBERWARE` (WP31's 60 flat
-rows) with a quantity box per item, so every tree this route builds is a set of zero-plugin,
-rating-1 leaves. Widening the UI -- rating-scaled items, and installing a plugin into a
-limb/cybereye/cyberear against its live Capacity -- is **WP42**, which is why this WP does not
-build one: a picker written against a half-migrated engine would be thrown away.
+**WP41 retyped what this route commits; WP42 widens what it offers.**
+`Character.cyberware_selection` has been Phase K's purchase *tree*
+(`chummer5.engine.cyberware_subsystems.CyberwareTreeSelection`) since WP41, but the picker stayed
+WP34's flat quantity-per-item form over `CYBERWARE` (WP31's 60 flat rows), so every tree the
+browser built was a set of zero-plugin, rating-1 leaves. WP42 is the UI half of Phase K:
 
-Two consequences of the split worth naming, both verified rather than assumed: no row in
-`CYBERWARE` carries a `<rating>` tag, so rating 1 is every offered item's only legal value; and
-none of the three `<subsystems>`-bearing parents (`Cybereyes Basic System`, `Cyberears`,
-`Control Rig`) is in `CYBERWARE` either, so the tree engine's bundled auto-attach cannot fire from
-this picker and the flat cost/Essence arithmetic `_cyberware_context` shows stays exact.
+1. **The offered catalog is `CYBERWARE_STANDALONE`** (76 of WP37's 87 SR5 rows -- see
+   `chummer5.web.catalogs` for the two exclusions and the 9 `<requireparent>` rows moved into their
+   parents), so rating-scaled items are purchasable at last. `Cybereyes Basic System` and
+   `Cyberears` in particular were unreachable before, which meant *no* subsystem parent with a real
+   Capacity budget except a cyberlimb.
+2. **A rating control per purchased unit**, over exactly the range
+   `cyberware_rating_bounds` resolves -- so the form cannot offer a rating the engine then rejects.
+3. **A plugin checklist per purchased parent**, with that parent's Capacity spend/remaining shown
+   beside it and re-rendered on every change (the section already re-posts itself on `change`, so
+   "live" needs no new JS -- the same mechanism WP15's remaining-points display uses).
+
+## The form shape, and why it is indexed per bought unit
+
+`cyberware_{item_id}` keeps its WP34 meaning (a quantity), so a purchase is still "how many of
+this row." Everything per-unit hangs off that count by index, mirroring WP80's
+`bioware_skill_{id}_{n}` shape exactly:
+
+- `cyberware_rating_{item_id}_{n}` -- the n-th bought unit's rating (absent/blank -> its minimum).
+- `plugin_{item_id}_{n}_{plugin_id}` -- a checkbox: install this plugin in that unit.
+- `plugin_rating_{item_id}_{n}_{plugin_id}` -- that plugin's own rating.
+
+**A plugin is a checkbox, not a quantity box**, which is the one place this UI is narrower than the
+engine: `create_cyberware_tree_selection` would accept two of the same row in one parent outside the
+`Cyberlimb Enhancement` category. Deliberate -- SR5's own p. 456 rule forbids the stacking case that
+matters, nothing in the core set benefits from a second copy in one limb, and a quantity box would
+need a fourth index level (a rating per copy) for no gain. The one consequence, recorded rather than
+hidden: a legacy-imported character carrying two identical plugins in one parent renders as one
+checked box, so re-submitting the form drops the duplicate. No fixture does this.
 """
 
 from __future__ import annotations
 
 import itertools
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any
@@ -33,7 +52,7 @@ from fastapi.responses import HTMLResponse
 from starlette.datastructures import FormData
 
 from chummer5.data.bioware import Bioware
-from chummer5.data.cyberware import Cyberware
+from chummer5.data.cyberware_subsystems import CyberwareEntry
 from chummer5.engine.bioware import (
     BiowarePurchaseRequest,
     BiowareSelection,
@@ -47,6 +66,8 @@ from chummer5.engine.cyberware_subsystems import (
     CyberwareTreeSelection,
     apply_cyberware_tree_improvements,
     create_cyberware_tree_selection,
+    cyberlimb_attribute_maximums,
+    cyberware_rating_bounds,
 )
 from chummer5.engine.derived import BASE_ESSENCE
 from chummer5.engine.improvements import ImprovementSource
@@ -58,8 +79,9 @@ from chummer5.engine.resources import (
 )
 from chummer5.web.catalogs import (
     BIOWARE,
-    CYBERWARE,
     CYBERWARE_ENTRIES,
+    CYBERWARE_PLUGIN_CHOICES,
+    CYBERWARE_STANDALONE,
     PRIORITIES,
     SKILLS,
     templates,
@@ -69,14 +91,15 @@ from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
 
-# Sorted by (category, name) for the picker's category-grouped `<details>` sections, mirroring
-# `STARTER_GEAR_CATALOG`'s own sort -- unlike that catalog, `load_cyberware()`'s XML-document order
-# already groups most categories consecutively but not perfectly (Cyber Implant Weapon and Cyber
-# Implant Weapon Accessory interleave at the end of the file), so a plain `itertools.groupby` over
-# `CYBERWARE` directly would produce spurious duplicate groups. Computed once at import time, not
-# per-request.
-_CYBERWARE_BY_CATEGORY = tuple(sorted(CYBERWARE, key=lambda item: (item.category, item.name)))
-# Same reasoning, applied to WP45's much smaller bioware catalog (2 categories, Basic/Cultured).
+# WP42: `CYBERWARE_STANDALONE` is already sorted by (category, name) for the picker's
+# category-grouped `<details>` sections -- see `chummer5.web.catalogs`, and note the sort is
+# load-bearing rather than cosmetic: `cyberware.xml`'s document order groups most categories
+# consecutively but not perfectly (Cyber Implant Weapon and Cyber Implant Weapon Accessory
+# interleave at the end of the file), so `itertools.groupby` over the raw order would produce
+# spurious duplicate groups.
+#
+# The same reasoning, applied to WP45's much smaller bioware catalog (2 categories, Basic/Cultured),
+# which still needs its sort done here because `chummer5.web.catalogs` keeps it in document order.
 _BIOWARE_BY_CATEGORY = tuple(sorted(BIOWARE, key=lambda item: (item.category, item.name)))
 # WP80: the skills each SELECT_SKILL row's purchase-time pick may come from (`Reflex Recorder` is
 # the only such row today: the 28 active skills linked to BOD/AGI/REA/STR). Computed once at import
@@ -109,15 +132,6 @@ def _replace_committed_cyberware(
     return replace(character, cyberware_selection=selection)
 
 
-def _purchase_requests(item_ids: Iterable[str]) -> tuple[CyberwarePurchaseRequest, ...]:
-    """Flat picker ids -> zero-plugin, rating-1 purchase requests (WP41).
-
-    The one adapter between this route's unchanged quantity-per-item form and the tree engine. See
-    the module docstring for why rating 1 is exact rather than a placeholder.
-    """
-    return tuple(CyberwarePurchaseRequest(item_id=item_id) for item_id in item_ids)
-
-
 def _replace_committed_bioware(character: Character, selection: BiowareSelection) -> Character:
     """Swap whatever `BIOWARE`-sourced Improvements `character.improvements` currently holds for
     `selection`'s, and re-attach `selection` as `character.bioware_selection` -- mirrors
@@ -131,22 +145,96 @@ def _replace_committed_bioware(character: Character, selection: BiowareSelection
     return replace(character, bioware_selection=selection)
 
 
-def _parse_cyberware(form: FormData, catalog: Iterable[Cyberware]) -> tuple[str, ...]:
-    """Expand each cyberware item's submitted quantity into that many repeats of its id -- mirrors
-    `chummer5.web.routes.resources._parse_gear`'s identical shape, keyed by catalog id (not name):
-    `create_cyberware_selection`'s own `item_ids` parameter takes ids, and repeats are legal
-    purchases (a matched pair of cyberlimbs -- see `chummer5.engine.cyberware`'s module docstring),
-    not an error to reject.
+def _form_int(form: FormData, key: str) -> int | None:
+    """A submitted integer field, or `None` for absent/blank/non-numeric -- the caller decides what
+    the absence means (a quantity of 0, or an item's minimum rating).
     """
-    ids: list[str] = []
-    for item in catalog:
-        raw = form.get(f"cyberware_{item.id}")
-        try:
-            quantity = int(str(raw)) if raw is not None else 0
-        except ValueError:
-            quantity = 0
-        ids.extend([item.id] * max(quantity, 0))
-    return tuple(ids)
+    raw = form.get(key)
+    if raw is None:
+        return None
+    try:
+        return int(str(raw))
+    except ValueError:
+        return None
+
+
+def _rating_range(
+    item: CyberwareEntry, attribute_maximums: Mapping[str, int]
+) -> tuple[int, int] | None:
+    """The rating range to offer for `item`, or `None` when it has no rating to pick.
+
+    `None` covers both an unrated row (`cyberware_rating_bounds` gives `(1, 1)`) and the degenerate
+    single-value range, so the template renders a control only where there is a choice.
+    """
+    minimum, maximum = cyberware_rating_bounds(item, attribute_maximums=attribute_maximums)
+    return None if minimum >= maximum else (minimum, maximum)
+
+
+def _parse_cyberware(
+    form: FormData, *, attribute_maximums: Mapping[str, int]
+) -> tuple[CyberwarePurchaseRequest, ...]:
+    """Read the picker form into a purchase *tree* (WP42; WP34 read it into a flat id list).
+
+    Quantity per catalog row as before -- repeats are legal purchases (a matched pair of cyberlimbs,
+    see `chummer5.engine.cyberware_subsystems`' module docstring), not an error -- then each bought
+    unit's own rating and plugin picks by index. See the module docstring for the three field names
+    and for why a plugin is a checkbox rather than a quantity.
+
+    Ratings default to the item's *minimum*, not to 1: `Customized Agility`'s floor is 4
+    (`{AGIMinimum}+1`, p. 456), so 1 would be an instant rejection rather than a sane default.
+    """
+    requests: list[CyberwarePurchaseRequest] = []
+    for item in CYBERWARE_STANDALONE:
+        quantity = max(_form_int(form, f"cyberware_{item.id}") or 0, 0)
+        for index in range(quantity):
+            requests.append(
+                CyberwarePurchaseRequest(
+                    item_id=item.id,
+                    rating=_parse_rating(
+                        form, f"cyberware_rating_{item.id}_{index}", item, attribute_maximums
+                    ),
+                    plugins=_parse_plugins(form, item, index, attribute_maximums),
+                )
+            )
+    return tuple(requests)
+
+
+def _parse_rating(
+    form: FormData,
+    key: str,
+    item: CyberwareEntry,
+    attribute_maximums: Mapping[str, int],
+) -> int:
+    minimum, _ = cyberware_rating_bounds(item, attribute_maximums=attribute_maximums)
+    submitted = _form_int(form, key)
+    return minimum if submitted is None else submitted
+
+
+def _parse_plugins(
+    form: FormData,
+    parent: CyberwareEntry,
+    index: int,
+    attribute_maximums: Mapping[str, int],
+) -> tuple[CyberwarePurchaseRequest, ...]:
+    """The plugins checked for the `index`-th bought unit of `parent`.
+
+    A row `CYBERWARE_PLUGIN_CHOICES` doesn't list for this parent is simply not iterated, so a
+    hand-crafted request naming an ineligible plugin is ignored here rather than reaching the engine
+    -- the same "unknown keys are just not in the catalog to iterate" shape `_parse_gear` has.
+    """
+    return tuple(
+        CyberwarePurchaseRequest(
+            item_id=plugin.id,
+            rating=_parse_rating(
+                form,
+                f"plugin_rating_{parent.id}_{index}_{plugin.id}",
+                plugin,
+                attribute_maximums,
+            ),
+        )
+        for plugin in CYBERWARE_PLUGIN_CHOICES.get(parent.id, ())
+        if form.get(f"plugin_{parent.id}_{index}_{plugin.id}") is not None
+    )
 
 
 def _parse_bioware(
@@ -184,14 +272,146 @@ def _parse_bioware(
     return tuple(requests)
 
 
+def _cyberware_groups(
+    requests: Sequence[CyberwarePurchaseRequest], attribute_maximums: Mapping[str, int]
+) -> list[dict[str, Any]]:
+    """Category-grouped picker rows for the cyberware half (WP42).
+
+    Each row carries its quantity as before, plus one `units` entry per bought copy holding that
+    copy's own rating control, resolved prices and -- for a parent with a real Capacity budget --
+    its plugin checklist and live Capacity spend. Costs are resolved here rather than read off the
+    validated `CyberwareTreeSelection`, for the same reason WP34's own tally was computed
+    independently: this has to render the *rejected* state too (an over-budget spend, an
+    over-capacity limb), which is exactly when no selection exists to read from.
+    """
+    units_by_item: dict[str, list[CyberwarePurchaseRequest]] = {}
+    for request in requests:
+        units_by_item.setdefault(request.item_id, []).append(request)
+    return [
+        {
+            "category": category,
+            "rows": [
+                _cyberware_row(item, units_by_item.get(item.id, []), attribute_maximums)
+                for item in items
+            ],
+        }
+        for category, items in itertools.groupby(
+            CYBERWARE_STANDALONE, key=lambda item: item.category
+        )
+    ]
+
+
+def _cyberware_row(
+    item: CyberwareEntry,
+    units: Sequence[CyberwarePurchaseRequest],
+    attribute_maximums: Mapping[str, int],
+) -> dict[str, Any]:
+    unit_rows = [
+        _cyberware_unit_row(item, index, request, attribute_maximums)
+        for index, request in enumerate(units)
+    ]
+    return {
+        "item": item,
+        "quantity": len(unit_rows),
+        "units": unit_rows,
+        "subtotal": sum(unit["subtotal"] for unit in unit_rows),
+        "essence": sum((unit["essence"] for unit in unit_rows), Decimal(0)),
+    }
+
+
+def _cyberware_unit_row(
+    item: CyberwareEntry,
+    index: int,
+    request: CyberwarePurchaseRequest,
+    attribute_maximums: Mapping[str, int],
+) -> dict[str, Any]:
+    """One bought copy of one catalog row: its rating control, its own prices, and its subsystems.
+
+    `capacity_budget` decides whether a subsystem block is offered at all -- a `Cyber Implant
+    Weapon` carries `<allowsubsystems>` yet a purely bracketed `<capacity>`, i.e. a budget of zero
+    (WP37/WP38's third-nesting-level cut), so offering its 3 accessories could only ever produce
+    "exceeds its Capacity budget of 0".
+    """
+    minimum, _ = cyberware_rating_bounds(item, attribute_maximums=attribute_maximums)
+    rating = request.rating
+    budget = (
+        item.capacity_budget.resolve(rating=rating, min_rating=minimum)
+        if item.capacity_budget is not None
+        else Decimal(0)
+    )
+    installed = {plugin.item_id: plugin for plugin in request.plugins}
+    plugin_rows = (
+        [
+            _plugin_row(item, index, plugin, installed.get(plugin.id), attribute_maximums)
+            for plugin in CYBERWARE_PLUGIN_CHOICES.get(item.id, ())
+        ]
+        if budget > 0
+        else []
+    )
+    spent = sum(
+        (row["capacity_cost"] for row in plugin_rows if row["selected"]),
+        Decimal(0),
+    )
+    nuyen_cost = int(item.cost.resolve(rating=rating, min_rating=minimum))
+    return {
+        "index": index,
+        "rating": rating,
+        "rating_range": _rating_range(item, attribute_maximums),
+        "nuyen_cost": nuyen_cost,
+        # Dual costing: a standalone purchase is the only thing that charges Essence -- every plugin
+        # below contributes exactly zero (module docstring of `engine.cyberware_subsystems`).
+        "essence": item.essence_cost.resolve(rating=rating, min_rating=minimum),
+        "capacity_budget": budget,
+        "capacity_spent": spent,
+        "capacity_remaining": budget - spent,
+        "plugin_rows": plugin_rows,
+        "bundled_names": item.bundled_subsystem_names,
+        "subtotal": nuyen_cost + sum(row["nuyen_cost"] for row in plugin_rows if row["selected"]),
+    }
+
+
+def _plugin_row(
+    parent: CyberwareEntry,
+    index: int,
+    plugin: CyberwareEntry,
+    request: CyberwarePurchaseRequest | None,
+    attribute_maximums: Mapping[str, int],
+) -> dict[str, Any]:
+    """One installable-plugin checkbox for one bought parent unit.
+
+    Prices are shown whether or not the box is ticked -- an unticked row's numbers are what
+    installing it *would* cost, which is the whole point of showing them next to the parent's
+    remaining Capacity.
+    """
+    minimum, _ = cyberware_rating_bounds(plugin, attribute_maximums=attribute_maximums)
+    rating = minimum if request is None else request.rating
+    return {
+        "item": plugin,
+        "selected": request is not None,
+        "rating": rating,
+        "rating_range": _rating_range(plugin, attribute_maximums),
+        "field": f"plugin_{parent.id}_{index}_{plugin.id}",
+        "rating_field": f"plugin_rating_{parent.id}_{index}_{plugin.id}",
+        "nuyen_cost": int(plugin.cost.resolve(rating=rating, min_rating=minimum)),
+        "capacity_cost": (
+            plugin.capacity_cost.resolve(rating=rating, min_rating=minimum)
+            if plugin.capacity_cost is not None
+            else Decimal(0)
+        ),
+    }
+
+
 def _catalog_groups(
     item_ids: tuple[str, ...],
     catalog_by_category: tuple[Any, ...],
     by_id: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Build category-grouped `<details>` rows for a quantity-per-item picker -- shared by the
-    cyberware and bioware halves of `_cyberware_context` (WP45), mirroring
-    `chummer5.web.routes.resources._resources_context`'s WP21 shape.
+    """Build category-grouped `<details>` rows for a quantity-per-item picker.
+
+    WP45 shared this between the cyberware and bioware halves of `_cyberware_context`; WP42 gave
+    cyberware its own tree-shaped builder above, so this now serves the bioware half only -- kept
+    under its general name because the shape is still the general one (`chummer5.web.routes
+    .resources._resources_context`'s WP21 shape), not a bioware-specific one.
     """
     counts: dict[str, int] = {}
     for item_id in item_ids:
@@ -239,7 +459,7 @@ def _bioware_groups(
 def _cyberware_context(
     character: Character | None,
     resources_letter: str,
-    item_ids: tuple[str, ...],
+    cyberware_requests: tuple[CyberwarePurchaseRequest, ...],
     bioware_requests: tuple[BiowarePurchaseRequest, ...],
     gear_cost: int,
     lifestyle_cost: int,
@@ -248,8 +468,14 @@ def _cyberware_context(
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
-    """Context for `_cyberware.html` (WP34, widened by WP45): Phase J's cyberware purchase, plus
-    Phase L's bioware purchase folded into the same section.
+    """Context for `_cyberware.html` (WP34, widened by WP45 and WP42): Phase J's cyberware purchase,
+    plus Phase L's bioware purchase folded into the same section.
+
+    **WP42**: `cyberware_requests` is a purchase *tree*, not a flat id list -- the third parameter
+    changed shape, and `chummer5.web.routes.priorities` (this function's only other caller) now
+    passes `cyberware_selection.to_requests()` rather than a list of top-level ids. That is what
+    makes a committed limb's installed plugins survive a full-page re-render instead of being
+    silently absent from the form the player then re-submits.
 
     **A new peer section, not folded into `_resources.html`'s gear picker** -- mirrors WP20's own
     explicit "Lifestyle gets its own section despite sharing a budget" choice (see that WP's
@@ -282,9 +508,9 @@ def _cyberware_context(
     """
     if character is None:
         return {"character": None, "cyberware_error": error}
-    cyberware_by_id = {item.id: item for item in CYBERWARE}
+    attribute_maximums = cyberlimb_attribute_maximums(character)
     bioware_by_id = {item.id: item for item in BIOWARE}
-    cyberware_groups = _catalog_groups(item_ids, _CYBERWARE_BY_CATEGORY, cyberware_by_id)
+    cyberware_groups = _cyberware_groups(cyberware_requests, attribute_maximums)
     bioware_groups = _bioware_groups(bioware_requests, bioware_by_id)
     budget = starting_nuyen(resources_letter, PRIORITIES) + display_karma_to_nuyen(karma_converted)
     nuyen_available = budget - gear_cost - lifestyle_cost - foci_cost
@@ -294,7 +520,7 @@ def _cyberware_context(
     bioware_spent = sum(int(row["subtotal"]) for group in bioware_groups for row in group["rows"])
     spent = cyberware_spent + bioware_spent
     cyberware_essence_spent = sum(
-        (cyberware_by_id[item_id].essence_cost for item_id in item_ids), Decimal(0)
+        (row["essence"] for group in cyberware_groups for row in group["rows"]), Decimal(0)
     )
     bioware_essence_spent = sum(
         (bioware_by_id[request.item_id].essence_cost for request in bioware_requests), Decimal(0)
@@ -304,7 +530,10 @@ def _cyberware_context(
     if error is None:
         try:
             cyberware_selection = create_cyberware_tree_selection(
-                _purchase_requests(item_ids), CYBERWARE_ENTRIES, nuyen_available
+                cyberware_requests,
+                CYBERWARE_ENTRIES,
+                nuyen_available,
+                attribute_maximums=attribute_maximums,
             )
             create_bioware_selection(
                 bioware_requests,
@@ -340,7 +569,8 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
         context = _cyberware_context(None, session.resources_letter, (), (), 0, 0, 0)
     else:
         form = await request.form()
-        item_ids = _parse_cyberware(form, CYBERWARE)
+        attribute_maximums = cyberlimb_attribute_maximums(session.character)
+        cyberware_requests = _parse_cyberware(form, attribute_maximums=attribute_maximums)
         bioware_requests = _parse_bioware(form, BIOWARE)
         resources_selection = session.character.resources_selection
         # WP66: preserve each committed Rating-priced item's chosen rating across re-validation.
@@ -367,7 +597,10 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
             # spend -- so a combination only invalid once both are counted together is always
             # caught, on the bioware call.
             selection = create_cyberware_tree_selection(
-                _purchase_requests(item_ids), CYBERWARE_ENTRIES, nuyen_available
+                cyberware_requests,
+                CYBERWARE_ENTRIES,
+                nuyen_available,
+                attribute_maximums=attribute_maximums,
             )
             bioware_selection = create_bioware_selection(
                 bioware_requests,
@@ -391,7 +624,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
             context = _cyberware_context(
                 session.character,
                 session.resources_letter,
-                item_ids,
+                cyberware_requests,
                 bioware_requests,
                 gear_cost,
                 lifestyle_cost,
@@ -408,7 +641,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
             context = _cyberware_context(
                 session.character,
                 session.resources_letter,
-                item_ids,
+                cyberware_requests,
                 bioware_requests,
                 gear_cost,
                 lifestyle_cost,

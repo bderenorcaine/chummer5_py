@@ -174,6 +174,17 @@ def test_every_supported_condition_key_maps_to_an_improvement_condition() -> Non
     assert set(_CONDITION_KEY_TO_CONDITION.values()) == set(ImprovementCondition)
 
 
+def test_every_supported_condition_key_has_player_facing_english_text() -> None:
+    # WP42: a third view of the same four keys -- the sheet prints this beside a conditional
+    # bonus's value. Pinned to the same whitelist for the same reason as the map above: a fifth
+    # condition added to the data layer without its text would render as a KeyError, not as a
+    # missing sentence.
+    from chummer5.data.cyberware import _SUPPORTED_BONUS_CONDITIONS, CONDITION_DESCRIPTIONS
+
+    assert set(CONDITION_DESCRIPTIONS) == set(_SUPPORTED_BONUS_CONDITIONS)
+    assert all(text for text in CONDITION_DESCRIPTIONS.values())
+
+
 def test_every_target_kind_the_loader_produces_has_an_improvement_type() -> None:
     # The same pin as above, for the other string -> enum map. WP78 is the WP that made this map
     # grow for the first time since WP40, so an unmapped `target_kind` is now a live failure mode

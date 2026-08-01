@@ -20,7 +20,13 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from starlette.datastructures import UploadFile
 
+from chummer5.data.cyberware import CONDITION_DESCRIPTIONS
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character
+from chummer5.engine.cyberware_subsystems import (
+    PAIRED_BONUS_ITEM_NAMES,
+    CyberwareTreeSelection,
+    PurchasedCyberware,
+)
 from chummer5.engine.derived import (
     drain_resistance,
     essence,
@@ -33,6 +39,7 @@ from chummer5.engine.derived import (
     stun_condition_monitor,
     unmodeled_effect_notes,
 )
+from chummer5.engine.improvements import ResolutionContext
 from chummer5.engine.resources import (
     ResourcesSelection,
     StarterGearItem,
@@ -143,6 +150,112 @@ def _resources_selection_for_display(
         karma_converted=karma_converted,
         foci_cost=foci_cost,
     )
+
+
+# WP42: the `<limitmodifier><limit>` value a `CyberwareConditionalBonus` carries, as the sheet
+# spells it out. `chummer5.engine.cyberware` maps the same two strings to `ImprovementType`s; this
+# map is display only, so it lives here rather than being read back out of the engine's.
+_LIMIT_LABELS = {"mental_limit": "Mental limit", "physical_limit": "Physical limit"}
+
+# WP42: every `ResolutionContext` a real conditional bonus can be resolved under, with the limit it
+# modifies and how the sheet names the test. Built from the four bonuses `chummer5.data.cyberware
+# ._SUPPORTED_BONUS_CONDITIONS` whitelists (WP39/WP40), not from the enum wholesale -- a context
+# with no bonus behind it would only ever render a row identical to the headline figure.
+_CONDITIONAL_LIMIT_ROWS = (
+    ("Mental limit", ResolutionContext.PERCEPTION_VISUAL, "visual Perception tests"),
+    ("Mental limit", ResolutionContext.PERCEPTION_HEARING, "hearing Perception tests"),
+    (
+        "Mental limit",
+        ResolutionContext.PERCEPTION_SOUND_SOURCE,
+        "Perception tests to find a sound's source",
+    ),
+    ("Physical limit", ResolutionContext.GYMNASTICS_JUMPING, "Gymnastics (Jumping) tests"),
+    ("Physical limit", ResolutionContext.RUNNING_SPRINTING, "Running (Sprinting) tests"),
+)
+
+
+def _cyberware_node_row(node: PurchasedCyberware) -> dict[str, Any]:
+    """One purchase-tree node as the sheet shows it (WP42), plugins nested under their parent.
+
+    `rating` is `None` for an unrated row, so the sheet says "Datajack" rather than
+    "Datajack (Rating 1)" for the 60-odd rows that have exactly one legal rating.
+
+    `conditional_bonuses` is what the Phase K UI deliverable is actually about: a bonus that applies
+    only during one kind of test is meaningless as a bare number on a sheet, so each carries its
+    condition's English text (`chummer5.data.cyberware.CONDITION_DESCRIPTIONS`) beside its value.
+    `paired` flags the one item whose bonus needs a matched pair to apply at all
+    (`Hydraulic Jacks`, p. 457) -- without it, a player reading two jacks' rows would count the
+    printed +Rating twice, which is the exact mistake WP40's engine rule exists to prevent.
+    """
+    return {
+        "name": node.item.name,
+        "rating": node.rating if node.item.is_rated else None,
+        "bundled": node.bundled,
+        "capacity_budget": node.capacity_budget,
+        "capacity_spent": node.capacity_spent,
+        "conditional_bonuses": [
+            {
+                "limit": _LIMIT_LABELS[bonus.target_kind],
+                "value": bonus.resolve_value(node.rating),
+                "condition": CONDITION_DESCRIPTIONS[bonus.condition],
+                "paired": node.item.name in PAIRED_BONUS_ITEM_NAMES,
+            }
+            for bonus in node.item.conditional_bonuses
+        ],
+        "plugins": [_cyberware_node_row(plugin) for plugin in node.plugins],
+    }
+
+
+def _cyberware_purchase_key(node: PurchasedCyberware) -> tuple[Any, ...]:
+    """What makes two top-level purchases "the same line" on the sheet: same row, same rating, same
+    subsystems installed at the same ratings. Two bare Datajacks collapse to `× 2`; two cyberarms
+    with different plugins stay two lines, because they genuinely are two different implants.
+    """
+    return (
+        node.item.id,
+        node.rating,
+        tuple(sorted(_cyberware_purchase_key(plugin) for plugin in node.plugins)),
+    )
+
+
+def _cyberware_sheet_rows(selection: CyberwareTreeSelection | None) -> list[dict[str, Any]]:
+    """The sheet's cyberware recap (WP42), nested and grouped.
+
+    WP34 tallied a flat `name -> quantity` dict and WP41 widened it over `walk()`, which put an
+    imported limb's plugins in the list but as siblings of the limb -- readable, but it loses which
+    plugin is in which limb and how much of that limb's Capacity is gone. This builds one row per
+    distinct top-level purchase instead, with its plugins beneath it.
+    """
+    if selection is None:
+        return []
+    grouped: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for purchase in selection.purchases:
+        row = grouped.setdefault(
+            _cyberware_purchase_key(purchase),
+            {**_cyberware_node_row(purchase), "quantity": 0},
+        )
+        row["quantity"] += 1
+    return sorted(grouped.values(), key=lambda row: (row["name"], row["rating"] or 0))
+
+
+def _conditional_limit_rows(character: Character) -> list[dict[str, Any]]:
+    """The other half of "a player can see *why* a bonus applies only sometimes" (WP42).
+
+    The cyberware recap says a Vision Enhancement is worth +Rating on visual Perception tests; this
+    says what the limit for such a test actually *is*. Only rows that differ from the headline
+    figure are emitted, so a character with no conditional bonus shows none at all rather than five
+    restatements of the same two numbers.
+
+    This is the first consumer of `chummer5.engine.derived`'s `context=` parameter, which WP40 added
+    for exactly this and left unused.
+    """
+    rows: list[dict[str, Any]] = []
+    for limit, context, test in _CONDITIONAL_LIMIT_ROWS:
+        resolve = mental_limit if limit == "Mental limit" else physical_limit
+        value = resolve(character, context=context)
+        if value != resolve(character):
+            rows.append({"limit": limit, "test": test, "value": value})
+    return rows
 
 
 def _character_sheet_context(
@@ -270,14 +383,11 @@ def _character_sheet_context(
     gear_counts: dict[tuple[str, int | None], int] = {}
     for item in resources_selection.gear:
         gear_counts[(item.name, item.rating)] = gear_counts.get((item.name, item.rating), 0) + 1
-    # WP34: tallied the same way gear is, since duplicate cyberware purchases (a matched pair of
-    # cyberlimbs) are legal -- see chummer5.engine.cyberware_subsystems' own docstring. WP41: over
-    # `walk()`, so an imported character's installed plugins appear in the recap instead of
-    # vanishing behind their parent. This stays one flat "name x quantity" list; showing plugins
-    # *nested under* their parent, with each conditional bonus's condition text, is WP42's job.
-    cyberware_counts: dict[str, int] = {}
-    for node in cyberware_selection.walk() if cyberware_selection is not None else ():
-        cyberware_counts[node.item.name] = cyberware_counts.get(node.item.name, 0) + 1
+    # WP34 tallied this the way gear is tallied (duplicate purchases -- a matched pair of cyberlimbs
+    # -- are legal, see chummer5.engine.cyberware_subsystems' own docstring), and WP41 widened the
+    # tally over `walk()` so an imported character's plugins appeared at all. **WP42** replaces both
+    # with a nested, grouped recap: see `_cyberware_sheet_rows`.
+    cyberware_rows = _cyberware_sheet_rows(cyberware_selection)
     # WP45: same tallying for bioware. WP80: keyed by the *displayed* label rather than the item
     # name, so two Reflex Recorders bought for different skills read as two lines ("Reflex Recorder
     # (Longarms)"), not one line of two -- the same "the pick is part of what was bought" display
@@ -365,6 +475,7 @@ def _character_sheet_context(
         "physical_limit": physical_limit(character),
         "mental_limit": mental_limit(character),
         "social_limit": social_limit(character),
+        "conditional_limit_rows": _conditional_limit_rows(character),
         "physical_cm": physical_condition_monitor(character),
         "stun_cm": stun_condition_monitor(character),
         # WP29: hidden entirely (not shown as zeroes) for Mundane -- `magic_type` gates the whole
@@ -436,10 +547,7 @@ def _character_sheet_context(
         # move away from) and a purchased-cyberware recap, the same "None until committed" shape
         # every other selection-backed sheet section already has.
         "essence": essence(character),
-        "cyberware_rows": [
-            {"name": name, "quantity": quantity}
-            for name, quantity in sorted(cyberware_counts.items())
-        ],
+        "cyberware_rows": cyberware_rows,
         # WP45: same recap for bioware, alongside cyberware's.
         "bioware_rows": [
             {"name": name, "quantity": quantity}

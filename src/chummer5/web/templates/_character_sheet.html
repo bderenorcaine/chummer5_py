@@ -202,9 +202,29 @@
 
   <h3>Cyberware</h3>
   {% if cyberware_rows %}
+  {# WP42: nested, so an installed subsystem reads as part of the limb/cybereye holding it rather
+     than as a separate implant, and each conditional bonus carries the condition it applies under.
+     Two levels, not a recursive macro: a plugin may not hold a plugin (the 2026-07-29 ruling, see
+     `chummer5.engine.cyberware_subsystems`). #}
+  {%- macro cyberware_label(row, quantity=None) -%}
+    {{- row.name }}{% if row.rating %} (Rating {{ row.rating }}){% endif %}
+    {%- if quantity %} × {{ quantity }}{% endif %}
+    {%- if row.bundled %} — included free{% endif %}
+    {%- if row.capacity_budget %} — Capacity {{ row.capacity_spent }} of {{ row.capacity_budget }} used{% endif %}
+    {%- for bonus in row.conditional_bonuses %}<br />+{{ bonus.value }} {{ bonus.limit }} — {{ bonus.condition }}{% if bonus.paired %} (granted once for a matched pair, not per implant){% endif %}
+    {%- endfor -%}
+  {%- endmacro -%}
   <ul>
     {% for row in cyberware_rows %}
-    <li>{{ row.name }} × {{ row.quantity }}</li>
+    <li>{{ cyberware_label(row, row.quantity) }}
+      {%- if row.plugins %}
+      <ul>
+        {% for plugin in row.plugins %}
+        <li>{{ cyberware_label(plugin) }}</li>
+        {% endfor %}
+      </ul>
+      {%- endif %}
+    </li>
     {% endfor %}
   </ul>
   {% else %}
@@ -232,6 +252,11 @@
       <tr><th>Physical limit</th><td>{{ physical_limit }}</td></tr>
       <tr><th>Mental limit</th><td>{{ mental_limit }}</td></tr>
       <tr><th>Social limit</th><td>{{ social_limit }}</td></tr>
+      {# WP42: only limits a conditional augmentation bonus actually changes -- see
+         `_conditional_limit_rows`. #}
+      {% for row in conditional_limit_rows %}
+      <tr><th>{{ row.limit }}, {{ row.test }}</th><td>{{ row.value }}</td></tr>
+      {% endfor %}
       <tr><th>Physical condition monitor</th><td>{{ physical_cm }} boxes</td></tr>
       <tr><th>Stun condition monitor</th><td>{{ stun_cm }} boxes</td></tr>
     </tbody>

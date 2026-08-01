@@ -16,6 +16,11 @@
     nuyen remaining for cyberware/bioware {{ nuyen_remaining }} / {{ nuyen_available }} (spent
     {{ nuyen_spent }}). Essence remaining: {{ essence_remaining }} / 6 (spent {{ essence_spent }}).
   </p>
+  <p>
+    Buying a cyberlimb, cybereyes or cyberears opens a subsystem list under it: an installed
+    subsystem costs the parent's <strong>Capacity</strong> and nuyen instead of Essence, and each
+    parent's remaining Capacity updates as you tick boxes.
+  </p>
 
   <form
     hx-post="/ui/cyberware"
@@ -33,6 +38,7 @@
             <th>Item</th>
             <th>Cost</th>
             <th>Essence</th>
+            <th>Capacity</th>
             <th>Quantity</th>
             <th>Subtotal</th>
           </tr>
@@ -41,8 +47,16 @@
           {% for row in group.rows %}
           <tr>
             <td>{{ row.item.name }}</td>
-            <td>{{ row.item.cost }}</td>
-            <td>{{ row.item.essence_cost }}</td>
+            {# WP42: the raw formula, since a rating-scaled row has no single price until a rating is
+               picked below. For a flat row this is just the number, exactly as WP34 showed it. #}
+            <td>{{ row.item.cost.raw }}</td>
+            <td>{{ row.item.essence_cost.raw }}</td>
+            <td>
+              {%- if row.item.capacity_budget %}{{ row.item.capacity_budget.raw }}
+              {%- elif row.item.capacity_cost %}[{{ row.item.capacity_cost.raw }}]
+              {%- elif row.item.bundled_free %}[*]
+              {%- else %}—{% endif -%}
+            </td>
             <td>
               <input
                 type="number"
@@ -53,6 +67,73 @@
             </td>
             <td>{{ row.subtotal }}</td>
           </tr>
+          {% for unit in row.units %}
+          {% if unit.rating_range or unit.plugin_rows or unit.bundled_names %}
+          <tr>
+            <td colspan="6">
+              <details data-details-key="cyberware-unit:{{ row.item.id }}:{{ unit.index }}" open>
+                <summary>
+                  {{ row.item.name }}{% if row.quantity > 1 %} #{{ unit.index + 1 }}{% endif %}
+                  — {{ unit.nuyen_cost }}¥, Essence {{ unit.essence }}
+                  {%- if unit.capacity_budget %}, Capacity {{ unit.capacity_remaining }} of {{ unit.capacity_budget }} remaining{% endif %}
+                </summary>
+                {% if unit.rating_range %}
+                <label>
+                  Rating:
+                  <select name="cyberware_rating_{{ row.item.id }}_{{ unit.index }}">
+                    {% for value in range(unit.rating_range[0], unit.rating_range[1] + 1) %}
+                    <option value="{{ value }}" {% if unit.rating == value %}selected{% endif %}>{{ value }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                {% endif %}
+                {% if unit.bundled_names %}
+                <p class="bundled">Included free: {{ unit.bundled_names | join(", ") }}.</p>
+                {% endif %}
+                {% if unit.plugin_rows %}
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Subsystem</th>
+                      <th>Install</th>
+                      <th>Rating</th>
+                      <th>Cost</th>
+                      <th>Capacity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for plugin in unit.plugin_rows %}
+                    <tr>
+                      <td>{{ plugin.item.name }}</td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          name="{{ plugin.field }}"
+                          value="1"
+                          {% if plugin.selected %}checked{% endif %}
+                        />
+                      </td>
+                      <td>
+                        {% if plugin.rating_range %}
+                        <select name="{{ plugin.rating_field }}">
+                          {% for value in range(plugin.rating_range[0], plugin.rating_range[1] + 1) %}
+                          <option value="{{ value }}" {% if plugin.rating == value %}selected{% endif %}>{{ value }}</option>
+                          {% endfor %}
+                        </select>
+                        {% else %}—{% endif %}
+                      </td>
+                      <td>{{ plugin.nuyen_cost }}</td>
+                      <td>{{ plugin.capacity_cost }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+                {% endif %}
+              </details>
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
           {% endfor %}
         </tbody>
       </table>

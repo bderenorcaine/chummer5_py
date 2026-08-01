@@ -25,9 +25,13 @@ was lost in the swap, because this module's validation is a strict superset of w
 did. `CyberwareTreeSelection` still carries `CyberwareSelection`'s `nuyen_budget`/`nuyen_spent`/
 `essence_spent` field names, which is what made that swap mechanical.
 
-What is still deliberately *not* wired: the **UI**. `chummer5.web.routes.cyberware`'s picker
-continues to offer WP31's 60 flat rows at rating 1, so every tree the browser builds is a set of
-zero-plugin leaves. Rating selection and plugin installation are **WP42**.
+**WP42 finished the job at the UI layer.** `chummer5.web.routes.cyberware`'s picker used to offer
+WP31's 60 flat rows at rating 1, so every tree the browser built was a set of zero-plugin leaves; it
+now offers the full SR5 set (bar two engine-bookkeeping rows), a rating control per purchased unit,
+and a plugin checklist per purchased parent with its Capacity spend shown live. Two pieces of this
+module are public for that: `cyberware_rating_bounds` (the picker's rating range must be the one
+`_build_purchase` validates against) and `PAIRED_BONUS_ITEM_NAMES` (the sheet must say a Hydraulic
+Jack's bonus needs a matched pair).
 
 ## Essence-vs-Capacity dual costing: the same catalog row, two prices
 
@@ -143,7 +147,7 @@ sprinting." So a lone jack grants nothing at all, and a pair grants `+Rating` **
 deliberately captures neither tag), and the legacy engine never evaluates a conditional limit
 modifier anyway -- so applying this row the same way as every other one would silently produce
 `+2 x Rating` for a real, ordinary build (`Barrett.chum5` owns exactly two). Modeled here as a
-named rule (`_PAIRED_BONUS_ITEM_NAMES`): its bonus is granted once per Rating for which at least
+named rule (`PAIRED_BONUS_ITEM_NAMES`): its bonus is granted once per Rating for which at least
 two jacks sit in **distinct** parents, carrying a `unique_name` so that two qualifying Ratings --
 impossible with two legs, but not something this engine counts -- collapse to the highest under
 SR5's existing "highest bonus wins" rule rather than stacking. The `<required><parentdetails>`
@@ -189,7 +193,10 @@ _ONE_PER_PARENT_CATEGORY = "Cyberlimb Enhancement"
 # Items whose <bonus> is granted by a matched *pair*, not per purchase -- p. 457's "requires you to
 # have two cyberlegs with a hydraulic jack of identical Ratings in each leg." See the module
 # docstring's WP40 section; this is a rulebook rule with no signal in the data at all.
-_PAIRED_BONUS_ITEM_NAMES = frozenset({"Hydraulic Jacks"})
+#
+# **Public since WP42**: the character sheet has to say "granted once for a matched pair" beside
+# such an item's bonus, or a player looking at two jacks would read the printed +Rating twice.
+PAIRED_BONUS_ITEM_NAMES = frozenset({"Hydraulic Jacks"})
 
 # Every ImprovementType this module produces is a single character-wide total (one Essence pool,
 # one Physical Limit) -- the same sentinel target chummer5.engine.derived resolves them against.
@@ -375,9 +382,19 @@ def _resolve_bound(
     return attribute_maximums[code] + plus
 
 
-def _rating_bounds(
-    item: CyberwareEntry, *, attribute_maximums: Mapping[str, int] | None
+def cyberware_rating_bounds(
+    item: CyberwareEntry, *, attribute_maximums: Mapping[str, int] | None = None
 ) -> tuple[int, int]:
+    """The `(minimum, maximum)` rating this item may be purchased at, placeholders resolved.
+
+    `(1, 1)` for an unrated row (no `<rating>`/`<minrating>` tag), which is the only value such a
+    row has. Raises when a bound needs an attribute maximum that `attribute_maximums` doesn't carry
+    -- see `_resolve_bound` and the module docstring's `{AGIMaximum}` section.
+
+    **Public since WP42**, which needs exactly this to build the picker's per-purchase rating
+    dropdown: an offered range the engine would then reject is the one thing a rating control must
+    not produce. `_build_purchase` calls it for the validation half, so the two cannot disagree.
+    """
     minimum = _resolve_bound(
         item.raw_min_rating,
         item.min_rating,
@@ -455,7 +472,7 @@ def _build_purchase(
                 f"its parent's cost instead -- see spec/decisions-log.md, 2026-07-29)"
             )
 
-    minimum, maximum = _rating_bounds(item, attribute_maximums=attribute_maximums)
+    minimum, maximum = cyberware_rating_bounds(item, attribute_maximums=attribute_maximums)
     if not minimum <= request.rating <= maximum:
         raise ValueError(
             f"{item.name}: rating {request.rating} is outside its purchasable range "
@@ -648,7 +665,7 @@ def create_cyberware_tree_selection(
 def _paired_bonus_nodes(
     selection: CyberwareTreeSelection,
 ) -> dict[tuple[str, int], list[tuple[int, PurchasedCyberware]]]:
-    """Group every `_PAIRED_BONUS_ITEM_NAMES` plugin by `(item name, rating)`, tagged with the
+    """Group every `PAIRED_BONUS_ITEM_NAMES` plugin by `(item name, rating)`, tagged with the
     index of the top-level purchase it is installed in.
 
     The index is what makes "two jacks in *distinct* legs" checkable: two matching plugins in the
@@ -658,7 +675,7 @@ def _paired_bonus_nodes(
     grouped: dict[tuple[str, int], list[tuple[int, PurchasedCyberware]]] = {}
     for parent_index, purchase in enumerate(selection.purchases):
         for plugin in purchase.plugins:
-            if plugin.item.name in _PAIRED_BONUS_ITEM_NAMES:
+            if plugin.item.name in PAIRED_BONUS_ITEM_NAMES:
                 grouped.setdefault((plugin.item.name, plugin.rating), []).append(
                     (parent_index, plugin)
                 )
@@ -695,7 +712,7 @@ def apply_cyberware_tree_improvements(
                 essence_value=-node.essence_cost,
             )
         )
-        if node.item.name in _PAIRED_BONUS_ITEM_NAMES:
+        if node.item.name in PAIRED_BONUS_ITEM_NAMES:
             continue
         for improvement in cyberware_bonus_improvements(
             item_id=node.item.id,

@@ -45,8 +45,10 @@ SKILLS = load_skills()
 QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
 # WP34 (Phase J's UI): the flat-cost, flat-Essence, Standard-grade cyberware catalog (WP31).
-# Still what the picker in `_cyberware.html` *offers* -- WP42 is the WP that widens the UI to
-# rating-scaled items and plugin installation.
+# **No longer what the picker offers** -- WP42 widened `_cyberware.html` to the full SR5 set below.
+# Kept because it is still the WP31 flat view several test modules and fixtures read (and because
+# `chummer5.data.cyberware` remains the home of the shared `<bonus>` classifier either way);
+# retiring `load_cyberware()` outright is a cleanup no WP has claimed.
 CYBERWARE = load_cyberware()
 # WP41: WP37's full 87-row SR5 catalog, with formulas parsed and Capacity/subsystem structure
 # captured. This is what every *engine* call resolves against now
@@ -55,6 +57,68 @@ CYBERWARE = load_cyberware()
 # CYBERWARE's ids are a subset of these, so a flat pick made from the picker above resolves here
 # unchanged.
 CYBERWARE_ENTRIES = load_cyberware_entries()
+
+# WP42: the two rows of `CYBERWARE_ENTRIES` that are *engine bookkeeping*, not purchasable SR5 gear,
+# despite carrying `<source>SR5</source>` like everything else. `Essence Hole` / `Essence Antihole`
+# have `<page>0</page>`, `<cost>0</cost>`, `<avail>0</avail>`, a `<rating>` of **600**, and the
+# phrase "essence hole" appears nowhere in the core rulebook (checked over the whole PDF -- see
+# `spec/rulebooks/learnings/phase-k.md`'s WP42 entry). The legacy app creates them from code
+# (`Character.IncreaseEssenceHole`) to represent Essence left behind by *removed* cyberware, a
+# career-mode concept this project has no equivalent of. WP31's flat-cost filter excluded both by
+# accident (their `<ess>` is `Rating * 0.01`); this list is what keeps that true now that the picker
+# no longer filters on flatness.
+_UNPURCHASABLE_CYBERWARE_NAMES = frozenset({"Essence Hole", "Essence Antihole"})
+
+# WP42: what the picker offers as a *standalone* purchase -- everything above except the two
+# bookkeeping rows and the 9 `<requireparent>` rows, which have no standalone mode at all
+# (`create_cyberware_tree_selection` rejects one, so offering them there was a live bug: buying an
+# `Ocular Drone` from WP34's picker could only ever produce an error). Those 9 are offered inside
+# their parent instead, via `cyberware_plugin_choices` below. Sorted by (category, name) for the
+# category-grouped `<details>` sections, exactly as `_CYBERWARE_BY_CATEGORY` was.
+CYBERWARE_STANDALONE = tuple(
+    sorted(
+        (
+            entry
+            for entry in CYBERWARE_ENTRIES
+            if not entry.requires_parent and entry.name not in _UNPURCHASABLE_CYBERWARE_NAMES
+        ),
+        key=lambda entry: (entry.category, entry.name),
+    )
+)
+
+# WP42: every row installable *into* something -- a bracketed `<capacity>`, i.e. a Capacity price.
+# `bundled_free` rows (`Image Link`, `Sound Link`) are excluded: they are auto-attached by their own
+# parent and free, so a checkbox for one would offer a choice that isn't one. They stay in
+# `CYBERWARE_STANDALONE` (WP34 offered them and the engine prices a standalone one normally), and
+# the parent's own block lists them as included.
+_CYBERWARE_PLUGINS = tuple(
+    sorted(
+        (
+            entry
+            for entry in CYBERWARE_ENTRIES
+            if entry.is_plugin
+            and not entry.bundled_free
+            and entry.name not in _UNPURCHASABLE_CYBERWARE_NAMES
+        ),
+        key=lambda entry: (entry.category, entry.name),
+    )
+)
+
+# WP42: the plugin rows each parent may hold, resolved once per parent id at import time rather than
+# re-filtered per request. Keyed by the *parent's* catalog id; a row with no `<allowsubsystems>` has
+# no entry. A parent's own bundled names are filtered out here too -- `Cybereyes Basic System` gets
+# its `Image Link` automatically, so offering it as an installable choice would be a second way to
+# ask for something already present.
+CYBERWARE_PLUGIN_CHOICES = {
+    parent.id: tuple(
+        plugin
+        for plugin in _CYBERWARE_PLUGINS
+        if plugin.category in parent.allowed_subsystem_categories
+        and plugin.name not in parent.bundled_subsystem_names
+    )
+    for parent in CYBERWARE_ENTRIES
+    if parent.is_subsystem_parent
+}
 # WP45: the flat-cost, flat-Essence, low-Availability, Standard-grade bioware catalog.
 BIOWARE = load_bioware()
 # WP47: the Rating-scaled SR5 Foci catalog (32 items, 7 rulebook categories).

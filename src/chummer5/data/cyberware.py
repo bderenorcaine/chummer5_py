@@ -87,7 +87,10 @@ with one member per confirmed shape). `_SUPPORTED_BONUS_CONDITIONS` below is the
 exactly as an unrecognized `<bonus>` child already does. The condition key is carried through as
 its **verbatim legacy string**, not as an engine enum: this module is the data layer and does not
 import from `chummer5.engine`, the same split `CyberwareFlatBonus.target_kind`'s string already
-uses (`chummer5.engine.cyberware` owns both string -> enum maps).
+uses (`chummer5.engine.cyberware` owns both string -> enum maps). **WP42** adds
+`CONDITION_DESCRIPTIONS`, the same four keys' English text, for the character sheet to print beside
+a conditional bonus's value -- display text about a catalog row, so it belongs here next to
+`UNMODELED_EFFECT_NOTES` rather than in the engine.
 
 ## WP78 (Phase K) -- the three flat shapes that make four rating-scaled rows stop being inert
 
@@ -236,6 +239,28 @@ _SUPPORTED_BONUS_CONDITIONS = frozenset(
         "LimitCondition_CyberwareHydraulicJacks",  # Hydraulic Jacks
     }
 )
+
+# WP42: the same four conditions' player-facing English text, keyed by the identical verbatim legacy
+# string. The keys *are* `legacy/Chummer/lang/en-us.xml` string ids, and these are that file's own
+# English values -- transcribed once in WP39's learnings entry, mirrored here rather than parsed out
+# of the language file at runtime, exactly as `UNMODELED_EFFECT_NOTES` below mirrors the Project
+# Overview's registry table rather than parsing the markdown.
+#
+# It lives in the data layer for the same reason that table's notes do: this is *rulebook display
+# text about a catalog row*, not an engine rule. `chummer5.engine.cyberware` owns the parallel
+# key -> `ImprovementCondition` map (the engine's compiled predicate); this one is what the sheet
+# prints next to a conditional bonus's value, so a player can see why it only applies sometimes.
+# A test pins the two dicts' key sets to each other, so neither can grow alone.
+CONDITION_DESCRIPTIONS: Mapping[str, str] = {
+    "LimitCondition_SkillsActivePerceptionVisual": "Only for Perception (Visual)",
+    "LimitCondition_SkillsActivePerceptionHearing": "Only for Perception (Hearing)",
+    "LimitCondition_SkillsActivePerceptionSpatialRecognizer": (
+        "Only for Perception to find the source of a sound"
+    ),
+    "LimitCondition_CyberwareHydraulicJacks": (
+        "Only for Gymnastics (Jumping) and Running (Sprinting)"
+    ),
+}
 
 # WP79: the Project Overview's "Unmodeled real effects" rows for `cyberware.xml` content, mirrored
 # by hand and keyed by catalog name -- see the module docstring for why this is one constant shared

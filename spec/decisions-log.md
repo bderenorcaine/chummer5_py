@@ -957,3 +957,61 @@ whoever settles the rating-vs-pool question inherits this label along with it.
 **Not in scope and not touched:** `chummer5.engine.knowledge`'s Knowledge/Language ratings, which
 have their own `MAX_SKILL_RATING_CREATE` purchase cap and no Improvement producer at all, so the
 same distinction has nothing to bite on there yet.
+
+## 2026-08-01 — Phase K, WP42: what the widened picker offers and what it deliberately doesn't; a
+`<requireparent>` bug WP34 shipped; and a now-unused flat catalog nobody has claimed retiring
+
+**The picker's catalog is now WP37's full 87-row SR5 set, minus 11 rows, and each exclusion is a
+different kind of decision.** WP34's picker offered `chummer5.data.cyberware.load_cyberware()`'s 60
+flat-cost rows — a filter that was never about what a player should be able to buy, only about what
+WP31 could price. Phase K's whole point was removing that limit, so `CYBERWARE_STANDALONE` starts
+from all 87 and removes:
+
+- **The 9 `<requireparent>` rows**, which are offered inside a parent instead. This is a **fix, not a
+  narrowing**: `create_cyberware_tree_selection` rejects such an item bought standalone, and four of
+  them (Ocular Drone, Cyber Holster, Cyberarm Slide, Large Smuggling Compartment) *were* in WP34's
+  flat 60, so buying one from the shipped picker could only ever produce an error message. Nobody
+  reported it because nobody had a reason to click them; it is fixed here rather than logged.
+- **`Essence Hole` / `Essence Antihole`**, engine bookkeeping wearing an `SR5` source tag — see
+  `spec/rulebooks/learnings/phase-k.md`'s WP42 entry for the negative rulebook finding and the
+  legacy `Character.IncreaseEssenceHole` call site behind it. WP31's flatness filter excluded them
+  by accident; stating the exclusion is what keeps that true.
+
+Everything else WP34 offered is still offered, at the same field name (`cyberware_{id}`), which is
+why every WP34 test passes unchanged.
+
+**A plugin is a checkbox, not a quantity box — the one place this UI is narrower than the engine.**
+`create_cyberware_tree_selection` accepts two of the same row in one parent outside the
+`Cyberlimb Enhancement` category (where p. 456 forbids it and the engine enforces it). The form
+offers at most one, because a quantity box would need a fourth index level (a rating per copy) to
+stay coherent and nothing in the SR5 core set gains anything from a second copy in one limb. The
+consequence, recorded rather than hidden: a legacy-imported character carrying two identical plugins
+in one parent renders as one ticked box, so re-submitting the form drops the duplicate. No fixture in
+the corpus does this.
+
+**Display costs are resolved in the web layer, not read off the validated selection.** The picker has
+to render the *rejected* state — an over-budget spend, an over-capacity limb — which is exactly when
+no `CyberwareTreeSelection` exists to read numbers from. So `_cyberware_groups` resolves each node's
+`CyberwareFormula` itself, the same independent-tally shape WP34's own subtotal column already had.
+The one rule it restates rather than reads is dual costing (a plugin charges Capacity, a standalone
+purchase charges Essence), which is one conditional; everything structural still comes from the
+engine, and `cyberware_rating_bounds` was made public specifically so the form cannot offer a rating
+`_build_purchase` would then reject.
+
+**`chummer5.data.cyberware.load_cyberware()` is now unused by `src/` outside its own module's
+classifier, and no WP has claimed retiring it.** WP41 kept it explicitly because "the UI picker still
+lists its 60 flat rows"; that reason is gone. `chummer5.web.catalogs.CYBERWARE` survives only as the
+WP31 flat view that several test modules and fixtures import. Retiring the loader and the `Cyberware`
+dataclass would touch `tests/unit/test_cyberware.py`,
+`tests/integration/test_cyberware_fixtures.py`, `tests/unit/test_augmentation_unmodeled_registry.py`
+and `tests/unit/test_web_cyberware.py` — a mechanical but wide cleanup, deliberately not bundled into
+a UI WP. Flagged here so it isn't rediscovered as a surprise. Note `chummer5.data.cyberware` itself
+is *not* retirable regardless: it owns `classify_bonus`, `UNMODELED_EFFECT_NOTES`,
+`CONDITION_DESCRIPTIONS` and both bonus dataclasses, all of which
+`chummer5.data.cyberware_subsystems` imports.
+
+**Reachability markers in the Project Overview's "Unmodeled real effects" registry are WP-scoped
+facts, not permanent ones.** Widening the picker moved nine rows from "legacy import only" (WP77's
+five) or "installable only into a cyberlimb" (WP38's four) to UI-reachable in one commit. The rows
+were updated in the same commit and the registry preamble now says a UI-widening WP owes that
+re-check; nothing about the underlying gaps changed.

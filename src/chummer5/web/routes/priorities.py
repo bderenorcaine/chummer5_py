@@ -289,13 +289,13 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.resources_selection is not None
         else 0
     )
-    # WP41: the *top-level* purchases only -- this list feeds `_cyberware_context`'s flat
-    # quantity-per-item picker, which has no plugin row to show one in (WP42 is that UI). Every
-    # tree this project's own web layer builds is zero-plugin anyway; a tree with plugins can only
-    # reach here via a loaded save/legacy import, whose plugins stay committed on the character and
-    # are simply not re-rendered in the picker.
-    cyberware_item_ids = (
-        tuple(purchase.item.id for purchase in character.cyberware_selection.purchases)
+    # WP42: the whole purchase *tree*, not just its top-level ids. WP41 passed ids because the
+    # picker had no plugin row to render one in; now that it has, a committed limb's plugins have to
+    # survive a full-page re-render, or re-submitting the (unchanged) form would drop them -- the
+    # identical reason `bioware_requests` below carries its chosen skills rather than bare ids
+    # (WP80). Bundled nodes are omitted by `to_requests()` and re-attached on the way back in.
+    cyberware_requests = (
+        character.cyberware_selection.to_requests()
         if character is not None and character.cyberware_selection is not None
         else ()
     )
@@ -351,7 +351,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
     cyberware_ctx = _cyberware_context(
         character,
         session.resources_letter,
-        cyberware_item_ids,
+        cyberware_requests,
         bioware_requests,
         gear_cost,
         lifestyle_cost,
