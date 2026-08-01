@@ -1,0 +1,210 @@
+{
+  "format_version": 1,
+  "metatype_name": "Human",
+  "heritage_letter": "E",
+  "attributes_letter": "B",
+  "attribute_points": {
+    "BOD": 2,
+    "AGI": 3,
+    "REA": 3,
+    "STR": 4,
+    "CHA": 2,
+    "INT": 3,
+    "LOG": 1,
+    "WIL": 2,
+    "EDG": 1
+  },
+  "skills_letter": "A",
+  "skill_points": {
+    "48763fa5-4b89-48c7-80ff-d0a2761de4c0": 6,
+    "cd9f6bf7-fa48-464b-9a8f-c7ce26713a72": 3,
+    "276877e1-5cdf-4e95-befd-13c1abb5ae02": 2,
+    "b20acd11-f102-40f3-a641-e3c420fbdb91": 4,
+    "47cb1e8b-c285-4c54-9aaa-75305ad6dd4f": 3,
+    "a9fa961d-07e5-46da-8edc-403ae3e6cc75": 5,
+    "9de43fad-b365-4e73-bc06-91dd571b858a": 3,
+    "04e1eb3e-e82d-485b-a7fd-1e677df2a070": 3,
+    "ae91a8a6-80e7-4f52-b9eb-21725a5528a4": 2,
+    "1531b2d8-6116-4be4-87b0-232dba1fc447": 3,
+    "867a6fa0-7d98-4cde-83a4-b33dd39de08e": 4,
+    "4fcd40cb-4b02-4b7e-afcb-f44d46cd5706": 5
+  },
+  "group_points": {
+    "Firearms": 5,
+    "Stealth": 5
+  },
+  "quality_ids": [
+    "84305e09-f8d5-4a82-8257-0119b8c3f926",
+    "58e6a651-cdd7-4144-a2cc-4cee24526e92",
+    "b9f1dbeb-1728-4250-a066-4773f758fe6a",
+    "dda02333-10e3-4295-9392-691ff3a7bd4a",
+    "9ac85feb-ae1e-4996-8514-3570d411e1d5"
+  ],
+  "contacts": [
+    {
+      "name": "Heterodyne",
+      "connection": 4,
+      "loyalty": 1,
+      "free": false
+    },
+    {
+      "name": "Stitch",
+      "connection": 4,
+      "loyalty": 3,
+      "free": false
+    }
+  ],
+  "resources_letter": "B",
+  "gear_names": [
+    "Ammo: Gel Rounds",
+    "Ammo: Regular Ammo",
+    "Armor Jacket",
+    "Ares Alpha",
+    "Hermes Ikon",
+    "Ares Predator V"
+  ],
+  "lifestyle_tier_name": "Medium",
+  "lifestyle_months": 1,
+  "talent_letter": "E",
+  "talent_codename": "Mundane",
+  "tradition_id": null,
+  "granted_skill_ids": [],
+  "spell_ids": [],
+  "power_picks": [],
+  "magic_attribute_points": 0,
+  "cyberware_purchases": [
+    {
+      "item_id": "2ecc8684-5a9f-4523-beb8-d3abc886a233",
+      "rating": 1,
+      "plugins": []
+    },
+    {
+      "item_id": "bea0ded3-821f-449c-9507-815088f68b86",
+      "rating": 2,
+      "plugins": []
+    },
+    {
+      "item_id": "ba93ab8d-fd7f-4fc4-bfa3-5f987fd15d77",
+      "rating": 1,
+      "plugins": []
+    },
+    {
+      "item_id": "1aa7fe36-10ab-4c3c-9a4f-f26e8460c0a8",
+      "rating": 1,
+      "plugins": []
+    },
+    {
+      "item_id": "2767fdaf-4f49-4403-a799-e91b9e6c8fa2",
+      "rating": 3,
+      "plugins": [
+        {
+          "item_id": "9cdee6a3-a04e-40a1-95ce-e509b26b192c",
+          "rating": 3,
+          "plugins": []
+        },
+        {
+          "item_id": "31d82330-4650-4550-aa90-c314a189f897",
+          "rating": 1,
+          "plugins": []
+        },
+        {
+          "item_id": "ab2e5330-25c6-4460-bab7-35a9e6b9aeb1",
+          "rating": 3,
+          "plugins": []
+        },
+        {
+          "item_id": "004b7eb4-190e-4903-8308-27fe9b2f626b",
+          "rating": 1,
+          "plugins": []
+        }
+      ]
+    },
+    {
+      "item_id": "8e414ade-2764-4dc7-bdc4-83bb4a086034",
+      "rating": 3,
+      "plugins": [
+        {
+          "item_id": "5921a6ac-1e20-483b-b210-dc84a14d3045",
+          "rating": 1,
+          "plugins": []
+        },
+        {
+          "item_id": "97910ef7-dc30-4a87-8314-d1e0021dc39c",
+          "rating": 1,
+          "plugins": []
+        },
+        {
+          "item_id": "fde2bfc3-c7a2-435e-a220-4896f49d8ca9",
+          "rating": 1,
+          "plugins": []
+        },
+        {
+          "item_id": "35c9c51e-5364-41b4-b3c9-4d1f080bd48c",
+          "rating": 3,
+          "plugins": []
+        }
+      ]
+    },
+    {
+      "item_id": "47c48542-48c3-417e-91f0-b5a456183f05",
+      "rating": 1,
+      "plugins": []
+    }
+  ],
+  "bioware_purchases": [],
+  "karma_converted": 4,
+  "bound_spirit_picks": [],
+  "foci_picks": [],
+  "mentor_spirit_archetype_id": null,
+  "mentor_spirit_general_choice_id": null,
+  "build_method": "SumtoTen",
+  "knowledge_skill_picks": [
+    {
+      "name": "Trivia Games",
+      "category": "Interest",
+      "rating": 3
+    },
+    {
+      "name": "Combat Tactics",
+      "category": "Professional",
+      "rating": 3
+    },
+    {
+      "name": "Underground Fight Scene",
+      "category": "Interest",
+      "rating": 3
+    },
+    {
+      "name": "Area Knowledge (Seattle)",
+      "category": "Street",
+      "rating": 3
+    }
+  ],
+  "language_skill_picks": [
+    {
+      "name": "English",
+      "rating": 0,
+      "native": true
+    }
+  ],
+  "specializations": {
+    "48763fa5-4b89-48c7-80ff-d0a2761de4c0": "Implanted",
+    "a9fa961d-07e5-46da-8edc-403ae3e6cc75": "Climbing",
+    "9de43fad-b365-4e73-bc06-91dd571b858a": "Physical"
+  },
+  "karma_attribute_points": {},
+  "karma_skill_points": {},
+  "karma_group_points": {},
+  "karma_specializations": {},
+  "karma_knowledge_points": {},
+  "quality_text": {
+    "9ac85feb-ae1e-4996-8514-3570d411e1d5": "Jacob Smith",
+    "dda02333-10e3-4295-9392-691ff3a7bd4a": "Assassins Creed"
+  },
+  "rating_gear_picks": [
+    {
+      "name": "Fake SIN",
+      "rating": 4
+    }
+  ]
+}

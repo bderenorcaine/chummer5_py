@@ -1015,3 +1015,40 @@ facts, not permanent ones.** Widening the picker moved nine rows from "legacy im
 five) or "installable only into a cyberlimb" (WP38's four) to UI-reachable in one commit. The rows
 were updated in the same commit and the registry preamble now says a UI-widening WP owes that
 re-check; nothing about the underlying gaps changed.
+
+## 2026-08-01 — Phases S/O, planning pass: a player-authored save reopens two closed phases, and exposes a stale WP43 deferral
+
+A character built in the web UI and handed over as a `format_version: 1` save file
+(`tests/fixtures/saves/razorboy.json`) was assessed for fixture value. It loads clean through
+`POST /character/load` with no engine change. Three rulings came out of that assessment.
+
+**A fixture-gap inventory goes stale in a way its own authors can't see.** Phase S §2 enumerated
+seven gaps by reasoning about which *subsystems* lacked a whole-character fixture, and §4 declared
+the phase complete at WP76 with two named, deliberate holes. The imported character walks through
+**six** gaps, only one of which (Knowledge/Language) §2 had ever named — because the others are
+gaps in what `SyntheticCharacter` can *express*, not in which subsystem is covered: every fixture
+buys cyberware flat, at rating 1, with no plugins, because the dataclass has no way to say
+otherwise, and every fixture therefore reports `initiative_dice: 1` and an unaugmented REA. The
+lesson recorded here, not just the fix: an input-format limitation reads as full coverage from
+inside the coverage table, and the cheapest way to find one is to feed the system an artifact
+authored by somebody who wasn't looking at the table. Scoped as WP85-88 in
+`phase-s-test-fixtures.md` §6.
+
+**Karma-to-Nuyen conversion has been free since WP51, and the deferral that made it free is
+correctly documented.** `Character.karma_spent` sums eight selections' `karma_cost` and omits
+`resources_selection.karma_converted`, so the imported character takes ¥8,000 for 4 Karma and still
+reports 19 Karma remaining. `spec/worklogs/WP43.md` (2026-07-21) states the reasoning plainly —
+Phase O hadn't landed, so there was no running total to double-spend against — and
+`engine/resources.py`'s module docstring still carries it as a known, deliberate gap. Nothing was
+missed at the time; WP51 silently satisfied the trigger condition three weeks later and no
+mechanism existed to notice. **Ruling: a deferral whose stated trigger is another WP landing should
+name that WP in the *depending* phase file, not only in the deferring WP's own worklog**, so the
+landing WP's author sees it. Filed as WP89 in `phase-o-karma-buying.md`, which reopens Phase O.
+
+**A player-authored save is worth committing as data before it is worth converting into a fixture.**
+The synthetic-fixture format is a Python literal, so importing this character means hand-translating
+it — three WPs' worth, given the harness extensions it needs first. The save file is therefore
+committed as-is, unreferenced, in the same commit as the WP entries, so WP85-88 can be executed cold
+from the repo rather than from a chat transcript. It also has standalone value the synthetic format
+can't provide: it is the first real on-disk artifact of this project's *own* save format, and WP85
+turns it into the regression guard that format has never had.

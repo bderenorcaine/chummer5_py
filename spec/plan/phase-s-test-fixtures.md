@@ -123,6 +123,12 @@ Explicitly **not** given a fixture WP here: Phase K's Cyber Implant Weapon → W
 two-level nesting (Phase K is on hold, WP36-42 unstarted — no engine code to test against yet). It
 stays on this list as blocked-on-K, not scheduled.
 
+*(2026-08-01 update: Phase K closed with WP42, so that blocker is gone — `Cyber Implant Weapon
+Accessory` is a real catalog category and Hand Blade/Spurs really do declare it in their
+`allowed_subsystem_categories`. §6's own gap list picks up the general parent→plugin nesting case;
+the weapon-accessory variant specifically is still unscheduled, because §6's fixture happens to
+carry implanted weapons with no accessory on them.)*
+
 ### 3. Fixture-authoring mechanism & format (decided)
 
 **Mechanism: a synthetic whole-character fixture harness that drives the real engine.** Each fixture is
@@ -252,6 +258,10 @@ coverage, both deliberate and both unit-tested: WP53's Knowledge/Language Karma 
 fixture declares a Knowledge roster, so the harness has no `karma_knowledge_points` field) and WP43's
 Karma-to-Nuyen conversion. Phase K's two-level cyberware nesting stays blocked on Phase K itself.
 
+*(Superseded 2026-08-01: **§6 reopens the phase with WP85-88.** Both "deliberate" gaps above, and
+several more the §2 inventory never knew to look for, turned out to be closable at once by a
+player-authored character that arrived from outside the plan — see §6.)*
+
 ## 5. Team roster — the fixtures mesh as one shadowrunning team
 
 The five synthetic fixtures are deliberately authored as **one coherent runner team**, not five
@@ -285,3 +295,159 @@ Face) and LOG-3 (no decker) *on purpose* — those gaps are exactly what the Fac
 the fixtures were designed against each other, not in isolation. Each of WP73-76 was sanity-checked
 against this table as it was authored so the team stayed balanced (e.g. the Decker is AGI 2 / CHA 2,
 not a second climber or a second face); any *future* fixture WP should do the same.
+
+---
+
+## 6. Second gap pass (2026-08-01) — importing a player-authored character, WP85-88
+
+### What arrived, and why it reopened a phase marked complete
+
+A player-built character turned up as a **save file in this project's own format**
+(`format_version: 1`), authored in the web UI rather than derived from the plan. It loads clean
+through `POST /character/load` today — no engine change is needed to accept it. What makes it worth
+a WP block is that it was built by someone shopping for a *character*, not for coverage, and it
+therefore walks straight through several things §2's inventory never thought to enumerate, because
+§2 was written by reasoning about which *subsystems* had no fixture rather than about which
+*inputs* the harness could not express.
+
+The build (letters E/B/A/B/E — Sum-to-Ten, 0+3+4+3+0 = 10):
+
+- **Chromed to Essence 0.10.** 5.90 of 6.00 spent. `create_cyberware_tree_selection` rejects at
+  `>= BASE_ESSENCE`, so this passes with 0.10 of headroom — the tightest legal margin any fixture
+  has ever put on that validator. It is also load-bearing downstream, not just a big number:
+  Social Limit reads `ceil(Essence)`, so 0.10 → 1 and the limit lands on 5, where a flat 0 would
+  give 4.
+- **A real purchase *tree*.** Wired Reflexes 2, Bone Lacing (Titanium), Hand Blade, Shock Hand,
+  Datajack, plus Cyberears 3 and Cybereyes Basic System 3 each carrying four plugins and one
+  bundled freebie (Sound Link / Image Link). Both parents' Capacity comes out **exactly** full at
+  12/12 (`Rating * 4` with Rating 3).
+- **An augmentation that moves an attribute.** Wired Reflexes 2 → natural REA 4, augmented REA 6,
+  and `initiative_dice` 3.
+- **Three conditional Improvements.** Audio Enhancement 3, Spatial Recognizer, and Vision
+  Enhancement 3 land `MENTAL_LIMIT` bonuses gated on `PERCEPTION_HEARING_ONLY` /
+  `PERCEPTION_SOUND_SOURCE_ONLY` / `PERCEPTION_VISUAL_ONLY`.
+- **A skill pushed past the chargen maximum by an Improvement.** Stealth group 5 + Catlike's +2
+  puts Sneaking at rating **7**, above `MAX_SKILL_RATING_CREATE`.
+- **Every budget except Karma spent to the pin.** 20/20 attribute points, 1/1 special (EDG, off
+  Human-at-E's single point), 46/46 skill points (43 + 3 specializations), 10/10 group points,
+  12/12 Knowledge points, and ¥282,420 of ¥283,000 — a total that only reaches ¥283,000 because
+  4 Karma were converted to nuyen. It leaves 19 Karma unspent, the one axis where it is *not* a
+  fully-spent build (see WP88 on what to do about that).
+
+### 6a. Second-pass gap inventory
+
+Same rule as §2 — each gap is tied to something currently real, not speculative.
+
+| # | Gap (nothing in `SYNTHETIC_FIXTURES` exercises it) | Currently-real call-out |
+|---|---|---|
+| G8 | Cyberware bought as a **tree**: rating > 1, plugins, Capacity budget, bundled subsystems | `tests/fixtures/synthetic.py`: "Each name is bought as a zero-plugin purchase tree at rating 1 (WP41); no synthetic fixture installs a plugin yet"; Phase K WP38/WP42 |
+| G9 | A build sitting at the **Essence floor**, where `ceil(Essence)` is load-bearing | `engine/cyberware_subsystems.py:650` (the `>= BASE_ESSENCE` reject); the deepest existing fixture is Rebar at 2.4 |
+| G10 | An **augmentation that raises an attribute** (natural vs. augmented, WP81) and adds Initiative Dice | every existing fixture asserts `initiative_dice: 1` and cites its `attr:REA` as "metatype min + points"; no fixture's cyberware has a non-empty `flat_bonuses` targeting an attribute |
+| G11 | **Conditional Improvements** (WP39/WP40) on a finished character | `engine/improvements.py` `ImprovementCondition`; every existing fixture's cyberware has `conditional_bonuses` empty. `resolve_metric` has no key for a conditional limit either |
+| G12 | The **spend side** of the nuyen/Karma/point budgets: gear, Rating-priced gear, Lifestyle, contacts, Knowledge/Language, Karma-to-Nuyen | `SyntheticCharacter` declares no field for any of them; §4's own closing note already flagged the last two as deliberate holes (WP43, WP49/WP53) |
+| G13 | A **skill rating pushed past `MAX_SKILL_RATING_CREATE`** by an Improvement, at whole-character level | WP82 (unit-tested only); the closest fixture is Cheshire, whose Catlike-boosted Sneaking lands at 5 |
+
+Still **not** scheduled: the Cyber Implant Weapon → Weapon Accessory nesting (§2's note). WP86
+makes it expressible for the first time, but this character's Hand Blade and Shock Hand carry no
+accessory and he has ¥580 left to buy one with, so closing it means a *different* fixture, not this
+one.
+
+### 6b. The WPs
+
+Next unclaimed WP number is **WP85** (Phase V claimed WP83-84 on 2026-08-01 — see the Implementation
+Plan index's tail note). WP85 lands the input; WP86/WP87 widen the harness on two independent axes;
+WP88 authors the fixture on top of all three.
+
+- [ ] **WP85 — Land the save file as the project's first on-disk save-format fixture.**
+  Goal: get the character into the repo as *data* — and get a regression guard on the save format
+  itself, which has never had one.
+  Notes: the file is already committed at `tests/fixtures/saves/razorboy.json` (added with this
+  planning entry, precisely so WP86-88 can be executed cold from the repo rather than from a chat
+  transcript); nothing references it yet. Everything the round-trip needs already exists —
+  `from_json` / `build_character` / `create_character_save` / `to_json`.
+  Deliverables:
+  - A registry entry beside `mundane_chum5.py`'s (name → path under `tests/fixtures/saves/`),
+    following that module's own "referenced, not copied" shape — except these files *are* ours, so
+    they live under `tests/fixtures/` rather than pointing into `legacy/`.
+  - An integration test that loads the file, builds it, and asserts the headline results this
+    section states above (Essence `Decimal("0.10")`, `initiative_dice` 3, augmented REA 6, Sneaking
+    7, nuyen remaining 580, both Capacity budgets exactly full), plus `save → to_json → from_json`
+    equality — i.e. that a `format_version: 1` file written by the UI keeps loading unchanged.
+  - A `tests/fixtures/README.md` section for the new directory, matching the depth of the two
+    already there.
+  Depends on: nothing new.
+  Acceptance: `pytest`/`ruff`/`mypy` green; the test fails loudly (not silently skips) if the file
+  is missing or stops loading; no engine or `io` change is needed to make it pass — if one turns
+  out to be, stop and log it, because it means the format regressed at some point since WP41.
+
+- [ ] **WP86 — Harness: express a cyberware purchase *tree*.** Closes the harness half of G8.
+  Goal: `SyntheticCharacter.cyberware` is a flat `tuple[str, ...]` that `build_synthetic()` turns
+  into rating-1, plugin-free `CyberwarePurchaseRequest`s. Widen it so a fixture can declare
+  ratings and nested plugins, which is what WP38/WP41/WP42 actually built.
+  Notes: keep the name-keyed authoring convention (`build_synthetic()` resolves names to ids and
+  raises clearly on an unknown one) and keep the existing four fixtures' literals working —
+  a bare `"Datajack"` must stay legal alongside a rated/plugged entry, the same way WP73-76 each
+  extended the dataclass without rewriting their predecessors. Bundled subsystems
+  (`bundled_subsystem_names`) are resolved *by the engine*, not declared by the fixture; a fixture
+  that lists one explicitly should be an error, not a silent duplicate.
+  Deliverables: the widened `cyberware` field + `build_synthetic()` wiring; new `resolve_metric`
+  keys for the Capacity side (per-purchase `capacity_cost`/`capacity_budget`, so "exactly full" is
+  assertable rather than merely "not rejected"); the `tests/fixtures/README.md` paragraph.
+  Depends on: WP72 (harness), Phase K (WP38 tree/Capacity, WP41 save shape, WP42 the UI that
+  produced this file). Independent of WP87 — either may land first.
+  Acceptance: `pytest`/`ruff`/`mypy` green with the four existing fixtures' literals **unchanged**;
+  a round-trip check that the widened field can express `razorboy.json`'s `cyberware_purchases`
+  exactly (same Essence, same nuyen, same Capacity per parent).
+
+- [ ] **WP87 — Harness: express the spend side of the budgets.** Closes the harness half of G12.
+  Goal: add the `SyntheticCharacter` fields for everything a character *buys* that isn't
+  cyberware/bioware/foci — gear, Rating-priced gear, Lifestyle, contacts, Knowledge skills,
+  languages, and Karma-to-Nuyen conversion — so a fixture can assert that a build's budgets balance,
+  not just that its dice pools are right.
+  Notes: every one of these already has an engine function `build_synthetic()` simply doesn't call
+  (`create_resources_selection` with `rating_gear`/`lifestyle_cost`/`karma_converted`,
+  `create_contact_selection`, `create_knowledge_selection`). Follow `io/save_format.build_character`'s
+  own evaluation order rather than inventing one — it already resolves these against a shared
+  ledger in a fixed sequence, and a fixture that disagrees with the save path is a fixture that
+  proves nothing. Note that free Contact points (`CHA x 3`) and free Knowledge points
+  (`(INT + LOG) x 2`) read **`natural_attribute_value`**, not the augmented one (p. 95) — that
+  distinction is exactly the kind of thing this fixture should pin down.
+  Deliverables: the new fields + wiring; `resolve_metric` keys for `nuyen:remaining` /
+  `nuyen:available`, the contact and knowledge point budgets, and knowledge dice pools; README.
+  Depends on: WP72; Phase H (WP20 Lifestyle), Phase L (WP43 Karma-to-Nuyen), Phase N (WP49
+  Knowledge/Language), WP66 (Rating-priced gear). Independent of WP86.
+  Acceptance: `pytest`/`ruff`/`mypy` green with the four existing fixtures' literals **unchanged**
+  (all four decline every new field, and their `expected` tables must not shift); the new metric
+  keys reproduce `razorboy.json`'s own ¥580 remaining and 12/12 Knowledge points.
+
+- [ ] **WP88 — The fixture: Jacob "Tithe" Smith, the wetwork specialist.** Closes G8-G13.
+  Goal: author `WETWORK_FIXTURE` in `synthetic_fixtures.py` from the save file, with the full
+  hand-derived `expected`/`citations` treatment WP72-76 established, and add him to §5's roster.
+  **Naming (decided here so WP88 doesn't re-litigate it):** the character's SINner (National)
+  quality text already names him *Jacob Smith*, which is his real, legal, government-registered
+  identity — he is a SINner, not a nobody, and the Rating-4 Fake SIN is the alias, not the other way
+  round. Handle: **"Tithe"** — what he has left, one tenth. Team role: close-quarters wetwork and
+  the rooftop approach (Blades 6 spec'd "Implanted" for 12 dice, Gymnastics/Climbing 11, Sneaking
+  11), which is a third lane beside Rebar's guns-and-soak muscle and Cheshire's infiltration rather
+  than a duplicate of either.
+  Notes and traps:
+  - **Spend the leftover 19 Karma.** Every other fixture is fully spent on every axis, and §5's own
+    rationale is that a fully-spent budget hits the validators at their exact limits. 19 Karma
+    is enough for a meaningful Step Seven spend (WIL 3→4 costs 20 — just out of reach; BOD 3→4 costs
+    20 likewise; a Karma specialization is 7, an active skill step is `new Rating x 2`). Pick a
+    spend that fits *and* says something, and record what changed from the player's original file
+    — the save is the input of record, so any divergence from it must be deliberate and written
+    down, not quietly absorbed.
+  - Do **not** carry the Karma-to-Nuyen figure over uncritically: WP89 changes what 4 converted
+    Karma costs the ledger. Sequence this after WP89 or re-derive `karma_remaining` once it lands.
+  - `resolve_metric` needs a conditional-limit key for G11, or the three conditional Improvements
+    are present-but-unasserted, which is the "hand-verified, no fixture" failure mode this whole
+    phase exists to end.
+  - Assert `natural` *and* augmented REA separately (G10), and Sneaking's 7 against
+    `MAX_SKILL_RATING_CREATE` (G13), or neither gap is actually closed by having the numbers pass.
+  Depends on: WP85, WP86, WP87; and see the WP89 note above.
+  Acceptance: `pytest`/`ruff`/`mypy` green; `assert_fixture` passes with every `expected` key
+  carrying a citation (a magic number with no cited source is a test failure — WP72's standard);
+  §5's roster table and its role-coverage/attribute-spread paragraphs updated to six runners;
+  `spec/worklogs/WP88.md` written, and any figure that needed the PDF recorded in
+  `spec/rulebooks/learnings/phase-s.md`.

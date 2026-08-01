@@ -291,3 +291,55 @@ isn't being computed, not just discover it by reading this document.
   crash and simply contributes nothing. Unit test for `unmodeled_effect_notes`'s own construction
   (dedup, correct notes, empty for a character with none, no crash on non-quality selections).
 
+
+---
+
+## Phase reopened 2026-08-01 — WP89
+
+Phase S's second fixture-gap pass (see `phase-s-test-fixtures.md` §6) loaded a player-authored
+character that converts 4 Karma to nuyen, and noticed that its Karma ledger doesn't move. This is
+this phase's own construct that's wrong, so the fix is filed here rather than in Phase L or S.
+
+- [ ] **WP89 — Karma-to-Nuyen conversion must debit the unified Karma ledger.**
+  Goal: `Character.karma_spent` (`engine/character.py:382`) sums every Karma-spending selection —
+  qualities, contacts, bound spirits, foci, and the four Step Seven spends — but not
+  `resources_selection.karma_converted`. So converting Karma to nuyen at Step Six currently costs
+  nothing: a character can convert the maximum 10 Karma for ¥20,000 and still spend all 25 Karma
+  on qualities, contacts, and Step Seven. The observed case: `tests/fixtures/saves/razorboy.json`
+  converts 4 Karma, gets the ¥8,000 (the character sheet says so in as many words — "275000
+  priority + 8000 from converting 4 Karma"), and still reports `karma_remaining: 19`, which is
+  `25 - 3 qualities - 3 contacts` with the conversion simply absent.
+  **This is a stale deferral, not an oversight.** `spec/worklogs/WP43.md` records the decision
+  explicitly: *"Confirmed Phase O (the unified Karma ledger) hasn't landed — no code anywhere sums
+  `quality_selection.karma_cost`/`contact_selection.karma_cost` into one running total today, so
+  there is nothing yet for this conversion to double-spend against."* That was true on 2026-07-21
+  and false from WP51 onward; the module docstring in `engine/resources.py` still documents the gap
+  as deliberate. Nobody was wrong — the trigger condition just passed unnoticed.
+  Notes and traps:
+  - Confirm the direction against the rulebook before coding (p. 94, and Step Six/Step Seven's own
+    ordering): the expectation is that converted Karma is spent Karma, but this WP should cite it
+    rather than assume it, per this phase's own re-extraction practice.
+  - `karma_spent` is a property read by `karma_remaining`, which is in turn what nearly every
+    `create_*` function's `karma_budget` argument is derived from — including
+    `create_foci_selection` and the four Step Seven spends. Adding a term to it therefore *shrinks*
+    every downstream budget, and the "add back this section's own currently-committed cost" idiom
+    (WP51) has to work for this term too or a resubmission will double-count it.
+  - There is a genuine ordering question to settle and document: Karma-to-Nuyen is Step Six and the
+    Karma spends are Step Seven, so a character who converts Karma and *then* overspends Step Seven
+    should be rejected — but `create_resources_selection` currently validates only nuyen, and knows
+    nothing about the Karma ledger. Decide whether it grows a `karma_budget` parameter like its
+    siblings, or whether the check lives at the aggregate; either is defensible, but say which and
+    why.
+  - Existing saves/fixtures with a nonzero `karma_converted` will shift their `karma_remaining`.
+    Check the four synthetic fixtures and the legacy-import path (`io/legacy_import.py:877` maps
+    `<nuyenbp>` onto this field) before assuming nothing moves — `.chum5` characters with a nonzero
+    `<nuyenbp>` are the interesting case, since their legacy-computed Karma total is ground truth
+    for what the right answer looks like.
+  - Remove the now-obsolete "known, deliberate gap" paragraph from `engine/resources.py`'s module
+    docstring rather than leaving it to contradict the code.
+  Depends on: WP51 (the ledger this adds a term to); WP43 (the conversion itself).
+  Acceptance: `pytest`/`ruff`/`mypy` green; a unit test that converting Karma reduces
+  `karma_remaining` by exactly the converted amount, and one that a Step Seven spend which was
+  affordable *before* a conversion is rejected after it; `razorboy.json` reports `karma_remaining:
+  15`; a dated entry in `spec/decisions-log.md` recording the ordering ruling; if the rulebook had
+  to be opened, a citation in `spec/rulebooks/learnings/phase-o.md`.

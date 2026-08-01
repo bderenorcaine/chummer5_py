@@ -113,16 +113,16 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | L | Easy wins (Karma-to-Nuyen, Sum-to-Ten, Bioware) | done (WP43-45) | [phase-l-easy-wins.md](plan/phase-l-easy-wins.md) |
 | M | Magic expansion (Bound Spirits, Foci, Mentor Spirits) | done (WP46-48) | [phase-m-magic-expansion.md](plan/phase-m-magic-expansion.md) |
 | N | Expanded skill support (Knowledge/Language, specializations) | done (WP49-50) | [phase-n-skill-support.md](plan/phase-n-skill-support.md) |
-| O | Karma-buying (chargen-time leftover-Karma spend) | done (WP51-56) | [phase-o-karma-buying.md](plan/phase-o-karma-buying.md) |
+| O | Karma-buying (chargen-time leftover-Karma spend) | WP51-56 done; reopened 2026-08-01 for WP89 | [phase-o-karma-buying.md](plan/phase-o-karma-buying.md) |
 | P | Rigger support | research-intro only, no WPs assigned | [phase-p-rigger-support.md](plan/phase-p-rigger-support.md) |
 | Q | Spec reorganization (phase-cut point) | done (WP57) | [phase-q-docs-reorg.md](plan/phase-q-docs-reorg.md) |
 | R | Architecture cleanup / refactoring | done (WP58, WP62-63) | [phase-r-architecture-cleanup.md](plan/phase-r-architecture-cleanup.md) |
-| S | Test fixture expansion | done (WP59, WP72-76) — fixture list complete | [phase-s-test-fixtures.md](plan/phase-s-test-fixtures.md) |
+| S | Test fixture expansion | WP59, WP72-76 done; reopened 2026-08-01 for WP85-88 | [phase-s-test-fixtures.md](plan/phase-s-test-fixtures.md) |
 | T | UI bugfixes & skill-picker QoL | done (WP60-61) | [phase-t-ui-bugfixes.md](plan/phase-t-ui-bugfixes.md) |
 | U | UI bugfixes round 2 | done (WP64-66) | [phase-u-ui-bugfixes-2.md](plan/phase-u-ui-bugfixes-2.md) |
 | V | UI improvement requests | done (WP67-71, WP83-84) | [phase-v-ui-improvements.md](plan/phase-v-ui-improvements.md) |
 
-Next unclaimed WP number: **WP85** (see Phase P's own file for why WP57-59 were claimed; Phase T
+Next unclaimed WP number: **WP90** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V
 claimed WP64-71 on 2026-07-27 from a second manual-testing pass — see those phase files for scope;
 Phase S's WP59 research pass claimed WP72-76 on 2026-07-29 for its synthetic-fixture WP list;
@@ -133,4 +133,7 @@ player; WP78 claimed WP80 and WP81 the same day too — the one Bucket A row who
 purchase-time player choice, and the natural-vs-augmented attribute-maximum split its four modeled
 rows made reachable from a second direction; WP80 claimed WP82 the same day, for that same
 natural-vs-augmented split applied to *skill* ratings, which its own bonus made reachable; Phase V
-claimed WP83-84 on 2026-08-01 from a second manual-testing pass over the now-complete chargen page).
+claimed WP83-84 on 2026-08-01 from a second manual-testing pass over the now-complete chargen page;
+Phase S claimed WP85-88 the same day, reopening a phase marked complete after a player-authored
+save file walked through six gaps its own §2 inventory never enumerated — see that file's §6; and
+Phase O claimed WP89 from the same pass, for a stale WP43 deferral that WP51 silently made live).
