@@ -313,8 +313,14 @@ def test_wesson_imports_end_to_end() -> None:
     assert karma_attribute_selection.points == {"EDG": 1}
     assert karma_attribute_selection.karma_cost == 20
 
-    # 25 starting - 10 (Guts) + 15 (SINner) = 30 available; 30 - 20 (EDG buy) = 10 left.
-    assert character.karma_remaining == 10
+    # 25 starting - 10 (Guts) + 15 (SINner) = 30 available; 30 - 20 (EDG buy) = 10 left, minus the
+    # 1 Karma Wesson's own `<nuyenbp>1</nuyenbp>` converted to nuyen at Step Six (WP89 -- that
+    # conversion is a Karma spend, not a free top-up; core rulebook p. 94). Shifted from 10 by WP89,
+    # and legacy agrees on the direction: `CalculateKarmaValue` adds the converted amount to the
+    # character's total Karma spend rather than ignoring it.
+    assert character.resources_selection is not None
+    assert character.resources_selection.karma_converted == 1
+    assert character.karma_remaining == 9
 
     # "Adept" (the Talent-granted metatype quality), Ambidextrous, and Common Sense are still
     # dropped -- unrelated to this WP (the first is metatype-sourced, never a player pick to import;

@@ -300,7 +300,7 @@ Phase S's second fixture-gap pass (see `phase-s-test-fixtures.md` §6) loaded a 
 character that converts 4 Karma to nuyen, and noticed that its Karma ledger doesn't move. This is
 this phase's own construct that's wrong, so the fix is filed here rather than in Phase L or S.
 
-- [ ] **WP89 — Karma-to-Nuyen conversion must debit the unified Karma ledger.**
+- [x] **WP89 — Karma-to-Nuyen conversion must debit the unified Karma ledger.**
   Goal: `Character.karma_spent` (`engine/character.py:382`) sums every Karma-spending selection —
   qualities, contacts, bound spirits, foci, and the four Step Seven spends — but not
   `resources_selection.karma_converted`. So converting Karma to nuyen at Step Six currently costs

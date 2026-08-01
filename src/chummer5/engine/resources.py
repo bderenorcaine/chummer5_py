@@ -82,12 +82,26 @@ implements -- see `spec/rulebooks/learnings.md`'s WP43 entry for the full citati
 the same "fold into the one joint budget check" shape `lifestyle_cost`/`cyberware_cost` already
 have -- except karma conversion *enlarges* the budget rather than spending from it.
 
-**Not yet enforced: karma spent here can't (yet) be double-spent against qualities/contacts'
-own karma costs.** No unified "leftover Karma" ledger exists in this engine yet (Phase O, not yet
-built) -- `create_quality_selection`/`create_contact_selection` each compute their own karma_cost
-independently, with nothing today that sums them into one running total this conversion would need
-to draw down. `karma_to_nuyen` only enforces the flat 0-10 range; wiring a real double-spend check
-is Phase O's job once its ledger exists, per the Implementation Plan's own WP43 entry.
+**Where the double-spend check lives (WP89): the ledger, not this function.** WP43 left converted
+Karma outside the Karma accounting entirely, because no unified "leftover Karma" ledger existed for
+it to draw down; WP51 built one, and `chummer5.engine.character.Character.karma_spent` now carries
+`resources_selection.karma_converted` as one of its terms. So converting Karma shrinks
+`karma_remaining` by exactly the amount converted, and every Step Seven spend -- each of which
+derives its own `karma_budget` from that property -- sees a smaller budget automatically.
+
+The alternative considered and rejected was giving `create_resources_selection` a `karma_budget`
+parameter like its Karma-spending siblings have. It doesn't fit this particular spender: unlike a
+quality or a skill rank, this function is **re-called several times within a single build** (once up
+front, again once cyberware/bioware are known, again once foci are -- see `chummer5.io.save_format
+.build_character`), each time with the *same* conversion but a differently-populated Karma ledger,
+since Step Seven's spends are resolved in between. Passing it a budget would mean passing a
+different budget each call for one unchanged choice, which is exactly the double-counting trap
+WP51's "add this section's own committed cost back in" idiom exists to avoid. The consequence
+accepted with that ruling: an over-conversion is not rejected at its own commit point -- it drives
+`karma_remaining` negative, and surfaces as every later Step Seven spend being refused, which is
+the same "validity is re-derived rather than enforced at construction" shape the Project Overview's
+"Character as the single aggregate" section already describes. `karma_to_nuyen` still enforces the
+flat 0-10 rulebook cap here, since that one *is* a property of the conversion alone.
 """
 
 from __future__ import annotations

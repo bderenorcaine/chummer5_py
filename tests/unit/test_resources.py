@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
-from chummer5.engine.character import Character, create_character, metatype_choices
+from chummer5.engine.character import (
+    STARTING_KARMA,
+    Character,
+    create_character,
+    create_karma_attribute_points,
+    metatype_choices,
+)
 from chummer5.engine.resources import (
     FREE_CONTACT_POINTS_PER_CHARISMA,
     KARMA_PER_EXCESS_CONTACT_POINT,
@@ -514,3 +522,45 @@ def test_create_resources_selection_rejects_karma_conversion_above_the_cap() -> 
         create_resources_selection(
             letter="E", priorities=PRIORITIES, gear_names=[], karma_converted=11
         )
+
+
+# --- WP89: Karma-to-Nuyen debits the unified Karma ledger ---------------------------------------
+
+
+def _human_converting(karma_converted: int) -> Character:
+    """A bare Human carrying nothing but a Resources selection with `karma_converted` converted."""
+    return replace(
+        _human_with_cha(0),
+        resources_selection=create_resources_selection(
+            letter="E", priorities=PRIORITIES, gear_names=[], karma_converted=karma_converted
+        ),
+    )
+
+
+def test_karma_conversion_reduces_karma_remaining_by_exactly_the_converted_amount() -> None:
+    """Core rulebook p. 94: "players can convert some of their Karma to nuyen ... up to 10 Karma at
+    a rate of 2,000 nuyen per Karma point". The Karma is *spent*, so Step Seven ("Spending Your
+    Left Over Karma") sees a smaller pool. WP43 deferred this for want of a ledger; WP51 built one.
+    """
+    assert _human_converting(0).karma_remaining == STARTING_KARMA
+    assert _human_converting(4).karma_remaining == STARTING_KARMA - 4
+    assert _human_converting(MAX_KARMA_TO_NUYEN).karma_remaining == (
+        STARTING_KARMA - MAX_KARMA_TO_NUYEN
+    )
+    # It's a Karma-point count, not a nuyen figure: the 2,000¥ rate never reaches the ledger.
+    assert _human_converting(4).karma_spent == 4
+
+
+def test_a_step_seven_spend_affordable_before_a_conversion_is_rejected_after_it() -> None:
+    """The ordering the ruling turns on: Step Six's conversion happens *before* Step Seven, so it
+    takes its Karma off the top. EDG 2 -> 3 costs `new rating x 5` = 15 Karma, which fits the
+    unconverted 25-Karma pool and doesn't fit what remains once 20,000¥ worth is converted.
+    """
+    unconverted = _human_converting(0)
+    selection = create_karma_attribute_points(unconverted, {"EDG": 1}, unconverted.karma_remaining)
+    assert selection.karma_cost == 15
+
+    converted = _human_converting(MAX_KARMA_TO_NUYEN)
+    assert converted.karma_remaining == STARTING_KARMA - MAX_KARMA_TO_NUYEN  # 25 - 10 = 15
+    with pytest.raises(ValueError, match="exceeds the Karma budget"):
+        create_karma_attribute_points(converted, {"EDG": 2}, converted.karma_remaining)

@@ -410,6 +410,19 @@ class Character:
                 else 0
             )
             + (self.spell_selection.karma_cost if self.spell_selection is not None else 0)
+            # WP89: Step Six's Karma-to-Nuyen conversion is a Karma *spend*, not a free top-up --
+            # core rulebook p. 94, "players can convert some of their Karma to nuyen if they need a
+            # little more to spend. They may convert up to 10 Karma at a rate of 2,000 nuyen per
+            # Karma point", and Step Seven is titled "Spending Your Left Over Karma", i.e. what
+            # Step Six left. WP43 deliberately deferred wiring this because no unified ledger
+            # existed to draw it down; WP51 built one, and this is the term that was waiting for it.
+            # Note this is the one term that isn't a `karma_cost` field: `ResourcesSelection`
+            # records how many Karma *points* were converted, and a point is worth a point.
+            + (
+                self.resources_selection.karma_converted
+                if self.resources_selection is not None
+                else 0
+            )
         )
 
     @property

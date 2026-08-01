@@ -1052,3 +1052,41 @@ committed as-is, unreferenced, in the same commit as the WP entries, so WP85-88 
 from the repo rather than from a chat transcript. It also has standalone value the synthetic format
 can't provide: it is the first real on-disk artifact of this project's *own* save format, and WP85
 turns it into the regression guard that format has never had.
+
+## 2026-08-01 — Phase O, WP89: converted Karma is spent Karma; the check lives in the ledger, not in `create_resources_selection`
+
+**Direction, confirmed rather than assumed.** Core rulebook p. 94 (Step Six: Spend Your Resources):
+"While nuyen from this step cannot be converted to Karma, players can convert some of their Karma to
+nuyen if they need a little more to spend. They may convert up to 10 Karma at a rate of 2,000 nuyen
+per Karma point for gear, which means they can have up to 20,000 extra nuyen." Two independent
+confirmations that the Karma is *consumed*, not duplicated: the very next step is titled "Spending
+Your Left Over Karma" (p. 98) — left over from Step Six, which the conversion is part of — and the
+legacy engine's own `Character.CalculateKarmaValue` adds the converted amount to a character's total
+Karma spend under the `Checkbox_CreatePACKSKit_StartingNuyen` line item rather than ignoring it. So
+`Character.karma_spent` gains `resources_selection.karma_converted` as a ninth term, and every Step
+Seven spend — each deriving its `karma_budget` from `karma_remaining` — sees the smaller pool for
+free.
+
+**Ruling on where the double-spend check lives: the aggregate ledger, not a new `karma_budget`
+parameter on `create_resources_selection`.** WP89's own entry left this open as "either is
+defensible, but say which and why." The deciding difference from every Karma-spending sibling that
+*does* take a `karma_budget`: this function is **re-called several times inside one build** — once up
+front, again once cyberware/bioware are resolved, again once foci are (`io/save_format
+.build_character`) — and Step Seven's spends are resolved in between two of those calls. One
+unchanged player choice would therefore have to be validated against three different budgets, which
+is exactly the double-counting trap WP51's "add this section's own committed cost back in" idiom
+exists to avoid. Making the conversion a *term of* the ledger instead is checked once, in one place,
+and needs no new parameter at any call site.
+
+**The consequence accepted with that ruling, stated rather than glossed:** an over-conversion is not
+rejected at its own commit point. It drives `karma_remaining` negative and surfaces as every
+subsequent Step Seven spend being refused, which is the same "validity is re-derived at render time
+rather than enforced at construction" shape `Project Overview.md`'s "Character as the single
+aggregate" section already describes for stale priority selections. `karma_to_nuyen` still enforces
+the flat 0-10 rulebook cap, since that one is a property of the conversion alone and needs no ledger.
+
+**One existing expected value moved, and it moved toward legacy.** `Wesson.chum5` carries
+`<nuyenbp>1</nuyenbp>`, so `test_wesson_imports_end_to_end`'s `karma_remaining` drops 10 → 9. That is
+the intended direction, not a regression: legacy's own `<karma>2</karma>` for the same character is
+likewise net of the conversion. No other fixture or test shifted — the five synthetic fixtures all
+convert 0.
