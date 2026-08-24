@@ -277,7 +277,7 @@ Next unclaimed WP number after this block is **WP97**.
   because `()` would silently reject every id. WP91's Tundra-9 Handling correction is applied here,
   in `_PRINTED_HANDLING_CORRECTIONS`. See `spec/worklogs/WP92.md`.
 
-- [ ] **WP93 — Web UI: the vehicle/drone picker and the character-sheet stat block.**
+- [x] **WP93 — Web UI: the vehicle/drone picker and the character-sheet stat block.**
   Goal: reach the player. A `_vehicles.html` partial + `routes/vehicles.py` following
   `_cyberware.html`/`routes/cyberware.py`'s category-grouped `<details>` shape, and a character-sheet
   section rendering each purchased vehicle's full stat block (Handling on-road/off-road, Speed,
@@ -290,6 +290,17 @@ Next unclaimed WP number after this block is **WP97**.
   Acceptance: `pytest`/`ruff`/`mypy` green; an integration test buying a drone and a vehicle through
   the routes and asserting both stat blocks and the budget on the rendered sheet; the two-value
   Handling/Speed rendered as printed (`4/3`), not silently collapsed to one number.
+  Landed as `chummer5.web.routes.vehicles` (`POST /ui/vehicles`) + `_vehicles.html`, a peer section
+  after cyberware in `_chargen_body.html`, plus a character-sheet stat-block table. The picker and
+  the sheet share one `vehicle_stat_block()` helper, so they cannot disagree about notation.
+  **Registry re-check (the WP77 clause): nothing changed.** This WP offers a catalog that has no
+  registry rows yet (WP95 writes them) and makes no existing quality/cyberware row newly reachable
+  — `Control Rig` was already UI-reachable via WP42's full-catalog picker, as WP90 §4 records.
+  Threading `vehicle_cost` through the five sibling sections surfaced a **pre-existing bug**:
+  `submit_resources`/`submit_lifestyle` displayed `foci_cost` in their budget warnings but never
+  passed it to the `create_resources_selection` call that actually accepts a submission, so gear or
+  a Lifestyle could be committed over budget against bonded foci. Fixed in the same lines
+  (2026-08-01 decisions-log entry). See `spec/worklogs/WP93.md`.
 
 - [ ] **WP94 — Surface the Matrix stat block on gear already being sold, and cap its Availability.**
   Goal: close §3. No new purchase flow — these items are already in `STARTER_GEAR_CATALOG`; what's

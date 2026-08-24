@@ -77,6 +77,7 @@ from chummer5.web.catalogs import (
     templates,
 )
 from chummer5.web.forms import display_karma_to_nuyen
+from chummer5.web.routes.vehicles import vehicle_stat_block
 from chummer5.web.session import SESSION_COOKIE_NAME, ChargenSession, resolve_session
 
 router = APIRouter()
@@ -90,6 +91,7 @@ def _resources_selection_for_display(
     bioware_cost: int,
     karma_converted: int = 0,
     foci_cost: int = 0,
+    vehicle_cost: int = 0,
 ) -> ResourcesSelection:
     """Recompute a `ResourcesSelection`'s nuyen totals against `letter`'s *current* budget, without
     `create_resources_selection`'s "spend must not exceed budget" check.
@@ -122,6 +124,9 @@ def _resources_selection_for_display(
 
     **WP47**: `foci_cost` (the character's currently-selected `foci_selection.nuyen_cost`, or 0 if
     none yet) folds in the same way, extending the shared budget to five sections.
+
+    **WP93**: `vehicle_cost` (the character's currently-selected `vehicle_selection.nuyen_spent`,
+    or 0 if none yet) folds in the same way, extending the shared budget to six sections.
     """
     # WP66: the committed purchased items are passed straight through -- each already carries its
     # own final cost (a Rating-priced item's is `rating * cost_per_rating`, a flat item's is its
@@ -143,12 +148,14 @@ def _resources_selection_for_display(
             - cyberware_cost
             - bioware_cost
             - foci_cost
+            - vehicle_cost
         ),
         lifestyle_cost=lifestyle_cost,
         cyberware_cost=cyberware_cost,
         bioware_cost=bioware_cost,
         karma_converted=karma_converted,
         foci_cost=foci_cost,
+        vehicle_cost=vehicle_cost,
     )
 
 
@@ -364,6 +371,7 @@ def _character_sheet_context(
     cyberware_selection = character.cyberware_selection
     bioware_selection = character.bioware_selection
     foci_selection = character.foci_selection
+    vehicle_selection = character.vehicle_selection
     committed_karma_converted = (
         character.resources_selection.karma_converted
         if character.resources_selection is not None
@@ -377,6 +385,7 @@ def _character_sheet_context(
         bioware_selection.nuyen_spent if bioware_selection is not None else 0,
         committed_karma_converted,
         foci_selection.nuyen_cost if foci_selection is not None else 0,
+        vehicle_selection.nuyen_spent if vehicle_selection is not None else 0,
     )
     # WP66: keyed by (name, rating) so two Rating-priced buys of the same item at different ratings
     # don't collapse into one line; `rating` is None for flat items (a plain "name × qty" line).
@@ -392,6 +401,19 @@ def _character_sheet_context(
     # name, so two Reflex Recorders bought for different skills read as two lines ("Reflex Recorder
     # (Longarms)"), not one line of two -- the same "the pick is part of what was bought" display
     # WP55 gives a SELECT_TEXT quality above.
+    # WP93: tallied by name (repeats are quantity -- a rigger buys four Fly-Spies), each row
+    # carrying its full printed stat block plus the derived Condition Monitor.
+    vehicle_counts: dict[str, int] = {}
+    for vehicle in vehicle_selection.vehicles if vehicle_selection is not None else ():
+        vehicle_counts[vehicle.name] = vehicle_counts.get(vehicle.name, 0) + 1
+    vehicles_by_name = {
+        vehicle.name: vehicle
+        for vehicle in (vehicle_selection.vehicles if vehicle_selection is not None else ())
+    }
+    vehicle_rows = [
+        {"quantity": quantity, **vehicle_stat_block(vehicles_by_name[name])}
+        for name, quantity in sorted(vehicle_counts.items())
+    ]
     bioware_counts: dict[str, int] = {}
     for purchase in bioware_selection.purchases if bioware_selection is not None else ():
         label = (
@@ -553,6 +575,13 @@ def _character_sheet_context(
             {"name": name, "quantity": quantity}
             for name, quantity in sorted(bioware_counts.items())
         ],
+        # WP93: purchased vehicles/drones -- the full printed stat block plus the one derived
+        # number (Condition Monitor, p. 199), tallied by name so a four-Fly-Spy buy is one line.
+        # `vehicle_stat_block` is shared with the picker so the two can't disagree on notation.
+        "vehicle_rows": vehicle_rows,
+        "vehicle_nuyen_cost": (
+            vehicle_selection.nuyen_spent if vehicle_selection is not None else 0
+        ),
         # WP47: bonded foci recap -- name, chosen Force, and each pick's own nuyen/Karma cost.
         "foci_rows": (
             [
@@ -782,6 +811,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         karma_converted=karma_converted,
         bound_spirit_picks=bound_spirit_picks,
         foci_picks=foci_picks,
+        vehicle_ids=(
+            character.vehicle_selection.vehicle_ids
+            if character.vehicle_selection is not None
+            else ()
+        ),
         mentor_spirit_archetype_id=(
             mentor_spirit.archetype.id if mentor_spirit is not None else None
         ),

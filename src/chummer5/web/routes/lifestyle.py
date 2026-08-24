@@ -63,6 +63,7 @@ def _lifestyle_context(
     bioware_cost: int,
     karma_converted: int = 0,
     foci_cost: int = 0,
+    vehicle_cost: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -80,7 +81,8 @@ def _lifestyle_context(
     `resources_selection.karma_converted`, or 0 if none yet), topping up the budget rather than
     spending from it -- see
     `chummer5.engine.resources`'s module docstring. **WP47** adds `foci_cost` the same way,
-    extending the shared budget to five sections.
+    extending the shared budget to five sections. **WP93** adds `vehicle_cost` the same way,
+    extending it to six.
 
     Same `error`-gated re-validation pattern as `_resources_context`/
     `chummer5.web.routes.skills._skill_allocation_context`: when `error` is unset (i.e. this isn't
@@ -107,7 +109,12 @@ def _lifestyle_context(
             budget_warning = str(exc)
         else:
             total_spent = (
-                gear_cost + selection.total_cost + cyberware_cost + bioware_cost + foci_cost
+                gear_cost
+                + selection.total_cost
+                + cyberware_cost
+                + bioware_cost
+                + foci_cost
+                + vehicle_cost
             )
             if total_spent > budget:
                 parts = [f"gear ({gear_cost})", f"lifestyle ({selection.total_cost})"]
@@ -117,6 +124,8 @@ def _lifestyle_context(
                     parts.append(f"bioware ({bioware_cost})")
                 if foci_cost:
                     parts.append(f"foci ({foci_cost})")
+                if vehicle_cost:
+                    parts.append(f"vehicles ({vehicle_cost})")
                 budget_warning = (
                     f"No longer fits since priorities were last confirmed: {' + '.join(parts)} "
                     f"spend {total_spent} exceeds Resources priority {resources_letter}'s nuyen "
@@ -169,6 +178,12 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
         cyberware_cost = cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
         bioware_selection = session.character.bioware_selection
         bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
+        # WP93: see chummer5.web.routes.resources' identical note -- `foci_cost` was displayed but
+        # never passed to the accepting call; both it and `vehicle_cost` are threaded now.
+        foci_selection = session.character.foci_selection
+        foci_cost = foci_selection.nuyen_cost if foci_selection is not None else 0
+        vehicle_selection = session.character.vehicle_selection
+        vehicle_cost = vehicle_selection.nuyen_spent if vehicle_selection is not None else 0
         try:
             lifestyle_selection = create_lifestyle_selection(tier_name, months, LIFESTYLES)
             new_resources_selection = create_resources_selection(
@@ -180,6 +195,8 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
                 cyberware_cost=cyberware_cost,
                 bioware_cost=bioware_cost,
                 karma_converted=karma_converted,
+                foci_cost=foci_cost,
+                vehicle_cost=vehicle_cost,
             )
         except ValueError as exc:
             context = _lifestyle_context(
@@ -191,6 +208,8 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
                 cyberware_cost,
                 bioware_cost,
                 karma_converted,
+                foci_cost,
+                vehicle_cost,
                 error=str(exc),
             )
         else:
@@ -208,6 +227,8 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
                 cyberware_cost,
                 bioware_cost,
                 karma_converted,
+                foci_cost,
+                vehicle_cost,
             )
     context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_lifestyle.html", context)

@@ -465,6 +465,7 @@ def _cyberware_context(
     lifestyle_cost: int,
     karma_converted: int = 0,
     foci_cost: int = 0,
+    vehicle_cost: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -487,7 +488,8 @@ def _cyberware_context(
     committed spend, threaded through the same cross-section wiring `_resources_context`/
     `_lifestyle_context` already use for each other (see their docstrings). **WP43** adds
     `karma_converted` the same way, topping up the budget rather than spending from it. **WP47**
-    adds `foci_cost` the same way, extending the shared budget to five sections.
+    adds `foci_cost` the same way, extending the shared budget to five sections. **WP93** adds
+    `vehicle_cost` the same way, extending it to six.
 
     **WP45: bioware folds into this same section rather than getting its own** -- unlike Lifestyle
     (its own distinct rulebook chargen step), the rulebook's own Step Six groups "Cyberware and
@@ -513,7 +515,7 @@ def _cyberware_context(
     cyberware_groups = _cyberware_groups(cyberware_requests, attribute_maximums)
     bioware_groups = _bioware_groups(bioware_requests, bioware_by_id)
     budget = starting_nuyen(resources_letter, PRIORITIES) + display_karma_to_nuyen(karma_converted)
-    nuyen_available = budget - gear_cost - lifestyle_cost - foci_cost
+    nuyen_available = budget - gear_cost - lifestyle_cost - foci_cost - vehicle_cost
     cyberware_spent = sum(
         int(row["subtotal"]) for group in cyberware_groups for row in group["rows"]
     )
@@ -588,8 +590,10 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
         # WP47: Foci's own committed nuyen cost shares this same pool now too.
         foci_selection = session.character.foci_selection
         foci_cost = foci_selection.nuyen_cost if foci_selection is not None else 0
+        vehicle_selection = session.character.vehicle_selection
+        vehicle_cost = vehicle_selection.nuyen_spent if vehicle_selection is not None else 0
         nuyen_available = available_nuyen(session.resources_letter, PRIORITIES, karma_converted) - (
-            gear_cost + lifestyle_cost + foci_cost
+            gear_cost + lifestyle_cost + foci_cost + vehicle_cost
         )
         try:
             # Fixed evaluation order (chummer5.engine.bioware's own docstring): cyberware
@@ -619,6 +623,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 bioware_cost=bioware_selection.nuyen_spent,
                 karma_converted=karma_converted,
                 foci_cost=foci_cost,
+                vehicle_cost=vehicle_cost,
             )
         except ValueError as exc:
             context = _cyberware_context(
@@ -630,6 +635,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 lifestyle_cost,
                 karma_converted,
                 foci_cost,
+                vehicle_cost,
                 error=str(exc),
             )
         else:
@@ -647,6 +653,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 lifestyle_cost,
                 karma_converted,
                 foci_cost,
+                vehicle_cost,
             )
     context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_cyberware.html", context)

@@ -94,6 +94,7 @@ def _foci_selection_context(
     cyberware_cost: int,
     bioware_cost: int,
     karma_converted: int = 0,
+    vehicle_cost: int = 0,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -104,7 +105,8 @@ def _foci_selection_context(
     `chummer5.web.routes.spirits._spirit_selection_context`'s `picks`.
 
     **Nuyen**: shares the same Step Six pool gear/Lifestyle/cyberware/bioware already draw from --
-    `gear_cost`/`lifestyle_cost`/`cyberware_cost`/`bioware_cost` are those sections' currently
+    `gear_cost`/`lifestyle_cost`/`cyberware_cost`/`bioware_cost`/`vehicle_cost` (WP93) are those
+    sections' currently
     committed spend, the same cross-section wiring
     `chummer5.web.routes.cyberware._cyberware_context` already uses for its own four terms, now
     extended to five.
@@ -153,6 +155,7 @@ def _foci_selection_context(
         - lifestyle_cost
         - cyberware_cost
         - bioware_cost
+        - vehicle_cost
     )
     nuyen_spent = sum(int(row["subtotal"]) for group in foci_groups for row in group["rows"])
     own_committed_cost = (
@@ -210,8 +213,10 @@ async def submit_foci(request: Request) -> HTMLResponse:
         cyberware_cost = cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
         bioware_selection = character.bioware_selection
         bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
+        vehicle_selection = character.vehicle_selection
+        vehicle_cost = vehicle_selection.nuyen_spent if vehicle_selection is not None else 0
         nuyen_available = available_nuyen(session.resources_letter, PRIORITIES, karma_converted) - (
-            gear_cost + lifestyle_cost + cyberware_cost + bioware_cost
+            gear_cost + lifestyle_cost + cyberware_cost + bioware_cost + vehicle_cost
         )
         # WP51: budget excludes Foci's own currently-committed cost (about to be replaced by
         # this submission) -- see _foci_selection_context's own docstring for why this is
@@ -236,6 +241,7 @@ async def submit_foci(request: Request) -> HTMLResponse:
                 bioware_cost=bioware_cost,
                 karma_converted=karma_converted,
                 foci_cost=selection.nuyen_cost,
+                vehicle_cost=vehicle_cost,
             )
         except ValueError as exc:
             context = _foci_selection_context(
@@ -247,6 +253,7 @@ async def submit_foci(request: Request) -> HTMLResponse:
                 cyberware_cost,
                 bioware_cost,
                 karma_converted,
+                vehicle_cost,
                 error=str(exc),
             )
         else:
@@ -263,6 +270,7 @@ async def submit_foci(request: Request) -> HTMLResponse:
                 cyberware_cost,
                 bioware_cost,
                 karma_converted,
+                vehicle_cost,
             )
     context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_foci_selection.html", context)

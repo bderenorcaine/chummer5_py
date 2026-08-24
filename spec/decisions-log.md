@@ -1175,3 +1175,24 @@ against the printed tables" programme. No other catalog in this project (gear, c
 qualities) has ever been checked exhaustively against its printed table, and doing so is not
 scheduled — WP91 only did it here because a 40-row table is small enough to transcribe in full and
 Phase P had the extract on hand.
+
+**2026-08-01 (WP93, Phase P) — a pre-existing shared-budget hole, found by widening it.** Threading
+`vehicle_cost` through the five sibling sections that share the Step Six nuyen pool made a bug in
+the *existing* wiring visible: `chummer5.web.routes.resources.submit_resources` and
+`chummer5.web.routes.lifestyle.submit_lifestyle` each passed `foci_cost` into their **context**
+builder (so the "no longer fits" warning was right) but not into the `create_resources_selection`
+call that actually **accepts** the submission. A character with bonded foci could therefore commit
+gear or a Lifestyle that overran the real remaining budget; the character sheet, which recomputes
+from the committed selections, would then show a negative `nuyen_remaining`.
+
+Fixed in the same lines that gained `vehicle_cost`, rather than deferred: the omission and its fix
+are one token apart, and leaving a known "the warning is right but the validator isn't" split in
+place while adding a sixth spender to the same code would have been actively misleading to the next
+WP. No other section had the gap (`cyberware`/`foci` both pass every sibling cost to their accepting
+call). `tests/unit/test_web_vehicles.py::test_gear_bought_after_a_vehicle_is_checked_against_the_
+remaining_budget` pins the vehicle half; the foci half stays covered only by the existing foci tests,
+which is the same coverage it had before.
+
+**Standing shape this confirms:** each shared-budget section must pass *every* sibling cost to both
+its context re-validation and its accepting `create_resources_selection` call. Six spenders now
+(gear, Lifestyle, cyberware, bioware, foci, vehicles); a seventh would touch the same six places.

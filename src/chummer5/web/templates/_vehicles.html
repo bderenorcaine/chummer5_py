@@ -1,0 +1,81 @@
+<div id="vehicles">
+  {% if character %}
+  <details {% if open_section == "vehicles" %}open{% endif %}>
+  <summary>Vehicles &amp; drones{% if vehicles_error or vehicles_budget_warning %} ⚠{% endif %}</summary>
+
+  {% if vehicles_error %}
+  <p class="error">{{ vehicles_error }}</p>
+  {% endif %}
+  {% if vehicles_budget_warning %}
+  <p class="warning">{{ vehicles_budget_warning }}</p>
+  {% endif %}
+
+  <p>
+    Core rulebook, pp. 461&ndash;466. Stock, unmodified purchases only &mdash; vehicle and drone
+    modifications are out of scope, so a vehicle bought here has no rigger interface (drones ship
+    with one built in, p. 265). Shares the same nuyen budget as gear/Lifestyle/cyberware/bioware:
+    nuyen remaining {{ vehicles_nuyen_remaining }} / {{ vehicles_nuyen_budget }} (spent on vehicles
+    {{ vehicles_nuyen_spent }}).
+  </p>
+
+  <form
+    hx-post="/ui/vehicles"
+    hx-target="#vehicles"
+    hx-swap="outerHTML"
+    hx-trigger="change, input[event.target.type=='number'] delay:400ms"
+  >
+    {% for group in vehicle_groups %}
+    <details data-details-key="vehicle:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
+      <summary>{{ group.category }}</summary>
+      <table>
+        <thead>
+          <tr>
+            <th>Vehicle</th>
+            <th>Handl</th>
+            <th>Speed</th>
+            <th>Accel</th>
+            <th>Body</th>
+            <th>Armor</th>
+            <th>Pilot</th>
+            <th>Sensor</th>
+            <th>Seats</th>
+            <th>CM</th>
+            <th>Avail</th>
+            <th>Cost</th>
+            <th>Qty</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in group.rows %}
+          <tr>
+            <td>{{ row.name }}</td>
+            <td>{{ row.handling }}</td>
+            <td>{{ row.speed }}</td>
+            <td>{{ row.acceleration }}</td>
+            <td>{{ row.body }}</td>
+            <td>{{ row.armor }}</td>
+            <td>{{ row.pilot }}</td>
+            <td>{{ row.sensor }}</td>
+            <td>{% if row.seats is none %}&mdash;{% else %}{{ row.seats }}{% endif %}</td>
+            <td>{{ row.condition_monitor }}</td>
+            <td>{{ row.availability }}</td>
+            <td>{{ row.cost }}</td>
+            <td>
+              <input type="number" name="vehicle_{{ row.id }}" value="{{ row.quantity }}" min="0" />
+            </td>
+            <td>{{ row.subtotal }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endfor %}
+
+    <button type="submit">Update vehicles</button>
+  </form>
+  </details>
+  {% else %}
+  <p>Confirm a metatype and priorities above before buying vehicles.</p>
+  {% endif %}
+</div>

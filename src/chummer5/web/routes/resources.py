@@ -106,6 +106,7 @@ def _resources_context(
     bioware_cost: int,
     karma_converted: int = 0,
     foci_cost: int = 0,
+    vehicle_cost: int = 0,
     rating_gear: tuple[tuple[str, int], ...] = (),
     *,
     error: str | None = None,
@@ -148,6 +149,8 @@ def _resources_context(
 
     **WP47**: `foci_cost` folds in the same way, extending the shared-budget check to
     gear+Lifestyle+cyberware+bioware+Foci.
+
+    **WP93**: `vehicle_cost` folds in the same way, extending it to six sections.
     """
     if character is None:
         return {"character": None, "resources_error": error}
@@ -212,6 +215,7 @@ def _resources_context(
                 bioware_cost=bioware_cost,
                 karma_converted=karma_converted,
                 foci_cost=foci_cost,
+                vehicle_cost=vehicle_cost,
             )
         except ValueError as exc:
             budget_warning = (
@@ -231,6 +235,7 @@ def _resources_context(
             - cyberware_cost
             - bioware_cost
             - foci_cost
+            - vehicle_cost
         ),
         "karma_converted": karma_converted,
         "max_karma_to_nuyen": MAX_KARMA_TO_NUYEN,
@@ -257,6 +262,14 @@ async def submit_resources(request: Request) -> HTMLResponse:
         cyberware_cost = cyberware_selection.nuyen_spent if cyberware_selection is not None else 0
         bioware_selection = session.character.bioware_selection
         bioware_cost = bioware_selection.nuyen_spent if bioware_selection is not None else 0
+        # WP93: Foci and vehicles are the other two spenders of the same pool. `foci_cost` was
+        # threaded into this section's *display* re-validation by WP47 but never into the accepting
+        # call below -- fixed here alongside `vehicle_cost`, since committing gear must be checked
+        # against every sibling spend, not just four of the five.
+        foci_selection = session.character.foci_selection
+        foci_cost = foci_selection.nuyen_cost if foci_selection is not None else 0
+        vehicle_selection = session.character.vehicle_selection
+        vehicle_cost = vehicle_selection.nuyen_spent if vehicle_selection is not None else 0
         try:
             selection = create_resources_selection(
                 session.resources_letter,
@@ -267,6 +280,8 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 cyberware_cost=cyberware_cost,
                 bioware_cost=bioware_cost,
                 karma_converted=karma_converted,
+                foci_cost=foci_cost,
+                vehicle_cost=vehicle_cost,
             )
         except ValueError as exc:
             context = _resources_context(
@@ -277,6 +292,8 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 cyberware_cost,
                 bioware_cost,
                 karma_converted,
+                foci_cost,
+                vehicle_cost,
                 rating_gear=rating_gear,
                 error=str(exc),
             )
@@ -290,6 +307,8 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 cyberware_cost,
                 bioware_cost,
                 karma_converted,
+                foci_cost,
+                vehicle_cost,
                 rating_gear=rating_gear,
             )
     context["open_section"] = session.open_section  # WP61

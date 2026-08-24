@@ -56,6 +56,7 @@ from chummer5.web.routes import (
     spells,
     spirits,
     talent,
+    vehicles,
 )
 from chummer5.web.session import SessionStore
 
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
     app.include_router(lifestyle.router)
     app.include_router(cyberware.router)
     app.include_router(foci.router)
+    app.include_router(vehicles.router)
     app.include_router(character.router)
 
     return app

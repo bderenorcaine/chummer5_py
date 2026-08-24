@@ -49,6 +49,7 @@ from chummer5.web.routes.skills import _skill_allocation_context
 from chummer5.web.routes.spells import _spell_selection_context
 from chummer5.web.routes.spirits import _spirit_selection_context
 from chummer5.web.routes.talent import _default_talent_codename, _talent_selection_context
+from chummer5.web.routes.vehicles import _vehicles_context
 from chummer5.web.session import (
     PRIORITY_LETTERS,
     SESSION_COOKIE_NAME,
@@ -326,6 +327,17 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         if character is not None and character.foci_selection is not None
         else 0
     )
+    # WP93: vehicles are the sixth (and last) spender of the shared Step Six nuyen pool.
+    vehicle_ids = (
+        character.vehicle_selection.vehicle_ids
+        if character is not None and character.vehicle_selection is not None
+        else ()
+    )
+    vehicle_cost = (
+        character.vehicle_selection.nuyen_spent
+        if character is not None and character.vehicle_selection is not None
+        else 0
+    )
     resources_ctx = _resources_context(
         character,
         session.resources_letter,
@@ -335,6 +347,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         bioware_cost,
         karma_converted,
         foci_cost,
+        vehicle_cost,
         rating_gear,
     )
     lifestyle_ctx = _lifestyle_context(
@@ -347,6 +360,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         bioware_cost,
         karma_converted,
         foci_cost,
+        vehicle_cost,
     )
     cyberware_ctx = _cyberware_context(
         character,
@@ -357,6 +371,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         lifestyle_cost,
         karma_converted,
         foci_cost,
+        vehicle_cost,
     )
     foci_ctx = _foci_selection_context(
         character,
@@ -367,6 +382,18 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         cyberware_cost,
         bioware_cost,
         karma_converted,
+        vehicle_cost,
+    )
+    vehicles_ctx = _vehicles_context(
+        character,
+        session.resources_letter,
+        vehicle_ids,
+        gear_cost,
+        lifestyle_cost,
+        cyberware_cost,
+        bioware_cost,
+        karma_converted,
+        foci_cost,
     )
     stale = bool(
         talent_ctx.get("talent_budget_warning")
@@ -378,6 +405,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         or cyberware_ctx.get("cyberware_budget_warning")
         or spirit_ctx.get("spirit_budget_warning")
         or foci_ctx.get("foci_budget_warning")
+        or vehicles_ctx.get("vehicles_budget_warning")
     )
     priority_ctx = {**priority_ctx, "priority_stale_selections": stale}
     return {
@@ -399,6 +427,7 @@ def _chargen_body_context(session: ChargenSession, priority_ctx: dict[str, Any])
         **contact_ctx,
         **lifestyle_ctx,
         **cyberware_ctx,
+        **vehicles_ctx,
         **resources_ctx,
     }
 

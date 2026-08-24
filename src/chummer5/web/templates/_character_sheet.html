@@ -243,6 +243,43 @@
   {% endif %}
   <p>Essence: {{ essence }} / 6.</p>
 
+  {# WP93: purchased vehicles/drones. Handling/Speed print as on-road/off-road (`4/3`) where the
+     book does; CM is the one derived number (12 + ⌈Body/2⌉, drones 6 + ⌈Body/2⌉, p. 199). #}
+  <h3>Vehicles &amp; drones</h3>
+  {% if vehicle_rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>Vehicle</th><th>Qty</th><th>Handl</th><th>Speed</th><th>Accel</th><th>Body</th>
+        <th>Armor</th><th>Pilot</th><th>Sensor</th><th>Seats</th><th>CM</th><th>Avail</th>
+        <th>Cost</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in vehicle_rows %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.quantity }}</td>
+        <td>{{ row.handling }}</td>
+        <td>{{ row.speed }}</td>
+        <td>{{ row.acceleration }}</td>
+        <td>{{ row.body }}</td>
+        <td>{{ row.armor }}</td>
+        <td>{{ row.pilot }}</td>
+        <td>{{ row.sensor }}</td>
+        <td>{% if row.seats is none %}&mdash;{% else %}{{ row.seats }}{% endif %}</td>
+        <td>{{ row.condition_monitor }}</td>
+        <td>{{ row.availability }}</td>
+        <td>{{ row.cost }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p>Vehicle nuyen cost: {{ vehicle_nuyen_cost }}.</p>
+  {% else %}
+  <p>None purchased.</p>
+  {% endif %}
+
   <p>Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget + karma_to_nuyen_amount }}{% if karma_to_nuyen_amount %} ({{ nuyen_budget }} priority + {{ karma_to_nuyen_amount }} from converting {{ karma_converted }} Karma){% endif %}.</p>
 
   <h3>Derived stats</h3>
