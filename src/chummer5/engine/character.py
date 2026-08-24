@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from chummer5.engine.resources import ContactSelection, ResourcesSelection
     from chummer5.engine.skills import KarmaSkillSelection, SkillAllocation
     from chummer5.engine.spirits import BoundSpiritSelection
+    from chummer5.engine.vehicles import VehicleSelection
 
 # MVP content-scope filter (see Project Overview's "Core rulebook only" note and WP2's worklog):
 # every data-driven choice offered to the player is restricted to entries sourced from the SR5
@@ -337,6 +338,14 @@ class Character:
     it's a pure roster-rating increase, the same reason `KnowledgeSelection` itself isn't read
     piecemeal by any formula. `karma_spent` gains matching terms for both.
 
+    **WP92** adds `vehicle_selection: VehicleSelection | None` -- purchased stock vehicles and
+    drones, the same "`None` until committed" wrapping-field shape as `bioware_selection`. The
+    plainest selection field on this class: a vehicle purchase grants no Improvement of any kind
+    (nothing about a vehicle changes a *character* number -- see `chummer5.engine.vehicles`'s
+    module docstring), so unlike cyberware/bioware there is no `apply_*_improvements` counterpart,
+    and unlike qualities/foci there is no Karma term for `karma_spent` to pick up. It spends only
+    from the shared Step Six nuyen pool, via `ResourcesSelection.vehicle_cost`.
+
     **WP54** adds no new field -- it widens `spell_selection` itself (`SpellSelection.karma_
     spell_count`/`.karma_cost`, see `chummer5.engine.magic`'s own WP54 paragraph) so a Magician can
     spend leftover Karma on spells beyond the Talent-granted free budget, up to the rulebook's
@@ -377,6 +386,8 @@ class Character:
     karma_skill_selection: KarmaSkillSelection | None = None
     # Leftover-Karma-funded Knowledge/Language skill rating spend (Step Seven, WP53).
     karma_knowledge_selection: KarmaKnowledgeSelection | None = None
+    # Purchased stock vehicles/drones (Phase P, WP92).
+    vehicle_selection: VehicleSelection | None = None
 
     @property
     def karma_spent(self) -> int:

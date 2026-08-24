@@ -216,6 +216,14 @@ both already-resolved.
 separate resolution step is needed, since `create_quality_selection` itself validates that every
 selected `SELECT_TEXT` quality has a non-blank entry and that no entry is orphaned.
 
+**WP92** adds `vehicle_ids` -- purchased stock vehicles/drones as catalog ids, repeats meaning
+quantity. The simplest persistable selection in this file: no tree (unlike cyberware), no player
+choice (unlike bioware's `Reflex Recorder`), no Force (unlike foci), because a stock vehicle
+purchase carries none of those. Defaults to `()` ("predates this field"), so every pre-WP92 save
+round-trips unchanged. `build_character` resolves it third among the shared-nuyen-pool spenders
+(cyberware, then bioware, then vehicles) and folds `vehicle_selection.nuyen_spent` back into
+`resources_selection` in the same re-call that already folds cyberware's and bioware's.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -244,6 +252,7 @@ from chummer5.data.qualities import Quality
 from chummer5.data.skills import Skill
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
+from chummer5.data.vehicles import Vehicle
 from chummer5.engine.bioware import (
     BiowarePurchaseRequest,
     apply_bioware_improvements,
@@ -293,6 +302,7 @@ from chummer5.engine.resources import (
 )
 from chummer5.engine.skills import create_karma_skill_selection, create_skill_allocation
 from chummer5.engine.spirits import create_bound_spirit_selection
+from chummer5.engine.vehicles import VEHICLE_CATALOG, create_vehicle_selection
 
 # Bumped only if a future WP changes this format's shape in a way older saves can't be read as.
 # MVP has exactly one version; there is no migration path yet because there is nothing to migrate
@@ -426,6 +436,12 @@ class CharacterSave:
     # rating. Defaults to () -- "predates this field", the identical shape every other optional
     # selection field defaults to.
     rating_gear_picks: tuple[RatingGearPick, ...] = ()
+    # WP92: purchased stock vehicles/drones, as catalog ids (repeats = quantity, e.g. four
+    # Fly-Spies). A bare id list is the whole persistable shape a vehicle purchase has -- unlike
+    # cyberware there is no tree, unlike bioware no player choice, unlike foci no Force. Defaults
+    # to () -- "predates this field", the identical shape every other optional selection field
+    # defaults to.
+    vehicle_ids: tuple[str, ...] = ()
 
 
 def create_character_save(
@@ -468,6 +484,7 @@ def create_character_save(
     karma_knowledge_points: Mapping[str, int] = MappingProxyType({}),
     quality_text: Mapping[str, str] = MappingProxyType({}),
     rating_gear_picks: Iterable[RatingGearPick] = (),
+    vehicle_ids: Iterable[str] = (),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -516,6 +533,7 @@ def create_character_save(
         karma_knowledge_points=MappingProxyType(dict(karma_knowledge_points)),
         quality_text=MappingProxyType(dict(quality_text)),
         rating_gear_picks=tuple(rating_gear_picks),
+        vehicle_ids=tuple(vehicle_ids),
     )
 
 
@@ -657,6 +675,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "rating_gear_picks": [
             {"name": name, "rating": rating} for name, rating in save.rating_gear_picks
         ],
+        "vehicle_ids": list(save.vehicle_ids),
     }
 
 
@@ -727,6 +746,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         karma_knowledge_points=data.get("karma_knowledge_points", {}),
         quality_text=data.get("quality_text", {}),
         rating_gear_picks=((p["name"], p["rating"]) for p in data.get("rating_gear_picks", ())),
+        vehicle_ids=data.get("vehicle_ids", ()),
     )
 
 
@@ -754,6 +774,7 @@ def build_character(
     bioware: tuple[Bioware, ...] = (),
     foci: tuple[Focus, ...] = (),
     mentors: tuple[MentorSpiritArchetype, ...] = (),
+    vehicles: tuple[Vehicle, ...] = VEHICLE_CATALOG,
 ) -> Character:
     """Reconstruct a fully-populated `Character` from a `CharacterSave`, re-running the same
     `create_*` validation each selection already has (see module docstring).
@@ -793,6 +814,14 @@ def build_character(
     evaluation order, see `chummer5.engine.foci`'s own module docstring), so its Karma budget
     accounts for Bound Spirits' already-resolved `karma_cost` and its nuyen budget accounts for
     gear/Lifestyle/cyberware/bioware's already-resolved spend.
+
+    **WP92**: `vehicles` is the one new catalog that does *not* default to `()`. Unlike
+    `traditions`/`cyberware`/`foci`/etc., whose catalogs are only ever consulted by a save that
+    opted into that subsystem, `chummer5.engine.vehicles.VEHICLE_CATALOG` is a single, fixed,
+    35-row constant with no per-character variation and no filtering a caller could reasonably want
+    to override -- so defaulting to it means no existing call site needs to learn about vehicles at
+    all, while a test can still substitute a stub. Passing `()` would silently reject every
+    `vehicle_ids` entry as an unknown id, which is a worse default than the real catalog.
 
     **WP53**: `save.karma_skill_points`/`karma_group_points`/`karma_specializations`/`karma_
     knowledge_points` are resolved right after `karma_attribute_selection` (both are Step Seven
@@ -922,15 +951,29 @@ def build_character(
     )
     apply_bioware_improvements(character, bioware_selection)
 
-    # WP34/WP45: fold the now-resolved cyberware+bioware cost back into `resources_selection`
-    # itself, so the `Character` this function returns carries a `nuyen_remaining` that reflects the
-    # true 4-way gear+Lifestyle+cyberware+bioware spend (what `chummer5.web.app
-    # ._character_sheet_context` and every other reader of `character.resources_selection` display)
-    # rather than the gear+Lifestyle-only figure computed above, before cyberware/bioware were
-    # known. Guaranteed to re-validate cleanly: `create_cyberware_selection`/
-    # `create_bioware_selection` above already confirmed their combined nuyen_spent doesn't exceed
-    # the earlier resources_selection's own nuyen_remaining, so the combined total still fits the
-    # same budget.
+    # WP92: vehicles/drones resolve third, against whatever nuyen cyberware and bioware left. The
+    # same fixed-evaluation-order convention cyberware->bioware already follows (chummer5.engine
+    # .bioware's module docstring), extended by one: a purchase that only overruns the budget once
+    # all three are counted is always caught, on this last call. There is no Essence term and no
+    # apply_*_improvements step -- a vehicle grants no Improvement of any kind (see
+    # chummer5.engine.vehicles' module docstring).
+    vehicle_selection = create_vehicle_selection(
+        save.vehicle_ids,
+        vehicles,
+        resources_selection.nuyen_remaining
+        - cyberware_selection.nuyen_spent
+        - bioware_selection.nuyen_spent,
+    )
+
+    # WP34/WP45/WP92: fold the now-resolved cyberware+bioware+vehicle cost back into
+    # `resources_selection` itself, so the `Character` this function returns carries a
+    # `nuyen_remaining` that reflects the true 5-way gear+Lifestyle+cyberware+bioware+vehicle spend
+    # (what `chummer5.web.app._character_sheet_context` and every other reader of
+    # `character.resources_selection` display) rather than the gear+Lifestyle-only figure computed
+    # above, before the other three were known. Guaranteed to re-validate cleanly:
+    # `create_cyberware_selection`/`create_bioware_selection`/`create_vehicle_selection` above each
+    # already confirmed their own nuyen_spent fits what the previous one left, so the combined
+    # total still fits the same budget.
     resources_selection = create_resources_selection(
         save.resources_letter,
         priorities,
@@ -940,6 +983,7 @@ def build_character(
         cyberware_cost=cyberware_selection.nuyen_spent,
         bioware_cost=bioware_selection.nuyen_spent,
         karma_converted=save.karma_converted,
+        vehicle_cost=vehicle_selection.nuyen_spent,
     )
 
     # WP28: Magic-type/tradition/free-skill-grant. `apply_magic_skill_grant_improvements` mutates
@@ -1106,7 +1150,11 @@ def build_character(
         bioware_cost=bioware_selection.nuyen_spent,
         karma_converted=save.karma_converted,
         foci_cost=foci_selection.nuyen_cost,
+        vehicle_cost=vehicle_selection.nuyen_spent,
     )
     return replace(
-        character, foci_selection=foci_selection, resources_selection=resources_selection
+        character,
+        foci_selection=foci_selection,
+        vehicle_selection=vehicle_selection,
+        resources_selection=resources_selection,
     )

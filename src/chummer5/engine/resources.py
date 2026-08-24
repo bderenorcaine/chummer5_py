@@ -423,6 +423,11 @@ class ResourcesSelection:
 
     **WP47**: `foci_cost` (default 0) is the character's separately-selected `chummer5.engine.foci
     .FociSelection.nuyen_cost`, folded in the same way `cyberware_cost`/`bioware_cost` already are.
+
+    **WP92**: `vehicle_cost` (default 0) is the character's separately-selected
+    `chummer5.engine.vehicles.VehicleSelection.nuyen_spent`, folded in the same way again. p. 94's
+    Step Six Gear Checklist names "Vehicle(s), p. 461 / Drones..., p. 461" alongside gear and
+    cyberware, so it is the same single Resources-priority pool, not a second budget.
     """
 
     resources_letter: str
@@ -435,6 +440,7 @@ class ResourcesSelection:
     bioware_cost: int = 0
     karma_converted: int = 0
     foci_cost: int = 0
+    vehicle_cost: int = 0
 
 
 def starting_nuyen(letter: str, priorities: PriorityTable) -> int:
@@ -485,6 +491,7 @@ def create_resources_selection(
     bioware_cost: int = 0,
     karma_converted: int = 0,
     foci_cost: int = 0,
+    vehicle_cost: int = 0,
 ) -> ResourcesSelection:
     """Build a `ResourcesSelection`, validating the combined gear + lifestyle + cyberware + bioware
     + foci spend against the nuyen budget (priority-derived, plus whatever Karma-to-Nuyen conversion
@@ -502,10 +509,11 @@ def create_resources_selection(
     `chummer5.engine.cyberware`'s own module docstring; WP45: bioware draws from it too, see
     `chummer5.engine.bioware`'s own module docstring; WP47: Foci draws from it too, see
     `chummer5.engine.foci`'s own module docstring; WP43: Karma-to-Nuyen tops up the same pool, see
-    this module's own docstring). Does not require the full budget to be spent, mirroring
-    WP6/WP7/WP8's identical choice. `lifestyle_cost`/`cyberware_cost`/`bioware_cost`/
-    `karma_converted`/`foci_cost` each default to 0 so every pre-WP20/pre-WP34/pre-WP45/pre-WP43/
-    pre-WP47 call site is unaffected.
+    this module's own docstring; WP92: vehicles/drones draw from it too, see
+    `chummer5.engine.vehicles`'s own module docstring). Does not require the full budget to be
+    spent, mirroring WP6/WP7/WP8's identical choice. `lifestyle_cost`/`cyberware_cost`/
+    `bioware_cost`/`karma_converted`/`foci_cost`/`vehicle_cost` each default to 0 so every
+    pre-WP20/pre-WP34/pre-WP45/pre-WP43/pre-WP47/pre-WP92 call site is unaffected.
     """
     by_name = {item.name: item for item in catalog}
     names = list(gear_names)
@@ -534,7 +542,7 @@ def create_resources_selection(
     budget = starting_nuyen(letter, priorities)
     available = budget + karma_to_nuyen(karma_converted)
     spent = sum(item.cost for item in selected)
-    total_spent = spent + lifestyle_cost + cyberware_cost + bioware_cost + foci_cost
+    total_spent = spent + lifestyle_cost + cyberware_cost + bioware_cost + foci_cost + vehicle_cost
     if total_spent > available:
         parts = [f"gear ({spent})"]
         if lifestyle_cost:
@@ -545,6 +553,8 @@ def create_resources_selection(
             parts.append(f"bioware ({bioware_cost})")
         if foci_cost:
             parts.append(f"foci ({foci_cost})")
+        if vehicle_cost:
+            parts.append(f"vehicles ({vehicle_cost})")
         if len(parts) == 1:
             raise ValueError(
                 f"gear spend {spent} exceeds Resources priority {letter}'s nuyen budget of "
@@ -566,4 +576,5 @@ def create_resources_selection(
         bioware_cost=bioware_cost,
         karma_converted=karma_converted,
         foci_cost=foci_cost,
+        vehicle_cost=vehicle_cost,
     )

@@ -24,12 +24,14 @@ from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.data.vehicles import load_vehicles
 from chummer5.engine.bioware import BiowarePurchaseRequest
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD, SUM_TO_TEN_BUILD_METHOD
 from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
 from chummer5.engine.derived import essence
 from chummer5.engine.improvements import ImprovementType
 from chummer5.engine.resources import Contact
+from chummer5.engine.vehicles import VEHICLE_CATALOG
 from chummer5.io.save_format import (
     FORMAT_VERSION,
     CharacterSave,
@@ -1624,3 +1626,102 @@ def test_build_character_rejects_select_text_quality_with_missing_text() -> None
     save = _mundane_save_with_quality_text((SINNER_NATIONAL_ID,), {})
     with pytest.raises(ValueError, match="requires a free-text detail"):
         _build_mundane(save)
+
+
+# --- WP92: vehicles/drones ------------------------------------------------------------------------
+
+# A cheap drone and an affordable vehicle from the real offerable catalog, so these tests exercise
+# the same rows the UI offers rather than a stub.
+FLY_SPY = next(v for v in VEHICLE_CATALOG if v.name == "MCT Fly-Spy (Minidrone)")
+AMERICAR = next(v for v in VEHICLE_CATALOG if v.name == "Ford Americar (Sedan)")
+
+
+def _mundane_save_with_vehicles(
+    vehicle_ids: tuple[str, ...], resources_letter: str = "A"
+) -> CharacterSave:
+    return create_character_save(
+        metatype_name="Human",
+        heritage_letter="D",
+        attributes_letter="B",
+        attribute_points={},
+        skills_letter="C",
+        skill_points={},
+        group_points={},
+        quality_ids=(),
+        contacts=(),
+        resources_letter=resources_letter,
+        gear_names=(),
+        lifestyle_tier_name="Street",
+        lifestyle_months=1,
+        vehicle_ids=vehicle_ids,
+    )
+
+
+def test_json_round_trip_preserves_vehicle_ids_including_repeats() -> None:
+    save = _mundane_save_with_vehicles((FLY_SPY.id, FLY_SPY.id, AMERICAR.id))
+    assert from_json(to_json(save)) == save
+    # Repeats are quantity, so order and multiplicity both have to survive the wire.
+    assert json.loads(to_json(save))["vehicle_ids"] == [FLY_SPY.id, FLY_SPY.id, AMERICAR.id]
+
+
+def test_from_json_defaults_vehicle_ids_for_a_pre_wp92_save() -> None:
+    save = _sample_save()
+    data = json.loads(to_json(save))
+    del data["vehicle_ids"]
+    assert from_json(json.dumps(data)).vehicle_ids == ()
+
+
+def test_build_character_resolves_a_multi_vehicle_purchase() -> None:
+    save = _mundane_save_with_vehicles((FLY_SPY.id, FLY_SPY.id, AMERICAR.id))
+    character = build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert character.vehicle_selection is not None
+    assert [v.name for v in character.vehicle_selection.vehicles] == [
+        FLY_SPY.name,
+        FLY_SPY.name,
+        AMERICAR.name,
+    ]
+    spent = FLY_SPY.cost * 2 + AMERICAR.cost
+    assert character.vehicle_selection.nuyen_spent == spent
+    # WP92: the cost reaches the shared Step Six pool via resources_selection, not a second budget.
+    assert character.resources_selection is not None
+    assert character.resources_selection.vehicle_cost == spent
+    assert (
+        character.resources_selection.nuyen_remaining
+        == character.resources_selection.nuyen_budget - spent
+    )
+
+
+def test_build_character_rejects_a_vehicle_purchase_over_the_shared_budget() -> None:
+    # Resources E is 6,000Y; a Ford Americar is 16,000Y.
+    save = _mundane_save_with_vehicles((AMERICAR.id,), resources_letter="E")
+    with pytest.raises(ValueError, match="vehicle spend"):
+        build_character(
+            save,
+            metatypes=METATYPES,
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
+        )
+
+
+def test_build_character_rejects_an_unoffered_vehicle() -> None:
+    # The GMC Banshee (Avail 24F) is in vehicles.xml but not in the offerable catalog.
+    banshee = next(v for v in load_vehicles() if v.name == "GMC Banshee (Thunderbird)")
+    save = _mundane_save_with_vehicles((banshee.id,))
+    with pytest.raises(ValueError, match="not a vehicle catalog id"):
+        build_character(
+            save,
+            metatypes=METATYPES,
+            priorities=PRIORITIES,
+            skills=SKILLS,
+            qualities=QUALITIES,
+            lifestyles=LIFESTYLES,
+        )

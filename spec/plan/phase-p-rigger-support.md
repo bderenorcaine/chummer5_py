@@ -245,7 +245,7 @@ Next unclaimed WP number after this block is **WP97**.
   **WP92 must apply the printed 3 in its catalog builder**, per the 2026-08-01 ruling in
   `spec/decisions-log.md`. See `spec/worklogs/WP91.md`.
 
-- [ ] **WP92 — Engine: `VehicleSelection`, the Condition Monitor, and save/load.**
+- [x] **WP92 — Engine: `VehicleSelection`, the Condition Monitor, and save/load.**
   Goal: make a stock vehicle/drone purchase a real, budget-checked part of a `Character`.
   Deliverables: `chummer5.engine.vehicles` with a `build_vehicle_catalog()` applying the two policy
   filters (Availability ≤ 12; the 2 unprinted names) to reach the 35-row offerable set, a frozen
@@ -265,6 +265,17 @@ Next unclaimed WP number after this block is **WP97**.
   Availability-excluded and 2 unprinted rows are each asserted absent *by name*; a purchase that
   overruns the shared nuyen pool is rejected with the same diagnostic shape cyberware's already
   produces; save → `to_json` → `from_json` round-trips a multi-vehicle selection unchanged.
+  Landed as `chummer5.engine.vehicles` (`build_vehicle_catalog`/`VEHICLE_CATALOG` = **35** rows,
+  `VehicleSelection`, `create_vehicle_selection`, `condition_monitor`), `Character
+  .vehicle_selection`, `ResourcesSelection.vehicle_cost`, and `CharacterSave.vehicle_ids`. Three
+  things worth carrying forward: purchases are keyed by **catalog id**, not name (gear is
+  name-keyed only because `StarterGearItem` is a synthesized cross-file catalog with no id — every
+  other catalog since WP21 uses ids); `build_character` resolves vehicles **third** among the
+  shared-pool spenders (cyberware → bioware → vehicles) and folds `vehicle_cost` into the same
+  re-call that already folds the other two; and `build_character`'s new `vehicles` parameter
+  defaults to the real `VEHICLE_CATALOG` rather than `()`, unlike every other optional catalog,
+  because `()` would silently reject every id. WP91's Tundra-9 Handling correction is applied here,
+  in `_PRINTED_HANDLING_CORRECTIONS`. See `spec/worklogs/WP92.md`.
 
 - [ ] **WP93 — Web UI: the vehicle/drone picker and the character-sheet stat block.**
   Goal: reach the player. A `_vehicles.html` partial + `routes/vehicles.py` following
