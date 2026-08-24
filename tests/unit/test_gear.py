@@ -280,3 +280,152 @@ def test_rating_item_displaces_zero_cost_flat_namesake() -> None:
     camera = FULL_BY_NAME["Camera"]
     assert camera.cost_per_rating == 100
     assert camera.category == "Vision Devices"
+
+
+# --- WP94: the Matrix stat block and the three-category Availability cap --------------------------
+
+# The three printed tables, transcribed from the core rulebook before being compared against the
+# XML -- same method WP91 used for the vehicle tables. See
+# `spec/rulebooks/vehicles_and_riggers_chapter.md` section 6 for the same three tables in prose.
+#
+# Commlinks, p. 438: (name, device rating, avail, cost). The printed table has no Data Processing
+# or Firewall column; a commlink has exactly those two Matrix attributes (p. 226) and every SR5
+# row in `gear.xml` sets both equal to the Device Rating -- asserted separately below rather than
+# smuggled into this transcription.
+PRINTED_COMMLINKS = (
+    ("Meta Link", 1, 2, 100),
+    ("Sony Emperor", 2, 4, 700),
+    ("Renraku Sensei", 3, 6, 1000),
+    ("Erika Elite", 4, 8, 2500),
+    ("Hermes Ikon", 5, 10, 3000),
+    ("Transys Avalon", 6, 12, 5000),
+    ("Fairlight Caliban", 7, 14, 8000),
+)
+
+# Cyberdecks, p. 439: (name, device rating, attribute array, programs, avail, cost).
+PRINTED_CYBERDECKS = (
+    ("Erika MCD-1", 1, (4, 3, 2, 1), 1, 3, 49500),
+    ("Microdeck Summit", 1, (4, 3, 3, 1), 1, 3, 58000),
+    ("Microtrónica Azteca 200", 2, (5, 4, 3, 2), 2, 6, 110250),
+    ("Hermes Chariot", 2, (5, 4, 4, 2), 2, 6, 123000),
+    ("Novatech Navigator", 3, (6, 5, 4, 3), 3, 9, 205750),
+    ("Renraku Tsurugi", 3, (6, 5, 5, 3), 3, 9, 214125),
+    ("Sony CIY-720", 4, (7, 6, 5, 4), 4, 12, 345000),
+    ("Shiawase Cyber-5", 5, (8, 7, 6, 5), 5, 15, 549375),
+    ("Fairlight Excalibur", 6, (9, 8, 7, 6), 6, 18, 823250),
+)
+
+# Command Console Table, p. 267: (name, device rating, avail, cost, data processing, firewall).
+PRINTED_RCCS = (
+    ("Scratch-Built Junk", 1, 2, 1400, 3, 2),
+    ("Radio Shack Remote Controller", 2, 6, 8000, 3, 3),
+    ("Essy Motors DroneMaster", 3, 6, 16000, 4, 4),
+    ("CompuForce TaskMaster", 4, 8, 32000, 5, 4),
+    ("Maersk Spider", 4, 8, 34000, 4, 5),
+    ("Maser Industrial Electronics", 5, 8, 64000, 3, 4),
+    ("Vulcan Liegelord", 5, 10, 66000, 5, 6),
+    ("Proteus Poseidon", 5, 12, 68000, 5, 6),
+    ("Lone Star Remote Commander", 6, 14, 75000, 6, 5),
+    ("MCT Drone Web", 6, 16, 95000, 7, 6),
+    ("Triox UberMensch", 6, 18, 140000, 8, 7),
+)
+
+GEAR_BY_NAME = {g.name: g for g in GEAR}
+
+
+def test_loader_reads_every_printed_commlink_stat_block() -> None:
+    for name, device_rating, avail, cost in PRINTED_COMMLINKS:
+        item = GEAR_BY_NAME[name]
+        assert (item.cost, item.device_rating) == (cost, device_rating), name
+        assert parse_rating_availability(item.availability) == (0, avail), name
+        # p. 226: a commlink has only Data Processing and Firewall, both = Device Rating here.
+        assert item.data_processing == device_rating, name
+        assert item.firewall == device_rating, name
+        assert item.attack is None and item.sleaze is None, name
+        assert item.attribute_array is None, name
+
+
+def test_loader_reads_every_printed_cyberdeck_stat_block() -> None:
+    for name, device_rating, array, programs, avail, cost in PRINTED_CYBERDECKS:
+        item = GEAR_BY_NAME[name]
+        assert (item.cost, item.device_rating) == (cost, device_rating), name
+        assert parse_rating_availability(item.availability) == (0, avail), name
+        # The array is one assignable descending set (p. 439), not four labelled attributes.
+        assert item.attribute_array == array, name
+        assert item.programs == programs, name
+        assert item.data_processing is None and item.firewall is None, name
+
+
+def test_loader_reads_every_printed_rcc_stat_block() -> None:
+    for name, device_rating, avail, cost, data_processing, firewall in PRINTED_RCCS:
+        item = GEAR_BY_NAME[name]
+        assert (item.cost, item.device_rating) == (cost, device_rating), name
+        assert parse_rating_availability(item.availability) == (0, avail), name
+        assert item.data_processing == data_processing, name
+        assert item.firewall == firewall, name
+        assert item.attribute_array is None, name
+        # `<programs>` is carried but never displayed: the p. 267 table prints no program-slot
+        # count for RCCs at all, and Chummer's value is always just the Device Rating.
+        assert item.programs == device_rating, name
+
+
+def test_matrix_stat_parsing_fails_closed_on_an_attribute_formula() -> None:
+    # Living Persona's <devicerating> is `{RES}` -- an attribute reference, not a number. It must
+    # read as None rather than being guessed at (it's <hide/>-marked, so it never reaches the
+    # catalog either).
+    living_persona = GEAR_BY_NAME["Living Persona"]
+    assert living_persona.hidden is True
+    assert living_persona.device_rating is None
+    assert living_persona.attack is None
+    assert living_persona.data_processing is None
+
+
+def test_gear_without_a_matrix_stat_block_reads_as_none() -> None:
+    credstick = GEAR_BY_NAME["Certified Credstick, Standard"]
+    assert credstick.device_rating is not None  # a credstick *is* a device
+    rope = GEAR_BY_NAME["Standard Rope (100m)"]
+    assert rope.device_rating is None
+    assert rope.attribute_array is None
+
+
+def test_availability_cap_trims_the_three_matrix_device_categories() -> None:
+    counts = {"Commlinks": 0, "Cyberdecks": 0, "Rigger Command Consoles": 0}
+    for item in FULL_CATALOG:
+        if item.category in counts:
+            counts[item.category] += 1
+    assert counts == {"Commlinks": 6, "Cyberdecks": 7, "Rigger Command Consoles": 8}
+
+
+def test_availability_cap_removes_exactly_the_over_cap_rows_by_name() -> None:
+    for name in (
+        "Fairlight Caliban",  # commlink, 14
+        "Shiawase Cyber-5",  # cyberdeck, 15R
+        "Fairlight Excalibur",  # cyberdeck, 18R
+        "Lone Star Remote Commander",  # RCC, 14R
+        "MCT Drone Web",  # RCC, 16R
+        "Triox UberMensch",  # RCC, 18R
+    ):
+        assert name in GEAR_BY_NAME, name  # the loader stays literal
+        assert name not in FULL_BY_NAME, name  # the policy filter lives one layer up
+    # Everything at or under the cap survives, including the exactly-12 boundary rows.
+    for name in ("Transys Avalon", "Sony CIY-720", "Proteus Poseidon"):
+        assert name in FULL_BY_NAME, name
+
+
+def test_availability_cap_is_scoped_to_those_three_categories_only() -> None:
+    # The general flat-gear backfill is a separate, unscheduled job (see
+    # `chummer5.engine.resources._AVAILABILITY_CAPPED_GEAR_CATEGORIES`): these flat rows are all
+    # well over 12 and are still offered.
+    assert FULL_BY_NAME["Certified Credstick, Ebony"].cost == 1000  # avail 20
+    assert "Seven-7" in FULL_BY_NAME  # avail 20F
+    assert "Neuro-Stun X" in FULL_BY_NAME  # avail 14R
+
+
+def test_catalog_carries_the_matrix_stat_block_through() -> None:
+    assert FULL_BY_NAME["Meta Link"].device_rating == 1
+    assert FULL_BY_NAME["Meta Link"].firewall == 1
+    deck = FULL_BY_NAME["Sony CIY-720"]
+    assert deck.attribute_array == (7, 6, 5, 4)
+    assert deck.programs == 4
+    rcc = FULL_BY_NAME["Scratch-Built Junk"]
+    assert (rcc.data_processing, rcc.firewall) == (3, 2)

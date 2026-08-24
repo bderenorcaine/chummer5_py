@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase P — Post-MVP: Rigger support (research pass done, WP90; WP91-96 scoped)
+### Phase P — Post-MVP: Rigger support (WP90-94 done; WP95-96 remaining)
 
 **Deliberately scoped down before any WP breakdown is written** — raised during the same 2026-07-21
 session as Phases L-O, but confirmed to be a materially different size than any of them: vehicles and
@@ -119,7 +119,7 @@ removes exactly the rows that had no business in a starting build:
 **Offerable catalog: 42 − 5 (Availability) − 2 (unprinted) = 35 rows** (24 vehicles + 11 drones).
 Every one of the 35 is affordable within Resources A's 450,000¥, so no second cost filter is needed.
 
-### 3. RCCs, cyberdecks and commlinks are **already purchasable today** — with their entire stat block discarded
+### 3. RCCs, cyberdecks and commlinks are **already purchasable today** — with their entire stat block discarded *(closed by WP94)*
 
 This is the finding that most changes what this phase should build. `chummer5.engine.resources
 .STARTER_GEAR_CATALOG` already offers, as ordinary flat-cost gear:
@@ -302,7 +302,7 @@ Next unclaimed WP number after this block is **WP97**.
   a Lifestyle could be committed over budget against bonded foci. Fixed in the same lines
   (2026-08-01 decisions-log entry). See `spec/worklogs/WP93.md`.
 
-- [ ] **WP94 — Surface the Matrix stat block on gear already being sold, and cap its Availability.**
+- [x] **WP94 — Surface the Matrix stat block on gear already being sold, and cap its Availability.**
   Goal: close §3. No new purchase flow — these items are already in `STARTER_GEAR_CATALOG`; what's
   missing is that their entire printed stat block is discarded at load time and that the
   Availability ≤ 12 ruling was never applied to flat-cost gear.
@@ -321,6 +321,21 @@ Next unclaimed WP number after this block is **WP97**.
   6 commlinks**, each removed row asserted absent by name; every retained row's stat block asserted
   against the tables in `vehicles_and_riggers_chapter.md` §6; the total catalog count in
   `chummer5.data.gear`'s docstring updated rather than left stale.
+  Landed as seven optional fields on `chummer5.data.gear.Gear` (`availability` plus the six Matrix
+  stats) carried through `StarterGearItem`, an `_AVAILABILITY_CAPPED_GEAR_CATEGORIES` filter in
+  `build_starter_gear_catalog` (379 → **373** items; 8 RCCs / 7 cyberdecks / 6 commlinks), and a
+  `chummer5.web.routes.resources.matrix_stat_block` helper rendered on the character sheet. Went
+  past the acceptance bar the way WP91 did: rather than asserting the retained rows,
+  `tests/unit/test_gear.py` transcribes **all three printed tables in full** (27 rows) and asserts
+  every row — including the 6 the cap removes, which is what makes the exclusion list *derived*
+  rather than asserted. Unlike WP91's vehicle pass, no XML-vs-print divergence was found. Three
+  things worth carrying forward: the three tables print three genuinely different stat sets and the
+  renderer follows each (p. 226 — commlinks have only DP/Firewall, decks have all four *as one
+  assignable array*); `<programs>` is loaded for RCCs but deliberately **not** displayed, because
+  SR5 core prints no program-slot count for an RCC anywhere (2026-08-24 decisions-log entry); and
+  the Availability cap is scoped to these three categories by design, with the general backfill
+  still unscheduled and Project Overview's "no WP currently scheduled" sentence updated to say
+  *partially backfilled* rather than left stale. See `spec/worklogs/WP94.md`.
 
 - [ ] **WP95 — Unmodeled-effect registry: the rigger surface.** Closes §4 and the display half of
   §1's rigger-interface gap.

@@ -125,9 +125,13 @@ Implementation Plan's WP20.
   agreed on: any new catalog (gear, cyberware, bioware, foci, eventual vehicle gear) should simply
   **exclude items with Availability > 12** from what it offers, rather than tracking an Availability
   budget as its own resource. Note this doesn't retroactively fix WP21's gear catalog or WP31's
-  cyberware catalog, neither of which filters by Availability at all today (WP21's own doc flags this
-  as a deliberate, undone cut) — no WP currently scheduled to backfill that, flagged here so it isn't
-  forgotten.
+  cyberware catalog, neither of which filtered by Availability at all when the ruling was made
+  (WP21's own doc flags this as a deliberate, undone cut). **Partially backfilled since:** WP66
+  capped the Rating-priced half of the gear catalog, and WP94 capped its Commlinks / Cyberdecks /
+  Rigger Command Consoles categories (6 rows dropped, purchasable catalog 379 → 373). Every other
+  flat-gear category and the whole cyberware catalog remain uncapped, with no WP scheduled — sized
+  concretely in `spec/decisions-log.md`'s 2026-08-01 and 2026-08-24 entries. Flagged here so it
+  isn't forgotten.
 - Technomancers/Resonance — reaffirmed out of scope, 2026-07-21 (already excluded per above; recorded
   again here since it came up explicitly in the same ruling as the items above).
 - Plugins.

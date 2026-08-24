@@ -193,7 +193,10 @@
   {% if gear_rows %}
   <ul>
     {% for row in gear_rows %}
-    <li>{{ row.name }}{% if row.rating %} (Rating {{ row.rating }}){% endif %} × {{ row.quantity }}</li>
+    {# WP94: Matrix devices (commlinks, cyberdecks, RCCs) carry their printed stat block; every
+       other gear row renders as the plain "name × qty" line it always has. #}
+    <li>{{ row.name }}{% if row.rating %} (Rating {{ row.rating }}){% endif %} × {{ row.quantity }}
+      {%- if row.matrix_stat_block %}<br /><small>{{ row.matrix_stat_block }}</small>{% endif %}</li>
     {% endfor %}
   </ul>
   {% else %}

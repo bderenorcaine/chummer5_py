@@ -162,8 +162,11 @@ def test_create_resources_selection_within_budget() -> None:
     assert selection.nuyen_budget == 6000
     assert selection.nuyen_spent == 400
     assert selection.nuyen_remaining == 5600
+    # WP94: a Commlink now carries its printed Matrix stat block through the purchase.
     assert selection.gear == (
-        StarterGearItem("Meta Link", 100, category="Commlinks"),
+        StarterGearItem(
+            "Meta Link", 100, category="Commlinks", device_rating=1, data_processing=1, firewall=1
+        ),
         StarterGearItem("Combat Knife", 300, category="Blades"),
     )
 

@@ -169,6 +169,16 @@ MAX_AVAILABILITY = 12
 # focus must be bonded with Karma to function), so they are excluded from the starter-gear catalog.
 _FOCI_GEAR_CATEGORIES = frozenset({"Foci", "Formulae"})
 
+# WP94: the three flat-cost gear categories the Availability<=12 ruling is applied to. Deliberately
+# **not** every flat-cost category. Phase P needed the rigger-adjacent slice of the gear catalog to
+# stop offering over-cap items (a starting character could buy a Triox UberMensch at 18R); the
+# general flat-gear backfill -- every other category here, plus the flat and rating-scaled halves of
+# the cyberware catalog -- is a separate, still-unscheduled job, sized in `spec/decisions-log.md`'s
+# 2026-08-01 entry. Widening this set is the right way to do that backfill when it is scheduled.
+_AVAILABILITY_CAPPED_GEAR_CATEGORIES = frozenset(
+    {"Commlinks", "Cyberdecks", "Rigger Command Consoles"}
+)
+
 
 def karma_to_nuyen(karma_spent: int) -> int:
     """`karma_spent * KARMA_TO_NUYEN_RATE`, validated against the 0-10 Karma cap.
@@ -262,6 +272,14 @@ class StarterGearItem:
       through so the value round-trips.
     All three default to None, so a flat item (`cost_per_rating is None`) is unchanged and every
     pre-WP66 caller keeps working.
+
+    **WP94 (the Matrix stat block).** The six `chummer5.data.gear.Gear` Matrix fields are carried
+    through verbatim so the character sheet can render what a Commlink/Cyberdeck/Rigger Command
+    Console actually *is*, not just what it cost. All default to None -- most gear is not a Matrix
+    device -- and nothing in the engine derives anything from them: no Matrix rules exist here, so
+    this is record-and-display only, the discipline WP27 applied to out-of-scope Adept Powers.
+    `attribute_array` stays one descending tuple rather than four named attributes, because p. 439
+    leaves the Attack/Sleaze/Data Processing/Firewall assignment to the decker.
     """
 
     name: str
@@ -271,6 +289,13 @@ class StarterGearItem:
     cost_per_rating: int | None = None
     max_rating: int | None = None
     rating: int | None = None
+    device_rating: int | None = None
+    attack: int | None = None
+    sleaze: int | None = None
+    data_processing: int | None = None
+    firewall: int | None = None
+    programs: int | None = None
+    attribute_array: tuple[int, ...] | None = None
 
 
 def _availability_capped_max_rating(rating_gear: RatingGear) -> int:
@@ -290,6 +315,24 @@ def _availability_capped_max_rating(rating_gear: RatingGear) -> int:
         else:
             break
     return offered
+
+
+def _flat_availability_over_cap(item: Gear) -> bool:
+    """True if a flat-cost gear entry in an Availability-capped category (WP94) prints an
+    availability above MAX_AVAILABILITY, or one this parser can't read.
+
+    Reuses `parse_rating_availability`, which returns `(0, N)` for the bare `N`/`NR`/`NF` form
+    every SR5 entry in these three categories actually uses. An unreadable `<avail>` excludes the
+    row (fail-closed), the same posture `_availability_capped_max_rating` already takes for
+    rating-priced gear.
+    """
+    parsed = parse_rating_availability(item.availability)
+    if parsed is None:
+        return True
+    slope, intercept = parsed
+    if slope != 0:
+        return True  # a Rating-scaled avail on a flat-cost item: not a shape SR5 produces here
+    return intercept > MAX_AVAILABILITY
 
 
 def build_starter_gear_catalog(
@@ -330,6 +373,16 @@ def build_starter_gear_catalog(
     - A rating-priced catalog entry carries `cost_per_rating`/`max_rating` with `cost = 0` (the
       price isn't known until a rating is picked -- see `StarterGearItem`).
 
+    **WP94 (Availability<=12 for the three Matrix-device categories).** Commlinks, Cyberdecks and
+    Rigger Command Consoles are flat-cost, so WP66's cap never touched them -- this catalog offered
+    a Triox UberMensch (18R) and a Fairlight Excalibur (18R) to a starting character. Those three
+    categories are now capped (`_AVAILABILITY_CAPPED_GEAR_CATEGORIES`), dropping 6 rows: Fairlight
+    Caliban (14); Shiawase Cyber-5 (15R) and Fairlight Excalibur (18R); Lone Star Remote Commander
+    (14R), MCT Drone Web (16R) and Triox UberMensch (18R). Every *other* flat-cost category is
+    still uncapped -- deliberately, see `_AVAILABILITY_CAPPED_GEAR_CATEGORIES`' own comment and
+    Project Overview's note that the general backfill has no WP scheduled. Each surviving row also
+    carries its printed Matrix stat block through to `StarterGearItem` now, for display only.
+
     One flat/rating name collision exists (`Camera`: a 0-cost `Sensor Functions` component vs. the
     real `Rating * 100` `Vision Devices` item). A rating-priced item displaces a same-named *0-cost*
     flat entry -- the same "0 is never a real standalone price" tie-break the flat collision
@@ -355,7 +408,22 @@ def build_starter_gear_catalog(
     for g in gear:
         if g.hidden:
             continue
-        _consider(StarterGearItem(name=g.name, cost=g.cost, category=g.category))
+        if g.category in _AVAILABILITY_CAPPED_GEAR_CATEGORIES and _flat_availability_over_cap(g):
+            continue
+        _consider(
+            StarterGearItem(
+                name=g.name,
+                cost=g.cost,
+                category=g.category,
+                device_rating=g.device_rating,
+                attack=g.attack,
+                sleaze=g.sleaze,
+                data_processing=g.data_processing,
+                firewall=g.firewall,
+                programs=g.programs,
+                attribute_array=g.attribute_array,
+            )
+        )
     for a in armor:
         if a.armor_stacks:
             continue

@@ -77,6 +77,7 @@ from chummer5.web.catalogs import (
     templates,
 )
 from chummer5.web.forms import display_karma_to_nuyen
+from chummer5.web.routes.resources import matrix_stat_block
 from chummer5.web.routes.vehicles import vehicle_stat_block
 from chummer5.web.session import SESSION_COOKIE_NAME, ChargenSession, resolve_session
 
@@ -390,8 +391,10 @@ def _character_sheet_context(
     # WP66: keyed by (name, rating) so two Rating-priced buys of the same item at different ratings
     # don't collapse into one line; `rating` is None for flat items (a plain "name × qty" line).
     gear_counts: dict[tuple[str, int | None], int] = {}
+    gear_by_key: dict[tuple[str, int | None], StarterGearItem] = {}
     for item in resources_selection.gear:
         gear_counts[(item.name, item.rating)] = gear_counts.get((item.name, item.rating), 0) + 1
+        gear_by_key[(item.name, item.rating)] = item
     # WP34 tallied this the way gear is tallied (duplicate purchases -- a matched pair of cyberlimbs
     # -- are legal, see chummer5.engine.cyberware_subsystems' own docstring), and WP41 widened the
     # tally over `walk()` so an imported character's plugins appeared at all. **WP42** replaces both
@@ -460,8 +463,15 @@ def _character_sheet_context(
         "quality_names": quality_names,
         "metatype_quality_names": metatype_quality_names,
         "contacts": contact_selection.contacts,
+        # WP94: `matrix_stat_block` is None for all but the three Matrix-device categories, so the
+        # overwhelming majority of gear rows render exactly as they did before.
         "gear_rows": [
-            {"name": name, "rating": rating, "quantity": quantity}
+            {
+                "name": name,
+                "rating": rating,
+                "quantity": quantity,
+                "matrix_stat_block": matrix_stat_block(gear_by_key[(name, rating)]),
+            }
             for (name, rating), quantity in sorted(
                 gear_counts.items(), key=lambda kv: (kv[0][0], kv[0][1] or 0)
             )

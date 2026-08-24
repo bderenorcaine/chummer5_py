@@ -29,6 +29,54 @@ from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
 
+# WP94: the gear categories whose printed stat block the character sheet renders. Identical to
+# `chummer5.engine.resources._AVAILABILITY_CAPPED_GEAR_CATEGORIES` today and for the same reason
+# (Phase P's rigger-adjacent slice), but kept as its own name: one is a display decision, the other
+# a purchasability rule, and a future backfill will very plausibly widen one without the other.
+MATRIX_STAT_BLOCK_CATEGORIES = frozenset({"Commlinks", "Cyberdecks", "Rigger Command Consoles"})
+
+
+def matrix_stat_block(item: StarterGearItem) -> str | None:
+    """One Matrix device's printed stat block as a display string, or None for gear that has no
+    such block (WP94).
+
+    Renders **only what the book prints for that category**, which is not the same set of numbers
+    for all three:
+
+    - Commlinks (p. 438) print Device Rating alone. Data Processing and Firewall are shown
+      alongside it because a commlink has exactly those two Matrix attributes (p. 226) and
+      `gear.xml` sets both equal to the Device Rating for every SR5 row -- see
+      `spec/rulebooks/learnings/phase-p.md`.
+    - Cyberdecks (p. 439) print Device Rating, the Attribute Array and Programs. The array is one
+      descending set the decker assigns among Attack/Sleaze/Data Processing/Firewall, so it is
+      rendered as the book prints it (`4 3 2 1`) rather than as four labelled values.
+    - Rigger Command Consoles (p. 267) print Device Rating, Data Processing and Firewall.
+      `gear.xml` also carries a `<programs>` count for every RCC (always equal to its Device
+      Rating), but **the core rulebook prints no program-slot number for RCCs at all** -- p. 269's
+      rigger-cyberprograms sidebar establishes that RCCs run programs without saying how many. It's
+      loaded (`StarterGearItem.programs`) and deliberately not displayed, rather than showing a
+      Chummer-supplied number as if it were a printed stat.
+
+    Scoped to those three categories on purpose. 21 other flat rows (RFID tags, credsticks,
+    Electronics/Commlink accessories) carry a `<devicerating>` too, but none of them prints a stat
+    block in the gear tables, and WP94's brief is the rigger-adjacent slice only -- the same line
+    the Availability cap is drawn along in `chummer5.engine.resources`.
+
+    Nothing derives anything from these values -- no Matrix rules exist in this project (WP90 §5).
+    """
+    if item.device_rating is None or item.category not in MATRIX_STAT_BLOCK_CATEGORIES:
+        return None
+    parts = [f"Device Rating {item.device_rating}"]
+    if item.attribute_array is not None:
+        parts.append("Attribute Array " + " ".join(str(value) for value in item.attribute_array))
+    if item.data_processing is not None:
+        parts.append(f"Data Processing {item.data_processing}")
+    if item.firewall is not None:
+        parts.append(f"Firewall {item.firewall}")
+    if item.attribute_array is not None and item.programs is not None:
+        parts.append(f"Programs {item.programs}")
+    return ", ".join(parts)
+
 
 def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str, ...]:
     """Expand each starter-gear item's submitted quantity into that many repeats of its name --

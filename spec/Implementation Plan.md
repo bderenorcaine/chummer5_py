@@ -114,7 +114,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | M | Magic expansion (Bound Spirits, Foci, Mentor Spirits) | done (WP46-48) | [phase-m-magic-expansion.md](plan/phase-m-magic-expansion.md) |
 | N | Expanded skill support (Knowledge/Language, specializations) | done (WP49-50) | [phase-n-skill-support.md](plan/phase-n-skill-support.md) |
 | O | Karma-buying (chargen-time leftover-Karma spend) | done (WP51-56, WP89) | [phase-o-karma-buying.md](plan/phase-o-karma-buying.md) |
-| P | Rigger support | research pass done (WP90); WP91-96 scoped, unstarted | [phase-p-rigger-support.md](plan/phase-p-rigger-support.md) |
+| P | Rigger support | WP90-94 done; WP95-96 remaining | [phase-p-rigger-support.md](plan/phase-p-rigger-support.md) |
 | Q | Spec reorganization (phase-cut point) | done (WP57) | [phase-q-docs-reorg.md](plan/phase-q-docs-reorg.md) |
 | R | Architecture cleanup / refactoring | done (WP58, WP62-63) | [phase-r-architecture-cleanup.md](plan/phase-r-architecture-cleanup.md) |
 | S | Test fixture expansion | done (WP59, WP72-76, WP85-88) | [phase-s-test-fixtures.md](plan/phase-s-test-fixtures.md) |

@@ -1196,3 +1196,38 @@ which is the same coverage it had before.
 **Standing shape this confirms:** each shared-budget section must pass *every* sibling cost to both
 its context re-validation and its accepting `create_resources_selection` call. Six spenders now
 (gear, Lifestyle, cyberware, bioware, foci, vehicles); a seventh would touch the same six places.
+
+**2026-08-24 (WP94, Phase P) — the Availability cap arrives in the flat-cost gear catalog, scoped
+to three categories on purpose.** WP66 was the first place the gear catalog enforced the 2026-07-21
+Availability≤12 ruling at all, and it only ever covered the *Rating-priced* half of `gear.xml`.
+Every flat-cost row stayed uncapped, which is how this project came to sell a starting character a
+Triox UberMensch (18R) and a Fairlight Excalibur (18R). WP94 caps **Commlinks, Cyberdecks and
+Rigger Command Consoles** — removing 6 rows (Fairlight Caliban 14; Shiawase Cyber-5 15R, Fairlight
+Excalibur 18R; Lone Star Remote Commander 14R, MCT Drone Web 16R, Triox UberMensch 18R) and taking
+the purchasable catalog from 379 items to 373.
+
+**The scoping is the decision, not an oversight.** Phase P's own WP list says WP94 "closes only the
+three rigger-adjacent gear categories," and the general backfill (every other flat-gear category —
+Certified Credstick Ebony at 20, Seven-7 at 20F, the Missile/Rocket ammunition rows at 22F — plus
+the 7 flat and 17 rating-scaled cyberware rows the 2026-08-01 entry above sized) stays unscheduled.
+Two things make that a defensible stopping point rather than a half-measure: the mechanism now
+exists and widening it is one frozenset (`chummer5.engine.resources
+._AVAILABILITY_CAPPED_GEAR_CATEGORIES`), and the categories left uncapped are, unlike these three,
+not ones any Phase P WP puts in front of a player. Project Overview's "no WP currently scheduled to
+backfill that" sentence is updated to say *partially*, rather than being left to read as if nothing
+had happened.
+
+**2026-08-24 (WP94, Phase P) — load a stat, don't display one the book never printed.** `gear.xml`
+gives every Rigger Command Console a `<programs>` value equal to its Device Rating. The core
+rulebook prints no program-slot count for an RCC anywhere: p. 267's table has no such column,
+p. 269's sidebar establishes only that RCCs run programs and can't duplicate a type, and the one
+printed slot *formula* in that neighbourhood ("half its Device Rating, rounded up") is explicitly a
+**drone** rule. Cyberdecks do print a Programs column, so theirs is shown.
+
+**Ruling:** `StarterGearItem.programs` is loaded for both (the loader stays literal, as always), and
+`chummer5.web.routes.resources.matrix_stat_block` renders it for cyberdecks only. This is the same
+line WP27 drew for Adept Powers and WP90 §5 drew for Matrix stat blocks generally — record what the
+data says, display what the book says, derive nothing — applied one notch finer, to a single field
+of a row this project does display. Worth stating as a rule because the tempting alternative
+(render every field that happens to be populated) would have quietly published a Chummer-authored
+number as an SR5 stat.

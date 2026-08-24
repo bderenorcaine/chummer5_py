@@ -42,6 +42,19 @@ testable) and handled one layer up:
   here as `Armor.armor_stacks`/`Armor.armor_rating` so the engine layer can exclude them from the
   purchasable catalog rather than mis-adding them as if they were a normal armor rating.
 
+**The Matrix stat block (WP94).** `load_gear` also reads each flat entry's `<avail>` and its
+Matrix-device stats (`<devicerating>`, `<attack>`, `<sleaze>`, `<dataprocessing>`, `<firewall>`,
+`<programs>`, `<attributearray>`) into optional `Gear` fields. These were discarded entirely
+before, which meant this project sold Commlinks, Cyberdecks and Rigger Command Consoles as a name
+and a price with their whole printed stat block thrown away (Implementation Plan, Phase P, WP90
+§3). The counts above are unchanged by this -- it adds fields, not rows; the loader stays a
+literal pass and every filter still lives one layer up. What *did* change one layer up is that
+`chummer5.engine.resources.build_starter_gear_catalog` now applies the Availability<=12 ruling to
+those three categories, dropping 6 rows (1 commlink, 2 cyberdecks, 3 RCCs) from the 379-item
+purchasable catalog to leave **373**. That cap is still **not** applied to the rest of the
+flat-cost catalog -- see that function's docstring and `spec/decisions-log.md`'s 2026-08-01 entry
+for the size of the unscheduled general backfill.
+
 Both of these matter because of a real data collision found while building the catalog on top of
 this module: a `<hide/>` weapon-profile entry can share its *display name* with the real,
 independently-purchasable gear/armor item it's a companion to, at a **different cost** (the
@@ -103,6 +116,31 @@ def _flat_cost(elem: ET.Element) -> int | None:
     return int(text)
 
 
+def _matrix_int(elem: ET.Element, tag: str) -> int | None:
+    """One Matrix-device stat as a plain integer, or None if the tag is absent or isn't a bare
+    integer (WP94). Fail-closed rather than guessing -- see `Gear`'s docstring for the one SR5 row
+    (`Living Persona`, `{RES}`) that takes the None path.
+    """
+    text = elem.findtext(tag)
+    if text is None:
+        return None
+    text = text.strip()
+    return int(text) if text.isdigit() else None
+
+
+def _attribute_array(elem: ET.Element) -> tuple[int, ...] | None:
+    """A cyberdeck's `<attributearray>` (`"4,3,2,1"`) as a tuple, in the printed descending order
+    (WP94). None if absent or not a comma-separated integer list.
+    """
+    text = elem.findtext("attributearray")
+    if text is None:
+        return None
+    parts = [part.strip() for part in text.split(",")]
+    if not parts or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
+
+
 def _rating_cost(elem: ET.Element) -> int | None:
     """The per-rating unit cost N of a `Rating * N` <cost>, or None if it isn't rating-priced."""
     text = elem.findtext("cost")
@@ -145,7 +183,27 @@ def parse_rating_availability(avail: str) -> tuple[int, int] | None:
 
 @dataclass(frozen=True)
 class Gear:
-    """One flat-cost, SR5-sourced `<gear>` entry."""
+    """One flat-cost, SR5-sourced `<gear>` entry.
+
+    **WP94: the Matrix stat block.** `availability` (the raw `<avail>` text, `R`/`F` marker and
+    all) plus the six Matrix-device fields were read by nobody before -- a Fairlight Excalibur was
+    a name and a price and nothing else. All seven are optional because most gear isn't a Matrix
+    device at all: only 49 of the 266 flat SR5 rows carry a `<devicerating>`, and among the three
+    categories WP94 actually renders, commlinks/RCCs carry `data_processing`/`firewall` while
+    cyberdecks carry `attribute_array`/`programs` instead (p. 226: "Most devices (including
+    commlinks) have only two Matrix attributes: Data Processing and Firewall. Decks and hosts have
+    all four, including Attack and Sleaze").
+
+    `attribute_array` is the cyberdeck's four assignable Matrix attributes in descending order
+    (p. 439), **not** four labelled columns -- it is deliberately a tuple rather than four named
+    fields, so nothing downstream can assert an Attack/Sleaze/DP/Firewall assignment the rules
+    leave to the decker.
+
+    Every one of the six parses fail-closed to `None` rather than guessing: `Living Persona`'s
+    `<devicerating>{RES}</devicerating>` (an attribute reference, not a number) is the one SR5 flat
+    row that hits that path, and it is `<hide/>`-marked and dropped from the purchasable catalog
+    anyway.
+    """
 
     id: str
     name: str
@@ -154,6 +212,14 @@ class Gear:
     hidden: bool
     source: str
     page: int
+    availability: str = ""
+    device_rating: int | None = None
+    attack: int | None = None
+    sleaze: int | None = None
+    data_processing: int | None = None
+    firewall: int | None = None
+    programs: int | None = None
+    attribute_array: tuple[int, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -234,6 +300,14 @@ def load_gear(xml_path: Path = DEFAULT_GEAR_PATH) -> tuple[Gear, ...]:
                 hidden=elem.find("hide") is not None,
                 source=elem.findtext("source", ""),
                 page=int(elem.findtext("page", "0")),
+                availability=elem.findtext("avail", "").strip(),
+                device_rating=_matrix_int(elem, "devicerating"),
+                attack=_matrix_int(elem, "attack"),
+                sleaze=_matrix_int(elem, "sleaze"),
+                data_processing=_matrix_int(elem, "dataprocessing"),
+                firewall=_matrix_int(elem, "firewall"),
+                programs=_matrix_int(elem, "programs"),
+                attribute_array=_attribute_array(elem),
             )
         )
     return tuple(items)
