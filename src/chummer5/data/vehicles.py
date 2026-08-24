@@ -67,6 +67,33 @@ _AVAIL_RE = re.compile(r"(\d+)([RF]?)")
 _INT_RE = re.compile(r"\d+")
 _PAIR_RE = re.compile(r"(\d+)/(\d+)")
 
+# WP95: this module's hand-kept mirror of the Project Overview's "Unmodeled real effects" rows for
+# vehicles, alongside `chummer5.data.qualities`' and `chummer5.data.cyberware`'s own. Two strings
+# rather than a per-row dict, because every SR5 row's gap is identical except for the one thing
+# `is_drone` already distinguishes: p. 265's rigger interface is built into every drone and into no
+# vehicle, and it is a *modification*, excluded from Phase P by the 2026-07-21 ruling. So a bought
+# vehicle here is one no rigger can jump into, and a bought drone is one they can -- if there were
+# any jumping-in to do. A WP that edits either string must edit that table in the same commit.
+_UNMODELED_COMMON = (
+    "Every printed stat -- Handling, Speed, Acceleration, Body, Armor, Pilot, Sensor and the "
+    "Condition Monitor -- exists to be rolled in Vehicle Tests and vehicle combat (p. 199ff), and "
+    "this project has no test resolution, no vehicle combat and no Matrix rules for its Device "
+    "Rating. The purchase, its nuyen cost and its Condition Monitor are modeled; nothing reads "
+    "them further."
+)
+
+UNMODELED_EFFECT_NOTE_VEHICLE = (
+    _UNMODELED_COMMON + " A vehicle also cannot be jumped into as bought: p. 265's 1,000¥ "
+    "Rigger Interface is a modification, and modifications are out of scope for this project. "
+    "Drones ship with one built in; vehicles do not."
+)
+
+UNMODELED_EFFECT_NOTE_DRONE = (
+    _UNMODELED_COMMON + " A drone ships with its rigger interface built in (p. 265), so unlike a "
+    "vehicle it needs no modification to be rigger-usable -- but there is no jumping in, no "
+    "autosoft slot accounting and no autonomous Pilot behaviour here for that to enable."
+)
+
 
 @dataclass(frozen=True)
 class Vehicle:
@@ -101,6 +128,7 @@ class Vehicle:
     hidden: bool
     source: str
     page: int
+    unmodeled_effect_note: str | None = None
 
 
 def _fail(name: str, tag: str, text: str | None) -> ValueError:
@@ -169,6 +197,7 @@ def load_vehicles(xml_path: Path = DEFAULT_VEHICLES_PATH) -> tuple[Vehicle, ...]
         availability, restriction = _availability(elem, name)
         handling, handling_offroad = _pair_field(elem, "handling", name)
         speed, speed_offroad = _pair_field(elem, "speed", name)
+        is_drone = category.startswith(_DRONE_CATEGORY_PREFIX)
         items.append(
             Vehicle(
                 id=elem.findtext("id", ""),
@@ -187,10 +216,13 @@ def load_vehicles(xml_path: Path = DEFAULT_VEHICLES_PATH) -> tuple[Vehicle, ...]
                 pilot=_int_field(elem, "pilot", name),
                 sensor=_int_field(elem, "sensor", name),
                 seats=_optional_int_field(elem, "seats", name),
-                is_drone=category.startswith(_DRONE_CATEGORY_PREFIX),
+                is_drone=is_drone,
                 hidden=elem.find("hide") is not None,
                 source=elem.findtext("source", ""),
                 page=int(elem.findtext("page", "0")),
+                unmodeled_effect_note=(
+                    UNMODELED_EFFECT_NOTE_DRONE if is_drone else UNMODELED_EFFECT_NOTE_VEHICLE
+                ),
             )
         )
     return tuple(items)

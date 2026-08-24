@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase P — Post-MVP: Rigger support (WP90-94 done; WP95-96 remaining)
+### Phase P — Post-MVP: Rigger support (WP90-95 done; WP96 remaining)
 
 **Deliberately scoped down before any WP breakdown is written** — raised during the same 2026-07-21
 session as Phases L-O, but confirmed to be a materially different size than any of them: vehicles and
@@ -142,7 +142,7 @@ Two consequences, both scoped below rather than assumed away:
   ruling. Project Overview already flags the general gap ("no WP currently scheduled to backfill
   that"); WP94 closes the rigger-adjacent slice of it and nothing more.
 
-### 4. `Control Rig` is offered by today's UI, and its effect is 100% unmodeled with no registry row
+### 4. `Control Rig` is offered by today's UI, and its effect is 100% unmodeled with no registry row *(closed by WP95)*
 
 `Control Rig` (Headware, SR5 p. 452, `<ess>Rating * 1`, `<cost>FixedValues(43000,97000,208000)`,
 `<avail>(Rating * 5)R`, ratings 1-3) is in `CYBERWARE_ENTRIES` and in `CYBERWARE_STANDALONE` — it
@@ -337,7 +337,7 @@ Next unclaimed WP number after this block is **WP97**.
   still unscheduled and Project Overview's "no WP currently scheduled" sentence updated to say
   *partially backfilled* rather than left stale. See `spec/worklogs/WP94.md`.
 
-- [ ] **WP95 — Unmodeled-effect registry: the rigger surface.** Closes §4 and the display half of
+- [x] **WP95 — Unmodeled-effect registry: the rigger surface.** Closes §4 and the display half of
   §1's rigger-interface gap.
   Goal: every rigger-reachable aspect this project offers gets a row in Project Overview's registry
   *and* an `unmodeled_effect_note` the player actually sees, per that table's own hand-kept-mirror
@@ -361,6 +361,20 @@ Next unclaimed WP number after this block is **WP97**.
   Acceptance: `pytest`/`ruff`/`mypy` green; a character holding a Control Rig, an RCC and a drone
   renders three distinct notes in the sheet's "Unmodeled real effects" section; the registry table
   and the catalog dicts agree row-for-row.
+  Landed as `Control Rig`'s note in `chummer5.data.cyberware.UNMODELED_EFFECT_NOTES`,
+  `chummer5.data.gear._UNMODELED_EFFECT_NOTES` (**keyed by category**, four categories — the WP's
+  three plus Autosofts) stamped by *both* gear loaders, `chummer5.data.vehicles
+  .UNMODELED_EFFECT_NOTE_{VEHICLE,DRONE}`, and 8 new registry rows. Three findings worth carrying
+  forward. **First, the note mechanism was less "already exists" than the WP assumed**:
+  `unmodeled_effect_notes` did not walk `vehicle_selection` at all (it postdates the function), so
+  the `getattr` indirection makes new *catalogs* free but not new *selections* — recorded in that
+  function's docstring and Project Overview's preamble. **Second, `Control Rig` is a `NO_EFFECT`
+  row, not a `NOT_YET_SUPPORTED` one** — it carries no `<bonus>` node at all, which is exactly why
+  WP77's audit (a sweep of the `NOT_YET_SUPPORTED` bucket) could never have found it;
+  `tests/unit/test_augmentation_unmodeled_registry.py` gains a third bucket saying so, since a
+  future audit will hit the same blind spot. **Third, keying gear notes by category rather than by
+  name** avoids ~30 identical strings with 30 chances to drift, and is checked as an all-or-none
+  invariant per category. See `spec/worklogs/WP95.md`.
 
 - [ ] **WP96 — The Rigger synthetic fixture.** Closes Phase S §5's recorded "Known gap: no Rigger."
   Goal: a whole-character `RIGGER_FIXTURE` in `tests/fixtures/synthetic_fixtures.py` with the full

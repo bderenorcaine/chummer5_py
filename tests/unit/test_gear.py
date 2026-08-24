@@ -429,3 +429,53 @@ def test_catalog_carries_the_matrix_stat_block_through() -> None:
     assert deck.programs == 4
     rcc = FULL_BY_NAME["Scratch-Built Junk"]
     assert (rcc.data_processing, rcc.firewall) == (3, 2)
+
+
+# --- WP95: the unmodeled-effect notes ------------------------------------------------------------
+
+ANNOTATED_CATEGORIES = frozenset(
+    {"Commlinks", "Cyberdecks", "Rigger Command Consoles", "Autosofts"}
+)
+
+
+def test_every_row_in_an_annotated_category_carries_the_note() -> None:
+    # Keyed by category, so the invariant is "all or none of a category", not a per-name list --
+    # see `chummer5.data.gear`'s docstring for why.
+    for item in GEAR:
+        assert (item.unmodeled_effect_note is not None) == (
+            item.category in ANNOTATED_CATEGORIES
+        ), item.name
+    for item in RATING_GEAR:
+        assert (item.unmodeled_effect_note is not None) == (
+            item.category in ANNOTATED_CATEGORIES
+        ), item.name
+
+
+def test_the_autosoft_note_rides_the_rating_priced_loader() -> None:
+    # All 6 SR5 autosofts are `Rating * 500`-priced, so they are load_rating_gear's rows. This is
+    # the one annotated category load_gear contributes nothing to, and the reason both loaders
+    # had to be changed rather than just the flat one.
+    autosofts = [g for g in RATING_GEAR if g.category == "Autosofts"]
+    assert len(autosofts) == 6
+    assert all(a.unmodeled_effect_note for a in autosofts)
+    assert not [g for g in GEAR if g.category == "Autosofts"]
+
+
+def test_the_notes_survive_into_the_purchasable_catalog() -> None:
+    assert FULL_BY_NAME["Meta Link"].unmodeled_effect_note
+    assert FULL_BY_NAME["Erika MCD-1"].unmodeled_effect_note
+    assert FULL_BY_NAME["Scratch-Built Junk"].unmodeled_effect_note
+    assert FULL_BY_NAME["Clearsight Autosoft"].unmodeled_effect_note
+    assert FULL_BY_NAME["Ares Predator V"].unmodeled_effect_note is None
+
+
+def test_each_annotated_category_has_a_distinct_note() -> None:
+    # Four categories, four different gaps -- a copy-pasted string would make the disclosure
+    # section say the same thing four times for a rigger who owns one of each.
+    notes = {
+        item.category: item.unmodeled_effect_note
+        for item in FULL_CATALOG
+        if item.unmodeled_effect_note is not None
+    }
+    assert set(notes) == ANNOTATED_CATEGORIES
+    assert len(set(notes.values())) == 4

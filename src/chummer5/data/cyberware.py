@@ -158,12 +158,20 @@ looked maintained. `cyberware_subsystems` imports this one, exactly as it alread
 `classify_bonus`/`BonusSupport`/`CyberwareFlatBonus` from here. (`chummer5.data.bioware` keeps its
 own, because it loads a different file -- it happens to be empty today; see its docstring.)
 
-**A note is independent of `bonus_support`, and covers two different situations.** Ten of the
-sixteen named rows are `NOT_YET_SUPPORTED` (WP77's registry rows: the effect is absent entirely).
-The other six are `NO_EFFECT`/`CONDITIONAL_BONUS` rows whose effect this engine models *in part* --
-WP38's cyberlimb Customization/Enhancement and WP40's four conditional limit bonuses -- so their
-note is the unmodeled **remainder**, and is worded to say what *is* applied too, since "Enhanced
-Agility: adds its Rating to the limb's Agility" read as a bare gap would be actively misleading.
+**A note is independent of `bonus_support`, and covers three different situations.** Ten of the
+nineteen named rows are `NOT_YET_SUPPORTED` (WP77's registry rows: the effect is absent entirely).
+Eight are `NO_EFFECT`/`CONDITIONAL_BONUS` rows whose effect this engine models *in part* -- WP38's
+cyberlimb Customization/Enhancement and WP40's four conditional limit bonuses -- so their note is
+the unmodeled **remainder**, and is worded to say what *is* applied too, since "Enhanced Agility:
+adds its Rating to the limb's Agility" read as a bare gap would be actively misleading.
+
+**The nineteenth is `Control Rig` (WP95), and it is why "independent of `bonus_support`" matters.**
+It carries no `<bonus>` node at all, so it classifies `NO_EFFECT` and WP77's audit -- which swept
+the `NOT_YET_SUPPORTED` bucket -- never saw it, even though it has been UI-reachable since WP42 and
+costs a full point of Essence at rating 1. Its entire printed effect is an in-play, jumped-in limit
+bonus on a *vehicle* (p. 266). **The lesson for a future audit: `NOT_YET_SUPPORTED` finds rows whose
+bonus this loader couldn't parse, not rows whose effect this engine doesn't model. A row with no
+`<bonus>` at all is invisible to that sweep and has to be found by reading the book.**
 
 WP32 is what actually turns `FLAT_BONUS` items into real `Improvement` records (mirroring
 `chummer5.engine.qualities.apply_quality_improvements`'s shape) -- this module only classifies.
@@ -363,6 +371,14 @@ UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
         "distance for falling-damage purposes (p. 457) -- no movement or falling-damage system "
         "exists. The +Rating Physical limit for jumping and sprinting, granted once per matched "
         "pair, is modeled."
+    ),
+    # --- WP95's registry row: a NO_EFFECT row, which is why WP77's audit never saw it -------------
+    "Control Rig": (
+        "While you are jumped into a vehicle, drone or other device, that device's limits go up by "
+        "the control rig's rating -- vehicle and drone Sensor, Speed and Handling, and the "
+        "Accuracy of mounted weapons you fire (p. 266). Nothing in that is a character-level term, "
+        "and there is no jumping-in, vehicle-test or weapon-Accuracy representation here, so the "
+        "full nuyen and Essence cost buys nothing this engine computes."
     ),
 }
 

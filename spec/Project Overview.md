@@ -177,9 +177,19 @@ section for a character who actually holds it, collected by
 `chummer5.engine.derived.unmodeled_effect_notes`. Those notes are a **hand-kept mirror** of this
 table: runtime code never parses this file, so a WP that edits a row here must edit the matching
 catalog dict (`chummer5.data.qualities._UNMODELED_EFFECT_NOTES`,
-`chummer5.data.cyberware.UNMODELED_EFFECT_NOTES`, `chummer5.data.bioware._UNMODELED_EFFECT_NOTES`)
-in the same commit. `tests/unit/test_augmentation_unmodeled_registry.py` pins *which* augmentation
+`chummer5.data.cyberware.UNMODELED_EFFECT_NOTES`, `chummer5.data.bioware._UNMODELED_EFFECT_NOTES`,
+and — since WP95 — `chummer5.data.gear._UNMODELED_EFFECT_NOTES` (keyed by **category**, not by
+item name: every row in a gear category here has the same gap) plus
+`chummer5.data.vehicles.UNMODELED_EFFECT_NOTE_{VEHICLE,DRONE}` (two strings, split on `is_drone`
+for the rigger-interface half)) in the same commit.
+`tests/unit/test_augmentation_unmodeled_registry.py` pins *which* augmentation
 rows must have a note and which must not; it cannot pin the wording against this table.
+
+**One collector, but new *selections* aren't free (WP95).** `unmodeled_effect_notes` reads every
+aspect through a plain `getattr`, so adding the field to a new *catalog* dataclass needs no change
+there — but it can only read selections it actually walks, and `vehicle_selection` (WP92) was
+simply never added to that walk. A WP that gives `Character` a new field holding catalog objects
+has to add its own loop.
 
 | Aspect | Kind | What's modeled | What's not (and why) | Source |
 |---|---|---|---|---|
@@ -215,6 +225,13 @@ rows must have a note and which must not; it cannot pin the wording against this
 | Internal Air Tank | Cyberware (Bodyware); **offered by today's UI** since WP42 (import-only before that) | Nuyen + Essence cost | Holding your breath for up to Rating hours, and complete protection from inhalation-vector toxin attacks while you do (p. 455) — the same toxin/pathogen bucket Natural Immunity and Resistance to Pathogens/Toxins are already in, plus no breath/environmental subsystem | WP77 |
 | Skillwires | Cyberware (Bodyware); **offered by today's UI** since WP42 (import-only before that) | Nuyen + Essence cost (both Rating-scaled) | Use of activesofts up to the skillwire's Rating, and only while they run on an implanted skilljack (p. 455) — no skillsoft subsystem. The softs themselves are equally absent: SR5's Activesoft/Knowsoft/Linguasoft are Rating-scaled-cost gear and so fall outside WP21's flat-cost gear catalog, leaving nothing to run | WP77 |
 | Skilljack | Cyberware (Headware); **offered by today's UI** since WP42 (import-only before that) | Nuyen + Essence cost (both Rating-scaled) | Interpreting knowsofts/linguasofts and running activesofts, capped at Rating × 2 total and Rating per skill (p. 452) — the same missing skillsoft subsystem as Skillwires | WP77 |
+| Control Rig | Cyberware (Headware); **offered by today's UI** since WP42 (import-only before that) | Nuyen + Essence cost (both Rating-scaled; a full Essence point at rating 1) | Its entire printed payload: while you are jumped into a vehicle/drone/device, that device's limits rise by the rig's rating — vehicle and drone Sensor, Speed and Handling, plus the Accuracy of mounted weapons the rigger fires (p. 266). No character-level term exists in it at all, and there is no jumping-in, vehicle-test or weapon-Accuracy representation. **Found late for a reason worth recording:** it carries no `<bonus>` node, so it classifies `NO_EFFECT` and WP77's audit — a sweep of the `NOT_YET_SUPPORTED` bucket — could never have seen it | WP95 |
+| Vehicles (all 24 offerable) | Vehicle (catalog); **offered by today's UI** (WP93) | Purchase + nuyen cost + the derived Condition Monitor (`12 + ⌈Body/2⌉`, p. 199) | Every printed stat (Handling, Speed, Acceleration, Body, Armor, Pilot, Sensor) exists to be rolled in Vehicle Tests and vehicle combat — no test resolution or vehicle combat exists. **Plus the rigger-interface gap:** a bought vehicle cannot be jumped into, because p. 265's 1,000¥ Rigger Interface is a *modification* and modifications are excluded by the 2026-07-21 ruling | WP95 |
+| Drones (all 11 offerable) | Vehicle (catalog, `is_drone`); **offered by today's UI** (WP93) | Purchase + nuyen cost + the derived Condition Monitor (`6 + ⌈Body/2⌉`, p. 199) | Same missing Vehicle Tests/vehicle combat as above. A drone *does* ship with its rigger interface built in (p. 265), so unlike a vehicle it needs no modification to be rigger-usable — but there is no jumping in, no autosoft slot accounting (`⌈Device Rating / 2⌉`, p. 269) and no autonomous Pilot behaviour for that to enable | WP95 |
+| Commlinks (6 offerable) | Gear (`Commlinks`); **offered by today's UI** | Nuyen cost + the printed Device Rating / Data Processing / Firewall, **displayed** since WP94 | Those numbers feed nothing — this project has no Matrix rules at all, so there is no Matrix test, PAN, noise or hacking defence for them to be a limit or dice pool in (pp. 226, 438) | WP95 |
+| Cyberdecks (7 offerable) | Gear (`Cyberdecks`); **offered by today's UI** | Nuyen cost + the printed Device Rating / Attribute Array / Programs, **displayed** since WP94 | Same absent Matrix rules. The Array's four values are also assigned among Attack/Sleaze/Data Processing/Firewall in play (p. 439), a choice nothing here records, and the deck's built-in hot-sim module has no simsense/VR representation | WP95 |
+| Rigger Command Consoles (8 offerable) | Gear (`Rigger Command Consoles`); **offered by today's UI** | Nuyen cost + the printed Device Rating / Data Processing / Firewall, **displayed** since WP94 | Same absent Matrix rules, plus everything an RCC is actually *for*: slaving up to (Device Rating × 3) drones into a WAN, the boot-time Noise Reduction/Sharing split bounded by Device Rating, and running shared autosofts for slaved drones (p. 267). Its `<programs>` count is loaded but not displayed — SR5 core prints none for an RCC | WP95 |
+| Autosofts (6, Rating-priced) | Gear (`Autosofts`); **offered by today's UI** | Nuyen cost (`Rating × 500¥`) | An autosoft is a drone's *skill* (p. 269) — Clearsight acts as its Perception, [Model] Maneuvering as its Pilot skill. No drone test resolution exists to roll one into, no autosoft slot accounting, and no way to bind a `[Model]`/`[Weapon]` copy to the drone or weapon it was bought for | WP95 |
 
 ## Architecture & major design decisions
 

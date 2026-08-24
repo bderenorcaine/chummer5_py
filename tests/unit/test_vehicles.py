@@ -325,3 +325,21 @@ def test_scorpion_matches_wessons_legacy_computed_vehicle_node() -> None:
     assert scorpion.speed_offroad is None
     assert int(node.findtext("offroadspeed", "")) == scorpion.speed
     assert int(node.findtext("page", "")) == scorpion.page
+
+
+# --- WP95: the unmodeled-effect notes ------------------------------------------------------------
+
+
+def test_every_vehicle_row_carries_a_note_and_drones_get_a_different_one() -> None:
+    # The gap is identical for every row except the one thing `is_drone` already distinguishes:
+    # p. 265's rigger interface ships in every drone and no vehicle, and it is a *modification*,
+    # excluded by the 2026-07-21 ruling. So a bought vehicle is one no rigger can jump into.
+    notes = {v.unmodeled_effect_note for v in VEHICLES}
+    assert None not in notes
+    assert len(notes) == 2
+    drone_notes = {v.unmodeled_effect_note for v in VEHICLES if v.is_drone}
+    vehicle_notes = {v.unmodeled_effect_note for v in VEHICLES if not v.is_drone}
+    assert len(drone_notes) == 1 and len(vehicle_notes) == 1
+    assert not drone_notes & vehicle_notes
+    assert "cannot be jumped into as bought" in vehicle_notes.pop()
+    assert "ships with its rigger interface built in" in drone_notes.pop()

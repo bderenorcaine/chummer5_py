@@ -251,6 +251,16 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
     `chummer5.data.bioware.Bioware`) was the entire change, and cyberware notes now surface here.
     `Power`/`Focus`/`LifestyleTier`/`StarterGearItem`/`Spell` still populate nothing, so the
     "walks them without crashing, contributes nothing" case below still holds for those kinds.
+
+    **WP95 takes it up for two more kinds, and had to add one loop.** `StarterGearItem` (via
+    `chummer5.data.gear._UNMODELED_EFFECT_NOTES`, four rigger-adjacent categories) needed nothing
+    here, exactly as the docstring above promised. `Vehicle` did: `vehicle_selection` postdates this
+    function and was simply not among the selections walked, so "aspect-kind-agnostic" held for the
+    dataclass but not for the selection holding it. The lesson is worth stating plainly, since the
+    same trap is waiting for the next selection type: **the `getattr` indirection makes new
+    *catalogs* free, not new *selections*.** A WP adding a `Character` field that holds catalog
+    objects has to add its loop here. `Power`/`Focus`/`LifestyleTier`/`Spell` still populate
+    nothing.
     """
     notes: dict[str, str] = {}
 
@@ -289,6 +299,12 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
     if character.resources_selection is not None:
         for gear_item in character.resources_selection.gear:
             add(gear_item.name, getattr(gear_item, "unmodeled_effect_note", None))
+    # WP95: the one selection this walk did not cover at all -- `vehicle_selection` postdates the
+    # function (WP92) and was never added. Repeats are legal here (four Fly-Spies), and `add`
+    # already dedupes by name, so a fleet contributes one note per distinct model.
+    if character.vehicle_selection is not None:
+        for vehicle in character.vehicle_selection.vehicles:
+            add(vehicle.name, getattr(vehicle, "unmodeled_effect_note", None))
     if character.spell_selection is not None:
         for spell in character.spell_selection.spells:
             add(spell.name, getattr(spell, "unmodeled_effect_note", None))

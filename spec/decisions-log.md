@@ -1231,3 +1231,46 @@ data says, display what the book says, derive nothing — applied one notch fine
 of a row this project does display. Worth stating as a rule because the tempting alternative
 (render every field that happens to be populated) would have quietly published a Chummer-authored
 number as an SR5 stat.
+
+**2026-08-24 (WP95, Phase P) — the `getattr` indirection makes new catalogs free, not new
+selections.** `chummer5.engine.derived.unmodeled_effect_notes` was written (WP56) to be
+"aspect-kind-agnostic by construction": every aspect is read through a plain
+`getattr(item, "unmodeled_effect_note", None)`, so adding the field to a new catalog dataclass needs
+no change there. WP79 confirmed that for cyberware, and its docstring says so.
+
+WP95 found the other half. The function can only read selections it actually **walks**, and its walk
+is a hand-written list of `Character` fields. `vehicle_selection` postdates the function (WP92) and
+was never added, so a `Vehicle` note would have been silently invisible no matter how correctly the
+catalog populated it. Recorded here, in that function's docstring, and in Project Overview's registry
+preamble, because the trap is generic: **a WP that gives `Character` a new field holding catalog
+objects owes this function a loop.** `Power`/`Focus`/`LifestyleTier`/`Spell` are walked already and
+populate nothing, which is why the omission looked like coverage.
+
+**2026-08-24 (WP95, Phase P) — `NOT_YET_SUPPORTED` is not the same set as "unmodeled", and an audit
+that conflates them has a blind spot.** WP77 audited augmentation content for unmodeled effects by
+sweeping the `NOT_YET_SUPPORTED` bucket — rows whose `<bonus>` node the loader declined to classify.
+`Control Rig` was not in it. It carries **no `<bonus>` node at all**, so it classifies `NO_EFFECT`,
+alongside the many rows that genuinely have no mechanical effect to model. It is nonetheless one of
+the most consequential unmodeled rows in the catalog: UI-reachable since WP42, a full point of
+Essence at rating 1, and an entire printed payload (p. 266) that lives on a *vehicle* rather than on
+the character.
+
+**Ruling:** the row gets a registry entry and a note like any other, and
+`tests/unit/test_augmentation_unmodeled_registry.py` gains a third bucket
+(`FULLY_UNMODELED_WITHOUT_A_BONUS_NODE`) rather than being bent to fit it into one of the two — the
+existing buckets' invariant (`NOT_YET_SUPPORTED == REGISTERED | MODELED_BUT_UNCLASSIFIED`) is
+correct and must keep holding. The standing lesson, recorded in that file and in
+`chummer5.data.cyberware`'s docstring: `bonus_support` classifies **parseability**, not
+modelledness. A future unmodeled-effects audit has to enumerate `NO_EFFECT` rows against the book
+too, and `NO_EFFECT` is a large bucket, so that is a genuinely bigger job than WP77's was.
+
+**2026-08-24 (WP95, Phase P) — gear unmodeled-effect notes are keyed by category, not by name.**
+Every other catalog's notes dict (`qualities`, `cyberware`, `bioware`) is keyed by item name,
+because each row's gap is its own. Gear is different: every RCC has the same gap (the Matrix does
+not exist here), every autosoft has the same gap (drone tests do not exist here). Keying by name
+would have meant ~30 identical strings in `chummer5.data.gear._UNMODELED_EFFECT_NOTES` with 30
+independent chances to drift from the registry table. Keyed by category it is 4 strings, and the
+invariant a test can pin is stronger: **all or none of a category carries a note.** Vehicles take
+the same shape one step further — two module-level strings split on `is_drone`, because the only
+per-row difference in the whole catalog is the one thing that flag already records (p. 265's rigger
+interface ships in every drone and no vehicle).

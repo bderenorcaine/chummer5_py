@@ -55,6 +55,21 @@ purchasable catalog to leave **373**. That cap is still **not** applied to the r
 flat-cost catalog -- see that function's docstring and `spec/decisions-log.md`'s 2026-08-01 entry
 for the size of the unscheduled general backfill.
 
+**Unmodeled-effect notes (WP95).** `_UNMODELED_EFFECT_NOTES` below is this module's hand-kept
+mirror of the Project Overview's "Unmodeled real effects" table, exactly as
+`chummer5.data.qualities._UNMODELED_EFFECT_NOTES` (WP56) and `chummer5.data.cyberware
+.UNMODELED_EFFECT_NOTES` (WP79) already are for their own catalogs -- runtime code never reads a
+`.md` file as data. It is keyed by **category**, not by item name: unlike a quality or a piece of
+cyberware, every row in a gear category here has the *same* unmodeled effect (every RCC is a
+Matrix device in a project with no Matrix rules; every autosoft is a drone skill in a project with
+no drone tests), so 30-odd identical per-name entries would be a mirror with 30 chances to drift.
+Both loaders stamp the note onto every row of a covered category.
+
+**It covers the rigger surface only, deliberately.** Four categories (Commlinks, Cyberdecks,
+Rigger Command Consoles, Autosofts) of roughly fifty. The other ~50 stay unannotated, the same way
+WP79 annotated cyberware without claiming every catalog -- see Phase P's own "explicitly out of
+this phase" list.
+
 Both of these matter because of a real data collision found while building the catalog on top of
 this module: a `<hide/>` weapon-profile entry can share its *display name* with the real,
 independently-purchasable gear/armor item it's a companion to, at a **different cost** (the
@@ -101,6 +116,36 @@ _RATING_COST_RE = re.compile(r"Rating\s*\*\s*(\d+)")
 # matters for WP66's Availability<=12 cap. A leading `+` marks a modifier added to a *parent* item's
 # availability (an accessory, not a standalone pick) -- excluded, mirroring load_gear's `+`-cost
 # accessory exclusion.
+# WP95: the hand-kept mirror of the Project Overview's "Unmodeled real effects" rows for gear,
+# keyed by <category> -- see this module's docstring for why by category rather than by name, and
+# why only these four. A WP that edits a row here must edit that table in the same commit.
+_UNMODELED_EFFECT_NOTES: dict[str, str] = {
+    "Commlinks": (
+        "Its Device Rating, Data Processing and Firewall (pp. 226, 438) are recorded and shown but "
+        "feed nothing -- this project has no Matrix rules at all, so there is no Matrix test, no "
+        "PAN, no noise and no hacking defence for them to be a limit or a dice pool in."
+    ),
+    "Cyberdecks": (
+        "Its Device Rating, Attribute Array and program count (p. 439) are recorded and shown but "
+        "feed nothing -- this project has no Matrix rules at all. The array's four values are also "
+        "assigned among Attack/Sleaze/Data Processing/Firewall in play, a choice nothing here "
+        "records, and the deck's built-in hot-sim module has no simsense or VR representation."
+    ),
+    "Rigger Command Consoles": (
+        "Its Device Rating, Data Processing and Firewall (p. 267) are recorded and shown but feed "
+        "nothing -- no Matrix rules exist. Everything an RCC is actually for is equally absent: "
+        "slaving up to (Device Rating x 3) drones into a WAN, the Noise Reduction/Sharing split "
+        "you set at boot, and running shared autosofts for the slaved drones."
+    ),
+    "Autosofts": (
+        "An autosoft is a drone's skill (p. 269) -- Clearsight acts as its Perception, "
+        "[Model] Maneuvering as its Pilot skill, and so on. There is no drone test resolution "
+        "here for one to roll into, no autosoft slot accounting (a drone runs half its Device "
+        "Rating, rounded up), and no way to tie a [Model]/[Weapon] copy to the drone or weapon it "
+        "is bought for. Its Rating-scaled nuyen cost is modeled."
+    ),
+}
+
 _AVAIL_RESTRICTION_RE = re.compile(r"[RF]$")
 _AVAIL_TIMES_RE = re.compile(r"Rating\s*\*\s*(\d+)")
 _AVAIL_PLUS_RE = re.compile(r"Rating\s*\+\s*(\d+)")
@@ -203,6 +248,11 @@ class Gear:
     `<devicerating>{RES}</devicerating>` (an attribute reference, not a number) is the one SR5 flat
     row that hits that path, and it is `<hide/>`-marked and dropped from the purchasable catalog
     anyway.
+
+    **WP95: `unmodeled_effect_note`.** Set for every row in a category covered by
+    `_UNMODELED_EFFECT_NOTES`, `None` otherwise -- the same field name `chummer5.data.qualities
+    .Quality` and `chummer5.data.cyberware.Cyberware` already carry, read by
+    `chummer5.engine.derived.unmodeled_effect_notes` through a plain `getattr`.
     """
 
     id: str
@@ -220,6 +270,7 @@ class Gear:
     firewall: int | None = None
     programs: int | None = None
     attribute_array: tuple[int, ...] | None = None
+    unmodeled_effect_note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -262,6 +313,7 @@ class RatingGear:
     hidden: bool
     source: str
     page: int
+    unmodeled_effect_note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -308,6 +360,7 @@ def load_gear(xml_path: Path = DEFAULT_GEAR_PATH) -> tuple[Gear, ...]:
                 firewall=_matrix_int(elem, "firewall"),
                 programs=_matrix_int(elem, "programs"),
                 attribute_array=_attribute_array(elem),
+                unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(elem.findtext("category", "")),
             )
         )
     return tuple(items)
@@ -322,6 +375,9 @@ def load_rating_gear(xml_path: Path = DEFAULT_GEAR_PATH) -> tuple[RatingGear, ..
     Foci/Formulae exclusion, and the flat/rating name-collision resolution all live one layer up in
     `chummer5.engine.resources.build_starter_gear_catalog`, so this stays a plain XML->dataclass
     pass with no cross-file knowledge.
+
+    WP95: the Autosofts category's `unmodeled_effect_note` is stamped here -- all 6 SR5 autosofts
+    are `Rating * 500`-priced, so they are this loader's rows, not `load_gear`'s.
     """
     root = ET.parse(xml_path).getroot()
     gears_elem = root.find("gears")
@@ -345,6 +401,7 @@ def load_rating_gear(xml_path: Path = DEFAULT_GEAR_PATH) -> tuple[RatingGear, ..
                 hidden=elem.find("hide") is not None,
                 source=elem.findtext("source", ""),
                 page=int(elem.findtext("page", "0")),
+                unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(elem.findtext("category", "")),
             )
         )
     return tuple(items)

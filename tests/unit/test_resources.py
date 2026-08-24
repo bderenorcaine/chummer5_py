@@ -24,7 +24,6 @@ from chummer5.engine.resources import (
     Contact,
     ContactSelection,
     ResourcesSelection,
-    StarterGearItem,
     available_nuyen,
     create_contact_selection,
     create_resources_selection,
@@ -162,13 +161,14 @@ def test_create_resources_selection_within_budget() -> None:
     assert selection.nuyen_budget == 6000
     assert selection.nuyen_spent == 400
     assert selection.nuyen_remaining == 5600
-    # WP94: a Commlink now carries its printed Matrix stat block through the purchase.
-    assert selection.gear == (
-        StarterGearItem(
-            "Meta Link", 100, category="Commlinks", device_rating=1, data_processing=1, firewall=1
-        ),
-        StarterGearItem("Combat Knife", 300, category="Blades"),
-    )
+    # A purchase yields the catalog's own rows, unchanged. Compared against the catalog rather than
+    # against hand-written literals since WP95: a flat purchase copies the entry verbatim, and
+    # spelling every field out here made this test a tax on every WP that adds one (WP94's Matrix
+    # stat block, WP95's `unmodeled_effect_note`) without checking anything the identity doesn't.
+    by_name = {item.name: item for item in STARTER_GEAR_CATALOG}
+    assert selection.gear == (by_name["Meta Link"], by_name["Combat Knife"])
+    assert by_name["Meta Link"].category == "Commlinks"
+    assert by_name["Combat Knife"].category == "Blades"
 
 
 def test_create_resources_selection_allows_empty_gear() -> None:

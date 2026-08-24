@@ -169,6 +169,20 @@ PARTLY_MODELED_WITH_NOTES = frozenset(
     }
 )
 
+# WP95's registry row, and a third bucket because it fits neither of the two above. `Control Rig`
+# carries **no `<bonus>` node at all**, so it classifies `NO_EFFECT` rather than
+# `NOT_YET_SUPPORTED` -- which is precisely why WP77's audit, a sweep of the `NOT_YET_SUPPORTED`
+# bucket, never saw it despite it being UI-reachable since WP42 and costing a full point of Essence
+# at rating 1. Its entire printed effect (p. 266) is an in-play limit bonus on a *vehicle*, so
+# nothing about it is computable here and none of it is modeled: unlike
+# `PARTLY_MODELED_WITH_NOTES`, its note is a bare gap, not a remainder.
+#
+# The standing lesson, worth more than the row: `NOT_YET_SUPPORTED` identifies rows whose `<bonus>`
+# the loader could not parse, **not** rows whose effect this engine does not model. A row with no
+# `<bonus>` is invisible to that sweep. Any future audit has to enumerate `NO_EFFECT` rows against
+# the book too.
+FULLY_UNMODELED_WITHOUT_A_BONUS_NODE = frozenset({"Control Rig"})
+
 
 def test_every_registered_row_resolves_to_a_note_in_both_cyberware_catalogs() -> None:
     # WP79's acceptance criterion. Both catalogs, because they are two views of the same rows and a
@@ -197,9 +211,26 @@ def test_no_row_outside_the_registry_carries_a_note() -> None:
     # for this item, so an unregistered one would be documentation with no source. In particular
     # WP78's four newly-modeled rows must have none -- registering them would launder a live policy
     # violation into an accepted gap, which is the distinction this whole file exists to keep.
-    named = REGISTERED_UNMODELED | PARTLY_MODELED_WITH_NOTES
+    named = REGISTERED_UNMODELED | PARTLY_MODELED_WITH_NOTES | FULLY_UNMODELED_WITHOUT_A_BONUS_NODE
     for entry in CYBERWARE_ENTRIES:
         assert (entry.unmodeled_effect_note is not None) == (entry.name in named), entry.name
+
+
+def test_control_rig_is_registered_despite_carrying_no_bonus_node() -> None:
+    # WP95. The row itself, and the reason it was missed: `NO_EFFECT`, not `NOT_YET_SUPPORTED`, so
+    # neither bucket above would ever have contained it and the two constants' union test passes
+    # without it. It is UI-reachable (WP42's full-catalog picker) and costs a full Essence point at
+    # rating 1, which is what makes the silence expensive.
+    entries = {e.name: e for e in CYBERWARE_ENTRIES}
+    control_rig = entries["Control Rig"]
+    assert control_rig.bonus_support is BonusSupport.NO_EFFECT
+    assert control_rig.raw_bonus is None
+    assert control_rig.unmodeled_effect_note
+    # Not a remainder: nothing of its effect is applied, so it must not claim otherwise.
+    assert "modeled" not in control_rig.unmodeled_effect_note
+    assert not FULLY_UNMODELED_WITHOUT_A_BONUS_NODE & (
+        REGISTERED_UNMODELED | MODELED_BUT_UNCLASSIFIED | PARTLY_MODELED_WITH_NOTES
+    )
 
 
 def test_no_bioware_row_carries_a_note_and_reflex_recorder_is_modeled_instead() -> None:

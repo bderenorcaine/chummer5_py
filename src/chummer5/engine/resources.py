@@ -296,6 +296,7 @@ class StarterGearItem:
     firewall: int | None = None
     programs: int | None = None
     attribute_array: tuple[int, ...] | None = None
+    unmodeled_effect_note: str | None = None
 
 
 def _availability_capped_max_rating(rating_gear: RatingGear) -> int:
@@ -422,6 +423,7 @@ def build_starter_gear_catalog(
                 firewall=g.firewall,
                 programs=g.programs,
                 attribute_array=g.attribute_array,
+                unmodeled_effect_note=g.unmodeled_effect_note,
             )
         )
     for a in armor:
@@ -449,6 +451,7 @@ def build_starter_gear_catalog(
                 category=rg.category,
                 cost_per_rating=rg.cost_per_rating,
                 max_rating=offered_max,
+                unmodeled_effect_note=rg.unmodeled_effect_note,
             )
         )
 
