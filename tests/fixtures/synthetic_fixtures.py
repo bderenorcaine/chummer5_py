@@ -4,7 +4,10 @@ Each fixture is a `SyntheticCharacter` (see `synthetic.py`) whose `expected` val
 from the rulebook / `priorities.xml` / legacy C#, with an inline `citations` entry for every one.
 WP72 landed the substrate plus the reference fixture below; WP73-76 appended their
 interaction-covering fixtures here (cyberware/bioware, magician+cyberware, leftover-Karma,
-Sum-to-Ten) as they extended the harness.
+Sum-to-Ten) as they extended the harness. WP88 added a fixture transcribed from a player's own save
+file rather than designed from a gap, and WP96 — the first one authored from *outside* Phase S, once
+Phase P had shipped rigger support — added the vehicle/drone rigger the roster had always recorded
+as missing.
 
 The fixtures double as **playable Shadowrun characters** — legal, fully-spent builds with
 a name and concept, not degenerate test artifacts — so a reader can pick one up as a real runner.
@@ -12,7 +15,8 @@ More than that, the set is authored as **one coherent runner team** (see `phase-
 §5 for the full roster): WP72's Cheshire is the Infiltrator; WP73-76 fill the Street Samurai, Combat
 Mage, Shaman Face, and Decker roles — each archetype chosen to fit the mechanic its WP already has
 to test, and to cover a gap the others leave (the Decker covers the Matrix, which Cheshire's
-Simsense Vertigo keeps her out of; the Face covers social, which her CHA 2 doesn't).
+Simsense Vertigo keeps her out of; the Face covers social, which her CHA 2 doesn't). WP88's Tithe
+and WP96's Belfry complete the team as its wetwork specialist and its rigger.
 That deliberately costs nothing in test rigour: a *fully*-spent budget exercises the engine's
 validators harder than a half-empty one, and a coherent character naturally touches more interaction
 paths (a skill boosted by a quality, a group rating capped by another quality's bonus, a Limit
@@ -59,6 +63,12 @@ All figures below are cross-checked as follows:
   rulebook — Sum-to-Ten is legacy-Chummer/errata content with **zero** core-rulebook hits (WP44's
   research, `learnings.md`). Everything downstream of the letters is the same `priorities.xml` data
   the Priority fixtures above read.
+- Vehicles/drones and the Matrix stat block (WP96, `chummer5.engine.vehicles`/`chummer5.data.gear`):
+  every printed stat is cross-checked against the four vehicle tables and the three
+  console/commlink/deck tables transcribed in `spec/rulebooks/vehicles_and_riggers_chapter.md` §6
+  (which WP91/WP94 already assert row-by-row from the catalog side). The one derived figure is the
+  Condition Monitor — `12 + ceil(Body/2)`, or `6 + ceil(Body/2)` for a drone (p. 199), already
+  extracted in `spec/rulebooks/learnings/phase-p.md` (WP90). No new PDF pass.
 """
 
 from __future__ import annotations
@@ -1704,6 +1714,535 @@ WETWORK_FIXTURE = SyntheticCharacter(
 )
 
 
+# ==================================================================================================
+# WP96 -- Halla "Belfry" Ødegård, troll rigger (Priority B/D/C/A, Talent forced to E)
+#
+# Closes Phase S §5's own recorded roster gap ("**Known gap: no Rigger** -- deliberate, since
+# rigger support (Phase P) isn't built ... not a hole to plug until Phase P lands"). Phase P has
+# now landed (WP90-95), so this is the fixture that gap was waiting for, and it is the first one
+# authored against a *shipped subsystem* rather than against a coverage-gap inventory.
+#
+# What it exercises that no other fixture can:
+#   - **Vehicles and drones at all** (WP92/WP93). Ten purchases across two vehicles and eight
+#     drones, including three repeated catalog rows -- the "repeats are legal" rule
+#     `create_vehicle_selection` inherits from `gear_names` rather than from the qualities/foci
+#     "can't pick twice" one. Both Condition Monitor formulas are asserted (p. 199): the vehicle's
+#     `12 + ceil(Body/2)` on the Step-Van (Body 16 -> 20) and the drone's `6 + ceil(Body/2)` on the
+#     Kanmushi, whose printed **Body 0** makes it the boundary case of that formula (6 + 0 = 6).
+#   - **The Matrix stat block on a real character** (WP94's §3 half). The Proteus Poseidon RCC and
+#     the Transys Avalon commlink are asserted through `gear:<Name>:*`, so the numbers WP94 started
+#     loading and rendering are pinned by a character and not only by a catalog test.
+#   - **A Control Rig, and an Essence that is exactly an integer.** Rating 2 costs `Rating * 1` = a
+#     flat 2.00 Essence, so Essence lands on **exactly 4**, the one shape `ceil(Essence)` has never
+#     been asserted in (6.0/2.4/5.7/5.3/0.10 are the set's other five). Its bundled Datajack is
+#     installed free by the engine and is deliberately *not* declared -- see `CyberwarePick`.
+#   - **A five-way Step Six ledger.** gear + Rating-priced gear + Lifestyle + cyberware + vehicles,
+#     which is the full sequence `build_character` documents; Tithe (WP88) reached four of the five.
+#   - **Bilingual**, and therefore a `native_language_limit` of **2** with two native languages
+#     actually declared. `build_synthetic()` has resolved Knowledge *after* qualities since WP87
+#     precisely so that Improvement is on the index in time, and until now nothing tested it.
+#   - **Troll**, the one SR5-core metatype the set was missing, and with it the first metatype whose
+#     *minimums* exceed 1 (BOD 5 / STR 5, bought with zero points) and whose Mental maximums are 5
+#     rather than 6.
+#
+# CONCEPT (flavor; not engine-modeled except where an assertion below says so)
+# ------------------------------------------------------------------------------------------------
+# Team role: the Rigger (see phase-s-test-fixtures.md §5) -- the eyes above the street and the ride
+# out. She is the reason Cheshire knows what's on the far side of the door before she opens it.
+#
+# A troll who never gets out of the van, on the entirely practical grounds that she does not fit
+# through most of the doors the team uses. So she sends something that does: a stepped-down swarm
+# of eight drones flown off a Proteus Poseidon, and an autogyro on a rooftop somewhere for when the
+# job ends badly. She is enormous and gentle and has no small talk whatsoever (CHA 1, Social
+# Stress), and her hands shake badly enough that she would rather shoot through a gun bolted to a
+# drone than one held in her own fingers (Unsteady Hands) -- which is, conveniently, the whole
+# rigger thesis. Lone Star has a jacket on her under a name she doesn't use any more.
+#
+#   Handle: Belfry     Metatype: Troll (mundane)     Pronouns: she/her
+#   Loadout (Resources A, 450,000¥ -- fully engine-modeled here, unlike WP72-76's prose loadouts):
+#     a GMC Bulldog Step-Van as home, office and hangar; a Northrup Wasp autogyro; two Steel Lynx
+#     gun platforms, a Lockheed Optic-X2, two Roto-drones, two Fly-Spies and a Kanmushi; a Proteus
+#     Poseidon RCC, a Transys Avalon, five autosofts and a Rating-4 fake SIN. Contacts: a
+#     chop-shop fixer (Connection 3 / Loyalty 2) and an ex-Ares drone tech (Connection 2 /
+#     Loyalty 3).
+#
+# BUILD (all engine-modeled and asserted)
+# ------------------------------------------------------------------------------------------------
+# Priorities -- Resources A / Heritage B / Skills C / Attributes D, Talent forced to E (mundane).
+#   **Resources A and Attributes D are both firsts for this set**, and they are the same decision:
+#   a rigger's competence is bought, not rolled, so the money letter goes to the top and the
+#   attribute letter to the bottom. Troll is only offered at Heritage A or B, which fixes Heritage
+#   at B here (A is spoken for by Resources) and therefore fixes her special-attribute-point budget
+#   at **0** -- Edge sits on the Troll floor of 1 and nothing can lift it.
+#
+# Attributes -- 14/14 primary points, 0/0 special. Troll's floors (BOD 5, STR 5) are taken for free
+#   and left there, so she is naturally huge without being the muscle: Rebar's BOD/STR 6 is still
+#   the team's peak. Exactly one attribute sits at its natural maximum (REA 6), per Step Two.
+#     BOD +0=5, AGI +2=3, REA +5=6, STR +0=5, CHA +0=1, INT +3=4, LOG +3=4, WIL +1=2   (sum 14)
+#     EDG +0=1
+#
+# Skills -- Skills C = 28 skill + 2 group points, ALL spent.
+#   Engineering group = 2 -> Aeronautics/Automotive/Industrial/Nautical Mechanic all at 2. Nobody
+#     else on the team has this group; the Decker took Electronics.
+#   Individual: Pilot Aircraft 6 (+"Remote Operation" specialization, 1 pt), Pilot Ground Craft 5,
+#     Gunnery 5, Electronic Warfare 4, Perception 3, Computer 2, Sneaking 1, Etiquette 1
+#     = 27 points + 1 specialization = 28 (fully spent); group points: 2.
+#
+# Qualities -- Positive 24 of the 25 cap (Gearhead 11 + Indomitable (Mental) 8 + Bilingual 5);
+#   Negative 25 of 25, hitting the cap exactly (Unsteady Hands 7 + Social Stress 8 + SINner
+#   (Criminal) 10). Net karma **-1**, i.e. the qualities *fund* a point, so her Step Seven pool is
+#   26 rather than 25.
+#
+# Step Six -- gear ¥74,745 + Rating-priced gear ¥22,000 + Lifestyle (Medium x 9 months) ¥45,000 +
+#   cyberware ¥97,000 + vehicles ¥207,000 = ¥445,745 of ¥450,000, leaving ¥4,255 -- inside p. 94's
+#   "5,000 nuyen or less" carry-over allowance. No Karma-to-Nuyen conversion: every point of Karma
+#   is spoken for below.
+#
+# Step Seven -- 26 Karma, all 26 spent: contacts 7 (10 points against a CHA-1 budget of 3, the
+#   smallest free contact budget in the set), Gunnery 5 -> 6 for 12 (`new Rating x 2`, landing on
+#   `MAX_SKILL_RATING_CREATE` and breaking nothing, since Gunnery belongs to no skill group at
+#   all), and 7 on Knowledge (Aircraft Design 2 -> 3 for 3, Smuggling Routes 3 -> 4 for 4).
+# ==================================================================================================
+
+RIGGER_FIXTURE = SyntheticCharacter(
+    name='Halla "Belfry" Ødegård — troll rigger (WP96)',
+    metatype="Troll",
+    heritage_letter="B",
+    attributes_letter="D",
+    skills_letter="C",
+    resources_letter="A",
+    # BOD and STR are absent, not zero-valued: Troll's floors of 5 are free, and every one of the
+    # 14 points goes to the rigger attributes instead.
+    attribute_points={"AGI": 2, "REA": 5, "INT": 3, "LOG": 3, "WIL": 1},
+    skill_points={
+        "Pilot Aircraft": 6,
+        "Pilot Ground Craft": 5,
+        "Gunnery": 5,
+        "Electronic Warfare": 4,
+        "Perception": 3,
+        "Computer": 2,
+        "Sneaking": 1,
+        "Etiquette": 1,
+    },
+    group_points={"Engineering": 2},
+    specializations={"Pilot Aircraft": "Remote Operation"},
+    qualities=(
+        "Gearhead",
+        "Indomitable (Mental)",
+        "Bilingual",
+        "Unsteady Hands",
+        "Social Stress",
+        "SINner (Criminal)",
+    ),
+    quality_text={
+        "Social Stress": "Freezes solid when more than three people look at her at once",
+        "SINner (Criminal)": "Halla Ødegård — Lone Star, grand theft auto (vehicular), Seattle",
+    },
+    contacts=(
+        Contact(name="Sixpence", connection=3, loyalty=2),
+        Contact(name="Ratchet", connection=2, loyalty=3),
+    ),
+    cyberware=(CyberwarePick("Control Rig", rating=2),),
+    gear=(
+        "Proteus Poseidon",
+        "Transys Avalon",
+        "Armor Jacket",
+        "Ares Predator V",
+        "Ammo: Regular Ammo",
+    ),
+    rating_gear=(
+        ("Clearsight Autosoft", 6),
+        ("[Model] Maneuvering Autosoft", 6),
+        ("[Model] Evasion Autosoft", 6),
+        ("[Weapon] Targeting Autosoft", 6),
+        ("Fake SIN", 4),
+    ),
+    lifestyle=("Medium", 9),
+    vehicles=(
+        "GMC Bulldog Step-Van (Van)",
+        "Northrup Wasp (Autogyro)",
+        # Repeats are legal and mean quantity -- three catalog rows appear twice here.
+        "Steel Lynx Combat Drone (Large)",
+        "Steel Lynx Combat Drone (Large)",
+        "Lockheed Optic-X2 (Small)",
+        "MCT-Nissan Roto-drone (Medium)",
+        "MCT-Nissan Roto-drone (Medium)",
+        "MCT Fly-Spy (Minidrone)",
+        "MCT Fly-Spy (Minidrone)",
+        "Shiawase Kanmushi (Microdrone)",
+    ),
+    knowledge_skills=(
+        KnowledgeSkillPick(name="Drone Models", category="Professional", rating=4),
+        KnowledgeSkillPick(name="Area Knowledge (Seattle)", category="Street", rating=4),
+        KnowledgeSkillPick(name="Smuggling Routes", category="Street", rating=3),
+        KnowledgeSkillPick(name="Aircraft Design", category="Academic", rating=2),
+    ),
+    languages=(
+        # Two natives, which only Bilingual's NATIVE_LANGUAGE_LIMIT Improvement makes legal.
+        LanguageSkillPick(name="English", rating=0, native=True),
+        LanguageSkillPick(name="Or'zet", rating=0, native=True),
+        LanguageSkillPick(name="Sperethiel", rating=3, native=False),
+    ),
+    karma_skill_points={"Gunnery": 1},
+    karma_knowledge_points={"Aircraft Design": 1, "Smuggling Routes": 1},
+    expected={
+        "attr:BOD": 5,
+        "attr:AGI": 3,
+        "attr:REA": 6,
+        "attr:STR": 5,
+        "attr:CHA": 1,
+        "attr:INT": 4,
+        "attr:LOG": 4,
+        "attr:WIL": 2,
+        "attr:EDG": 1,
+        "rating:Gunnery": 6,
+        "rating:Aeronautics Mechanic": 2,
+        "rating:Automotive Mechanic": 2,
+        "rating:Industrial Mechanic": 2,
+        "rating:Nautical Mechanic": 2,
+        "pool:Pilot Aircraft": 14,
+        "pool:Pilot Ground Craft": 11,
+        "pool:Gunnery": 9,
+        "pool:Electronic Warfare": 8,
+        "pool:Perception": 7,
+        "pool:Computer": 6,
+        "pool:Sneaking": 4,
+        "pool:Etiquette": 2,
+        "pool:Aeronautics Mechanic": 6,
+        "pool:Automotive Mechanic": 6,
+        "initiative": 10,
+        "initiative_dice": 1,
+        "limit:physical": 7,
+        "limit:mental": 6,
+        "limit:social": 3,
+        "cm:physical": 11,
+        "cm:stun": 9,
+        "essence": Decimal("4"),
+        "cyberware:essence_spent": Decimal("2"),
+        "cyberware:nuyen_spent": 97000,
+        # The five-way Step Six ledger.
+        "nuyen:budget": 450000,
+        "nuyen:available": 450000,
+        "nuyen:gear_spent": 96745,
+        "nuyen:lifestyle_cost": 45000,
+        "vehicles:nuyen_spent": 207000,
+        "nuyen:remaining": 4255,
+        "vehicles:count": 10,
+        # The vehicle half of the stat block WP93 renders, printed-table-for-printed-table.
+        "vehicle:GMC Bulldog Step-Van (Van):handling": 3,
+        "vehicle:GMC Bulldog Step-Van (Van):handling_offroad": 3,
+        "vehicle:GMC Bulldog Step-Van (Van):speed": 3,
+        "vehicle:GMC Bulldog Step-Van (Van):acceleration": 1,
+        "vehicle:GMC Bulldog Step-Van (Van):body": 16,
+        "vehicle:GMC Bulldog Step-Van (Van):armor": 12,
+        "vehicle:GMC Bulldog Step-Van (Van):pilot": 1,
+        "vehicle:GMC Bulldog Step-Van (Van):sensor": 2,
+        "vehicle:GMC Bulldog Step-Van (Van):seats": 6,
+        "vehicle:GMC Bulldog Step-Van (Van):is_drone": False,
+        "vehicle:GMC Bulldog Step-Van (Van):condition_monitor": 20,
+        "vehicle:Northrup Wasp (Autogyro):body": 10,
+        "vehicle:Northrup Wasp (Autogyro):condition_monitor": 17,
+        # ... and the drone half, where the constant is 6 rather than 12.
+        "vehicle:Steel Lynx Combat Drone (Large):body": 6,
+        "vehicle:Steel Lynx Combat Drone (Large):armor": 12,
+        "vehicle:Steel Lynx Combat Drone (Large):seats": None,
+        "vehicle:Steel Lynx Combat Drone (Large):is_drone": True,
+        "vehicle:Steel Lynx Combat Drone (Large):condition_monitor": 9,
+        "vehicle:Lockheed Optic-X2 (Small):condition_monitor": 7,
+        "vehicle:MCT-Nissan Roto-drone (Medium):condition_monitor": 8,
+        "vehicle:MCT Fly-Spy (Minidrone):body": 1,
+        "vehicle:MCT Fly-Spy (Minidrone):condition_monitor": 7,
+        "vehicle:Shiawase Kanmushi (Microdrone):body": 0,
+        "vehicle:Shiawase Kanmushi (Microdrone):condition_monitor": 6,
+        # The Matrix stat block, on a character rather than in a catalog test.
+        "gear:Proteus Poseidon:cost": 68000,
+        "gear:Proteus Poseidon:device_rating": 5,
+        "gear:Proteus Poseidon:data_processing": 5,
+        "gear:Proteus Poseidon:firewall": 6,
+        "gear:Proteus Poseidon:programs": 5,
+        "gear:Transys Avalon:device_rating": 6,
+        "gear:Transys Avalon:data_processing": 6,
+        "gear:Transys Avalon:firewall": 6,
+        "contacts:free_points": 3,
+        "contacts:points_spent": 10,
+        "contacts:karma_cost": 7,
+        "knowledge:free_points": 16,
+        "knowledge:points_spent": 16,
+        "knowledge:native_language_limit": 2,
+        "knowledge:pool:Drone Models": 8,
+        "knowledge:pool:Area Knowledge (Seattle)": 8,
+        "knowledge:pool:Smuggling Routes": 8,
+        "knowledge:pool:Aircraft Design": 7,
+        "languages:pool:Sperethiel": 7,
+        "karma_skill:karma_cost": 12,
+        "karma_skill:broken_groups": frozenset(),
+        "karma_knowledge:karma_cost": 7,
+        "karma_spent": 25,
+        "karma_remaining": 0,
+        # Everything this character's sheet lists as an unmodeled real effect. Nineteen rows, of
+        # which the Control Rig, the RCC, the commlink, the four autosofts, the six distinct
+        # vehicle/drone rows and Gearhead are precisely Phase P's own registry surface (WP95).
+        "unmodeled_notes:names": frozenset(
+            {
+                "Thermographic Vision",
+                "Gearhead",
+                "Unsteady Hands",
+                "Social Stress",
+                "SINner (Criminal)",
+                "Control Rig",
+                "Proteus Poseidon",
+                "Transys Avalon",
+                "Clearsight Autosoft",
+                "[Model] Maneuvering Autosoft",
+                "[Model] Evasion Autosoft",
+                "[Weapon] Targeting Autosoft",
+                "GMC Bulldog Step-Van (Van)",
+                "Northrup Wasp (Autogyro)",
+                "Steel Lynx Combat Drone (Large)",
+                "Lockheed Optic-X2 (Small)",
+                "MCT-Nissan Roto-drone (Medium)",
+                "MCT Fly-Spy (Minidrone)",
+                "Shiawase Kanmushi (Microdrone)",
+            }
+        ),
+    },
+    citations={
+        "attr:BOD": (
+            "priorities.xml Attributes D = 14 pts; metatypes.xml Troll BOD minimum 5 (+0) — the "
+            "first fixture whose metatype floor is above 1, so this costs nothing"
+        ),
+        "attr:AGI": "priorities.xml Attributes D; Troll AGI min 1 (+2); Troll AGI maximum 5",
+        "attr:REA": (
+            "priorities.xml Attributes D; Troll REA min 1 (+5) = natural maximum 6 — the one "
+            "attribute at its natural maximum, per Step Two (p. 65)"
+        ),
+        "attr:STR": "priorities.xml Attributes D; Troll STR minimum 5 (+0)",
+        "attr:CHA": "priorities.xml Attributes D; Troll CHA min 1 (+0); Troll CHA maximum 4",
+        "attr:INT": "priorities.xml Attributes D; Troll INT min 1 (+3); Troll INT maximum 5",
+        "attr:LOG": "priorities.xml Attributes D; Troll LOG min 1 (+3); Troll LOG maximum 5",
+        "attr:WIL": "priorities.xml Attributes D; Troll WIL min 1 (+1)",
+        "attr:EDG": (
+            "priorities.xml Heritage B/Troll = 0 special attribute points (Troll is offered at "
+            "Heritage A and B only, and A is taken by Resources here); Troll EDG minimum 1 (+0)"
+        ),
+        "rating:Gunnery": (
+            "Skills C skill pts 5, +1 Karma point (skills.py create_karma_skill_selection) = 6 = "
+            "MAX_SKILL_RATING_CREATE"
+        ),
+        "rating:Aeronautics Mechanic": "Skills C group pts; Engineering group 2",
+        "rating:Automotive Mechanic": "Skills C group pts; Engineering group 2 (proves the group)",
+        "rating:Industrial Mechanic": "Skills C group pts; Engineering group 2 (proves the group)",
+        "rating:Nautical Mechanic": "Skills C group pts; Engineering group 2 (proves the group)",
+        "pool:Pilot Aircraft": (
+            "learnings/phase-d.md (dice pool): rating 6 + REA 6 + 2 specialization "
+            "'Remote Operation' (skills.xml lists it for every Pilot skill — it is what a rigger "
+            "flying a drone is actually rolling)"
+        ),
+        "pool:Pilot Ground Craft": "learnings/phase-d.md: rating 5 + REA 6",
+        "pool:Gunnery": "learnings/phase-d.md: rating 6 + AGI 3 (Gunnery is AGI-linked)",
+        "pool:Electronic Warfare": "learnings/phase-d.md: rating 4 + LOG 4",
+        "pool:Perception": "learnings/phase-d.md: rating 3 + INT 4",
+        "pool:Computer": "learnings/phase-d.md: rating 2 + LOG 4",
+        "pool:Sneaking": "learnings/phase-d.md: rating 1 + AGI 3",
+        "pool:Etiquette": "learnings/phase-d.md: rating 1 + CHA 1 (the set's lowest social pool)",
+        "pool:Aeronautics Mechanic": "learnings/phase-d.md: group rating 2 + LOG 4",
+        "pool:Automotive Mechanic": "learnings/phase-d.md: group rating 2 + LOG 4",
+        "initiative": "learnings/phase-d.md (Character.cs InitiativeValue): REA 6 + INT 4",
+        "initiative_dice": (
+            "learnings/phase-d.md: base 1 — a Control Rig grants no Initiative Dice (its whole "
+            "printed effect is device-side, p. 266), unlike WP88's Wired Reflexes"
+        ),
+        "limit:physical": (
+            "learnings/phase-d.md LimitPhysical: ceil((STR*2+BOD+REA)/3) = ceil((10+5+6)/3) = 7"
+        ),
+        "limit:mental": (
+            "learnings/phase-d.md LimitMental: ceil((LOG*2+INT+WIL)/3) = ceil((8+4+2)/3) = 5, "
+            "+1 Indomitable (Mental) (qualities.xml FLAT_BONUS mental_limit)"
+        ),
+        "limit:social": (
+            "learnings/phase-d.md LimitSocial: ceil((CHA*2+WIL+ceil ESS)/3) = ceil((2+2+4)/3) = 3. "
+            "Essence is exactly 4, so ceil() is the identity here — the one Essence shape no other "
+            "fixture has (6.0 uncybered, or 2.4/5.7/5.3/0.10 fractional)"
+        ),
+        "cm:physical": "learnings/phase-d.md (PhysicalCM): 8 + ceil(BOD 5/2) = 8 + 3",
+        "cm:stun": "learnings/phase-d.md (StunCM): 8 + ceil(WIL 2/2) = 8 + 1",
+        "essence": "derived.py essence = BASE_ESSENCE 6 - 2 = exactly 4",
+        "cyberware:essence_spent": (
+            "cyberware.xml Control Rig <ess>Rating * 1 at rating 2 = 2.00. Its bundled Datajack "
+            "(<bundled_subsystem_names>) is installed free by the engine at 0 Essence and 0¥, and "
+            "must not be declared by the fixture — see CyberwarePick's docstring"
+        ),
+        "cyberware:nuyen_spent": (
+            "cyberware.xml Control Rig <cost>FixedValues(43000,97000,208000)[r2] = 97000; "
+            "<avail>(Rating * 5)R = 10R at rating 2, inside the Availability <= 12 ruling"
+        ),
+        "nuyen:budget": (
+            "priorities.xml Resources A = 450000 — the first fixture to take Resources A"
+        ),
+        "nuyen:available": (
+            "resources.py available_nuyen: 450000 + karma_to_nuyen(0) — no conversion, since every "
+            "Karma point is spent on contacts/skills/knowledge below"
+        ),
+        "nuyen:gear_spent": (
+            "gear.xml <cost>: Proteus Poseidon 68000 + Transys Avalon 5000 + Armor Jacket 1000 + "
+            "Ares Predator V 725 + Ammo: Regular Ammo 20 = 74745, + Rating-priced (WP66) four "
+            "autosofts at rating 6 x 500/rating = 12000 and a Fake SIN at rating 4 x 2500/rating = "
+            "10000 = 96745"
+        ),
+        "nuyen:lifestyle_cost": (
+            "lifestyles.xml Medium 5000/month x 9 months (engine/lifestyle.py total_cost; WP20's "
+            "1-100 month range) — she pays the garage's lease through the year"
+        ),
+        "vehicles:nuyen_spent": (
+            "vehicles.xml <cost>, all cross-checked against the printed tables transcribed in "
+            "vehicles_and_riggers_chapter.md §6: Bulldog 35000 + Wasp 86000 + 2x Steel Lynx 50000 "
+            "+ Optic-X2 21000 + 2x Roto-drone 10000 + 2x Fly-Spy 4000 + Kanmushi 1000 = 207000"
+        ),
+        "nuyen:remaining": (
+            "450000 - 96745 gear - 45000 Lifestyle - 97000 cyberware - 207000 vehicles = 4255, "
+            "within p. 94's 'and any nuyen you have left over, up to a maximum of 5,000' allowance"
+        ),
+        "vehicles:count": (
+            "ten purchases, three of the seven distinct rows bought twice — repeats are legal and "
+            "mean quantity (engine/vehicles.py, following gear_names rather than foci/qualities)"
+        ),
+        "vehicle:GMC Bulldog Step-Van (Van):handling": (
+            "p. 463 GROUND CRAFT: GMC Bulldog, Handl 3/3 (on-road/off-road, split by the WP91 "
+            "loader rather than propagated as the XML's '3/3' string)"
+        ),
+        "vehicle:GMC Bulldog Step-Van (Van):handling_offroad": "p. 463: GMC Bulldog, Handl 3/3",
+        "vehicle:GMC Bulldog Step-Van (Van):speed": "p. 463: GMC Bulldog, Speed 3",
+        "vehicle:GMC Bulldog Step-Van (Van):acceleration": "p. 463: GMC Bulldog, Accel 1",
+        "vehicle:GMC Bulldog Step-Van (Van):body": "p. 463: GMC Bulldog, Body 16",
+        "vehicle:GMC Bulldog Step-Van (Van):armor": "p. 463: GMC Bulldog, Armor 12",
+        "vehicle:GMC Bulldog Step-Van (Van):pilot": "p. 463: GMC Bulldog, Pilot 1",
+        "vehicle:GMC Bulldog Step-Van (Van):sensor": "p. 463: GMC Bulldog, Sensor 2",
+        "vehicle:GMC Bulldog Step-Van (Van):seats": "p. 463: GMC Bulldog, Seats 6",
+        "vehicle:GMC Bulldog Step-Van (Van):is_drone": (
+            "vehicles.xml category 'Trucks' — not one of the 'Drones: *' categories WP91 derives "
+            "is_drone from, which is what selects the 12-based Condition Monitor below"
+        ),
+        "vehicle:GMC Bulldog Step-Van (Van):condition_monitor": (
+            "p. 199: a vehicle's Condition Monitor is 12 + ceil(Body/2) = 12 + ceil(16/2) = 20 "
+            "(engine/vehicles.py condition_monitor)"
+        ),
+        "vehicle:Northrup Wasp (Autogyro):body": "p. 465 AIRCRAFT: Northrup Wasp, Body 10",
+        "vehicle:Northrup Wasp (Autogyro):condition_monitor": (
+            "p. 199: 12 + ceil(10/2) = 17 — an odd-Body-half case, unlike the Bulldog's even 16"
+        ),
+        "vehicle:Steel Lynx Combat Drone (Large):body": "p. 466 DRONES: Steel Lynx, Body 6",
+        "vehicle:Steel Lynx Combat Drone (Large):armor": "p. 466: Steel Lynx, Armor 12",
+        "vehicle:Steel Lynx Combat Drone (Large):seats": (
+            "p. 466: drones print no Seating ('—'), which WP91 loads as None rather than 0"
+        ),
+        "vehicle:Steel Lynx Combat Drone (Large):is_drone": (
+            "vehicles.xml category 'Drones: Large' — WP91 derives is_drone from the 'Drones: *' "
+            "categories, and it is what picks the 6-based Condition Monitor"
+        ),
+        "vehicle:Steel Lynx Combat Drone (Large):condition_monitor": (
+            "p. 199: a drone's Condition Monitor is 6 + ceil(Body/2) = 6 + ceil(6/2) = 9"
+        ),
+        "vehicle:Lockheed Optic-X2 (Small):condition_monitor": (
+            "p. 199 / p. 466: 6 + ceil(2/2) = 7 (Body 2)"
+        ),
+        "vehicle:MCT-Nissan Roto-drone (Medium):condition_monitor": (
+            "p. 199 / p. 466: 6 + ceil(4/2) = 8 (Body 4)"
+        ),
+        "vehicle:MCT Fly-Spy (Minidrone):body": "p. 466 DRONES: MCT Fly-Spy, Body 1",
+        "vehicle:MCT Fly-Spy (Minidrone):condition_monitor": (
+            "p. 199: 6 + ceil(1/2) = 7 — the rounding-up half of the formula, on an odd Body of 1"
+        ),
+        "vehicle:Shiawase Kanmushi (Microdrone):body": "p. 466 DRONES: Shiawase Kanmushi, Body 0",
+        "vehicle:Shiawase Kanmushi (Microdrone):condition_monitor": (
+            "p. 199: 6 + ceil(0/2) = 6 — the boundary of the formula, the only printed SR5 row "
+            "with Body 0 (shared with the S-B Microskimmer)"
+        ),
+        "gear:Proteus Poseidon:cost": "p. 267 Command Console Table: Proteus Poseidon, 68,000¥",
+        "gear:Proteus Poseidon:device_rating": (
+            "p. 267: Proteus Poseidon, Device Rating 5 (WP94 loads and renders it; nothing "
+            "downstream consumes it — this project has no Matrix rules)"
+        ),
+        "gear:Proteus Poseidon:data_processing": "p. 267: Proteus Poseidon, Data Processing 5",
+        "gear:Proteus Poseidon:firewall": (
+            "p. 267: Proteus Poseidon, Firewall 6. Its Availability is 12R, exactly on the "
+            "Availability <= 12 cap WP94 applied to this category"
+        ),
+        "gear:Proteus Poseidon:programs": (
+            "gear.xml <programs>5 — loaded but deliberately *not* rendered, since SR5 core prints "
+            "no program-slot count for an RCC anywhere (WP94, decisions-log 2026-08-24). Asserted "
+            "here so the loader's value can't drift unnoticed while it stays off the sheet"
+        ),
+        "gear:Transys Avalon:device_rating": "p. 438 Commlinks: Transys Avalon, Device Rating 6",
+        "gear:Transys Avalon:data_processing": (
+            "p. 226: a commlink's Data Processing and Firewall both equal its Device Rating — the "
+            "reason WP94's renderer prints only those two for this category"
+        ),
+        "gear:Transys Avalon:firewall": "p. 226/438: Firewall = Device Rating 6",
+        "contacts:free_points": (
+            "resources.py FREE_CONTACT_POINTS_PER_CHARISMA 3 x natural CHA 1 = 3, the smallest "
+            "free contact budget in the fixture set (p. 95)"
+        ),
+        "contacts:points_spent": (
+            "Contact.points = Connection + Loyalty: Sixpence 3+2 = 5, Ratchet 2+3 = 5"
+        ),
+        "contacts:karma_cost": (
+            "KARMA_PER_EXCESS_CONTACT_POINT 1 x (10 spent - 3 free) = 7 (p. 98's contact table)"
+        ),
+        "knowledge:free_points": (
+            "knowledge.py free_knowledge_points: (natural INT 4 + natural LOG 4) x 2 = 16 (p. 95)"
+        ),
+        "knowledge:points_spent": (
+            "4 + 4 + 3 + 2 on Knowledge skills and 3 on Sperethiel = 16, spent to the pin; the two "
+            "native languages cost 0 (knowledge.py)"
+        ),
+        "knowledge:native_language_limit": (
+            "knowledge.py BASE_NATIVE_LANGUAGE_LIMIT 1, +1 Bilingual (qualities.xml FLAT_BONUS "
+            "native_language_limit) = 2 — the first fixture to buy Bilingual, and therefore the "
+            "first to prove build_synthetic() resolves Knowledge *after* quality Improvements"
+        ),
+        "knowledge:pool:Drone Models": (
+            "knowledge.py knowledge_dice_pool: rating 4 + LOG 4 (Professional links to LOG, p. 89)"
+        ),
+        "knowledge:pool:Area Knowledge (Seattle)": "rating 4 + INT 4 (Street links to INT, p. 89)",
+        "knowledge:pool:Smuggling Routes": (
+            "rating 3 + 1 Karma point + INT 4 (Street links to INT, p. 89)"
+        ),
+        "knowledge:pool:Aircraft Design": (
+            "rating 2 + 1 Karma point + LOG 4 (Academic links to LOG, p. 89)"
+        ),
+        "languages:pool:Sperethiel": "knowledge.py language_dice_pool: rating 3 + INT 4 (p. 89)",
+        "karma_skill:karma_cost": (
+            "karma_advancement_cost: new rating 6 x ACTIVE_SKILL_KARMA_PER_RATING 2 = 12 "
+            "(p. 106-107 Character Improvement Table, learnings/phase-o.md WP53)"
+        ),
+        "karma_skill:broken_groups": (
+            "empty: Gunnery belongs to no skill group at all (skills.xml carries no <skillgroup> "
+            "for it), so raising it with Karma can break nothing — the third distinct outcome of "
+            "that rule in this set, after WP75's raise-breaks-a-group and WP88's "
+            "specialize-breaks-a-group"
+        ),
+        "karma_knowledge:karma_cost": (
+            "KARMA_KNOWLEDGE_PER_RATING 1: Aircraft Design new rating 3 + Smuggling Routes new "
+            "rating 4 = 7 (learnings/phase-o.md WP53)"
+        ),
+        "karma_spent": (
+            "p. 64 (25 Karma); qualities 24 - 25 = -1 (Negative cap 25 hit exactly) + contacts 7 "
+            "+ skills 12 + knowledge 7 = 25"
+        ),
+        "karma_remaining": (
+            "STARTING_KARMA 25 - karma_spent 25 = 0 (fully spent; the net-negative quality bill "
+            "means the pool to spend was 26, not 25)"
+        ),
+        "unmodeled_notes:names": (
+            "derived.py unmodeled_effect_notes over this character's metatype qualities, "
+            "qualities, cyberware, gear and vehicles — the hand-kept mirror of Project Overview's "
+            "'Unmodeled real effects' table (WP56/WP79/WP95). Troll's Thermographic Vision is "
+            "metatype-granted (metatypes.xml <qualities><positive>), not purchased"
+        ),
+    },
+)
+
+
 # Every synthetic fixture, for the parametrized regression test.
 SYNTHETIC_FIXTURES = (
     REFERENCE_MUNDANE_FIXTURE,
@@ -1712,4 +2251,5 @@ SYNTHETIC_FIXTURES = (
     SHAMAN_FACE_FIXTURE,
     DECKER_FIXTURE,
     WETWORK_FIXTURE,
+    RIGGER_FIXTURE,
 )

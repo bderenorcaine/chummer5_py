@@ -26,6 +26,7 @@ from tests.fixtures.synthetic_fixtures import (
     COMBAT_MAGE_FIXTURE,
     DECKER_FIXTURE,
     REFERENCE_MUNDANE_FIXTURE,
+    RIGGER_FIXTURE,
     SHAMAN_FACE_FIXTURE,
     STREET_SAMURAI_FIXTURE,
     SYNTHETIC_FIXTURES,
@@ -47,7 +48,12 @@ from chummer5.engine.build_method import (
 from chummer5.engine.knowledge import KnowledgeSkillPick, LanguageSkillPick
 from chummer5.engine.resources import Contact
 from chummer5.engine.skills import MAX_SKILL_RATING_CREATE
-from chummer5.io.save_format import build_character, from_json
+from chummer5.engine.vehicles import (
+    BASE_DRONE_CONDITION_MONITOR,
+    BASE_VEHICLE_CONDITION_MONITOR,
+    condition_monitor,
+)
+from chummer5.io.save_format import build_character, create_character_save, from_json
 
 
 @pytest.mark.parametrize("fixture", SYNTHETIC_FIXTURES, ids=lambda f: f.name)
@@ -509,3 +515,100 @@ def test_wetwork_fixture_agrees_with_the_save_file_it_was_transcribed_from() -> 
     # spends it. WP89 is why the figure is 15 and not the 19 the planning entry recorded.
     assert from_save.karma_remaining == 15
     assert from_fixture.karma_remaining == 0
+
+
+def test_rigger_fixture_asserts_both_condition_monitor_formulas_and_legal_repeats() -> None:
+    """The two things `assert_fixture`'s matching numbers can't state on their own (WP96).
+
+    First, that the vehicle and drone Condition Monitors are two *different* formulas rather than
+    one figure that happens to fit both — asserted here as the arithmetic, against the same
+    purchased rows, so the `12 +`/`6 +` split and the `ceil(Body / 2)` rounding are each visible.
+    Second, that repeats are legal and mean quantity: ten purchases over seven distinct catalog
+    rows, which is the rule `create_vehicle_selection` takes from `gear_names` rather than from the
+    qualities/foci "can't pick twice" one.
+    """
+    character = build_synthetic(RIGGER_FIXTURE)
+    assert character.metatype.name == "Troll"
+    assert character.vehicle_selection is not None
+
+    purchased = character.vehicle_selection.vehicles
+    assert len(purchased) == 10
+    assert len({vehicle.name for vehicle in purchased}) == 7
+
+    for vehicle in purchased:
+        base = BASE_DRONE_CONDITION_MONITOR if vehicle.is_drone else BASE_VEHICLE_CONDITION_MONITOR
+        expected = base + -(-vehicle.body // 2)  # ceil(Body / 2)
+        assert condition_monitor(vehicle) == expected, vehicle.name
+        assert resolve_metric(character, f"vehicle:{vehicle.name}:condition_monitor") == expected, (
+            vehicle.name
+        )
+
+    # Both halves of the split are actually present, and the drone side reaches the Body-0 floor
+    # (the only printed SR5 rows with Body 0 are the Kanmushi and the Microskimmer).
+    assert {vehicle.is_drone for vehicle in purchased} == {True, False}
+    assert min(vehicle.body for vehicle in purchased if vehicle.is_drone) == 0
+
+    # An Essence of exactly 4 — the one shape `ceil()` is the identity on, and the reason the
+    # Social limit lands on 3 rather than on a rounded-up 4.
+    assert resolve_metric(character, "essence") == Decimal("4")
+    assert resolve_metric(character, "limit:social") == 3
+
+
+def test_rigger_fixtures_vehicle_ledger_agrees_with_the_save_path() -> None:
+    """The harness resolves vehicles third among the shared-pool spenders, exactly where
+    `chummer5.io.save_format.build_character` does — proved by rebuilding the same purchase through
+    that function and comparing the bottom line, not by re-reading the harness's own comment.
+
+    A cheaper check than WP87's (there is no save file for this character) but the same argument: a
+    fixture whose budget arithmetic disagrees with the real load path proves nothing.
+    """
+    from_fixture = build_synthetic(RIGGER_FIXTURE)
+    assert from_fixture.vehicle_selection is not None
+    assert from_fixture.resources_selection is not None
+
+    skills = load_skills()
+    qualities = load_qualities()
+    by_skill_name = {skill.name: skill.id for skill in skills}
+    by_quality_name = {quality.name: quality.id for quality in qualities}
+    save = create_character_save(
+        metatype_name=RIGGER_FIXTURE.metatype,
+        heritage_letter=RIGGER_FIXTURE.heritage_letter,
+        attributes_letter=RIGGER_FIXTURE.attributes_letter,
+        attribute_points=RIGGER_FIXTURE.attribute_points,
+        skills_letter=RIGGER_FIXTURE.skills_letter,
+        skill_points={by_skill_name[n]: p for n, p in RIGGER_FIXTURE.skill_points.items()},
+        group_points=RIGGER_FIXTURE.group_points,
+        specializations={
+            by_skill_name[n]: text for n, text in RIGGER_FIXTURE.specializations.items()
+        },
+        quality_ids=[by_quality_name[n] for n in RIGGER_FIXTURE.qualities],
+        quality_text={by_quality_name[n]: text for n, text in RIGGER_FIXTURE.quality_text.items()},
+        contacts=RIGGER_FIXTURE.contacts,
+        resources_letter=RIGGER_FIXTURE.resources_letter,
+        gear_names=RIGGER_FIXTURE.gear,
+        rating_gear_picks=RIGGER_FIXTURE.rating_gear,
+        lifestyle_tier_name="Medium",
+        lifestyle_months=9,
+        cyberware_purchases=[cyberware_purchase_request(pick) for pick in RIGGER_FIXTURE.cyberware],
+        vehicle_ids=from_fixture.vehicle_selection.vehicle_ids,
+    )
+    from_save = build_character(
+        save,
+        metatypes=load_metatypes(),
+        priorities=load_priorities(),
+        skills=skills,
+        qualities=qualities,
+        lifestyles=load_lifestyles(),
+        cyberware=load_cyberware_entries(),
+    )
+
+    assert from_save.vehicle_selection is not None
+    assert from_save.resources_selection is not None
+    assert from_save.vehicle_selection.vehicle_ids == from_fixture.vehicle_selection.vehicle_ids
+    assert from_save.vehicle_selection.nuyen_spent == 207000
+    assert from_save.resources_selection.vehicle_cost == 207000
+    assert (
+        from_save.resources_selection.nuyen_remaining
+        == from_fixture.resources_selection.nuyen_remaining
+        == 4255
+    )

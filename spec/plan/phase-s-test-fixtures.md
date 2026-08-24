@@ -264,17 +264,20 @@ player-authored character that arrived from outside the plan — see §6.)*
 
 ## 5. Team roster — the fixtures mesh as one shadowrunning team
 
-The five synthetic fixtures are deliberately authored as **one coherent runner team**, not five
+The synthetic fixtures are deliberately authored as **one coherent runner team**, not a handful of
 unrelated characters. This costs nothing in coverage — each character's archetype is chosen to *fit*
 the mechanic its WP already has to test (a cyberware+bioware build is naturally a Street Samurai; an
 Essence-losing magician is a Combat Mage; a leftover-Karma-on-a-spell build is a second, social
-magician; a Sum-to-Ten cyberware build is a Decker) — while making the set legible and fun to pick up
+magician; a Sum-to-Ten cyberware build is a Decker; a vehicle/drone build is a Rigger) — while making
+the set legible and fun to pick up
 as a table-ready party. A future reader who wants "a team" has one; a WP author who wants "the fixture
 that tests X" still has that too.
 
-All six are now authored, so the "Metatype" column below records what each fixture actually took.
+All seven are now authored, so the "Metatype" column below records what each fixture actually took.
 WP88's own runner joined from outside this design (§6) rather than being scoped from a gap, which is
 why his row is the only one whose "Covers" column reads as a loadout rather than a role brief.
+WP96's joined from outside this *phase* — it was written in Phase P, once rigger support existed for
+a rigger to exercise, closing the gap the paragraph below used to record.
 
 | Fixture | Runner | Metatype | Role | Covers |
 |---|---|---|---|---|
@@ -284,17 +287,22 @@ why his row is the only one whose "Covers" column reads as a loadout rather than
 | WP75 | Yseult "Wren" Marchetti | Elf | Face / secondary magic | Negotiation/Con/Etiquette, manipulation spells |
 | WP76 | Bakari "Nullsec" Osei | Dwarf | Matrix | Hacking, Matrix overwatch, data search, electronic B&E |
 | WP88 | Jacob "Tithe" Smith | Human | Wetwork / rooftop approach | Implanted blades (12 dice), climbing, urban infiltration, augmented senses |
+| WP96 | Halla "Belfry" Ødegård | Troll | Rigger | Drone swarm (8), the van and the autogyro, Gunnery 9, mechanics (Engineering group), aerial overwatch |
 
 **Role coverage check.** Combat: Sam (primary) + Mage (spells) + Cheshire (backup pistols 12-dice)
-+ Tithe (melee, 12 dice with Blades). Stealth/infiltration: Cheshire + Tithe, and they are different
++ Tithe (melee, 12 dice with Blades) + Belfry's two Steel Lynx gun platforms. Stealth/infiltration:
+Cheshire + Tithe, and they are different
 lanes rather than duplicates — Cheshire is the B&E specialist (locks, Palming, legwork), Tithe the
 climber who arrives from above and kills quietly (Gymnastics/Climbing 11, Sneaking 13). Matrix:
 Decker (fills Cheshire's deliberate gap — she has Simsense Vertigo). Magic/astral/healing: Combat
-Mage + Shaman. Social/Face: Shaman-Face (fills Cheshire's CHA-2 gap). Legwork/Perception: Cheshire +
+Mage + Shaman. Social/Face: Shaman-Face (fills Cheshire's CHA-2 gap, and Belfry's far worse CHA-1
+one). Legwork/Perception: Cheshire +
 Decker + Tithe, whose three conditional Mental-limit implants make him the team's sensor platform
-even at Perception 3. **Known gap: no Rigger** — deliberate, since rigger support (Phase P) isn't
-built, so there's no vehicle/drone subsystem for such a fixture to exercise; not a hole to plug until
-Phase P lands.
+even at Perception 3 — and now Belfry, whose drones are the team's *remote* sensor platform and its
+only aerial one. Transport: Belfry, the set's only vehicle owner and the only character who can
+drive or fly anything (Pilot Ground Craft 11 / Pilot Aircraft 14). **The "no Rigger" gap this
+paragraph used to record is closed** — it was always conditional on Phase P landing, which it did
+(WP90-95), and WP96 is the fixture it was waiting for.
 
 **Complementary attribute/skill spread (not just roles).** Cheshire is AGI/INT-heavy and CHA-2 (no
 Face) and LOG-3 (no decker) *on purpose* — those gaps are exactly what the Face and Decker fill, so
@@ -310,6 +318,19 @@ BOD/STR 6 with far more soak and no stealth at all), and his AGI 4 sits delibera
 Cheshire's. Worth recording as a small piece of evidence that §5's design-against-each-other
 discipline was producing a genuinely spread set rather than one that merely looked spread from
 inside its own table.
+
+**Belfry (WP96) was designed against this table**, per the instruction above, and the check drove
+real choices rather than merely ratifying them. She takes **Troll**, the one SR5-core metatype the
+set was missing, and takes it in the only way that doesn't duplicate Rebar's peak: BOD 5 / STR 5 are
+Troll's *floors*, bought with zero points and left there, so she is naturally huge while Rebar's
+BOD/STR 6 (with far more soak and the Bone Lacing to go with it) stays the team's physical peak. Her
+own peak is a **natural** REA 6, which nobody else has (Tithe's REA 6 is augmented from a natural 4).
+She is the set's CHA-1, WIL-2 and EDG-1 floor on all three counts — the last of those forced rather
+than chosen, since Troll is offered only at Heritage A/B and the money letter takes A. The priority
+spread is likewise a first in both directions: **Resources A** (no other fixture has taken it, and no
+other archetype needs it) against **Attributes D** (the lowest attribute letter in the set). On the
+skill side she owns the Engineering group, which nobody else touches, and Gunnery, which nobody else
+has a point in.
 
 ---
 

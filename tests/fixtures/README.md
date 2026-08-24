@@ -84,7 +84,8 @@ name and concept, not degenerate test artifacts, and authored as **one coherent 
 WP75's Yseult "Wren" Marchetti (Elf Shamanic face), WP76's Bakari "Nullsec" Osei (Dwarf decker, and the
 first of the set's two Sum-to-Ten builds), and WP88's Jacob "Tithe" Smith (Human wetwork
 specialist, chromed to Essence 0.10 — the only one transcribed from a real player's save rather
-than designed). This
+than designed), and WP96's Halla "Belfry" Ødegård (Troll rigger, and the metatype the set was
+missing). This
 costs nothing in rigour: a fully-spent budget hits the engine's validators at their exact limits, and
 a coherent character touches more interaction paths. Only the mechanically derived numbers are
 asserted; a fixture's loadout/contacts/lifestyle prose is flavour, not engine-checked.
@@ -147,6 +148,22 @@ unassertable. `test_wetwork_fixture_agrees_with_the_save_file_it_was_transcribed
 hand-derived table against the real load path's output from the player's own file, so the
 transcription is auditable rather than merely plausible; the one deliberate divergence is that the
 save banks its leftover Karma and the fixture spends all 15 of it.
+
+**WP96 (landed, Phase P)** adds `RIGGER_FIXTURE` — Halla "Belfry" Ødegård, a Troll rigger — closing
+Phase S §5's own recorded roster gap ("**Known gap: no Rigger**"), which was blocked on rigger
+support existing at all and is unblocked by Phase P's WP90-95. It is the first fixture authored
+against a *shipped subsystem* rather than a coverage-gap inventory. The new input field is
+`vehicles` (offerable-catalog names, repeats meaning quantity), resolved third among the shared-pool
+spenders — cyberware, then bioware, then vehicles — which is `build_character`'s own order and is
+checked against it by `test_rigger_fixtures_vehicle_ledger_agrees_with_the_save_path`. The new
+metric keys are `vehicles:nuyen_spent`/`vehicles:count`, `vehicle:<Name>:<field>` (the WP93 stat
+block, plus the one number this engine actually derives about a vehicle — the p. 199 Condition
+Monitor, `12 + ceil(Body/2)` or `6 + ceil(Body/2)` for a drone), `gear:<Name>:<field>` (the Matrix
+stat block WP94 surfaced on RCCs/cyberdecks/commlinks), and `unmodeled_notes:names`. The same WP
+also makes `build_synthetic()` resolve the **metatype's free qualities** (WP23), which it never had:
+they contribute zero Improvements, so no existing fixture's numbers move, but they do contribute
+rows to the character sheet's "Unmodeled real effects" section that the new key would otherwise have
+under-reported.
 
 ## Native save-format fixtures (Phase S / WP85)
 

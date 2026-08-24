@@ -1274,3 +1274,25 @@ invariant a test can pin is stronger: **all or none of a category carries a note
 the same shape one step further — two module-level strings split on `is_drone`, because the only
 per-row difference in the whole catalog is the one thing that flag already records (p. 265's rigger
 interface ships in every drone and no vehicle).
+
+**2026-08-24 (WP96, Phase P) — the synthetic fixture harness never resolved metatype-granted
+qualities, and it took a new metric key to notice.** `chummer5.io.save_format.build_character` has
+resolved a metatype's free qualities (Elf/Ork Low-Light Vision, Dwarf/Troll Thermographic Vision,
+Dwarf Resistance to Pathogens/Toxins) and applied them as `ImprovementSource.METATYPE` since WP23.
+`tests/fixtures/synthetic.build_synthetic()` — which otherwise follows that function's evaluation
+order deliberately and closely (WP87's own note: "a fixture that disagrees with the save path is a
+fixture that proves nothing") — simply never did. It was invisible for six fixtures and four
+released phases because **all four of those qualities are `NO_EFFECT` or `NOT_YET_SUPPORTED`**, so
+they contribute zero Improvements and move no number a fixture asserts.
+
+What made it visible is that they are not *inert*: each one is a row in the character sheet's
+"Unmodeled real effects" section, so WP96's new `unmodeled_notes:names` metric would have quietly
+under-reported against what a player actually sees. Fixed in the harness (no existing fixture's
+literals moved — the fix is provably number-neutral, which is exactly why it went unnoticed).
+
+**The generalisable point, and it is not about metatype qualities.** A harness that mirrors a
+production code path only stays a mirror for the assertions someone has thought to write. Six
+fixtures asserting dice pools and budgets could not have caught a divergence that affects neither.
+The next such gap will be found the same way — by a new metric key reading something the harness
+never populated — so a WP adding one should check what populates it in `build_character` before
+assuming the harness already does.

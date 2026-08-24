@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase P — Post-MVP: Rigger support (WP90-95 done; WP96 remaining)
+### Phase P — Post-MVP: Rigger support (done, WP90-96)
 
 **Deliberately scoped down before any WP breakdown is written** — raised during the same 2026-07-21
 session as Phases L-O, but confirmed to be a materially different size than any of them: vehicles and
@@ -376,7 +376,7 @@ Next unclaimed WP number after this block is **WP97**.
   name** avoids ~30 identical strings with 30 chances to drift, and is checked as an all-or-none
   invariant per category. See `spec/worklogs/WP95.md`.
 
-- [ ] **WP96 — The Rigger synthetic fixture.** Closes Phase S §5's recorded "Known gap: no Rigger."
+- [x] **WP96 — The Rigger synthetic fixture.** Closes Phase S §5's recorded "Known gap: no Rigger."
   Goal: a whole-character `RIGGER_FIXTURE` in `tests/fixtures/synthetic_fixtures.py` with the full
   hand-derived `expected`/`citations` treatment WP72-76/WP88 established, and a seventh row on Phase
   S §5's roster table.
@@ -395,6 +395,24 @@ Next unclaimed WP number after this block is **WP97**.
   formulas asserted; Phase S §5's roster table and its role-coverage/attribute-spread paragraphs
   updated to seven runners **and its "Known gap: no Rigger" sentence retired**;
   `spec/worklogs/WP96.md` written.
+  Landed as `RIGGER_FIXTURE` — Halla "Belfry" Ødegård, a **Troll** rigger (Resources A / Heritage B
+  / Skills C / Attributes D, Talent forced to E), carrying a rating-2 Control Rig, ten vehicle
+  purchases over seven distinct rows (2 vehicles + 8 drones), a Proteus Poseidon RCC, four
+  autosofts and 9 months of Medium Lifestyle: ¥445,745 of ¥450,000 and all 26 Karma spent. Four
+  things worth carrying forward. **First, the WP's own "or two at rating 2" aside turned out to be
+  the better choice for a reason it didn't state**: `Rating * 1` Essence at rating 2 lands the
+  character on an Essence of *exactly* 4, the one shape `ceil(Essence)` had never been asserted in
+  (the set's other five are 6.0, 2.4, 5.7, 5.3 and 0.10) — and it is load-bearing, since the Social
+  limit reads `ceil(ESS)`. **Second, `build_synthetic()` never resolved metatype-granted qualities**
+  (WP23) — invisible for six fixtures because all four such qualities are `NO_EFFECT`/
+  `NOT_YET_SUPPORTED` and move no number, but they *do* put rows in the sheet's "Unmodeled real
+  effects" section, so this WP's `unmodeled_notes:names` key would have under-reported against a
+  real sheet. Fixed here; no existing fixture's literals moved. **Third, Troll is the metatype the
+  fixture set was missing** and brings two firsts with it: the first attribute *minimums* above 1
+  (BOD/STR 5, bought with zero points) and the first Mental maximums of 5. **Fourth, a repeated
+  vehicle row is not ambiguous the way a repeated cyberware purchase is** — a `Vehicle` carries no
+  per-purchase state at all, so `_vehicle_metric` reads the first match instead of raising the way
+  `_capacity_metric` must. See `spec/worklogs/WP96.md`.
 
 **Explicitly out of this phase, each for a stated reason:**
 - **Vehicle/drone modifications** — the 2026-07-21 ruling, unchanged by §1. Its one real cost (a

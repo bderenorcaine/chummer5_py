@@ -20,7 +20,7 @@ It sits *beside* the `.chum5` registry (`mundane_chum5.py`), not in place of it:
 corpus stays the ground truth for build-method-agnostic derived-stat formulas; synthetic fixtures
 cover interactions the corpus structurally lacks.
 
-## Scope of this harness (WP72) and how later Phase-S WPs extend it
+## Scope of this harness (WP72) and how later WPs extend it
 
 WP72 establishes the substrate and proves it end to end with **one** reference fixture: a full
 mundane Priority build (`REFERENCE_MUNDANE_FIXTURE` in `synthetic_fixtures.py`). The
@@ -28,10 +28,11 @@ mundane Priority build (`REFERENCE_MUNDANE_FIXTURE` in `synthetic_fixtures.py`).
 priorities, metatype, attribute allocation, skill/group allocation + specializations, and a
 positive/negative quality pair.
 
-The later fixture-authoring WPs each **add their own input field(s) to `SyntheticCharacter` and the
-matching wiring to `build_synthetic()` together**, mirroring how WP4 grew its `.chum5` parser one
-field at a time rather than speculatively modelling shapes no fixture yet exercises (the same
-"don't build past what's asked or verified" discipline the acceptance criteria call for):
+The later fixture-authoring WPs -- Phase S's own, plus WP96, which Phase P wrote once it had a
+subsystem for a fixture to exercise -- each **add their own input field(s) to `SyntheticCharacter`
+and the matching wiring to `build_synthetic()` together**, mirroring how WP4 grew its `.chum5`
+parser one field at a time rather than speculatively modelling shapes no fixture yet exercises
+(the same "don't build past what's asked or verified" discipline the acceptance criteria call for):
 - WP73 — cyberware + bioware Essence stacking (gaps G1/G2) — **landed**: adds the `cyberware`/
   `bioware` name-list fields below, wired through `create_cyberware_tree_selection`/
   `create_bioware_selection` in the fixed cyberware-first, bioware-second evaluation order those
@@ -87,6 +88,16 @@ field at a time rather than speculatively modelling shapes no fixture yet exerci
   construction* — `build_synthetic()` raises unless the five letters total exactly 10 — and the
   dedicated test in `tests/integration/test_synthetic_fixtures.py` additionally pins down that the
   same letters are rejected under `PRIORITY_BUILD_METHOD`.
+- WP96 — the rigger surface (Phase P's own fixture) — **landed**: adds the `vehicles` field below,
+  wired through `create_vehicle_selection` in `chummer5.io.save_format.build_character`'s own
+  third-among-the-shared-pool-spenders position (cyberware, then bioware, then vehicles), plus the
+  `vehicles:*`/`vehicle:<Name>:*`/`gear:<Name>:*`/`unmodeled_notes:names` metric keys. The vehicle
+  side needed two keys of its own because a vehicle's *printed* stat block is catalog data a
+  fixture should be able to pin (WP93 renders it on the character sheet) while its Condition
+  Monitor is the one number this engine derives; the gear key exists for the same reason on the
+  Matrix stat block WP94 surfaced. Note `vehicles` is name-keyed like every other authoring field
+  even though the engine's own API is id-keyed here (WP92 chose ids over names deliberately) —
+  `build_synthetic()` resolves the names, as it already does for skills/qualities/cyberware.
 
 Fixture authoring is name-keyed for legibility: `skill_points`/`group_points`/`specializations` and
 `qualities` are keyed by human-readable catalog name (Sneaking, Firearms, Catlike), not by the
@@ -112,6 +123,7 @@ from chummer5.data.qualities import load_qualities
 from chummer5.data.skills import Skill, load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
+from chummer5.data.vehicles import Vehicle
 from chummer5.engine.bioware import apply_bioware_improvements, create_bioware_selection
 from chummer5.engine.build_method import (
     PRIORITY_BUILD_METHOD,
@@ -141,9 +153,10 @@ from chummer5.engine.derived import (
     physical_limit,
     social_limit,
     stun_condition_monitor,
+    unmodeled_effect_notes,
 )
 from chummer5.engine.foci import apply_foci_improvements, create_foci_selection
-from chummer5.engine.improvements import ResolutionContext
+from chummer5.engine.improvements import ImprovementSource, ResolutionContext
 from chummer5.engine.knowledge import (
     KnowledgeSelection,
     KnowledgeSkillPick,
@@ -165,11 +178,13 @@ from chummer5.engine.qualities import (
     apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
+    resolve_metatype_qualities,
 )
 from chummer5.engine.resources import (
     Contact,
     ContactSelection,
     ResourcesSelection,
+    StarterGearItem,
     available_nuyen,
     create_contact_selection,
     create_resources_selection,
@@ -179,6 +194,12 @@ from chummer5.engine.skills import (
     create_skill_allocation,
     dice_pool,
     skill_rating,
+)
+from chummer5.engine.vehicles import (
+    VEHICLE_CATALOG,
+    VehicleSelection,
+    condition_monitor,
+    create_vehicle_selection,
 )
 
 # Loaded once — the harness is a test dependency, so a module-level cache is fine (the same shape
@@ -203,6 +224,10 @@ _SPELLS_BY_NAME = {s.name: s for s in _SPELLS}
 _FOCI_BY_NAME = {f.name: f for f in _FOCI}
 _MENTORS_BY_NAME = {m.name: m for m in _MENTORS}
 _TRADITIONS_BY_NAME = {t.name: t for t in _TRADITIONS}
+# WP96: the *offerable* 35-row catalog (`chummer5.engine.vehicles.VEHICLE_CATALOG`), not WP91's
+# literal 42-row loader output -- a fixture naming an over-Availability or unprinted row is a
+# fixture naming something no player can buy, and should fail here rather than in the engine.
+_VEHICLES_BY_NAME = {v.name: v for v in VEHICLE_CATALOG}
 
 # The five priority categories a full build assigns a letter to. Under the Priority build method
 # those letters are a bijection onto A-E: a mundane fixture leaves `talent_letter` unset, so Talent
@@ -321,6 +346,13 @@ class SyntheticCharacter:
       `NATIVE_LANGUAGE_LIMIT` Improvement is already on the index when the native-language cap is
       read — the ordering `build_character` documents. `karma_knowledge_points` is Step Seven's
       Karma top-up on a committed pick, at `new Rating x 1` per step.
+    - `vehicles` (WP96): stock vehicle/drone catalog *names*, repeats meaning quantity (four
+      Fly-Spies is one rigger's ordinary loadout — the `gear_names` precedent, not the
+      qualities/foci "can't pick twice" one). Resolved *after* cyberware and bioware, against
+      whatever they left of the shared Step Six pool, which is `build_character`'s own fixed order.
+      Names resolve against the **offerable** 35-row catalog, so a fixture naming an
+      over-Availability or unprinted row raises here rather than reaching the engine. A vehicle
+      grants no Improvement and costs no Karma and no Essence — nuyen is the only ledger it touches.
 
     `expected` maps a metric key (see `resolve_metric`) to its hand-derived target value;
     `citations` maps each of those keys to the source the value was derived from (a `priorities.xml`
@@ -367,6 +399,8 @@ class SyntheticCharacter:
     knowledge_skills: tuple[KnowledgeSkillPick, ...] = ()
     languages: tuple[LanguageSkillPick, ...] = ()
     karma_knowledge_points: Mapping[str, int] = field(default_factory=dict)
+    # WP96 -- stock vehicles/drones, the last of the Step Six shared-pool spenders.
+    vehicles: tuple[str, ...] = ()
 
 
 def _skill_by_name(name: str) -> Skill:
@@ -416,6 +450,13 @@ def _bioware_by_name(name: str) -> Bioware:
     item = _BIOWARE_BY_NAME.get(name)
     if item is None:
         raise KeyError(f"synthetic fixture names an unknown bioware item: {name!r}")
+    return item
+
+
+def _vehicle_by_name(name: str) -> Vehicle:
+    item = _VEHICLES_BY_NAME.get(name)
+    if item is None:
+        raise KeyError(f"synthetic fixture names an unknown (or unofferable) vehicle: {name!r}")
     return item
 
 
@@ -498,6 +539,19 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
         priorities=_PRIORITIES,
         attribute_points=fixture.attribute_points,
     )
+
+    # WP96: the metatype's free qualities (WP23) -- Troll/Dwarf Thermographic Vision, Elf/Ork
+    # Low-Light Vision, Dwarf Resistance to Pathogens/Toxins. `build_character` has resolved these
+    # since WP23 and this harness never did, which was invisible for as long as no fixture asserted
+    # anything that reads them: all four are `NO_EFFECT`/`NOT_YET_SUPPORTED`, so they contribute
+    # zero Improvements and no existing fixture's numbers move. What they *do* contribute is a row
+    # in the character sheet's "Unmodeled real effects" section, so the `unmodeled_notes:names`
+    # metric would have quietly under-reported against a real sheet without this.
+    metatype_qualities = resolve_metatype_qualities(character.metatype, _QUALITIES)
+    apply_quality_improvements(
+        character, metatype_qualities, source_type=ImprovementSource.METATYPE
+    )
+    character = replace(character, metatype_qualities=metatype_qualities)
 
     # Magic (WP74): resolve the Talent selection before qualities (a Mentor Spirit pick needs
     # `magic_type`) and before cyberware/spells/foci (those read the eventual Magic rating). The
@@ -606,7 +660,10 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
     lifestyle_cost = lifestyle_selection.total_cost if lifestyle_selection is not None else 0
 
     def _resources(
-        cyberware_cost: int = 0, bioware_cost: int = 0, foci_cost: int = 0
+        cyberware_cost: int = 0,
+        bioware_cost: int = 0,
+        foci_cost: int = 0,
+        vehicle_cost: int = 0,
     ) -> ResourcesSelection:
         """Re-derive the Resources selection with the shared-budget spenders known so far.
 
@@ -625,6 +682,7 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
             bioware_cost=bioware_cost,
             foci_cost=foci_cost,
             karma_converted=fixture.karma_converted,
+            vehicle_cost=vehicle_cost,
         )
 
     resources_selection = _resources()
@@ -666,6 +724,31 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
             bioware_cost=bioware_selection.nuyen_spent,
         )
         character = replace(character, resources_selection=resources_selection)
+
+    if fixture.vehicles:
+        # WP96: vehicles/drones are the *third* shared-pool spender, after cyberware and bioware --
+        # `chummer5.io.save_format.build_character`'s own fixed order, followed here for the same
+        # reason WP87 followed it for gear/Lifestyle: a fixture that disagrees with the save path
+        # proves nothing. The budget is read straight off `nuyen_remaining`, which the re-call above
+        # has already netted cyberware and bioware out of (the same shortcut the foci block below
+        # takes), rather than re-subtracting their spend by hand as `build_character` does from its
+        # own pre-fold selection. There is no `apply_*_improvements` step and no Karma or Essence
+        # term: a stock vehicle purchase touches the nuyen ledger and nothing else.
+        vehicle_selection = create_vehicle_selection(
+            [_vehicle_by_name(name).id for name in fixture.vehicles],
+            VEHICLE_CATALOG,
+            resources_selection.nuyen_remaining,
+        )
+        resources_selection = _resources(
+            cyberware_cost=resources_selection.cyberware_cost,
+            bioware_cost=resources_selection.bioware_cost,
+            vehicle_cost=vehicle_selection.nuyen_spent,
+        )
+        character = replace(
+            character,
+            vehicle_selection=vehicle_selection,
+            resources_selection=resources_selection,
+        )
 
     # Step Seven's leftover-Karma spend (WP75), in the fixed order
     # `chummer5.io.save_format.build_character` documents: attributes first, then skills, each
@@ -753,6 +836,7 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
             cyberware_cost=resources_selection.cyberware_cost,
             bioware_cost=resources_selection.bioware_cost,
             foci_cost=foci_selection.nuyen_cost,
+            vehicle_cost=resources_selection.vehicle_cost,
         )
         character = replace(
             character, foci_selection=foci_selection, resources_selection=resources_selection
@@ -810,6 +894,74 @@ def _capacity_metric(
     return read(node)
 
 
+# WP96: what a `vehicle:<Name>:<field>` key may ask for. Everything but `condition_monitor` is a
+# printed constant carried straight through from the catalog row (WP90 §5's "record and display,
+# derive nothing"), which is exactly why they're worth pinning here: the character sheet renders
+# this stat block (WP93), so a fixture that asserts it is asserting what a player actually reads.
+_VEHICLE_FIELDS: dict[str, Callable[[Vehicle], object]] = {
+    "condition_monitor": condition_monitor,
+    "body": lambda v: v.body,
+    "armor": lambda v: v.armor,
+    "handling": lambda v: v.handling,
+    "handling_offroad": lambda v: v.handling_offroad,
+    "speed": lambda v: v.speed,
+    "acceleration": lambda v: v.acceleration,
+    "pilot": lambda v: v.pilot,
+    "sensor": lambda v: v.sensor,
+    "seats": lambda v: v.seats,
+    "cost": lambda v: v.cost,
+    "is_drone": lambda v: v.is_drone,
+}
+
+# WP96: what a `gear:<Name>:<field>` key may ask for -- the Matrix stat block WP94 started loading
+# and rendering for Commlinks/Cyberdecks/Rigger Command Consoles. `attribute_array` is a 4-tuple in
+# descending order, *assignable* among Attack/Sleaze/Data Processing/Firewall in play (p. 439), so
+# it is asserted as the array it is rather than as four named columns.
+_GEAR_FIELDS: dict[str, Callable[[StarterGearItem], object]] = {
+    "cost": lambda g: g.cost,
+    "device_rating": lambda g: g.device_rating,
+    "attack": lambda g: g.attack,
+    "sleaze": lambda g: g.sleaze,
+    "data_processing": lambda g: g.data_processing,
+    "firewall": lambda g: g.firewall,
+    "programs": lambda g: g.programs,
+    "attribute_array": lambda g: g.attribute_array,
+}
+
+
+def _vehicle_metric(selection: VehicleSelection, name: str, field_name: str) -> object:
+    """Read one figure off a purchased vehicle, addressed by catalog name.
+
+    Unlike `_capacity_metric`'s cyberware paths, a repeated name is **not** ambiguous here and
+    doesn't raise: a `Vehicle` is an immutable catalog row with no per-purchase state attached
+    (no rating, no plugins, no installed anything -- the whole point of the stock-only ruling), so
+    two Fly-Spies answer every one of these keys identically. Reading the first is reading both.
+    """
+    read = _VEHICLE_FIELDS.get(field_name)
+    if read is None:
+        raise KeyError(f"resolve_metric: unrecognised vehicle field {field_name!r}")
+    vehicle = next((v for v in selection.vehicles if v.name == name), None)
+    if vehicle is None:
+        raise KeyError(f"resolve_metric: no purchased vehicle named {name!r}")
+    return read(vehicle)
+
+
+def _gear_metric(selection: ResourcesSelection, name: str, field_name: str) -> object:
+    """Read one Matrix-stat-block figure off a purchased piece of starter gear, by catalog name.
+
+    Same "repeats answer identically" reasoning as `_vehicle_metric`: `StarterGearItem` carries no
+    per-purchase state either (a Rating-priced row's `rating` is part of the catalog *pick*, and
+    two identical picks are identical).
+    """
+    read = _GEAR_FIELDS.get(field_name)
+    if read is None:
+        raise KeyError(f"resolve_metric: unrecognised gear field {field_name!r}")
+    item = next((g for g in selection.gear if g.name == name), None)
+    if item is None:
+        raise KeyError(f"resolve_metric: no purchased gear named {name!r}")
+    return read(item)
+
+
 def _resources_of(character: Character) -> ResourcesSelection:
     assert character.resources_selection is not None
     return character.resources_selection
@@ -823,6 +975,11 @@ def _contacts_of(character: Character) -> ContactSelection:
 def _knowledge_of(character: Character) -> KnowledgeSelection:
     assert character.knowledge_selection is not None
     return character.knowledge_selection
+
+
+def _vehicles_of(character: Character) -> VehicleSelection:
+    assert character.vehicle_selection is not None
+    return character.vehicle_selection
 
 
 def _nuyen_available(character: Character) -> int:
@@ -897,6 +1054,19 @@ def resolve_metric(character: Character, key: str) -> object:
     - `knowledge:pool:<Name>` / `languages:pool:<Name>` (WP87) — one Knowledge/Language pick's dice
       pool at its *finished* rating (its own plus any Step Seven Karma top-up). A native language
       raises rather than returning a pool, since fluency "N" has no rating
+    - `vehicles:nuyen_spent` / `vehicles:count` (WP96) — the vehicle/drone ledger. `count` counts
+      purchases, so a repeated catalog row counts once per copy
+    - `vehicle:<Name>:condition_monitor` (WP96) — the one number this engine *derives* about a
+      vehicle: `12 + ceil(Body / 2)`, or `6 + ceil(Body / 2)` for a drone (p. 199). The same key
+      also reads any printed stat off the purchased row (`body`, `armor`, `handling`,
+      `handling_offroad`, `speed`, `acceleration`, `pilot`, `sensor`, `seats`, `cost`, `is_drone`),
+      which is what the character sheet renders. Repeats are not ambiguous — see `_vehicle_metric`
+    - `gear:<Name>:device_rating` / `:attack` / `:sleaze` / `:data_processing` / `:firewall` /
+      `:programs` / `:attribute_array` / `:cost` (WP96) — the Matrix stat block WP94 surfaced on
+      Commlinks / Cyberdecks / Rigger Command Consoles. Printed constants that feed nothing (no
+      Matrix rules exist), asserted because the sheet shows them
+    - `unmodeled_notes:names` (WP96) — the set of aspect names the sheet's "Unmodeled real effects"
+      section lists for this character (`chummer5.engine.derived.unmodeled_effect_notes`)
 
     A key naming a skill requires the fixture to have committed a `skill_allocation` (every WP72
     fixture does); a `cyberware:`/`bioware:`/`karma_attribute:`/`karma_skill:` key requires the
@@ -991,6 +1161,13 @@ def resolve_metric(character: Character, key: str) -> object:
     if key == "karma_knowledge:karma_cost":
         assert character.karma_knowledge_selection is not None
         return character.karma_knowledge_selection.karma_cost
+    if key.startswith("vehicle:"):
+        assert character.vehicle_selection is not None
+        name, _, field_name = key[len("vehicle:") :].rpartition(":")
+        return _vehicle_metric(character.vehicle_selection, name, field_name)
+    if key.startswith("gear:"):
+        name, _, field_name = key[len("gear:") :].rpartition(":")
+        return _gear_metric(_resources_of(character), name, field_name)
 
     fixed = {
         "initiative": initiative_value,
@@ -1026,6 +1203,16 @@ def resolve_metric(character: Character, key: str) -> object:
         "knowledge:free_points": free_knowledge_points,
         "knowledge:points_spent": lambda c: _knowledge_of(c).points_spent,
         "knowledge:native_language_limit": lambda c: _knowledge_of(c).native_language_limit,
+        # WP96 -- the vehicle ledger. `vehicles:count` counts *purchases*, so a repeated row counts
+        # once per copy (four Fly-Spies is 4), which is the only way "repeats are legal" is
+        # assertable at all.
+        "vehicles:nuyen_spent": lambda c: _vehicles_of(c).nuyen_spent,
+        "vehicles:count": lambda c: len(_vehicles_of(c).vehicles),
+        # WP96 -- the names the character sheet's "Unmodeled real effects" section lists for this
+        # character (`chummer5.engine.derived.unmodeled_effect_notes`), as a frozenset. Asserting
+        # the *set* rather than any one note keeps the fixture honest in both directions: an aspect
+        # that quietly stops carrying a note, and one that quietly starts, both fail.
+        "unmodeled_notes:names": lambda c: frozenset(name for name, _ in unmodeled_effect_notes(c)),
     }
     if key in fixed:
         return fixed[key](character)
