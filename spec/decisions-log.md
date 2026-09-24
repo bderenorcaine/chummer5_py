@@ -1408,3 +1408,32 @@ above, the panel re-fetches itself on `chargen-changed`, the same as the nav and
 Its acceptance test asserts that event wiring instead of an OOB swap. After every change the browser
 now makes three small `GET`s (nav, panel, and, on a composite page, tabs). Each measured about 3 ms
 locally, which is not worth merging them into one endpoint while the app is local and single-user.
+
+**2026-09-24 (WP100, Phase W) — `app.css` holds no token values; each theme is a complete token
+set.** WP100's entry asked for per-theme stylesheets that "redefine only tokens". The obvious reading
+keeps today's values as defaults in `app.css` and lets a theme override some of them. I did it the
+stricter way: `app.css` defines no custom property at all, and every theme under `static/themes/`
+defines every token `app.css` reads, for both colour schemes. The shipped themes are Classic (the
+WP97-99 look) and Sketch (the hand-drawn layout).
+
+The reason is what a test can then prove. With defaults in `app.css`, "Classic" would be an empty
+file, and a typo in a theme's token name would silently leave the default showing. With complete
+sets, `tests/unit/test_web_themes.py` checks three things mechanically:
+
+- every `var(--x)` in `app.css` is declared by every theme;
+- a theme's dark block only redefines tokens its light block already has;
+- a theme file parses as exactly `:root {…}` plus one `prefers-color-scheme: dark` `:root {…}`,
+  containing custom properties only. This last check is the entry's acceptance.
+
+The cost is that a new token has to be added to every theme. With two themes that is cheap, and the
+failing test names the missing token.
+
+**Display preferences are not chargen changes.** Theme selection is `POST /ui/prefs/theme`, and
+`chummer5.web.prefs` holds the theme list (the module exists so `session.py` can import the defaults
+without a cycle through the shell). The WP97 `chargen-changed` middleware now skips `/ui/prefs/`.
+Otherwise every preference change would make the nav, the panel, and the tabs re-fetch themselves
+for nothing. The theme applies in place: the response is the new `<link id="theme-stylesheet">`,
+swapped out of band into `<head>`. I checked in Chromium that htmx 2 swaps a `<head>` element by id
+and that the link keeps its position ahead of `app.css`. **For WP101:** a language change cannot
+work that way, because every string on the page changes. Its route should sit under the same
+prefix and answer with `HX-Refresh: true`.

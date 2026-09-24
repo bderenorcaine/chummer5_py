@@ -1,0 +1,103 @@
+/* Sketch (WP100): the hand-drawn target layout Phase W started from (examples/ui/main_ui.png) --
+   heavy black rules, a centred title, monospace step labels centred in a column joined by
+   downward chevrons, a grey current step, and a grey content pane the step panels sit on as white
+   cards. In dark mode the same drawing is inverted: light rules on near-black.
+
+   Tokens only -- see classic.css's header for the contract. */
+
+:root {
+  /* Type */
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-title: "DejaVu Sans", "Verdana", system-ui, sans-serif;
+  --font-nav: "DejaVu Sans Mono", "Courier New", ui-monospace, monospace;
+  --title-size: 1.6rem;
+  --title-weight: 500;
+  --title-align: center;
+
+  /* Geometry and rule weights */
+  --sidebar-width: 13rem;
+  --frame-width: 3px;
+  --nav-list-padding: 0rem;
+  --nav-item-align: center;
+  --nav-item-accent-width: 0px;
+  --nav-item-rule-width: 3px;
+  --nav-chevron-size: 0.55rem;
+  --tab-rule-width: 3px;
+  --tab-accent-width: 0px;
+  --panel-rule-width: 2px;
+  --panel-accent-width: 2px;
+  --radius: 0px;
+
+  /* Colours (light) */
+  --page-fg: #000000;
+  --page-bg: #ffffff;
+  --main-bg: #aaaaaa;
+  --rule: #000000;
+  --frame-color: #000000;
+  --section-bg-a: #ffffff;
+  --section-bg-b: #ffffff;
+  --section-accent: #000000;
+  --summary-fg: #000000;
+  --error-fg: #7a0000;
+  --error-bg: #ffe3e3;
+  --warning-fg: #5a3d00;
+  --warning-bg: #fff1c9;
+  --info-fg: #002f4a;
+  --info-bg: #e3f1fa;
+  --titlebar-bg: #ffffff;
+  --titlebar-fg: #000000;
+  --sidebar-bg: #ffffff;
+  --nav-item-fg: #000000;
+  --nav-item-hover-bg: #dddddd;
+  --nav-item-current-fg: #000000;
+  --nav-item-current-bg: #aaaaaa;
+  --nav-item-current-accent: transparent;
+  --nav-item-disabled-fg: #8a8a8a;
+  --nav-rule-color: #000000;
+  --nav-chevron-color: #000000;
+  --tab-fg: #000000;
+  --tab-hover-bg: #c4c4c4;
+  --tab-current-bg: #ffffff;
+  --tab-current-accent: transparent;
+  --tab-disabled-fg: #5e5e5e;
+  --panel-muted-fg: #4a4a4a;
+  --panel-over-fg: #a00000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-fg: #f0f0f0;
+    --page-bg: #111111;
+    --main-bg: #3a3a3a;
+    --rule: #e0e0e0;
+    --frame-color: #e0e0e0;
+    --section-bg-a: #111111;
+    --section-bg-b: #111111;
+    --section-accent: #e0e0e0;
+    --summary-fg: #f0f0f0;
+    --error-fg: #ffb4b4;
+    --error-bg: #3d1414;
+    --warning-fg: #ffd98a;
+    --warning-bg: #3a2e0e;
+    --info-fg: #a8d8f0;
+    --info-bg: #10293a;
+    --titlebar-bg: #111111;
+    --titlebar-fg: #f0f0f0;
+    --sidebar-bg: #111111;
+    --nav-item-fg: #f0f0f0;
+    --nav-item-hover-bg: #2a2a2a;
+    --nav-item-current-fg: #f0f0f0;
+    --nav-item-current-bg: #3a3a3a;
+    --nav-item-current-accent: transparent;
+    --nav-item-disabled-fg: #7a7a7a;
+    --nav-rule-color: #e0e0e0;
+    --nav-chevron-color: #e0e0e0;
+    --tab-fg: #f0f0f0;
+    --tab-hover-bg: #4a4a4a;
+    --tab-current-bg: #111111;
+    --tab-current-accent: transparent;
+    --tab-disabled-fg: #a0a0a0;
+    --panel-muted-fg: #b0b0b0;
+    --panel-over-fg: #ff9a9a;
+  }
+}

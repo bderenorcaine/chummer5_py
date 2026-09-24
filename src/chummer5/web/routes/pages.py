@@ -1,6 +1,7 @@
 """The application shell's routes (WP97): `GET /`, `GET /ui/page/{slug}`, `GET /ui/nav`, and
 `GET /character/sheet` -- plus, from WP98, a composite page's tabs: `GET /ui/page/{slug}/{tab}`
-and `GET /ui/tabs/{slug}`, and from WP99 the sidebar's `GET /ui/resource-panel`.
+and `GET /ui/tabs/{slug}`, from WP99 the sidebar's `GET /ui/resource-panel`, and from WP100 the
+title bar's `POST /ui/prefs/theme`.
 
 These are the only routes that render more than one step's own fragment. A nav click is an htmx
 `GET /ui/page/{slug}` that swaps just `#page` (plus the nav, out of band, so its current-step
@@ -28,10 +29,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from chummer5.web.catalogs import templates
+from chummer5.web.prefs import THEMES, THEMES_BY_SLUG
 from chummer5.web.routes.character import _character_sheet_context
 from chummer5.web.routes.priorities import _session_priority_form_context
 from chummer5.web.session import SESSION_COOKIE_NAME, ChargenSession, resolve_session
@@ -78,6 +80,8 @@ def _shell_context(
         **nav_context(session, chargen_ctx),
         **resource_panel_context(session, chargen_ctx),
         "page": page,
+        "theme": session.theme,
+        "themes": THEMES,
     }
     if page.tabbed:
         context |= tabs_context(session, page, chargen_ctx, resolve_tab(session, page, tab))
@@ -176,6 +180,23 @@ def resource_panel(request: Request) -> HTMLResponse:
     chargen_ctx = chargen_context(session, _session_priority_form_context(session))
     response = templates.TemplateResponse(
         request, "_resource_panel.html", resource_panel_context(session, chargen_ctx)
+    )
+    if new_cookie is not None:
+        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    return response
+
+
+@router.post("/ui/prefs/theme", response_class=HTMLResponse)
+def set_theme(request: Request, theme: str = Form(...)) -> HTMLResponse:
+    """Switch the session's theme (WP100) and answer with the new theme `<link>` out of band, so
+    the page restyles in place. An unknown slug is a 422, not a silent fallback: the picker only
+    offers `THEMES`, so anything else is a bad request."""
+    if theme not in THEMES_BY_SLUG:
+        raise HTTPException(status_code=422, detail=f"No such theme: {theme!r}.")
+    session, new_cookie = resolve_session(request)
+    session.theme = theme
+    response = templates.TemplateResponse(
+        request, "_theme_link.html", {"theme": theme, "oob_theme": True}
     )
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

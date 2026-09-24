@@ -1,0 +1,103 @@
+/* Classic (WP100): the look the shell shipped with in WP97-99 -- a slate title bar, a tinted
+   sidebar with a left-accent current step, hairline rules, system fonts.
+
+   A theme is custom-property declarations and nothing else: `:root`, plus one
+   `prefers-color-scheme: dark` block redefining the colours. Every token app.css reads must be
+   defined here (tests/unit/test_web_themes.py). */
+
+:root {
+  /* Type */
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-title: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-nav: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --title-size: 1.15rem;
+  --title-weight: 600;
+  --title-align: left;
+
+  /* Geometry and rule weights */
+  --sidebar-width: 13rem;
+  --frame-width: 1px;
+  --nav-list-padding: 0.5rem;
+  --nav-item-align: left;
+  --nav-item-accent-width: 4px;
+  --nav-item-rule-width: 0px;
+  --nav-chevron-size: 0px;
+  --tab-rule-width: 1px;
+  --tab-accent-width: 3px;
+  --panel-rule-width: 1px;
+  --panel-accent-width: 4px;
+  --radius: 3px;
+
+  /* Colours (light) */
+  --page-fg: #1c1c1e;
+  --page-bg: #ffffff;
+  --main-bg: #ffffff;
+  --rule: #d3d6db;
+  --frame-color: #d3d6db;
+  --section-bg-a: #ffffff;
+  --section-bg-b: #f2f4f7;
+  --section-accent: #7a8595;
+  --summary-fg: #35404f;
+  --error-fg: #8c1d1d;
+  --error-bg: #fbeaea;
+  --warning-fg: #7a5300;
+  --warning-bg: #fdf3dd;
+  --info-fg: #17506b;
+  --info-bg: #e6f2f8;
+  --titlebar-bg: #35404f;
+  --titlebar-fg: #ffffff;
+  --sidebar-bg: #f2f4f7;
+  --nav-item-fg: #35404f;
+  --nav-item-hover-bg: #ffffff;
+  --nav-item-current-fg: #35404f;
+  --nav-item-current-bg: #ffffff;
+  --nav-item-current-accent: #7a8595;
+  --nav-item-disabled-fg: #9aa2ad;
+  --nav-rule-color: transparent;
+  --nav-chevron-color: transparent;
+  --tab-fg: #35404f;
+  --tab-hover-bg: #f2f4f7;
+  --tab-current-bg: transparent;
+  --tab-current-accent: #35404f;
+  --tab-disabled-fg: #9aa2ad;
+  --panel-muted-fg: #6b7482;
+  --panel-over-fg: #8c1d1d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-fg: #e6e8eb;
+    --page-bg: #16181c;
+    --main-bg: #16181c;
+    --rule: #363b44;
+    --frame-color: #363b44;
+    --section-bg-a: #1c1f24;
+    --section-bg-b: #23272e;
+    --section-accent: #6b7686;
+    --summary-fg: #c6ccd6;
+    --error-fg: #f2b8b5;
+    --error-bg: #3a1f1f;
+    --warning-fg: #f0d08a;
+    --warning-bg: #382e12;
+    --info-fg: #a8d5e8;
+    --info-bg: #14303d;
+    --titlebar-bg: #0e1013;
+    --titlebar-fg: #e6e8eb;
+    --sidebar-bg: #1c1f24;
+    --nav-item-fg: #c6ccd6;
+    --nav-item-hover-bg: #23272e;
+    --nav-item-current-fg: #c6ccd6;
+    --nav-item-current-bg: #23272e;
+    --nav-item-current-accent: #6b7686;
+    --nav-item-disabled-fg: #5c6470;
+    --nav-rule-color: transparent;
+    --nav-chevron-color: transparent;
+    --tab-fg: #c6ccd6;
+    --tab-hover-bg: #23272e;
+    --tab-current-bg: transparent;
+    --tab-current-accent: #c6ccd6;
+    --tab-disabled-fg: #5c6470;
+    --panel-muted-fg: #8f98a6;
+    --panel-over-fg: #f2b8b5;
+  }
+}

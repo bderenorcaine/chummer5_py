@@ -1,77 +1,26 @@
-/* WP97: the application shell -- a title bar over a sidebar step nav and one content pane (see
-   base.html). Deliberately small, and it does not restyle the forms/tables inside a step.
+/* The application shell's *structure* -- a title bar over a sidebar (step nav + resource panel)
+   and one content pane (WP97-99). It does not restyle the forms/tables inside a step.
 
-   Every rule below selects on a semantic class hook (.app-shell__*, .step-nav__*, .panel*, .page*)
-   rather than on ids or tag structure, so a later theme (WP100) can restyle the furniture by
-   redefining tokens instead of matching the DOM shape. Two live constraints (WP84): nothing may set
-   `display` on a `tr` (the step filters toggle the `hidden` attribute), and light/dark stay handled
-   by prefers-color-scheme + color-scheme. */
+   WP100: this file defines no token values at all. Every colour, font, rule weight, alignment and
+   accent below is a `var(--...)` supplied by the linked theme (`static/themes/<slug>.css`, chosen
+   in the title bar -- see chummer5.web.prefs). A theme is a complete token set for both colour
+   schemes and nothing else; `tests/unit/test_web_themes.py` checks both halves of that: every
+   token used here is defined by every theme, and no theme contains anything but token
+   declarations. To restyle the furniture, write a theme. To change the layout, edit this file.
+
+   Every rule selects on a semantic class hook (.app-shell__*, .step-nav__*, .resource-panel__*,
+   .page*, .page-tabs__*, .subpage, .panel*), never on ids or tag structure. Live constraints:
+   nothing may set `display` on a `tr` (WP84: the step filters toggle `hidden`) or on `.subpage`
+   (WP98: inactive tabs are `hidden`), and light/dark stay handled by `color-scheme` here plus each
+   theme's own `prefers-color-scheme` block. */
 
 :root {
   color-scheme: light dark;
-  --page-fg: #1c1c1e;
-  --page-bg: #ffffff;
-  --rule: #d3d6db;
-  --section-bg-a: #ffffff;
-  --section-bg-b: #f2f4f7;
-  --section-accent: #7a8595;
-  --summary-fg: #35404f;
-  --error-fg: #8c1d1d;
-  --error-bg: #fbeaea;
-  --warning-fg: #7a5300;
-  --warning-bg: #fdf3dd;
-  --info-fg: #17506b;
-  --info-bg: #e6f2f8;
-  --titlebar-bg: #35404f;
-  --titlebar-fg: #ffffff;
-  --sidebar-bg: #f2f4f7;
-  --sidebar-width: 13rem;
-  --nav-item-fg: #35404f;
-  --nav-item-current-bg: #ffffff;
-  --nav-item-current-accent: #7a8595;
-  --nav-item-disabled-fg: #9aa2ad;
-  --tab-fg: #35404f;
-  --tab-hover-bg: #f2f4f7;
-  --tab-current-accent: #35404f;
-  --tab-disabled-fg: #9aa2ad;
-  --panel-muted-fg: #6b7482;
-  --panel-over-fg: #8c1d1d;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page-fg: #e6e8eb;
-    --page-bg: #16181c;
-    --rule: #363b44;
-    --section-bg-a: #1c1f24;
-    --section-bg-b: #23272e;
-    --section-accent: #6b7686;
-    --summary-fg: #c6ccd6;
-    --error-fg: #f2b8b5;
-    --error-bg: #3a1f1f;
-    --warning-fg: #f0d08a;
-    --warning-bg: #382e12;
-    --info-fg: #a8d5e8;
-    --info-bg: #14303d;
-    --titlebar-bg: #0e1013;
-    --titlebar-fg: #e6e8eb;
-    --sidebar-bg: #1c1f24;
-    --nav-item-fg: #c6ccd6;
-    --nav-item-current-bg: #23272e;
-    --nav-item-current-accent: #6b7686;
-    --nav-item-disabled-fg: #5c6470;
-    --tab-fg: #c6ccd6;
-    --tab-hover-bg: #23272e;
-    --tab-current-accent: #c6ccd6;
-    --tab-disabled-fg: #5c6470;
-    --panel-muted-fg: #8f98a6;
-    --panel-over-fg: #f2b8b5;
-  }
 }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   line-height: 1.45;
   color: var(--page-fg);
   background: var(--page-bg);
@@ -91,25 +40,52 @@ body {
 
 .app-shell__titlebar {
   grid-area: titlebar;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
   padding: 0.5rem 1.25rem;
   color: var(--titlebar-fg);
   background: var(--titlebar-bg);
 }
 
 .app-shell__title {
-  font-size: 1.15rem;
-  font-weight: 600;
+  flex: 1 1 auto;
+  font-family: var(--font-title);
+  font-size: var(--title-size);
+  font-weight: var(--title-weight);
+  text-align: var(--title-align);
+}
+
+/* The display-preference pickers (theme; WP101 adds the language). */
+.app-shell__prefs {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.app-shell__pref select {
+  margin-left: 0.3rem;
 }
 
 .app-shell__sidebar {
   grid-area: sidebar;
-  border-right: 1px solid var(--rule);
+  border-top: var(--frame-width) solid var(--frame-color);
+  border-left: var(--frame-width) solid var(--frame-color);
+  border-right: var(--frame-width) solid var(--frame-color);
   background: var(--sidebar-bg);
 }
 
 .app-shell__main {
   grid-area: main;
+  min-width: 0;
   padding: 1rem 1.25rem 4rem;
+  border-top: var(--frame-width) solid var(--frame-color);
+  background: var(--main-bg);
+}
+
+.app-shell__main > .page {
   max-width: 72rem;
 }
 
@@ -117,25 +93,56 @@ body {
 
 .step-nav__list {
   margin: 0;
-  padding: 0.5rem 0;
+  padding: var(--nav-list-padding) 0;
   list-style: none;
+}
+
+.step-nav__entry {
+  position: relative;
+}
+
+.step-nav__entry + .step-nav__entry {
+  border-top: var(--nav-item-rule-width) solid var(--nav-rule-color);
+}
+
+/* The sketch's chevron connector between two steps, pointing down into the next one: a V hung
+   from the rule, drawn only by tokens -- `--nav-chevron-size: 0` (Classic) draws nothing. */
+.step-nav__entry:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 100%;
+  left: 50%;
+  width: calc(var(--nav-chevron-size) * 2);
+  height: var(--nav-chevron-size);
+  transform: translateX(-50%);
+  background: var(--nav-chevron-color);
+  clip-path: polygon(0 0, 50% 55%, 100% 0, 100% 45%, 50% 100%, 0 45%);
+  pointer-events: none;
 }
 
 .step-nav__item {
   display: block;
   padding: 0.35rem 1rem;
-  border-left: 4px solid transparent;
+  border-left: var(--nav-item-accent-width) solid transparent;
+  font-family: var(--font-nav);
+  text-align: var(--nav-item-align);
   color: var(--nav-item-fg);
   text-decoration: none;
 }
 
 a.step-nav__item:hover {
-  background: var(--nav-item-current-bg);
+  background: var(--nav-item-hover-bg);
 }
 
 .step-nav__item--current {
   font-weight: 600;
+  color: var(--nav-item-current-fg);
   border-left-color: var(--nav-item-current-accent);
+  background: var(--nav-item-current-bg);
+}
+
+a.step-nav__item--current:hover {
   background: var(--nav-item-current-bg);
 }
 
@@ -148,17 +155,18 @@ a.step-nav__item:hover {
   color: var(--warning-fg);
 }
 
-/* --- The remaining-resources panel (WP99) -------------------------------------------------------- */
+/* --- The remaining-resources panel (WP99) ------------------------------------------------------ */
 
 .resource-panel {
-  margin: 0.5rem 0.75rem 1rem;
+  margin: 0 0.75rem 1rem;
   padding-top: 0.5rem;
-  border-top: 1px solid var(--rule);
+  border-top: var(--frame-width) solid var(--frame-color);
   font-size: 0.9rem;
 }
 
 .resource-panel__heading {
   margin: 0 0 0.35rem;
+  font-family: var(--font-nav);
   font-size: 0.95rem;
   color: var(--summary-fg);
 }
@@ -211,20 +219,29 @@ a.step-nav__item:hover {
   }
 
   .app-shell__sidebar {
-    border-right: 0;
-    border-bottom: 1px solid var(--rule);
+    border-right: var(--frame-width) solid var(--frame-color);
   }
 
   .step-nav__list {
     display: flex;
     flex-wrap: wrap;
   }
+
+  /* A row has no "next step below" for a chevron to point at, nor a rule between items. */
+  .step-nav__entry + .step-nav__entry {
+    border-top: 0;
+  }
+
+  .step-nav__entry:not(:last-child)::after {
+    content: none;
+  }
 }
 
-/* --- A page and its step panels --------------------------------------------------------------- */
+/* --- A page, its tabs, and its step panels ---------------------------------------------------- */
 
 .page__heading {
   margin-top: 0;
+  font-family: var(--font-title);
   font-size: 1.3rem;
   color: var(--summary-fg);
 }
@@ -233,7 +250,7 @@ a.step-nav__item:hover {
    the others `hidden` (nothing here may set `display` on .subpage, or `hidden` stops working). */
 .page-tabs {
   margin-bottom: 0.75rem;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: var(--tab-rule-width) solid var(--rule);
 }
 
 .page-tabs__list {
@@ -247,9 +264,10 @@ a.step-nav__item:hover {
 
 .page-tabs__item {
   display: block;
-  margin-bottom: -1px;
+  margin-bottom: calc(-1 * var(--tab-rule-width));
   padding: 0.35rem 0.8rem;
-  border-bottom: 3px solid transparent;
+  border-bottom: var(--tab-accent-width) solid transparent;
+  font-family: var(--font-nav);
   color: var(--tab-fg);
   text-decoration: none;
 }
@@ -261,6 +279,7 @@ a.page-tabs__item:hover {
 .page-tabs__item--current {
   font-weight: 600;
   border-bottom-color: var(--tab-current-accent);
+  background: var(--tab-current-bg);
 }
 
 .page-tabs__item--disabled {
@@ -278,12 +297,12 @@ a.page-tabs__item:hover {
   font-size: 0.95rem;
 }
 
-/* One box per step fragment. A composite page (Skills, Magic, Equipment) stacks several, so
-   neighbours are told apart by a rule plus alternating tint. */
+/* One box per step fragment. A single-section page shows one; a composite page shows one per tab.
+   Neighbours (should a page ever stack several again) are told apart by alternating tint. */
 .panel {
   padding: 0.75rem 1rem;
-  border-top: 1px solid var(--rule);
-  border-left: 4px solid var(--section-accent);
+  border-top: var(--panel-rule-width) solid var(--rule);
+  border-left: var(--panel-accent-width) solid var(--section-accent);
   background: var(--section-bg-a);
 }
 
@@ -292,12 +311,13 @@ a.page-tabs__item:hover {
 }
 
 .panel:last-child {
-  border-bottom: 1px solid var(--rule);
+  border-bottom: var(--panel-rule-width) solid var(--rule);
 }
 
 /* A panel's own <summary> is its heading; the nested ones (skill categories, gear/cyberware
    groups) are deliberately left plain so the two levels don't compete. */
 .panel__heading {
+  font-family: var(--font-title);
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--summary-fg);
@@ -327,7 +347,7 @@ details[open] > .panel__heading {
 .info {
   margin: 0.5rem 0;
   padding: 0.4rem 0.6rem;
-  border-radius: 3px;
+  border-radius: var(--radius);
 }
 
 .error {

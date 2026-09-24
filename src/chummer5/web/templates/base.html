@@ -9,6 +9,8 @@
        A snapshot would restore a page as it was *before* whatever the player did elsewhere, e.g.
        a Skills page missing the "no longer fits" warning a later priorities change caused. #}
     <meta name="htmx-config" content='{"historyCacheSize": 0}' />
+    {# WP100: the theme (token values only) first, then the structural sheet that reads them. #}
+    {% include "_theme_link.html" %}
     <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
     <!-- htmx 2.0.10, vendored — see static/vendor/htmx/VENDORED.md -->
     <script src="{{ url_for('static', path='vendor/htmx/htmx.min.js') }}"></script>
@@ -50,6 +52,18 @@
     <div class="app-shell">
       <header class="app-shell__titlebar">
         <span class="app-shell__title">Chummer5</span>
+        {# WP100: display preferences. Changing one is not a chargen change -- see
+           chummer5.web.prefs -- so the form swaps nothing but the theme link, out of band. #}
+        <form class="app-shell__prefs" hx-post="/ui/prefs/theme" hx-trigger="change" hx-swap="none">
+          <label class="app-shell__pref">
+            Theme
+            <select name="theme">
+              {% for option in themes %}
+              <option value="{{ option.slug }}" {% if option.slug == theme %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </form>
       </header>
       <aside class="app-shell__sidebar">
         {% include "_step_nav.html" %}

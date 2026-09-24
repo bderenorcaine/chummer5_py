@@ -1,0 +1,8 @@
+{# WP100: the selected theme's stylesheet. Rendered in <head> on a full load, and re-sent out of
+   band by POST /ui/prefs/theme so a theme change applies without a reload. #}
+<link
+  id="theme-stylesheet"
+  rel="stylesheet"
+  href="{{ url_for('static', path='themes/' ~ theme ~ '.css') }}"
+  {% if oob_theme %}hx-swap-oob="true"{% endif %}
+/>

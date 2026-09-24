@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n (WP97-99 done; WP100-103 remaining)
+### Phase W — Post-MVP: application shell, theming, and i18n (WP97-100 done; WP101-103 remaining)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -209,7 +209,7 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   that wiring. Class hooks for WP100: `.resource-panel*` (`__row--over` for a negative pool).
   Contacts' free pool is not shown; see the decisions log. See `spec/worklogs/WP99.md`.
 
-- [ ] **WP100 — Theme tokens and a theme selector.**
+- [x] **WP100 — Theme tokens and a theme selector.**
   Goal: make the graphical furniture — separators, backgrounds, fonts, border weights, the nav's own
   chrome — swappable without touching a single template.
   Deliverables: `app.css`'s token set widened from its current ~14 custom properties to the full
@@ -236,6 +236,16 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   contains **only** custom-property declarations (no selectors beyond `:root` and the scheme
   media queries) — the mechanical proof that themes can't drift into structural CSS; a test
   asserting the selected theme's stylesheet is the one linked in the rendered shell.
+  Landed as a stricter split than the entry asked for (decisions log, 2026-09-24): `app.css` now
+  defines **no** token, and `static/themes/classic.css` and `sketch.css` each define all 51 tokens
+  `app.css` reads, for both schemes. A test proves that completeness alongside the "declarations
+  only" check. Sketch reproduces the drawing: centred monospace steps, `::after` chevrons (sized by
+  `--nav-chevron-size`, which is `0px` in Classic), heavy rules, a grey pane, and white panels.
+  `chummer5.web.prefs` holds `THEMES`, `ChargenSession.theme` holds the choice, and a title-bar
+  picker posts to `POST /ui/prefs/theme`. That route answers with the new `<link>` out of band, so
+  the page restyles without a reload. The `chargen-changed` middleware skips `/ui/prefs/`. **For
+  WP101:** put the language picker in the same `.app-shell__prefs` form area and route, but answer
+  it with `HX-Refresh`. See `spec/worklogs/WP100.md`.
 
 - [ ] **WP101 — The i18n key layer.**
   Goal: a string-lookup mechanism plus a locale on the session — the machinery only. No existing

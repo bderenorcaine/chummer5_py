@@ -65,6 +65,8 @@ from chummer5.web.session import SessionStore
 
 # The htmx event name `_step_nav.html` listens for (`hx-trigger="chargen-changed from:body"`).
 CHARGEN_CHANGED_EVENT = "chargen-changed"
+# Display-preference routes (`chummer5.web.prefs`), which that event deliberately skips.
+PREFS_PATH_PREFIX = "/ui/prefs/"
 
 __all__ = [
     "create_app",
@@ -97,7 +99,13 @@ def create_app() -> FastAPI:
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         response = await call_next(request)
-        if request.method == "POST" and response.status_code < 400:
+        # WP100: `/ui/prefs/` (theme, and WP101's language) changes presentation, not the
+        # character, so it moves no nav marker or budget and must not make them all re-fetch.
+        if (
+            request.method == "POST"
+            and response.status_code < 400
+            and not request.url.path.startswith(PREFS_PATH_PREFIX)
+        ):
             response.headers["HX-Trigger"] = CHARGEN_CHANGED_EVENT
         return response
 
