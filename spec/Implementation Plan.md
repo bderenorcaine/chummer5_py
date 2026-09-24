@@ -121,7 +121,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | T | UI bugfixes & skill-picker QoL | done (WP60-61) | [phase-t-ui-bugfixes.md](plan/phase-t-ui-bugfixes.md) |
 | U | UI bugfixes round 2 | done (WP64-66) | [phase-u-ui-bugfixes-2.md](plan/phase-u-ui-bugfixes-2.md) |
 | V | UI improvement requests | done (WP67-71, WP83-84) | [phase-v-ui-improvements.md](plan/phase-v-ui-improvements.md) |
-| W | UI shell, theming, i18n | in progress (WP97 done; WP98-103) | [phase-w-ui-shell.md](plan/phase-w-ui-shell.md) |
+| W | UI shell, theming, i18n | in progress (WP97-98 done; WP99-103) | [phase-w-ui-shell.md](plan/phase-w-ui-shell.md) |
 
 Next unclaimed WP number: **WP104** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V

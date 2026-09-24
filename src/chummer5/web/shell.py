@@ -6,6 +6,9 @@ WP61/WP64) with a title bar, a sidebar step nav, and one `#page` content pane. T
 themselves were already per-step (WP62), so nothing here changes what a step renders -- only which
 fragments are mounted together as one nav *page*, which is what `STEP_PAGES` records.
 
+WP98 made the three pages that mount more than one fragment (Skills, Magic, Equipment) tabbed:
+each fragment is a `PageSection`, and `resolve_tab`/`tabs_context` below decide which one shows.
+
 Not a router module: `chummer5.web.routes.pages` owns the shell/page/nav routes, and
 `chummer5.web.routes.priorities` needs `chargen_context` too, so both import from here rather than
 from each other.
@@ -13,9 +16,11 @@ from each other.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from chummer5.engine.character import Character
 from chummer5.engine.resources import resources_gear_args
 from chummer5.web.catalogs import DEFAULT_LIFESTYLE_MONTHS, DEFAULT_LIFESTYLE_TIER_NAME
 from chummer5.web.routes.attributes import _attribute_allocation_context
@@ -35,62 +40,153 @@ from chummer5.web.routes.vehicles import _vehicles_context
 from chummer5.web.session import ChargenSession
 
 
-@dataclass(frozen=True)
-class StepPage:
-    """One entry in the sidebar step nav.
+def _always(_character: Character | None) -> bool:
+    return True
 
-    `fragments` are the existing per-step partials mounted, in order, as this page's content --
-    each keeps its own wrapper id, `hx-target`, and route exactly as before (Finding 1).
-    `warning_keys` are the context keys (each step context builder's own `*_budget_warning`) whose
-    presence marks this page in the nav as holding a selection that no longer fits the confirmed
-    priorities (WP19) -- the nav marker is how that warning reaches a player who isn't looking at
-    the page. `enabled=False` is Finding 3's two nav entries with nothing behind them yet.
+
+def _is_magician(character: Character | None) -> bool:
+    return character is not None and character.magic_type == "Magician"
+
+
+def _is_adept(character: Character | None) -> bool:
+    return character is not None and character.magic_type == "Adept"
+
+
+def _is_awakened(character: Character | None) -> bool:
+    return character is not None and bool(character.magic_type)
+
+
+@dataclass(frozen=True)
+class PageSection:
+    """One existing step fragment mounted on a nav page -- on a composite page (WP98), one sub-tab.
+
+    `fragment` keeps its own wrapper id, `hx-target`, and route exactly as before (Finding 1).
+    `warning_keys` are the context keys (that step context builder's own `*_budget_warning`) whose
+    presence marks it as holding a selection that no longer fits the confirmed priorities (WP19);
+    the page's nav entry is stale if any of its sections is, and a composite page's tab strip marks
+    the section itself. `available` mirrors the fragment's own top-level `{% if %}` guard -- it
+    must agree with it exactly (a test pins that), because a tab whose fragment renders nothing
+    is shown disabled, with `unavailable_reason` as its explanation, rather than as an empty pane.
     """
 
     slug: str
     label: str
-    fragments: tuple[str, ...] = ()
+    fragment: str
     warning_keys: tuple[str, ...] = ()
+    available: Callable[[Character | None], bool] = _always
+    unavailable_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class StepPage:
+    """One entry in the sidebar step nav.
+
+    A page with more than one section is a composite (Finding 4) and renders them as sub-tabs
+    (WP98 -- see `spec/decisions-log.md`'s 2026-09-24 entry on the intra-page pattern). `enabled=
+    False` is Finding 3's two nav entries with nothing behind them yet. `locked_note` is a
+    composite page's empty state: shown under its tab strip when every tab but the showing one is
+    unavailable (Magic, for a character with no confirmed magical Talent).
+    """
+
+    slug: str
+    label: str
+    sections: tuple[PageSection, ...] = ()
     enabled: bool = True
     disabled_reason: str | None = None
     # The step fragments each open with their own `<summary>` heading; only a page whose fragment
     # has none (Export's character sheet) needs the page to supply one.
     heading: str | None = None
+    locked_note: str | None = None
+
+    @property
+    def tabbed(self) -> bool:
+        return len(self.sections) > 1
+
+    @property
+    def warning_keys(self) -> tuple[str, ...]:
+        return tuple(key for section in self.sections for key in section.warning_keys)
+
+    def section(self, slug: str) -> PageSection | None:
+        return next((section for section in self.sections if section.slug == slug), None)
+
+
+def _single(slug: str, label: str, fragment: str, *warning_keys: str) -> tuple[PageSection, ...]:
+    return (PageSection(slug, label, fragment, warning_keys),)
 
 
 # The sketch's order (`examples/ui/main_ui.png`), which is also SR5's own chargen step order.
-# Skills/Magic/Equipment are composites (Finding 4) that WP98 gives real intra-page structure; until
-# then they stack their fragments in their old accordion order.
+# Skills/Magic/Equipment are the composites (Finding 4); their sections keep their old accordion
+# order, which is also the order a player fills them in.
 STEP_PAGES: tuple[StepPage, ...] = (
-    StepPage("priorities", "Priorities", ("_priority_form.html",)),
+    StepPage(
+        "priorities", "Priorities", _single("priorities", "Priorities", "_priority_form.html")
+    ),
     StepPage(
         "attributes",
         "Attributes",
-        ("_attribute_allocation.html",),
-        ("attribute_budget_warning",),
+        _single(
+            "attributes", "Attributes", "_attribute_allocation.html", "attribute_budget_warning"
+        ),
     ),
-    StepPage("qualities", "Qualities", ("_quality_selection.html",)),
+    StepPage(
+        "qualities", "Qualities", _single("qualities", "Qualities", "_quality_selection.html")
+    ),
     StepPage(
         "skills",
         "Skills",
-        ("_skill_allocation.html", "_knowledge_skills.html"),
-        ("skill_budget_warning", "knowledge_budget_warning"),
+        (
+            PageSection(
+                "active", "Active skills", "_skill_allocation.html", ("skill_budget_warning",)
+            ),
+            PageSection(
+                "knowledge",
+                "Knowledge & languages",
+                "_knowledge_skills.html",
+                ("knowledge_budget_warning",),
+            ),
+        ),
     ),
     StepPage(
         "magic",
         "Magic",
         (
-            "_talent_selection.html",
-            "_spell_selection.html",
-            "_power_selection.html",
-            "_spirit_selection.html",
-            "_foci_selection.html",
+            PageSection("talent", "Talent", "_talent_selection.html", ("talent_budget_warning",)),
+            PageSection(
+                "spells",
+                "Spells",
+                "_spell_selection.html",
+                ("spell_budget_warning",),
+                _is_magician,
+                "Spells need a confirmed Magician Talent.",
+            ),
+            PageSection(
+                "powers",
+                "Adept powers",
+                "_power_selection.html",
+                (),
+                _is_adept,
+                "Adept powers need a confirmed Adept Talent.",
+            ),
+            PageSection(
+                "spirits",
+                "Bound spirits",
+                "_spirit_selection.html",
+                ("spirit_budget_warning",),
+                _is_magician,
+                "Bound spirits need a confirmed Magician Talent.",
+            ),
+            PageSection(
+                "foci",
+                "Foci",
+                "_foci_selection.html",
+                ("foci_budget_warning",),
+                _is_awakened,
+                "Foci need a confirmed Magician or Adept Talent.",
+            ),
         ),
-        (
-            "talent_budget_warning",
-            "spell_budget_warning",
-            "spirit_budget_warning",
-            "foci_budget_warning",
+        locked_note=(
+            "Spells, adept powers, bound spirits and foci open up here once you confirm a "
+            "Magician or Adept Talent."
         ),
     ),
     StepPage(
@@ -102,16 +198,20 @@ STEP_PAGES: tuple[StepPage, ...] = (
     StepPage(
         "augmentation",
         "Augmentation",
-        ("_cyberware.html",),
-        ("cyberware_budget_warning",),
+        _single("augmentation", "Augmentation", "_cyberware.html", "cyberware_budget_warning"),
     ),
     StepPage(
         "equipment",
         "Equipment",
-        ("_resources.html", "_lifestyle.html", "_vehicles.html"),
-        ("resources_budget_warning", "lifestyle_budget_warning", "vehicles_budget_warning"),
+        (
+            PageSection("gear", "Gear", "_resources.html", ("resources_budget_warning",)),
+            PageSection("lifestyle", "Lifestyle", "_lifestyle.html", ("lifestyle_budget_warning",)),
+            PageSection(
+                "vehicles", "Vehicles & drones", "_vehicles.html", ("vehicles_budget_warning",)
+            ),
+        ),
     ),
-    StepPage("contacts", "Contacts", ("_contacts.html",)),
+    StepPage("contacts", "Contacts", _single("contacts", "Contacts", "_contacts.html")),
     StepPage(
         "bio",
         "Bio",
@@ -121,7 +221,7 @@ STEP_PAGES: tuple[StepPage, ...] = (
     StepPage(
         "export",
         "Export",
-        ("_character_sheet.html",),
+        _single("export", "Export", "_character_sheet.html"),
         heading="Character sheet & export",
     ),
 )
@@ -146,6 +246,52 @@ def nav_context(session: ChargenSession, chargen_ctx: dict[str, Any]) -> dict[st
             for page in STEP_PAGES
         ]
     }
+
+
+def resolve_tab(session: ChargenSession, page: StepPage, requested: str | None = None) -> str:
+    """Which of a composite page's sections to show, recorded as that page's remembered tab.
+
+    An explicitly `requested` tab (a tab link, or a bookmarked tab URL) is shown even when it is
+    unavailable -- the page then shows its reason as an empty state rather than silently showing
+    something else at that URL. Otherwise the remembered tab is reopened if it is still available
+    (a Talent change can take Spells away), falling back to the first available section, which
+    for every composite page is its first section. The caller has already rejected an unknown
+    `requested` slug.
+    """
+    character = session.character
+    if requested is not None:
+        tab = requested
+    else:
+        remembered = page.section(session.page_tabs.get(page.slug, ""))
+        if remembered is not None and remembered.available(character):
+            tab = remembered.slug
+        else:
+            tab = next(s.slug for s in page.sections if s.available(character))
+    session.page_tabs[page.slug] = tab
+    return tab
+
+
+def tabs_context(
+    session: ChargenSession, page: StepPage, chargen_ctx: dict[str, Any], current_tab: str
+) -> dict[str, Any]:
+    """A composite page's tab strip: one item per section, with `current_tab` marked, availability
+    read off the session's character, and per-section WP19 staleness off `chargen_ctx` (the same
+    keys `nav_context` unions for the page's nav entry).
+    """
+    character = session.character
+    items = [
+        {
+            "section": section,
+            "current": section.slug == current_tab,
+            "available": section.available(character),
+            "stale": any(chargen_ctx.get(key) for key in section.warning_keys),
+        }
+        for section in page.sections
+    ]
+    locked = page.locked_note is not None and all(
+        not item["available"] for item in items if not item["current"]
+    )
+    return {"tab_items": items, "current_tab": current_tab, "tabs_locked": locked}
 
 
 def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> dict[str, Any]:

@@ -30,6 +30,10 @@
   --nav-item-current-bg: #ffffff;
   --nav-item-current-accent: #7a8595;
   --nav-item-disabled-fg: #9aa2ad;
+  --tab-fg: #35404f;
+  --tab-hover-bg: #f2f4f7;
+  --tab-current-accent: #35404f;
+  --tab-disabled-fg: #9aa2ad;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -54,6 +58,10 @@
     --nav-item-current-bg: #23272e;
     --nav-item-current-accent: #6b7686;
     --nav-item-disabled-fg: #5c6470;
+    --tab-fg: #c6ccd6;
+    --tab-hover-bg: #23272e;
+    --tab-current-accent: #c6ccd6;
+    --tab-disabled-fg: #5c6470;
   }
 }
 
@@ -163,6 +171,55 @@ a.step-nav__item:hover {
   margin-top: 0;
   font-size: 1.3rem;
   color: var(--summary-fg);
+}
+
+/* WP98: a composite page's tab strip (Skills, Magic, Equipment) -- one section showing at a time,
+   the others `hidden` (nothing here may set `display` on .subpage, or `hidden` stops working). */
+.page-tabs {
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.page-tabs__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.page-tabs__item {
+  display: block;
+  margin-bottom: -1px;
+  padding: 0.35rem 0.8rem;
+  border-bottom: 3px solid transparent;
+  color: var(--tab-fg);
+  text-decoration: none;
+}
+
+a.page-tabs__item:hover {
+  background: var(--tab-hover-bg);
+}
+
+.page-tabs__item--current {
+  font-weight: 600;
+  border-bottom-color: var(--tab-current-accent);
+}
+
+.page-tabs__item--disabled {
+  color: var(--tab-disabled-fg);
+  cursor: not-allowed;
+}
+
+.page-tabs__marker {
+  color: var(--warning-fg);
+}
+
+.page-tabs__note {
+  margin: 0.4rem 0 0.5rem;
+  color: var(--tab-disabled-fg);
+  font-size: 0.95rem;
 }
 
 /* One box per step fragment. A composite page (Skills, Magic, Equipment) stacks several, so

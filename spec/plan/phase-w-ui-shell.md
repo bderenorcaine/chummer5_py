@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n (WP97 done; WP98-103 remaining)
+### Phase W — Post-MVP: application shell, theming, and i18n (WP97-98 done; WP99-103 remaining)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -138,7 +138,7 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   every step fragment; `app.css` no longer selects on any id or tag structure. See
   `spec/worklogs/WP97.md`.
 
-- [ ] **WP98 — The three composite pages: Skills, Magic, Equipment.**
+- [x] **WP98 — The three composite pages: Skills, Magic, Equipment.**
   Goal: give the three nav items that own more than one of today's sections (Finding 4) a real
   intra-page structure, rather than stacking their fragments in a column and calling it a page.
   Deliverables: a Skills page over `_skill_allocation` + `_knowledge_skills`; a Magic page over
@@ -160,6 +160,19 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   assertions unchanged (the fragments themselves are untouched); an integration test walking
   priorities → skills → magic → equipment through the nav and asserting each page renders all of its
   constituent fragments.
+  Landed as **server-rendered sub-tabs over a page that still renders every fragment** (decisions
+  log, 2026-09-24): `StepPage.fragments` became `sections: tuple[PageSection, ...]`, and a page
+  with more than one section is tabbed. A tab is a link (`GET /ui/page/{slug}/{tab}`) that re-
+  renders the page with that section showing and the others `hidden`. The link is fresh every time,
+  because no step route re-renders a sibling: confirming Magician never un-empties the Spells
+  fragment already in the DOM. The strip re-fetches itself from `GET /ui/tabs/{slug}` on
+  `chargen-changed`. `PageSection.available` mirrors each fragment's own guard, and a test pins the
+  two together. An unavailable tab is a disabled `<span>` with its reason, and Magic's empty state
+  adds one `locked_note` line. `ChargenSession.page_tabs` remembers each page's tab. Class hooks for
+  WP100: `.page-tabs*` (`__item--current`/`--stale`/`--disabled`, `__marker`, `__note`) and
+  `.subpage` (which must never get a `display`, or `hidden` stops working). **For WP99:** the
+  Equipment page-level nuyen line was *not* built; see the decisions log for why it belongs in the
+  panel. See `spec/worklogs/WP98.md`.
 
 - [ ] **WP99 — The remaining-resources panel.**
   Goal: the sidebar's lower box — one always-visible display of remaining Karma, nuyen, and the

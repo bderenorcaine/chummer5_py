@@ -1,0 +1,42 @@
+{# WP98: a composite page's tab strip -- the step nav's pattern one level down. Each available
+   tab is a link that re-renders the page with that section showing (pushed to history, so back
+   walks tabs too); an unavailable one is a disabled <span> carrying its reason, like the nav's
+   Resonance/Bio. Re-fetches itself on `chargen-changed` (every successful POST), so confirming a
+   Talent on the Talent tab un-disables Spells, and a fixed section's ⚠ clears, without a reload.
+   The links set their own hx-swap because the strip's outerHTML would otherwise be inherited. #}
+<nav
+  id="page-tabs"
+  class="page-tabs"
+  aria-label="{{ page.label }} sections"
+  hx-get="/ui/tabs/{{ page.slug }}"
+  hx-trigger="chargen-changed from:body"
+  hx-swap="outerHTML"
+>
+  <ul class="page-tabs__list">
+    {% for item in tab_items %}
+    <li class="page-tabs__entry">
+      {% if item.available %}
+      <a
+        class="page-tabs__item{% if item.current %} page-tabs__item--current{% endif %}{% if item.stale %} page-tabs__item--stale{% endif %}"
+        href="/ui/page/{{ page.slug }}/{{ item.section.slug }}"
+        hx-get="/ui/page/{{ page.slug }}/{{ item.section.slug }}"
+        hx-target="#page"
+        hx-swap="innerHTML"
+        hx-push-url="true"
+        {% if item.current %}aria-current="page"{% endif %}
+      >{{ item.section.label }}{% if item.stale %} <span class="page-tabs__marker" title="Some selections here no longer fit your priorities">⚠</span>{% endif %}</a>
+      {% else %}
+      <span
+        class="page-tabs__item page-tabs__item--disabled{% if item.current %} page-tabs__item--current{% endif %}"
+        aria-disabled="true"
+        {% if item.current %}aria-current="page"{% endif %}
+        title="{{ item.section.unavailable_reason }}"
+      >{{ item.section.label }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if tabs_locked %}
+  <p class="page-tabs__note">{{ page.locked_note }}</p>
+  {% endif %}
+</nav>

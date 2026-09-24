@@ -15,7 +15,7 @@ leak session state into each other.
 from __future__ import annotations
 
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import Request
 
@@ -161,6 +161,11 @@ class ChargenSession:
     sets it, now to the slug of the page that step lives on (so the five Magic fragments all set
     `"magic"`). The step nav marks it as the current entry. The WP64 section-exclusivity script
     went with the accordion; its sub-category `data-details-key` half survives in `base.html`.
+
+    **WP98**: `page_tabs` is `current_page`'s second level -- for each composite page (Skills,
+    Magic, Equipment), the slug of the sub-tab last shown there, so a nav click back to that page
+    reopens the same tab. Written only by page renders (`chummer5.web.shell.resolve_tab`), never by
+    a step `POST`: a player can only post from the tab that is showing, so it is already right.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER
@@ -172,6 +177,7 @@ class ChargenSession:
     metatype_id: str | None = None
     character: Character | None = None
     current_page: str = "priorities"
+    page_tabs: dict[str, str] = field(default_factory=dict)
 
 
 class SessionStore:

@@ -1,13 +1,33 @@
 {# WP97: one nav page's content -- its step fragments, each unchanged and still posting to and
    swapping its own wrapper (see chummer5.web.shell.STEP_PAGES). An htmx nav request gets this
-   alone swapped into #page, plus the nav out-of-band so its current-step marker follows. #}
+   alone swapped into #page, plus the nav out-of-band so its current-step marker follows.
+   WP98: a composite page (more than one section) puts a tab strip over them. Every section's
+   fragment is still rendered; all but the current tab's are `hidden`, and a tab link re-renders
+   this whole page rather than toggling visibility client-side (see chummer5.web.routes.pages). #}
 <div class="page page--{{ page.slug }}">
   {% if page.heading %}
   <h1 class="page__heading">{{ page.heading }}</h1>
   {% endif %}
-  {% for fragment in page.fragments %}
-  {% include fragment %}
+  {% if page.tabbed %}
+  {% include "_page_tabs.html" %}
+  {% for item in tab_items %}
+  <section
+    id="subpage-{{ page.slug }}-{{ item.section.slug }}"
+    class="subpage"
+    aria-label="{{ item.section.label }}"
+    {% if not item.current %}hidden{% endif %}
+  >
+    {% if item.current and not item.available %}
+    <p class="info subpage__unavailable">{{ item.section.unavailable_reason }}</p>
+    {% endif %}
+    {% include item.section.fragment %}
+  </section>
   {% endfor %}
+  {% else %}
+  {% for section in page.sections %}
+  {% include section.fragment %}
+  {% endfor %}
+  {% endif %}
 </div>
 {% if oob_nav %}
 {% include "_step_nav.html" %}

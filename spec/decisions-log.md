@@ -1334,3 +1334,48 @@ buttons have never done what their labels say. The fix is adding `submit` to tho
 `hx-trigger` lists; it is a behaviour change to every step fragment, so it was left out of a WP whose
 acceptance is "no step's contents change" — it belongs in its own small WP (or in WP98 if that WP is
 open to it).
+
+**2026-09-24 (WP98, Phase W) — the composite pages' intra-page pattern: server-rendered sub-tabs
+over a page that still renders every fragment.** Phase W left this as the one open design call
+(Skills, Magic, and Equipment each mount 2–5 of the old sections), to be made once and applied to all
+three. The options were retained `<details>` groups — what WP97 already shipped as a placeholder,
+every panel stacked and open — or sub-tabs. Tabs won, and the three constraints below settled *how*
+they work:
+
+1. **Every fragment has to stay in the page.** About 38 existing test requests `GET` a composite
+   page and assert on one of its fragments. WP98's acceptance is that those assertions stay
+   unchanged, and that each page renders all of its fragments. So a tab cannot be "the server renders
+   only this section". Every section's fragment is rendered, and all but the current one get the
+   `hidden` attribute on a `<section class="subpage">` wrapper owned by `_page.html`. The fragments
+   themselves are untouched.
+2. **A tab switch has to be a fresh render.** No step route re-renders a sibling fragment. Confirming
+   Magician on the Talent tab swaps only `#talent-selection`, so the Spells fragment stays in the DOM
+   with the empty output it rendered for a Mundane character. The same is true in the pre-WP97
+   accordion, where Spells stayed empty until a full reload. A client-side tab toggle would
+   uncover that stale fragment. A tab link that re-renders the page cannot. So a tab is WP97's nav
+   mechanism one level down: `GET /ui/page/{slug}/{tab}` (htmx into `#page`, pushed to history,
+   full shell when requested directly). It needs no JavaScript, and the cost is the same
+   `chargen_context` a nav click already pays.
+3. **The strip has to follow changes made on other tabs.** It re-fetches itself from
+   `GET /ui/tabs/{slug}` on the same `chargen-changed` event as the nav (2026-09-24, WP97). That is
+   how Spells un-disables the moment a Magician Talent is confirmed, and how a fixed section's ⚠
+   clears.
+
+**Availability is data, not a template guess.** A section's tab is disabled (a `<span>` with its
+reason, the same form as the nav's Resonance/Bio) exactly when its fragment's own top-level
+`{% if %}` renders nothing. The predicates on `PageSection.available` mirror those guards by hand,
+and `test_magic_tab_availability_agrees_with_each_fragments_own_guard` pins the two together across
+no-character/Mundane/Magician/Adept. Magic's designed empty state is the Talent tab, four
+disabled tabs, and one `locked_note` line saying what opens them.
+
+**Each page remembers its tab** (`ChargenSession.page_tabs`). A nav click reopens the tab the player
+left, falling back to the first available tab if a Talent change took it away. An *explicit* tab URL
+to an unavailable section shows that section's reason as an empty state rather than silently
+showing a different tab at that URL.
+
+**Deferred to WP99, deliberately: Equipment's shared nuyen line.** WP98's entry suggests one page-
+level budget line, because gear, lifestyle, and vehicles all spend one pool. A line in `#page` would
+go stale on every fragment `POST`, exactly as the nav would have without its self-refresh. Making it
+refresh would rebuild WP99's resource panel inside one page. The panel will show the global nuyen
+figure from every page, so a page-level copy would be redundant. The per-fragment "remaining" lines
+stay as they are.
