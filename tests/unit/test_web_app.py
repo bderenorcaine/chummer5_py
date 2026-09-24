@@ -108,7 +108,7 @@ def test_submitting_duplicate_priority_letters_is_rejected() -> None:
     )
 
     assert response.status_code == 200
-    assert "different priority letter" in response.text
+    assert "must each use a different priority letter" in response.text
     assert "Confirmed:" not in response.text
 
 
@@ -163,7 +163,7 @@ def test_submitting_only_four_distinct_letters_is_rejected() -> None:
     )
 
     assert response.status_code == 200
-    assert "different priority letter" in response.text
+    assert "must each use a different priority letter" in response.text
     assert "Confirmed:" not in response.text
 
 
@@ -233,7 +233,7 @@ def test_submitting_sum_to_ten_with_repeated_letters_summing_to_10_is_accepted()
 
     assert response.status_code == 200
     assert "Confirmed: Human" in response.text
-    assert "different priority letter" not in response.text
+    assert "must each use a different priority letter" not in response.text
 
 
 def test_submitting_sum_to_ten_under_target_is_rejected() -> None:
@@ -347,7 +347,7 @@ def test_priority_form_defaults_to_priority_build_method_when_field_omitted() ->
     )
 
     assert response.status_code == 200
-    assert "different priority letter" in response.text
+    assert "must each use a different priority letter" in response.text
 
 
 def test_sessions_are_isolated_per_cookie() -> None:

@@ -17,6 +17,7 @@ from starlette.datastructures import FormData
 from chummer5.engine.character import Character
 from chummer5.engine.spirits import create_bound_spirit_selection, offered_spirit_types
 from chummer5.web.catalogs import MAX_BOUND_SPIRIT_ROWS, templates
+from chummer5.web.i18n import Message
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -106,7 +107,7 @@ def _spirit_selection_context(
         for i in range(MAX_BOUND_SPIRIT_ROWS)
     ]
     karma_spent = sum(services for _, _, services in entries)
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None and character.bound_spirit_selection is not None:
         committed_picks: list[tuple[str, int | None, int]] = [
             (spirit.spirit_type, spirit.force, spirit.services)
@@ -115,10 +116,7 @@ def _spirit_selection_context(
         try:
             create_bound_spirit_selection(committed_picks, character, karma_budget)
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since priorities/attributes were last confirmed: {exc}. "
-                "Reconfirm Bound Spirits below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Spirits", error=str(exc))
     return {
         "character": character,
         "spirit_rows": rows,

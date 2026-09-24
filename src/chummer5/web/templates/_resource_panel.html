@@ -9,20 +9,20 @@
   hx-trigger="chargen-changed from:body"
   hx-swap="outerHTML"
 >
-  <h2 id="resource-panel-heading" class="resource-panel__heading">Remaining</h2>
+  <h2 id="resource-panel-heading" class="resource-panel__heading">{{ _('Web_Panel_Heading') }}</h2>
   {% if resource_rows %}
   <dl class="resource-panel__list">
     {% for row in resource_rows %}
     <div class="resource-panel__row{% if row.over %} resource-panel__row--over{% endif %}">
-      <dt class="resource-panel__label">{{ row.label }}</dt>
+      <dt class="resource-panel__label">{{ _(row.label_key) }}</dt>
       <dd class="resource-panel__value">
-        {{ row.remaining }}{% if row.nuyen %}¥{% endif %}
-        <span class="resource-panel__of">of {{ row.of }}{% if row.nuyen %}¥{% endif %}</span>
+        {% if row.nuyen %}{{ row.remaining | nuyen }}{% else %}{{ row.remaining }}{% endif %}
+        <span class="resource-panel__of">{{ _("Web_Panel_Of", total=(row.of | nuyen) if row.nuyen else row.of) }}</span>
       </dd>
     </div>
     {% endfor %}
   </dl>
   {% else %}
-  <p class="resource-panel__empty">Confirm priorities and a metatype to see your budgets.</p>
+  <p class="resource-panel__empty">{{ _("Web_Panel_Empty") }}</p>
   {% endif %}
 </section>

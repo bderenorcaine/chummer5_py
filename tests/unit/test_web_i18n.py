@@ -152,7 +152,8 @@ def test_every_literal_key_a_template_uses_exists_in_english() -> None:
     used = {
         key
         for path in Path(TEMPLATES_DIR).glob("*.html")
-        for key in re.findall(r"""_\(\s*["']([A-Za-z0-9_]+)["']""", path.read_text())
+        # A literal key is the whole first argument; `_("Web_X_" ~ value)` is a computed one.
+        for key in re.findall(r"""_\(\s*["']([A-Za-z0-9_]+)["']\s*[,)]""", path.read_text())
     }
     assert used, "no _() call found -- the regex is stale"
     assert used - set(english) == set()
@@ -170,3 +171,170 @@ def test_an_unknown_locale_is_rejected() -> None:
 
     assert client.post("/ui/prefs/locale", data={"locale": "de-de"}).status_code == 422
     assert '<html lang="en-US">' in client.get("/").text
+
+
+# --- WP102: keys built at render time, and the Python-side message types -------------------------
+
+
+def test_every_computed_key_family_is_complete() -> None:
+    """Templates build some keys from a value (`"Web_MagicType_" ~ character.magic_type`), which
+    the literal-key test above cannot see; each family is checked against its value set here."""
+    from chummer5.data.knowledge import KNOWLEDGE_CATEGORIES
+    from chummer5.data.skills import load_skills
+    from chummer5.data.traditions import load_traditions
+    from chummer5.engine.build_method import PRIORITY_BUILD_METHOD, SUM_TO_TEN_BUILD_METHOD
+    from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES
+    from chummer5.engine.magic import OFFERED_TALENT_CODENAMES
+    from chummer5.web.catalogs import MVP_POWERS
+
+    english = load_locale_strings("en-us")
+    keys = {f"Web_BuildMethod_{m}" for m in (PRIORITY_BUILD_METHOD, SUM_TO_TEN_BUILD_METHOD)}
+    keys |= {f"Web_MagicType_{c}" for c in OFFERED_TALENT_CODENAMES if c != "Mundane"}
+    codes = set(ALLOCATABLE_ATTRIBUTES) | {"MAG"}
+    codes |= {skill.attribute for skill in load_skills()}
+    codes |= {code for t in load_traditions() for code in t.drain_attributes}
+    codes |= {category.linked_attribute for category in KNOWLEDGE_CATEGORIES}
+    codes |= {
+        code
+        for power in MVP_POWERS
+        for bonus in power.flat_bonuses
+        for code in getattr(bonus, "attribute_options", ())
+    }
+    keys |= {f"String_Attribute{code}Short" for code in codes}
+    assert keys - set(english) == set()
+
+
+def test_every_key_the_shell_tables_hold_exists() -> None:
+    from chummer5.web.shell import STEP_PAGES
+
+    english = load_locale_strings("en-us")
+    keys = set()
+    for page in STEP_PAGES:
+        keys |= {page.label_key, page.disabled_reason_key, page.heading_key, page.locked_note_key}
+        for section in page.sections:
+            keys |= {section.label_key, section.unavailable_reason_key}
+    keys.discard(None)
+    assert keys - set(english) == set()
+
+
+def test_a_message_renders_its_params_and_nested_joins() -> None:
+    message = i18n.Message.of(
+        "Web_Stale_Lifestyle",
+        breakdown=i18n.MessageJoin(
+            (
+                i18n.Message.of("Web_Stale_SpendGear", amount=100),
+                i18n.Message.of("Web_Stale_SpendLifestyle", amount=200),
+            ),
+            "Web_List_Plus",
+        ),
+        total=300,
+        letter="E",
+        budget=250,
+    )
+
+    text = str(i18n.render_message("en-us", message))
+
+    assert text.startswith("No longer fits since priorities were last confirmed: ")
+    assert "gear (100) + lifestyle (200) spend 300" in text
+    assert "priority E&#39;s nuyen budget of 250." in text  # escaped like any template value
+
+
+def test_an_engine_string_passes_through_escaped() -> None:
+    assert str(i18n.render_message("en-us", "a <b> & c")) == "a &lt;b&gt; &amp; c"
+
+
+def test_markup_arguments_survive_but_plain_ones_are_escaped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from markupsafe import Markup
+
+    monkeypatch.setitem(i18n.CATALOGS, "xx-test", {"K": "<{word}> costs {cost}"})
+
+    rendered = i18n._markup_format(
+        "K",
+        i18n._lookup("xx-test", "K"),
+        (),
+        {"word": Markup("<strong>Capacity</strong>"), "cost": "<1>"},
+    )
+
+    assert str(rendered) == "&lt;<strong>Capacity</strong>&gt; costs &lt;1&gt;"
+
+
+def test_plurals_pick_the_form_by_count() -> None:
+    assert i18n.translate_plural("en-us", "Web_Sheet_Boxes", 1) == "1 box"
+    assert i18n.translate_plural("en-us", "Web_Sheet_Boxes", 0) == "0 boxes"
+    assert i18n.translate_plural("en-us", "Web_Sheet_Boxes", 10) == "10 boxes"
+
+
+def test_every_plural_key_has_both_forms() -> None:
+    english = set(load_locale_strings("en-us"))
+    for key in english:
+        for form, other in (("_One", "_Other"), ("_Other", "_One")):
+            if key.endswith(form):
+                assert key[: -len(form)] + other in english, key
+
+
+def test_money_goes_through_one_formatter() -> None:
+    assert i18n.format_nuyen("en-us", 50000) == "50000¥"
+    for path in Path(TEMPLATES_DIR).glob("*.html"):
+        # Every ¥ a template shows comes from the `nuyen` filter, never a literal.
+        assert "¥" not in path.read_text(), path.name
+
+
+@pytest.mark.parametrize("talent", ["Mundane", "Magician", "Adept"])
+def test_no_page_renders_a_missing_key_marker(
+    talent: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Every page and tab, for each archetype, with a little of everything bought: nothing renders
+    `⟦Key⟧` and nothing logs an i18n warning -- the end-to-end check behind the static ones."""
+    from chummer5.data.metatypes import load_metatypes
+    from chummer5.data.priorities import load_priorities
+    from chummer5.data.skills import load_skills
+    from chummer5.data.traditions import load_traditions
+    from chummer5.engine.character import metatype_choices
+    from chummer5.web.shell import STEP_PAGES
+
+    priorities = load_priorities()
+    human = next(
+        c
+        for c in metatype_choices(priorities.heritage["A"], load_metatypes())
+        if c.metatype.name == "Human"
+    ).metatype.id
+    skills = {s.name: s.id for s in load_skills()}
+    client = TestClient(create_app())
+    with caplog.at_level(logging.WARNING, logger="chummer5.web.i18n"):
+        pages = [client.get("/").text]  # before any character: every placeholder
+        client.post(
+            "/ui/priorities",
+            data={
+                "heritage_letter": "A",
+                "talent_letter": "B",
+                "attributes_letter": "C",
+                "skills_letter": "D",
+                "resources_letter": "E",
+                "metatype_id": human,
+            },
+        )
+        talent_data: dict[str, object] = {"talent_letter": "B", "talent_codename": talent}
+        if talent == "Magician":
+            hermetic = next(t for t in load_traditions() if t.name == "Hermetic")
+            talent_data |= {
+                "tradition_id": hermetic.id,
+                "granted_skill_id": [skills["Spellcasting"], skills["Counterspelling"]],
+            }
+        elif talent == "Adept":
+            talent_data |= {"granted_skill_id": [skills["Pistols"]]}
+        client.post("/ui/talent", data=talent_data)
+        client.post("/ui/lifestyle", data={"lifestyle_tier": "Low", "lifestyle_months": "30"})
+        client.post("/ui/attributes", data={"attr_BOD": "99"})  # an error message, too
+        for page in STEP_PAGES:
+            if not page.enabled:
+                continue
+            pages.append(client.get(f"/ui/page/{page.slug}").text)
+            for section in page.sections if page.tabbed else ():
+                pages.append(client.get(f"/ui/page/{page.slug}/{section.slug}").text)
+        pages.append(client.get("/ui/resource-panel").text)
+
+    for html in pages:
+        assert "⟦" not in html
+    assert "i18n" not in caplog.text

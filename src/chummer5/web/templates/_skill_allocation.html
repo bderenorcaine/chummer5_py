@@ -1,28 +1,28 @@
 <div id="skill-allocation" class="panel">
   {% if character %}
   <details open>
-  <summary class="panel__heading">Skills</summary>
+  <summary class="panel__heading">{{ _("Tab_Skills") }}</summary>
 
   {% if skill_error %}
-  <p class="error">{{ skill_error }}</p>
+  <p class="error">{{ skill_error | tr }}</p>
   {% endif %}
   {% if skill_budget_warning %}
-  <p class="warning">{{ skill_budget_warning }}</p>
+  <p class="warning">{{ skill_budget_warning | tr }}</p>
   {% endif %}
 
   <p>
-    Skill points remaining: {{ skills_remaining }} / {{ skills_budget }}.
-    Skill group points remaining: {{ groups_remaining }} / {{ groups_budget }}.
-    Karma remaining for skills: {{ skill_karma_remaining }} / {{ skill_karma_budget }}.
+    {{ _("Web_Skills_PointsRemaining", remaining=skills_remaining, budget=skills_budget) }}
+    {{ _("Web_Skills_GroupPointsRemaining", remaining=groups_remaining, budget=groups_budget) }}
+    {{ _("Web_Skills_KarmaRemaining", remaining=skill_karma_remaining, budget=skill_karma_budget) }}
   </p>
 
   <label>
-    Filter skills
-    <input type="text" id="skill-filter" placeholder="e.g. Automatics" />
+    {{ _("Web_Skills_Filter") }}
+    <input type="text" id="skill-filter" placeholder="{{ _('Web_Skills_FilterPlaceholder') }}" />
   </label>
   <label>
     <input type="checkbox" id="skill-rated-only" />
-    Only rated skills
+    {{ _("Web_Skills_RatedOnly") }}
   </label>
 
   <form
@@ -31,17 +31,14 @@
     hx-swap="outerHTML"
     hx-trigger="change, input[event.target.type=='number'] delay:400ms"
   >
-    <h3>Skill groups</h3>
-    <p>
-      "Karma pts" (Step Seven) raises a group's rating beyond its priority points, at
-      new Rating &times; 5 Karma per point.
-    </p>
+    <h3>{{ _("Label_SkillGroups") }}</h3>
+    <p>{{ _("Web_Skills_GroupKarmaHelp") }}</p>
     <table>
       <thead>
         <tr>
-          <th>Group</th>
-          <th>Points</th>
-          <th>Karma pts</th>
+          <th>{{ _("Web_Skills_ColGroup") }}</th>
+          <th>{{ _("Web_Skills_ColPoints") }}</th>
+          <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -71,20 +68,9 @@
       </tbody>
     </table>
 
-    <h3>Individual skills</h3>
-    <p>
-      A skill's own points are ignored whenever its group has points spent (the group rating
-      wins) — see the "strict skill groups" rule. A specialization costs 1 extra skill point (on
-      top of whatever bought the rating) and only applies to a skill bought individually here —
-      not one whose rating comes from a purchased skill group.
-    </p>
-    <p>
-      "Karma pts"/"Karma spec" (Step Seven) can raise or specialize a skill beyond what the columns
-      above allow, at new Rating &times; 2 Karma per point / 7 Karma flat per specialization —
-      including a skill whose rating comes from a purchased group, which permanently breaks that
-      group from this point forward (its other members keep their current rating, but can no
-      longer be raised together as a group).
-    </p>
+    <h3>{{ _("Web_Skills_Individual") }}</h3>
+    <p>{{ _("Web_Skills_GroupsWinHelp") }}</p>
+    <p>{{ _("Web_Skills_KarmaHelp") }}</p>
 
     <div id="skill-tables">
       {% for group in skill_row_groups %}
@@ -99,22 +85,22 @@
         <table>
           <thead>
             <tr>
-              <th>Skill</th>
-              <th>Attribute</th>
-              <th>Group</th>
-              <th>Points</th>
-              <th>Karma pts</th>
-              <th>Rating (with bonuses)</th>
-              <th>Specialization</th>
-              <th>Karma spec</th>
-              <th>Pool</th>
+              <th>{{ _("Web_Skills_ColSkill") }}</th>
+              <th>{{ _("Web_Attributes_ColAttribute") }}</th>
+              <th>{{ _("Web_Skills_ColGroup") }}</th>
+              <th>{{ _("Web_Skills_ColPoints") }}</th>
+              <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
+              <th>{{ _("Web_Skills_ColRating") }}</th>
+              <th>{{ _("Web_Skills_ColSpecialization") }}</th>
+              <th>{{ _("Web_Skills_ColKarmaSpec") }}</th>
+              <th>{{ _("Web_Skills_ColPool") }}</th>
             </tr>
           </thead>
           <tbody>
             {% for row in group.rows %}
             <tr data-skill-name="{{ row.skill.name | lower }}" data-skill-rating="{{ row.rating }}">
               <td>{{ row.skill.name }}</td>
-              <td>{{ row.skill.attribute }}</td>
+              <td>{{ _("String_Attribute" ~ row.skill.attribute ~ "Short") }}</td>
               <td>{{ row.skill.skill_group or "—" }}</td>
               <td>
                 <input
@@ -140,7 +126,7 @@
                   type="text"
                   name="spec_{{ row.skill.id }}"
                   value="{{ row.specialization }}"
-                  placeholder="e.g. Axes"
+                  placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
                 />
               </td>
               <td>
@@ -148,7 +134,7 @@
                   type="text"
                   name="karma_spec_{{ row.skill.id }}"
                   value="{{ row.karma_specialization }}"
-                  placeholder="e.g. Axes"
+                  placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
                 />
               </td>
               <td>{{ row.pool }}{% if row.pool_specialized is not none %} ({{ row.pool_specialized }}){% endif %}</td>
@@ -159,7 +145,7 @@
       </details>
       {% endfor %}
     </div>
-    <button type="submit">Update skills</button>
+    <button type="submit">{{ _("Web_Skills_Update") }}</button>
   </form>
   <script>
     (function () {
@@ -204,6 +190,6 @@
   </script>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities on the Priorities page before allocating skill points.</p>
+  <p>{{ _("Web_Skills_Placeholder") }}</p>
   {% endif %}
 </div>

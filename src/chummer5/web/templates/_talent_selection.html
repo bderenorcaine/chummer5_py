@@ -1,22 +1,23 @@
 <div id="talent-selection" class="panel">
   {% if character %}
   <details open>
-  <summary class="panel__heading">Talent</summary>
+  <summary class="panel__heading">{{ _("Web_Tab_Talent") }}</summary>
   <p>
-    Talent priority {{ talent_letter }} — {{ talent_letter_name }}.
-    {% if character.magic_type %}
-    Confirmed: {{ character.magic_type }}{% if character.tradition %} ({{ character.tradition.name }}){% endif %} —
-    Magic {{ character.magic_rating }}.
+    {{ _("Web_Talent_Priority", letter=talent_letter, name=talent_letter_name) }}
+    {% if character.magic_type and character.tradition %}
+    {{ _("Web_Talent_ConfirmedWithTradition", type=_("Web_MagicType_" ~ character.magic_type), tradition=character.tradition.name, rating=character.magic_rating) }}
+    {% elif character.magic_type %}
+    {{ _("Web_Talent_Confirmed", type=_("Web_MagicType_" ~ character.magic_type), rating=character.magic_rating) }}
     {% else %}
-    Not yet confirmed — MVP defaults to Mundane until you confirm below.
+    {{ _("Web_Talent_NotConfirmed") }}
     {% endif %}
   </p>
 
   {% if talent_error %}
-  <p class="error">{{ talent_error }}</p>
+  <p class="error">{{ talent_error | tr }}</p>
   {% endif %}
   {% if talent_budget_warning %}
-  <p class="warning">{{ talent_budget_warning }}</p>
+  <p class="warning">{{ talent_budget_warning | tr }}</p>
   {% endif %}
 
   <form
@@ -45,10 +46,10 @@
 
     {% include "_talent_options.html" %}
 
-    <button type="submit">Confirm Talent</button>
+    <button type="submit">{{ _("Web_Talent_Confirm") }}</button>
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities on the Priorities page before selecting Talent.</p>
+  <p>{{ _("Web_Talent_Placeholder") }}</p>
   {% endif %}
 </div>

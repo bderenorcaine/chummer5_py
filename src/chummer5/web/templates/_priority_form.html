@@ -1,21 +1,13 @@
 <div id="priority-section" class="panel">
   <details open>
-  <summary class="panel__heading">Priority &amp; metatype selection</summary>
-  <p>
-    Assign each of Heritage, Talent, Attributes, Skills, and Resources a different priority
-    letter (A-E). Talent's own archetype (Mundane/Magician/Adept) is chosen on the Magic page,
-    once you confirm a letter for it here — which archetypes are offered depends on the
-    letter.
-  </p>
+  <summary class="panel__heading">{{ _("Web_Priorities_Heading") }}</summary>
+  <p>{{ _("Web_Priorities_Intro") }}</p>
 
   {% if error %}
-  <p class="error">{{ error }}</p>
+  <p class="error">{{ error | tr }}</p>
   {% endif %}
   {% if priority_stale_selections %}
-  <p class="warning">
-    Some of your existing attribute, skill, or gear selections no longer fit these priorities —
-    the affected steps are marked ⚠ in the step list.
-  </p>
+  <p class="warning">{{ _("Web_Priorities_StaleSelections") }}</p>
   {% endif %}
 
   <form
@@ -25,7 +17,7 @@
     hx-swap="outerHTML"
   >
     <fieldset>
-      <legend>Build method</legend>
+      <legend>{{ _("Web_Priorities_BuildMethod") }}</legend>
       {% for method in build_methods %}
       <label>
         <input
@@ -34,16 +26,16 @@
           value="{{ method }}"
           {% if method == selected.build_method %}checked{% endif %}
         >
-        {% if method == priority_build_method %}Priority (each of the 5 must use a different letter){% else %}Sum-to-Ten (letters may repeat; point values must total exactly {{ sum_to_ten_target }}){% endif %}
+        {% if method == priority_build_method %}{{ _("Web_Priorities_MethodPriority") }}{% else %}{{ _("Web_Priorities_MethodSumToTen", target=sum_to_ten_target) }}{% endif %}
       </label>
       {% endfor %}
       {% if selected.build_method == sum_to_ten_build_method %}
-      <p>Current total: {{ sum_to_ten_total }} / {{ sum_to_ten_target }}</p>
+      <p>{{ _("Web_Priorities_SumToTenTotal", total=sum_to_ten_total, target=sum_to_ten_target) }}</p>
       {% endif %}
     </fieldset>
 
     <label>
-      Heritage
+      {{ _("Web_Priorities_Heritage") }}
       <select
         name="heritage_letter"
         hx-get="/ui/metatypes"
@@ -61,7 +53,7 @@
     </label>
 
     <label>
-      Talent
+      {{ _("Web_Tab_Talent") }}
       <select name="talent_letter">
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.talent_letter %}selected{% endif %}>
@@ -72,7 +64,7 @@
     </label>
 
     <label>
-      Attributes
+      {{ _("Label_Attributes") }}
       <select name="attributes_letter">
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.attributes_letter %}selected{% endif %}>
@@ -83,7 +75,7 @@
     </label>
 
     <label>
-      Skills
+      {{ _("Tab_Skills") }}
       <select name="skills_letter">
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.skills_letter %}selected{% endif %}>
@@ -94,7 +86,7 @@
     </label>
 
     <label>
-      Resources
+      {{ _("Web_Priorities_Resources") }}
       <select name="resources_letter">
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.resources_letter %}selected{% endif %}>
@@ -105,24 +97,24 @@
     </label>
 
     <label>
-      Metatype
+      {{ _("String_Metatype") }}
       {% include "_metatype_select.html" %}
     </label>
 
-    <button type="submit">Confirm metatype &amp; priorities</button>
+    <button type="submit">{{ _("Web_Priorities_Confirm") }}</button>
   </form>
 
   {% if character %}
   <div id="character-summary">
-    <h2>Confirmed: {{ character.metatype.name }}</h2>
+    <h2>{{ _("Web_Priorities_Confirmed", metatype=character.metatype.name) }}</h2>
     <ul>
-      <li>Build method: {{ selected.build_method }}</li>
-      <li>Heritage {{ selected.heritage_letter }} — {{ heritage_priorities[selected.heritage_letter].name }}</li>
-      <li>Talent {{ selected.talent_letter }} — {{ talent_priorities[selected.talent_letter].name }}</li>
-      <li>Attributes {{ selected.attributes_letter }} — {{ attributes_priorities[selected.attributes_letter].name }}</li>
-      <li>Skills {{ selected.skills_letter }} — {{ skills_priorities[selected.skills_letter].name }}</li>
-      <li>Resources {{ selected.resources_letter }} — {{ resources_priorities[selected.resources_letter].name }}</li>
-      <li>Special attribute points (EDG budget): {{ character.special_attribute_points }}</li>
+      <li>{{ _("Web_Priorities_SummaryBuildMethod", method=_("Web_BuildMethod_" ~ selected.build_method)) }}</li>
+      <li>{{ _("Web_Priorities_SummaryHeritage", letter=selected.heritage_letter, name=heritage_priorities[selected.heritage_letter].name) }}</li>
+      <li>{{ _("Web_Priorities_SummaryTalent", letter=selected.talent_letter, name=talent_priorities[selected.talent_letter].name) }}</li>
+      <li>{{ _("Web_Priorities_SummaryAttributes", letter=selected.attributes_letter, name=attributes_priorities[selected.attributes_letter].name) }}</li>
+      <li>{{ _("Web_Priorities_SummarySkills", letter=selected.skills_letter, name=skills_priorities[selected.skills_letter].name) }}</li>
+      <li>{{ _("Web_Priorities_SummaryResources", letter=selected.resources_letter, name=resources_priorities[selected.resources_letter].name) }}</li>
+      <li>{{ _("Web_Priorities_SummarySpecialPoints", points=character.special_attribute_points) }}</li>
     </ul>
   </div>
   {% endif %}

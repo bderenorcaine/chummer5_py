@@ -14,6 +14,7 @@ from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.engine.character import metatype_choices
 from chummer5.web.app import MUNDANE_SKILLS, create_app
+from chummer5.web.i18n import translate
 from chummer5.web.shell import STEP_PAGES
 
 METATYPES = load_metatypes()
@@ -76,7 +77,7 @@ def test_nav_renders_all_eleven_entries_in_the_sketch_order() -> None:
 
     html = client.get("/").text
 
-    assert tuple(page.label for page in STEP_PAGES) == NAV_LABELS
+    assert tuple(translate("en-us", page.label_key) for page in STEP_PAGES) == NAV_LABELS
     positions = [html.index(_nav_item(html, label)) for label in NAV_LABELS]
     assert positions == sorted(positions)
 

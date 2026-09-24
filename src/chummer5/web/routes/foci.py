@@ -27,6 +27,7 @@ from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.resources import available_nuyen, create_resources_selection, starting_nuyen
 from chummer5.web.catalogs import FOCI, PRIORITIES, templates
 from chummer5.web.forms import display_karma_to_nuyen
+from chummer5.web.i18n import Message
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -165,15 +166,12 @@ def _foci_selection_context(
     karma_spent = sum(
         force * by_id[focus_id].bonding_karma_per_force for focus_id, force in entries
     )
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None:
         try:
             create_foci_selection(entries, character, FOCI, nuyen_available, karma_budget)
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since priorities/attributes were last confirmed: {exc}. "
-                "Adjust Foci below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Foci", error=str(exc))
     return {
         "character": character,
         "foci_groups": foci_groups,

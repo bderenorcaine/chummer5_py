@@ -5,8 +5,8 @@
    fragment is still rendered; all but the current tab's are `hidden`, and a tab link re-renders
    this whole page rather than toggling visibility client-side (see chummer5.web.routes.pages). #}
 <div class="page page--{{ page.slug }}">
-  {% if page.heading %}
-  <h1 class="page__heading">{{ page.heading }}</h1>
+  {% if page.heading_key %}
+  <h1 class="page__heading">{{ _(page.heading_key) }}</h1>
   {% endif %}
   {% if page.tabbed %}
   {% include "_page_tabs.html" %}
@@ -14,11 +14,11 @@
   <section
     id="subpage-{{ page.slug }}-{{ item.section.slug }}"
     class="subpage"
-    aria-label="{{ item.section.label }}"
+    aria-label="{{ _(item.section.label_key) }}"
     {% if not item.current %}hidden{% endif %}
   >
     {% if item.current and not item.available %}
-    <p class="info subpage__unavailable">{{ item.section.unavailable_reason }}</p>
+    <p class="info subpage__unavailable">{{ _(item.section.unavailable_reason_key) }}</p>
     {% endif %}
     {% include item.section.fragment %}
   </section>

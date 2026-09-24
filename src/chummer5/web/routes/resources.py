@@ -17,6 +17,7 @@ from starlette.datastructures import FormData
 
 from chummer5.engine.character import Character
 from chummer5.engine.resources import (
+    KARMA_TO_NUYEN_RATE,
     MAX_KARMA_TO_NUYEN,
     STARTER_GEAR_CATALOG,
     StarterGearItem,
@@ -25,6 +26,7 @@ from chummer5.engine.resources import (
 )
 from chummer5.web.catalogs import PRIORITIES, templates
 from chummer5.web.forms import display_karma_to_nuyen
+from chummer5.web.i18n import Message, MessageJoin
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -36,9 +38,9 @@ router = APIRouter()
 MATRIX_STAT_BLOCK_CATEGORIES = frozenset({"Commlinks", "Cyberdecks", "Rigger Command Consoles"})
 
 
-def matrix_stat_block(item: StarterGearItem) -> str | None:
-    """One Matrix device's printed stat block as a display string, or None for gear that has no
-    such block (WP94).
+def matrix_stat_block(item: StarterGearItem) -> MessageJoin | None:
+    """One Matrix device's printed stat block as a keyed, comma-joined list of `Message`s (WP102;
+    a display string before that), or None for gear that has no such block (WP94).
 
     Renders **only what the book prints for that category**, which is not the same set of numbers
     for all three:
@@ -66,16 +68,17 @@ def matrix_stat_block(item: StarterGearItem) -> str | None:
     """
     if item.device_rating is None or item.category not in MATRIX_STAT_BLOCK_CATEGORIES:
         return None
-    parts = [f"Device Rating {item.device_rating}"]
+    parts = [Message.of("Web_Gear_DeviceRating", value=item.device_rating)]
     if item.attribute_array is not None:
-        parts.append("Attribute Array " + " ".join(str(value) for value in item.attribute_array))
+        array = MessageJoin(tuple(str(value) for value in item.attribute_array), "Web_List_Space")
+        parts.append(Message.of("Web_Gear_AttributeArray", values=array))
     if item.data_processing is not None:
-        parts.append(f"Data Processing {item.data_processing}")
+        parts.append(Message.of("Web_Gear_DataProcessing", value=item.data_processing))
     if item.firewall is not None:
-        parts.append(f"Firewall {item.firewall}")
+        parts.append(Message.of("Web_Gear_Firewall", value=item.firewall))
     if item.attribute_array is not None and item.programs is not None:
-        parts.append(f"Programs {item.programs}")
-    return ", ".join(parts)
+        parts.append(Message.of("Web_Gear_Programs", value=item.programs))
+    return MessageJoin(tuple(parts))
 
 
 def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str, ...]:
@@ -250,7 +253,7 @@ def _resources_context(
     ]
     budget = starting_nuyen(resources_letter, PRIORITIES)
     spent = sum(int(row["subtotal"]) for group in gear_groups for row in group["rows"])
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None:
         try:
             create_resources_selection(
@@ -266,10 +269,7 @@ def _resources_context(
                 vehicle_cost=vehicle_cost,
             )
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since priorities were last confirmed: {exc}. "
-                "Adjust the gear below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Resources", error=str(exc))
     return {
         "character": character,
         "gear_groups": gear_groups,
@@ -287,6 +287,8 @@ def _resources_context(
         ),
         "karma_converted": karma_converted,
         "max_karma_to_nuyen": MAX_KARMA_TO_NUYEN,
+        # WP102: the rate the conversion label shows, read from the engine rather than a literal.
+        "karma_to_nuyen_rate": KARMA_TO_NUYEN_RATE,
         "karma_to_nuyen_amount": display_karma_to_nuyen(karma_converted),
         "resources_error": error,
         "resources_budget_warning": budget_warning,

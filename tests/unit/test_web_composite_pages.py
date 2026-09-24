@@ -22,6 +22,7 @@ from chummer5.data.skills import load_skills
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import metatype_choices
 from chummer5.web.app import MUNDANE_SKILLS, create_app
+from chummer5.web.i18n import translate
 from chummer5.web.shell import STEP_PAGES, STEP_PAGES_BY_SLUG
 
 METATYPES = load_metatypes()
@@ -214,13 +215,15 @@ def test_magic_tab_availability_agrees_with_each_fragments_own_guard(talent: str
         wrapper = re.search(rf'<div id="{wrapper_id}" class="panel">(.*?)\n</div>', html, re.S)
         assert wrapper is not None, wrapper_id
         has_content = bool(wrapper.group(1).strip())
-        tab_markup = _tab(html, section.label)
+        tab_markup = _tab(html, translate("en-us", section.label_key))
         if has_content:
             assert tab_markup.startswith("<a"), (talent, tab)
         else:
             assert tab_markup.startswith("<span"), (talent, tab)
             assert 'aria-disabled="true"' in tab_markup
-            assert f'title="{section.unavailable_reason}"' in tab_markup
+            assert section.unavailable_reason_key is not None
+            reason = translate("en-us", section.unavailable_reason_key)
+            assert f'title="{reason}"' in tab_markup
 
 
 def test_mundane_magic_page_is_the_talent_tab_plus_an_explained_empty_state() -> None:
@@ -249,7 +252,7 @@ def test_a_magician_sees_no_locked_note_and_a_disabled_powers_tab() -> None:
 
     assert _shown_tab(html, "magic") == "spells"
     assert "page-tabs__note" not in html
-    assert _tab(html, "Adept powers").startswith("<span")
+    assert _tab(html, "Adept Powers").startswith("<span")
     assert "subpage__unavailable" not in html
 
 

@@ -64,7 +64,7 @@ def _page_or_404(slug: str) -> StepPage:
 def _section_or_404(page: StepPage, tab: str) -> None:
     if not page.tabbed or page.section(tab) is None:
         raise HTTPException(
-            status_code=404, detail=f"No such section on the {page.label} page: {tab!r}."
+            status_code=404, detail=f"No such section on the {page.slug!r} page: {tab!r}."
         )
 
 
@@ -150,7 +150,7 @@ def page_tabs(request: Request, slug: str) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
     page = _page_or_404(slug)
     if not page.tabbed:
-        raise HTTPException(status_code=404, detail=f"The {page.label} page has no tabs.")
+        raise HTTPException(status_code=404, detail=f"The {page.slug!r} page has no tabs.")
     chargen_ctx = chargen_context(session, _session_priority_form_context(session))
     remembered = session.page_tabs.get(page.slug, "")
     current = remembered if page.section(remembered) else resolve_tab(session, page)

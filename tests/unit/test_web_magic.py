@@ -113,7 +113,9 @@ def test_talent_defaults_to_mundane_at_letter_e_and_hides_spell_and_power_sectio
 
     assert "Not yet confirmed" in response.text
     assert 'value="Mundane"' in response.text
-    assert "Adept Powers" not in response.text
+    # WP102: the Powers tab's own label is now "Adept Powers" too (legacy `Tab_Adept`), so check
+    # the fragment's heading, as the Spells line below already does.
+    assert 'panel__heading">Adept Powers' not in response.text
     assert 'panel__heading">Spells' not in response.text
 
     sheet = client.get("/character/sheet")

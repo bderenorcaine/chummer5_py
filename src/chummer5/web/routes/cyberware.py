@@ -87,6 +87,7 @@ from chummer5.web.catalogs import (
     templates,
 )
 from chummer5.web.forms import display_karma_to_nuyen
+from chummer5.web.i18n import Message
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -528,7 +529,7 @@ def _cyberware_context(
         (bioware_by_id[request.item_id].essence_cost for request in bioware_requests), Decimal(0)
     )
     essence_spent = cyberware_essence_spent + bioware_essence_spent
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None:
         try:
             cyberware_selection = create_cyberware_tree_selection(
@@ -545,10 +546,7 @@ def _cyberware_context(
                 skills=SKILLS,
             )
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since priorities were last confirmed: {exc}. "
-                "Adjust cyberware/bioware below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Cyberware", error=str(exc))
     return {
         "character": character,
         "cyberware_groups": cyberware_groups,

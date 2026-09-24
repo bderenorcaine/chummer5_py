@@ -1,15 +1,14 @@
 <div id="power-selection" class="panel">
   {% if character and character.magic_type == "Adept" %}
   <details open>
-  <summary class="panel__heading">Adept Powers</summary>
+  <summary class="panel__heading">{{ _("Tab_Adept") }}</summary>
 
   {% if power_error %}
-  <p class="error">{{ power_error }}</p>
+  <p class="error">{{ power_error | tr }}</p>
   {% endif %}
 
   <p>
-    Power Points spent: {{ power_points_spent }} / {{ power_point_budget }}
-    ({{ power_points_remaining }} remaining).
+    {{ _("Web_Powers_Spent", spent=power_points_spent, budget=power_point_budget, remaining=power_points_remaining) }}
   </p>
 
   <form
@@ -21,10 +20,10 @@
     <table>
       <thead>
         <tr>
-          <th>Power</th>
-          <th>Points/level</th>
-          <th>Rating</th>
-          <th>Attribute</th>
+          <th>{{ _("Web_Powers_ColPower") }}</th>
+          <th>{{ _("Web_Powers_ColPointsPerLevel") }}</th>
+          <th>{{ _("String_Rating") }}</th>
+          <th>{{ _("Web_Attributes_ColAttribute") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -47,7 +46,7 @@
               <option value="">--</option>
               {% for attribute in row.attribute_options %}
               <option value="{{ attribute }}" {% if attribute == row.selected_attribute %}selected{% endif %}>
-                {{ attribute }}
+                {{ _("String_Attribute" ~ attribute ~ "Short") }}
               </option>
               {% endfor %}
             </select>
@@ -57,7 +56,7 @@
         {% endfor %}
       </tbody>
     </table>
-    <button type="submit">Update powers</button>
+    <button type="submit">{{ _("Web_Powers_Update") }}</button>
   </form>
   </details>
   {% endif %}

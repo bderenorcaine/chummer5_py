@@ -35,6 +35,7 @@ from chummer5.engine.knowledge import (
 )
 from chummer5.engine.skills import MAX_SKILL_RATING_CREATE
 from chummer5.web.catalogs import MAX_KNOWLEDGE_ROWS, MAX_LANGUAGE_ROWS, templates
+from chummer5.web.i18n import Message
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -238,7 +239,7 @@ def _knowledge_selection_context(
         if character.karma_knowledge_selection is not None
         else 0
     )
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None:
         try:
             create_knowledge_selection(character, knowledge_skills, languages)
@@ -248,10 +249,7 @@ def _knowledge_selection_context(
                 karma_budget,
             )
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since attributes were last confirmed: {exc}. "
-                "Adjust the entries below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Knowledge", error=str(exc))
     return {
         "character": character,
         "knowledge_rows": knowledge_rows,

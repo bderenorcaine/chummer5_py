@@ -1,12 +1,12 @@
 <div id="talent-options-fragment">
   {% if selected_codename == "Magician" %}
   <label>
-    Tradition
+    {{ _("Web_Talent_Tradition") }}
     <select name="tradition_id">
-      <option value="">-- choose a tradition --</option>
+      <option value="">{{ _("Web_Talent_ChooseTradition") }}</option>
       {% for tradition in traditions %}
       <option value="{{ tradition.id }}" {% if tradition.id == selected_tradition_id %}selected{% endif %}>
-        {{ tradition.name }} (Drain: {{ tradition.drain_attributes[0] }} + {{ tradition.drain_attributes[1] }})
+        {{ _("Web_Talent_TraditionOption", name=tradition.name, first=_("String_Attribute" ~ tradition.drain_attributes[0] ~ "Short"), second=_("String_Attribute" ~ tradition.drain_attributes[1] ~ "Short")) }}
       </option>
       {% endfor %}
     </select>
@@ -15,7 +15,7 @@
 
   {% if skill_qty %}
   <fieldset>
-    <legend>Free skill grant: choose {{ skill_qty }} skill{{ 's' if skill_qty != 1 else '' }}</legend>
+    <legend>{{ _n("Web_Talent_FreeSkillGrant", skill_qty) }}</legend>
     {% for skill in eligible_skills %}
     <label>
       <input

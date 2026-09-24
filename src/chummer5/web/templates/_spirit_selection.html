@@ -1,18 +1,18 @@
 <div id="spirit-selection" class="panel">
   {% if character and character.magic_type == "Magician" %}
   <details open>
-  <summary class="panel__heading">Bound Spirits</summary>
+  <summary class="panel__heading">{{ _("Web_Spirits_Heading") }}</summary>
 
   {% if spirit_error %}
-  <p class="error">{{ spirit_error }}</p>
+  <p class="error">{{ spirit_error | tr }}</p>
   {% endif %}
 
   {% if spirit_budget_warning %}
-  <p class="warning">{{ spirit_budget_warning }}</p>
+  <p class="warning">{{ spirit_budget_warning | tr }}</p>
   {% endif %}
 
-  <p>Up to {{ max_bound_spirits }} bound spirits (one per Charisma point). Force may be 1 to {{ spirit_force }} (your current Magic rating); cost is 1 Karma per service regardless of Force.</p>
-  <p>Karma spent: {{ spirit_karma_spent }} / {{ spirit_karma_budget }} ({{ spirit_karma_remaining }} remaining).</p>
+  <p>{{ _("Web_Spirits_Rules", max=max_bound_spirits, force=spirit_force) }}</p>
+  <p>{{ _("Web_Spirits_KarmaSpent", spent=spirit_karma_spent, budget=spirit_karma_budget, remaining=spirit_karma_remaining) }}</p>
 
   <form
     hx-post="/ui/spirits"
@@ -23,9 +23,9 @@
     <table>
       <thead>
         <tr>
-          <th>Spirit type</th>
-          <th>Force</th>
-          <th>Services (Karma)</th>
+          <th>{{ _("Web_Spirits_ColType") }}</th>
+          <th>{{ _("Web_Spirits_ColForce") }}</th>
+          <th>{{ _("Web_Spirits_ColServices") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -62,7 +62,7 @@
         {% endfor %}
       </tbody>
     </table>
-    <button type="submit">Update bound spirits</button>
+    <button type="submit">{{ _("Web_Spirits_Update") }}</button>
   </form>
   </details>
   {% endif %}

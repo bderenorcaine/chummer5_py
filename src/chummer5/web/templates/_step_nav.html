@@ -5,7 +5,7 @@
 <nav
   id="step-nav"
   class="step-nav"
-  aria-label="Chargen steps"
+  aria-label="{{ _('Web_Nav_AriaLabel') }}"
   hx-get="/ui/nav"
   hx-trigger="chargen-changed from:body"
   hx-swap="outerHTML"
@@ -23,13 +23,13 @@
         hx-swap="innerHTML"
         hx-push-url="true"
         {% if item.current %}aria-current="page"{% endif %}
-      >{{ item.page.label }}{% if item.stale %} <span class="step-nav__marker" title="Some selections here no longer fit your priorities">⚠</span>{% endif %}</a>
+      >{{ _(item.page.label_key) }}{% if item.stale %} <span class="step-nav__marker" title="{{ _('Web_Nav_StaleMarker') }}">⚠</span>{% endif %}</a>
       {% else %}
       <span
         class="step-nav__item step-nav__item--disabled"
         aria-disabled="true"
-        title="{{ item.page.disabled_reason }}"
-      >{{ item.page.label }}</span>
+        title="{{ _(item.page.disabled_reason_key) }}"
+      >{{ _(item.page.label_key) }}</span>
       {% endif %}
     </li>
     {% endfor %}

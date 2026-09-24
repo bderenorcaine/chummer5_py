@@ -70,15 +70,17 @@ class PageSection:
     the page's nav entry is stale if any of its sections is, and a composite page's tab strip marks
     the section itself. `available` mirrors the fragment's own top-level `{% if %}` guard -- it
     must agree with it exactly (a test pins that), because a tab whose fragment renders nothing
-    is shown disabled, with `unavailable_reason` as its explanation, rather than as an empty pane.
+    is shown disabled, with its unavailable reason as the explanation, rather than as an empty pane.
+
+    Every `*_key` field is an i18n key (WP102), rendered through `_()` -- none holds display text.
     """
 
     slug: str
-    label: str
+    label_key: str
     fragment: str
     warning_keys: tuple[str, ...] = ()
     available: Callable[[Character | None], bool] = _always
-    unavailable_reason: str | None = None
+    unavailable_reason_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,20 +89,21 @@ class StepPage:
 
     A page with more than one section is a composite (Finding 4) and renders them as sub-tabs
     (WP98 -- see `spec/decisions-log.md`'s 2026-09-24 entry on the intra-page pattern). `enabled=
-    False` is Finding 3's two nav entries with nothing behind them yet. `locked_note` is a
+    False` is Finding 3's two nav entries with nothing behind them yet. `locked_note_key` is a
     composite page's empty state: shown under its tab strip when every tab but the showing one is
-    unavailable (Magic, for a character with no confirmed magical Talent).
+    unavailable (Magic, for a character with no confirmed magical Talent). Every `*_key` field is
+    an i18n key (WP102).
     """
 
     slug: str
-    label: str
+    label_key: str
     sections: tuple[PageSection, ...] = ()
     enabled: bool = True
-    disabled_reason: str | None = None
+    disabled_reason_key: str | None = None
     # The step fragments each open with their own `<summary>` heading; only a page whose fragment
     # has none (Export's character sheet) needs the page to supply one.
-    heading: str | None = None
-    locked_note: str | None = None
+    heading_key: str | None = None
+    locked_note_key: str | None = None
 
     @property
     def tabbed(self) -> bool:
@@ -114,37 +117,51 @@ class StepPage:
         return next((section for section in self.sections if section.slug == slug), None)
 
 
-def _single(slug: str, label: str, fragment: str, *warning_keys: str) -> tuple[PageSection, ...]:
-    return (PageSection(slug, label, fragment, warning_keys),)
+def _single(
+    slug: str, label_key: str, fragment: str, *warning_keys: str
+) -> tuple[PageSection, ...]:
+    return (PageSection(slug, label_key, fragment, warning_keys),)
 
 
 # The sketch's order (`examples/ui/main_ui.png`), which is also SR5's own chargen step order.
 # Skills/Magic/Equipment are the composites (Finding 4); their sections keep their old accordion
-# order, which is also the order a player fills them in.
+# order, which is also the order a player fills them in. Labels reuse a legacy key wherever its
+# English text is exactly the label (WP102 -- see src/chummer5/lang/README.md), which is where the
+# Title Case of "Adept Powers"/"Vehicles & Drones" comes from.
 STEP_PAGES: tuple[StepPage, ...] = (
     StepPage(
-        "priorities", "Priorities", _single("priorities", "Priorities", "_priority_form.html")
+        "priorities",
+        "Label_SelectBP_Priorities",
+        _single("priorities", "Label_SelectBP_Priorities", "_priority_form.html"),
     ),
     StepPage(
         "attributes",
-        "Attributes",
+        "Label_Attributes",
         _single(
-            "attributes", "Attributes", "_attribute_allocation.html", "attribute_budget_warning"
+            "attributes",
+            "Label_Attributes",
+            "_attribute_allocation.html",
+            "attribute_budget_warning",
         ),
     ),
     StepPage(
-        "qualities", "Qualities", _single("qualities", "Qualities", "_quality_selection.html")
+        "qualities",
+        "String_Qualities",
+        _single("qualities", "String_Qualities", "_quality_selection.html"),
     ),
     StepPage(
         "skills",
-        "Skills",
+        "Tab_Skills",
         (
             PageSection(
-                "active", "Active skills", "_skill_allocation.html", ("skill_budget_warning",)
+                "active",
+                "Web_Tab_ActiveSkills",
+                "_skill_allocation.html",
+                ("skill_budget_warning",),
             ),
             PageSection(
                 "knowledge",
-                "Knowledge & languages",
+                "Web_Tab_KnowledgeLanguages",
                 "_knowledge_skills.html",
                 ("knowledge_budget_warning",),
             ),
@@ -152,81 +169,84 @@ STEP_PAGES: tuple[StepPage, ...] = (
     ),
     StepPage(
         "magic",
-        "Magic",
+        "String_AttributeMAGLong",
         (
-            PageSection("talent", "Talent", "_talent_selection.html", ("talent_budget_warning",)),
+            PageSection(
+                "talent", "Web_Tab_Talent", "_talent_selection.html", ("talent_budget_warning",)
+            ),
             PageSection(
                 "spells",
-                "Spells",
+                "String_Spells",
                 "_spell_selection.html",
                 ("spell_budget_warning",),
                 _is_magician,
-                "Spells need a confirmed Magician Talent.",
+                "Web_Magic_SpellsUnavailable",
             ),
             PageSection(
                 "powers",
-                "Adept powers",
+                "Tab_Adept",
                 "_power_selection.html",
                 (),
                 _is_adept,
-                "Adept powers need a confirmed Adept Talent.",
+                "Web_Magic_PowersUnavailable",
             ),
             PageSection(
                 "spirits",
-                "Bound spirits",
+                "Web_Tab_BoundSpirits",
                 "_spirit_selection.html",
                 ("spirit_budget_warning",),
                 _is_magician,
-                "Bound spirits need a confirmed Magician Talent.",
+                "Web_Magic_SpiritsUnavailable",
             ),
             PageSection(
                 "foci",
-                "Foci",
+                "Label_SummaryFoci",
                 "_foci_selection.html",
                 ("foci_budget_warning",),
                 _is_awakened,
-                "Foci need a confirmed Magician or Adept Talent.",
+                "Web_Magic_FociUnavailable",
             ),
         ),
-        locked_note=(
-            "Spells, adept powers, bound spirits and foci open up here once you confirm a "
-            "Magician or Adept Talent."
-        ),
+        locked_note_key="Web_Magic_LockedNote",
     ),
     StepPage(
         "resonance",
-        "Resonance",
+        "String_AttributeRESLong",
         enabled=False,
-        disabled_reason="Technomancers are not supported yet.",
+        disabled_reason_key="Web_Nav_ResonanceUnsupported",
     ),
     StepPage(
         "augmentation",
-        "Augmentation",
-        _single("augmentation", "Augmentation", "_cyberware.html", "cyberware_budget_warning"),
+        "Web_Nav_Augmentation",
+        _single(
+            "augmentation", "Web_Nav_Augmentation", "_cyberware.html", "cyberware_budget_warning"
+        ),
     ),
     StepPage(
         "equipment",
-        "Equipment",
+        "Web_Nav_Equipment",
         (
-            PageSection("gear", "Gear", "_resources.html", ("resources_budget_warning",)),
-            PageSection("lifestyle", "Lifestyle", "_lifestyle.html", ("lifestyle_budget_warning",)),
+            PageSection("gear", "Tab_Gear", "_resources.html", ("resources_budget_warning",)),
             PageSection(
-                "vehicles", "Vehicles & drones", "_vehicles.html", ("vehicles_budget_warning",)
+                "lifestyle", "String_Lifestyle", "_lifestyle.html", ("lifestyle_budget_warning",)
             ),
+            PageSection("vehicles", "Tab_Vehicles", "_vehicles.html", ("vehicles_budget_warning",)),
         ),
     ),
-    StepPage("contacts", "Contacts", _single("contacts", "Contacts", "_contacts.html")),
+    StepPage(
+        "contacts", "String_Contacts", _single("contacts", "String_Contacts", "_contacts.html")
+    ),
     StepPage(
         "bio",
-        "Bio",
+        "Web_Nav_Bio",
         enabled=False,
-        disabled_reason="Character background details are not supported yet.",
+        disabled_reason_key="Web_Nav_BioUnsupported",
     ),
     StepPage(
         "export",
-        "Export",
-        _single("export", "Export", "_character_sheet.html"),
-        heading="Character sheet & export",
+        "String_Export",
+        _single("export", "String_Export", "_character_sheet.html"),
+        heading_key="Web_Export_Heading",
     ),
 )
 
@@ -292,14 +312,15 @@ def tabs_context(
         }
         for section in page.sections
     ]
-    locked = page.locked_note is not None and all(
+    locked = page.locked_note_key is not None and all(
         not item["available"] for item in items if not item["current"]
     )
     return {"tab_items": items, "current_tab": current_tab, "tabs_locked": locked}
 
 
 def resource_panel_context(session: ChargenSession, chargen_ctx: dict[str, Any]) -> dict[str, Any]:
-    """The sidebar's remaining-resources panel (WP99): one row per budget, each `(remaining, of)`.
+    """The sidebar's remaining-resources panel (WP99): one row per budget, each `(remaining, of)`,
+    labelled by an i18n key (WP102 -- legacy's own `String_*Points` keys, hence their Title Case).
 
     Nothing here is accounting. Karma is `Character.karma_remaining`, Phase O's unified ledger, so
     the panel cannot disagree with it. Nuyen is the Resources letter's pool (with any Karma
@@ -322,35 +343,35 @@ def resource_panel_context(session: ChargenSession, chargen_ctx: dict[str, Any])
     )
     nuyen_pool = available_nuyen(session.resources_letter, PRIORITIES, karma_converted)
     rows: list[dict[str, Any]] = [
-        {"label": "Karma", "remaining": character.karma_remaining, "of": STARTING_KARMA},
+        {"label_key": "String_Karma", "remaining": character.karma_remaining, "of": STARTING_KARMA},
         {
-            "label": "Nuyen",
+            "label_key": "Label_SummaryNuyen",
             "remaining": nuyen_pool - character.nuyen_spent,
             "of": nuyen_pool,
             "nuyen": True,
         },
         {
-            "label": "Attribute points",
+            "label_key": "String_AttributePoints",
             "remaining": chargen_ctx["primary_remaining"],
             "of": chargen_ctx["primary_budget"],
         },
         {
-            "label": "Special attribute points",
+            "label_key": "String_SpecialAttributePoints",
             "remaining": chargen_ctx["special_remaining"],
             "of": chargen_ctx["special_budget"],
         },
         {
-            "label": "Skill points",
+            "label_key": "String_SkillPoints",
             "remaining": chargen_ctx["skills_remaining"],
             "of": chargen_ctx["skills_budget"],
         },
         {
-            "label": "Skill group points",
+            "label_key": "String_SkillGroupPoints",
             "remaining": chargen_ctx["groups_remaining"],
             "of": chargen_ctx["groups_budget"],
         },
         {
-            "label": "Knowledge points",
+            "label_key": "String_KnowledgePoints",
             "remaining": (
                 chargen_ctx["knowledge_free_points"] - chargen_ctx["knowledge_points_spent"]
             ),
@@ -360,7 +381,7 @@ def resource_panel_context(session: ChargenSession, chargen_ctx: dict[str, Any])
     if character.magic_type == "Magician":
         rows.append(
             {
-                "label": "Free spells",
+                "label_key": "String_FreeSpells",
                 "remaining": chargen_ctx["spells_remaining"],
                 "of": chargen_ctx["spell_budget"],
             }
@@ -368,7 +389,7 @@ def resource_panel_context(session: ChargenSession, chargen_ctx: dict[str, Any])
     elif character.magic_type == "Adept":
         rows.append(
             {
-                "label": "Power Points",
+                "label_key": "Web_Panel_PowerPoints",
                 "remaining": chargen_ctx["power_points_remaining"],
                 "of": chargen_ctx["power_point_budget"],
             }

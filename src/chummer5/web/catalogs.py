@@ -31,7 +31,12 @@ from chummer5.engine.character import Character
 from chummer5.engine.lifestyle import MIN_LIFESTYLE_MONTHS
 from chummer5.engine.magic import MAGICAL_SKILL_CATEGORIES, mvp_power_catalog
 from chummer5.engine.qualities import MENTOR_SPIRIT_QUALITY_NAME, mvp_quality_catalog
-from chummer5.web.i18n import jinja_translate
+from chummer5.web.i18n import (
+    jinja_nuyen,
+    jinja_render_message,
+    jinja_translate,
+    jinja_translate_plural,
+)
 
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = WEB_DIR / "templates"
@@ -39,6 +44,11 @@ STATIC_DIR = WEB_DIR / "static"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # WP101: the i18n key layer's one injection point -- `_("Key", ...)` in every template.
 templates.env.globals["_"] = jinja_translate
+templates.env.globals["_n"] = jinja_translate_plural  # WP102: `_n("Key", count, ...)`
+# WP102: the one money formatter every template goes through (`{{ amount | nuyen }}`).
+templates.env.filters["nuyen"] = jinja_nuyen
+# WP102: `{{ value | tr }}` -- a context builder's `Message`, or an engine error's plain text.
+templates.env.filters["tr"] = jinja_render_message
 
 # Static rules data: parsed once per process, not per request (Project Overview's "parsed once at
 # startup" rule for `chummer5.data` loaders).

@@ -35,6 +35,7 @@ from chummer5.web.catalogs import (
     templates,
 )
 from chummer5.web.forms import parse_points, parse_specializations
+from chummer5.web.i18n import Message
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -161,7 +162,7 @@ def _skill_allocation_context(
         }
         for group in offered_skill_groups(character)
     ]
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None:
         try:
             create_skill_allocation(
@@ -176,10 +177,7 @@ def _skill_allocation_context(
                 karma_budget,
             )
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since priorities were last confirmed: {exc}. "
-                "Adjust the points below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Skills", error=str(exc))
     return {
         "character": display,
         "skill_rows": skill_rows,

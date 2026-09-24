@@ -79,6 +79,7 @@ from chummer5.web.catalogs import (
     templates,
 )
 from chummer5.web.forms import display_karma_to_nuyen
+from chummer5.web.i18n import Message, MessageJoin
 from chummer5.web.routes.resources import matrix_stat_block
 from chummer5.web.routes.vehicles import vehicle_stat_block
 from chummer5.web.session import SESSION_COOKIE_NAME, ChargenSession, resolve_session
@@ -165,22 +166,22 @@ def _resources_selection_for_display(
 # WP42: the `<limitmodifier><limit>` value a `CyberwareConditionalBonus` carries, as the sheet
 # spells it out. `chummer5.engine.cyberware` maps the same two strings to `ImprovementType`s; this
 # map is display only, so it lives here rather than being read back out of the engine's.
-_LIMIT_LABELS = {"mental_limit": "Mental limit", "physical_limit": "Physical limit"}
+# WP102: i18n keys, rendered by the template, not display text.
+_LIMIT_LABEL_KEYS = {
+    "mental_limit": "Web_Sheet_MentalLimit",
+    "physical_limit": "Web_Sheet_PhysicalLimit",
+}
 
 # WP42: every `ResolutionContext` a real conditional bonus can be resolved under, with the limit it
 # modifies and how the sheet names the test. Built from the four bonuses `chummer5.data.cyberware
 # ._SUPPORTED_BONUS_CONDITIONS` whitelists (WP39/WP40), not from the enum wholesale -- a context
 # with no bonus behind it would only ever render a row identical to the headline figure.
 _CONDITIONAL_LIMIT_ROWS = (
-    ("Mental limit", ResolutionContext.PERCEPTION_VISUAL, "visual Perception tests"),
-    ("Mental limit", ResolutionContext.PERCEPTION_HEARING, "hearing Perception tests"),
-    (
-        "Mental limit",
-        ResolutionContext.PERCEPTION_SOUND_SOURCE,
-        "Perception tests to find a sound's source",
-    ),
-    ("Physical limit", ResolutionContext.GYMNASTICS_JUMPING, "Gymnastics (Jumping) tests"),
-    ("Physical limit", ResolutionContext.RUNNING_SPRINTING, "Running (Sprinting) tests"),
+    ("mental_limit", ResolutionContext.PERCEPTION_VISUAL, "Web_Sheet_TestVisualPerception"),
+    ("mental_limit", ResolutionContext.PERCEPTION_HEARING, "Web_Sheet_TestHearingPerception"),
+    ("mental_limit", ResolutionContext.PERCEPTION_SOUND_SOURCE, "Web_Sheet_TestSoundSource"),
+    ("physical_limit", ResolutionContext.GYMNASTICS_JUMPING, "Web_Sheet_TestJumping"),
+    ("physical_limit", ResolutionContext.RUNNING_SPRINTING, "Web_Sheet_TestSprinting"),
 )
 
 
@@ -205,7 +206,7 @@ def _cyberware_node_row(node: PurchasedCyberware) -> dict[str, Any]:
         "capacity_spent": node.capacity_spent,
         "conditional_bonuses": [
             {
-                "limit": _LIMIT_LABELS[bonus.target_kind],
+                "limit_key": _LIMIT_LABEL_KEYS[bonus.target_kind],
                 "value": bonus.resolve_value(node.rating),
                 "condition": CONDITION_DESCRIPTIONS[bonus.condition],
                 "paired": node.item.name in PAIRED_BONUS_ITEM_NAMES,
@@ -260,16 +261,21 @@ def _conditional_limit_rows(character: Character) -> list[dict[str, Any]]:
     for exactly this and left unused.
     """
     rows: list[dict[str, Any]] = []
-    for limit, context, test in _CONDITIONAL_LIMIT_ROWS:
-        resolve = mental_limit if limit == "Mental limit" else physical_limit
+    for limit, context, test_key in _CONDITIONAL_LIMIT_ROWS:
+        resolve = mental_limit if limit == "mental_limit" else physical_limit
         value = resolve(character, context=context)
         if value != resolve(character):
-            rows.append({"limit": limit, "test": test, "value": value})
+            rows.append(
+                {"limit_key": _LIMIT_LABEL_KEYS[limit], "test_key": test_key, "value": value}
+            )
     return rows
 
 
 def _character_sheet_context(
-    session: ChargenSession, *, error: str | None = None, info: str | None = None
+    session: ChargenSession,
+    *,
+    error: Message | None = None,
+    info: Message | MessageJoin | None = None,
 ) -> dict[str, Any]:
     """Context for `_character_sheet.html`: WP10's derived stats plus a read-only recap of every
     already-committed selection. Unlike the `_*_context` builders in `chummer5.web.routes`, there is
@@ -930,10 +936,10 @@ async def load_save(request: Request) -> HTMLResponse:
     session.current_page = "export"  # WP97
     form = await request.form()
     upload = form.get("save_file")
-    error: str | None = None
-    info: str | None = None
+    error: Message | None = None
+    info: Message | None = None
     if not isinstance(upload, UploadFile) or not upload.filename:
-        error = "Choose a save file to load."
+        error = Message.of("Web_Sheet_ErrorChooseSave")
     else:
         raw = await upload.read()
         try:
@@ -961,10 +967,10 @@ async def load_save(request: Request) -> HTMLResponse:
         # build_character's own validations (ValueError) are all just "not a loadable save",
         # reported the same way rather than crashing the request.
         except (ValueError, KeyError, AttributeError) as exc:
-            error = f"Could not load save: {exc}"
+            error = Message.of("Web_Sheet_ErrorLoad", error=str(exc))
         else:
             _apply_built_character_to_session(session, save, built)
-            info = "Character loaded."
+            info = Message.of("Web_Sheet_Loaded")
     context = _character_sheet_context(session, error=error, info=info)
     response = templates.TemplateResponse(request, "_character_sheet.html", context)
     if new_cookie is not None:
@@ -978,10 +984,10 @@ async def import_chum5_route(request: Request) -> HTMLResponse:
     session.current_page = "export"  # WP97
     form = await request.form()
     upload = form.get("chum5_file")
-    error: str | None = None
-    info: str | None = None
+    error: Message | None = None
+    info: MessageJoin | None = None
     if not isinstance(upload, UploadFile) or not upload.filename:
-        error = "Choose a .chum5 file to import."
+        error = Message.of("Web_Sheet_ErrorChooseChum5")
     else:
         raw = await upload.read()
         # `import_chum5`/`load_chum5` take a `Path`, not bytes -- write the upload to a scratch
@@ -1005,33 +1011,48 @@ async def import_chum5_route(request: Request) -> HTMLResponse:
                     bioware=BIOWARE,
                 )
             except UnsupportedLegacyCharacterError as exc:
-                error = "Cannot import: " + "; ".join(exc.reasons)
+                # The importer's reasons are engine-side English, joined but not translated.
+                error = Message.of(
+                    "Web_Sheet_ErrorCannotImport",
+                    reasons=MessageJoin(tuple(exc.reasons), "Web_List_Semicolon"),
+                )
             except ET.ParseError as exc:
-                error = f"Not a valid .chum5 file: {exc}"
+                error = Message.of("Web_Sheet_ErrorInvalidChum5", error=str(exc))
             else:
                 _apply_built_character_to_session(session, result.save, result.built)
-                messages = ["Character imported."]
+                messages = [Message.of("Web_Sheet_Imported")]
                 if result.dropped_qualities:
                     messages.append(
-                        "Dropped qualities (not MVP-supported): "
-                        + ", ".join(result.dropped_qualities)
+                        Message.of(
+                            "Web_Sheet_DroppedQualities",
+                            names=MessageJoin(tuple(result.dropped_qualities)),
+                        )
                     )
                 if result.dropped_skills:
                     messages.append(
-                        "Dropped skills (unresolvable): " + ", ".join(result.dropped_skills)
+                        Message.of(
+                            "Web_Sheet_DroppedSkills",
+                            names=MessageJoin(tuple(result.dropped_skills)),
+                        )
                     )
                 # WP29: surfaced now that a real Magician/Adept import can actually succeed
                 # (WP28 added these fields to `ImportResult`, but nothing reached the browser
                 # for them until this WP wired traditions/spells/powers into this route at all).
                 if result.dropped_spells:
                     messages.append(
-                        "Dropped spells (not SR5-scoped): " + ", ".join(result.dropped_spells)
+                        Message.of(
+                            "Web_Sheet_DroppedSpells",
+                            names=MessageJoin(tuple(result.dropped_spells)),
+                        )
                     )
                 if result.dropped_powers:
                     messages.append(
-                        "Dropped powers (not MVP-supported): " + ", ".join(result.dropped_powers)
+                        Message.of(
+                            "Web_Sheet_DroppedPowers",
+                            names=MessageJoin(tuple(result.dropped_powers)),
+                        )
                     )
-                info = " ".join(messages)
+                info = MessageJoin(tuple(messages), "Web_List_Space")
     context = _character_sheet_context(session, error=error, info=info)
     response = templates.TemplateResponse(request, "_character_sheet.html", context)
     if new_cookie is not None:

@@ -34,6 +34,7 @@ from chummer5.web.catalogs import (
     templates,
 )
 from chummer5.web.forms import display_karma_to_nuyen
+from chummer5.web.i18n import Message, MessageJoin
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -101,12 +102,12 @@ def _lifestyle_context(
             "lifestyle_error": error,
         }
     budget = starting_nuyen(resources_letter, PRIORITIES) + display_karma_to_nuyen(karma_converted)
-    budget_warning: str | None = None
+    budget_warning: Message | str | None = None
     if error is None:
         try:
             selection = create_lifestyle_selection(tier_name, months, LIFESTYLES)
         except ValueError as exc:
-            budget_warning = str(exc)
+            budget_warning = str(exc)  # an engine message: stays as-is (WP102)
         else:
             total_spent = (
                 gear_cost
@@ -117,19 +118,26 @@ def _lifestyle_context(
                 + vehicle_cost
             )
             if total_spent > budget:
-                parts = [f"gear ({gear_cost})", f"lifestyle ({selection.total_cost})"]
-                if cyberware_cost:
-                    parts.append(f"cyberware ({cyberware_cost})")
-                if bioware_cost:
-                    parts.append(f"bioware ({bioware_cost})")
-                if foci_cost:
-                    parts.append(f"foci ({foci_cost})")
-                if vehicle_cost:
-                    parts.append(f"vehicles ({vehicle_cost})")
-                budget_warning = (
-                    f"No longer fits since priorities were last confirmed: {' + '.join(parts)} "
-                    f"spend {total_spent} exceeds Resources priority {resources_letter}'s nuyen "
-                    f"budget of {budget}. Adjust the lifestyle below to continue."
+                # WP102: one keyed fragment per spender, joined by a keyed " + ", so no English is
+                # assembled here -- see `chummer5.web.i18n.MessageJoin`.
+                parts = [
+                    Message.of("Web_Stale_SpendGear", amount=gear_cost),
+                    Message.of("Web_Stale_SpendLifestyle", amount=selection.total_cost),
+                ]
+                for key, cost in (
+                    ("Web_Stale_SpendCyberware", cyberware_cost),
+                    ("Web_Stale_SpendBioware", bioware_cost),
+                    ("Web_Stale_SpendFoci", foci_cost),
+                    ("Web_Stale_SpendVehicles", vehicle_cost),
+                ):
+                    if cost:
+                        parts.append(Message.of(key, amount=cost))
+                budget_warning = Message.of(
+                    "Web_Stale_Lifestyle",
+                    breakdown=MessageJoin(tuple(parts), "Web_List_Plus"),
+                    total=total_spent,
+                    letter=resources_letter,
+                    budget=budget,
                 )
     return {
         "character": character,

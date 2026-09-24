@@ -1,22 +1,19 @@
 <div id="quality-selection" class="panel">
   {% if character %}
   <details open>
-  <summary class="panel__heading">Qualities</summary>
+  <summary class="panel__heading">{{ _("String_Qualities") }}</summary>
 
   {% if quality_error %}
-  <p class="error">{{ quality_error }}</p>
+  <p class="error">{{ quality_error | tr }}</p>
   {% endif %}
 
   {% if metatype_qualities %}
-  <p>
-    Free from metatype:
-    {% for quality in metatype_qualities %}{{ quality.name }}{% if not loop.last %}, {% endif %}{% endfor %}.
-  </p>
+  <p>{{ _("Web_Qualities_FreeFromMetatype", names=metatype_qualities | map(attribute="name") | join(_("Web_List_Separator"))) }}</p>
   {% endif %}
 
   <p>
-    Positive Quality karma: {{ positive_karma }} / {{ karma_limit }}.
-    Negative Quality karma: {{ negative_karma }} / {{ karma_limit }}.
+    {{ _("Web_Qualities_PositiveKarma", spent=positive_karma, limit=karma_limit) }}
+    {{ _("Web_Qualities_NegativeKarma", spent=negative_karma, limit=karma_limit) }}
   </p>
 
   <form
@@ -28,11 +25,11 @@
     <table>
       <thead>
         <tr>
-          <th>Select</th>
-          <th>Quality</th>
-          <th>Category</th>
-          <th>Karma</th>
-          <th>Detail</th>
+          <th>{{ _("Web_Qualities_ColSelect") }}</th>
+          <th>{{ _("Web_Qualities_ColQuality") }}</th>
+          <th>{{ _("Web_Qualities_ColCategory") }}</th>
+          <th>{{ _("String_Karma") }}</th>
+          <th>{{ _("Web_Qualities_ColDetail") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -55,7 +52,7 @@
               type="text"
               name="quality_text_{{ row.quality.id }}"
               value="{{ row.text_value }}"
-              placeholder="required detail (e.g. which SIN)"
+              placeholder="{{ _('Web_Qualities_DetailPlaceholder') }}"
             />
             {% endif %}
           </td>
@@ -66,11 +63,11 @@
 
     {% if mentor_spirit_offered %}
     <fieldset>
-      <legend>Mentor Spirit archetype (only applies if the Mentor Spirit quality above is checked)</legend>
+      <legend>{{ _("Web_Qualities_MentorLegend") }}</legend>
       <label>
-        Archetype
+        {{ _("Web_Qualities_MentorArchetype") }}
         <select name="mentor_spirit_archetype_id">
-          <option value="">-- choose an archetype --</option>
+          <option value="">{{ _("Web_Qualities_ChooseArchetype") }}</option>
           {% for archetype in mentor_spirit_archetypes %}
           <option value="{{ archetype.id }}" {% if archetype.id == selected_mentor_spirit_archetype_id %}selected{% endif %}>
             {{ archetype.name }}
@@ -85,7 +82,7 @@
 
       {% if selected_mentor_spirit_archetype.general_options|length > 1 %}
       <fieldset>
-        <legend>General bonus: choose one</legend>
+        <legend>{{ _("Web_Qualities_MentorGeneralBonus") }}</legend>
         {% for option in selected_mentor_spirit_archetype.general_options %}
         <label>
           <input
@@ -101,18 +98,18 @@
       {% endif %}
 
       <p>
-        Magician bonus: {{ selected_mentor_spirit_archetype.magician_choice.name }}.
-        Adept bonus: {{ selected_mentor_spirit_archetype.adept_choice.name }}.
-        Only the one matching {{ character.magic_type }} applies.
+        {{ _("Web_Qualities_MentorMagicianBonus", bonus=selected_mentor_spirit_archetype.magician_choice.name) }}
+        {{ _("Web_Qualities_MentorAdeptBonus", bonus=selected_mentor_spirit_archetype.adept_choice.name) }}
+        {% if character.magic_type %}{{ _("Web_Qualities_MentorOnlyMatching", type=_("Web_MagicType_" ~ character.magic_type)) }}{% endif %}
       </p>
       {% endif %}
     </fieldset>
     {% endif %}
 
-    <button type="submit">Update qualities</button>
+    <button type="submit">{{ _("Web_Qualities_Update") }}</button>
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities on the Priorities page before selecting qualities.</p>
+  <p>{{ _("Web_Qualities_Placeholder") }}</p>
   {% endif %}
 </div>

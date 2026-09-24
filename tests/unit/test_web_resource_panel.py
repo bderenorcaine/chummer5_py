@@ -172,13 +172,13 @@ def test_the_point_pools_are_the_numbers_each_step_shows_on_its_own_page() -> No
 
     rows = _panel_rows(client.get("/ui/resource-panel").text)
     budget = PRIORITIES.attributes["B"].points
-    assert rows["Attribute points"] == (budget - 3, budget, False)
+    assert rows["Attribute Points"] == (budget - 3, budget, False)
     special = _character(client).special_attribute_points
-    assert rows["Special attribute points"] == (special - 1, special, False)
+    assert rows["Special Attribute Points"] == (special - 1, special, False)
     skills = PRIORITIES.skills["C"]
-    assert rows["Skill points"] == (skills.skills - 4, skills.skills, False)
-    assert rows["Skill group points"] == (skills.skill_groups, skills.skill_groups, False)
-    assert "Knowledge points" in rows
+    assert rows["Skill Points"] == (skills.skills - 4, skills.skills, False)
+    assert rows["Skill Group Points"] == (skills.skill_groups, skills.skill_groups, False)
+    assert "Knowledge Points" in rows
     # And they agree with what the step's own page prints.
     attributes_page = client.get("/ui/page/attributes", headers=HTMX).text
     assert f"Primary attribute points remaining: {budget - 3} / {budget}." in attributes_page
@@ -192,11 +192,11 @@ def test_an_over_budget_pool_is_flagged() -> None:
     ungrouped = [s for s in MUNDANE_SKILLS if s.skill_group is None][:5]
     points = {s.id: 6 for s in ungrouped[:4]} | {ungrouped[4].id: 1}  # 25 of C's 28
     client.post("/ui/skills", data={f"skill_{sid}": str(v) for sid, v in points.items()})
-    assert _panel_rows(client.get("/ui/resource-panel").text)["Skill points"][2] is False
+    assert _panel_rows(client.get("/ui/resource-panel").text)["Skill Points"][2] is False
 
     _confirm_human(client, skills_letter="D", resources_letter="C")  # 22 points now
 
-    remaining, of, over = _panel_rows(client.get("/ui/resource-panel").text)["Skill points"]
+    remaining, of, over = _panel_rows(client.get("/ui/resource-panel").text)["Skill Points"]
     assert (remaining, of, over) == (22 - 25, 22, True)
 
 
@@ -221,14 +221,14 @@ def test_magic_pools_appear_only_for_the_archetype_that_has_them() -> None:
             resources_letter="E",
         )
         mundane = _panel_rows(client.get("/ui/resource-panel").text)
-        assert "Free spells" not in mundane and "Power Points" not in mundane
+        assert "Free Spells" not in mundane and "Power Points" not in mundane
 
         client.post("/ui/talent", data={"talent_letter": "B", "talent_codename": codename, **extra})
 
         rows = _panel_rows(client.get("/ui/resource-panel").text)
         if codename == "Magician":
             assert "Power Points" not in rows
-            assert rows["Free spells"][:2] == (7, 7)  # letter B Magician: 7 free spells
+            assert rows["Free Spells"][:2] == (7, 7)  # letter B Magician: 7 free spells
         else:
-            assert "Free spells" not in rows
+            assert "Free Spells" not in rows
             assert rows["Power Points"][:2] == (6, 6)  # letter B Adept: Magic 6 -> 6 PP

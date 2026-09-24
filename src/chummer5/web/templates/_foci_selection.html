@@ -1,23 +1,19 @@
 <div id="foci-selection" class="panel">
   {% if character and character.magic_type %}
   <details open>
-  <summary class="panel__heading">Foci</summary>
+  <summary class="panel__heading">{{ _("Label_SummaryFoci") }}</summary>
 
   {% if foci_error %}
-  <p class="error">{{ foci_error }}</p>
+  <p class="error">{{ foci_error | tr }}</p>
   {% endif %}
   {% if foci_budget_warning %}
-  <p class="warning">{{ foci_budget_warning }}</p>
+  <p class="warning">{{ foci_budget_warning | tr }}</p>
   {% endif %}
 
   <p>
-    Bond up to {{ foci_max_count }} foci (one per Magic point), total Force at most
-    {{ foci_max_total_force }} (Magic x 2 -- the character-creation cap, tighter than the general
-    Magic x 5 rule). Shares the same nuyen budget as gear/Lifestyle/cyberware/bioware:
-    nuyen remaining {{ foci_nuyen_remaining }} / {{ foci_nuyen_available }} (spent
-    {{ foci_nuyen_spent }}). Shares the same leftover-Karma pool as Bound Spirits:
-    Karma remaining {{ foci_karma_remaining }} / {{ foci_karma_budget }} (spent
-    {{ foci_karma_spent }}).
+    {{ _("Web_Foci_Rules", count=foci_max_count, force=foci_max_total_force) }}
+    {{ _("Web_Foci_Nuyen", remaining=foci_nuyen_remaining, available=foci_nuyen_available, spent=foci_nuyen_spent) }}
+    {{ _("Web_Foci_Karma", remaining=foci_karma_remaining, budget=foci_karma_budget, spent=foci_karma_spent) }}
   </p>
 
   <form
@@ -32,11 +28,11 @@
       <table>
         <thead>
           <tr>
-            <th>Item</th>
-            <th>Nuyen/Force</th>
-            <th>Karma/Force</th>
-            <th>Force</th>
-            <th>Nuyen subtotal</th>
+            <th>{{ _("Web_Foci_ColItem") }}</th>
+            <th>{{ _("Web_Foci_ColNuyenPerForce") }}</th>
+            <th>{{ _("Web_Foci_ColKarmaPerForce") }}</th>
+            <th>{{ _("Web_Spirits_ColForce") }}</th>
+            <th>{{ _("Web_Foci_ColSubtotal") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -61,7 +57,7 @@
     </details>
     {% endfor %}
 
-    <button type="submit">Update foci</button>
+    <button type="submit">{{ _("Web_Foci_Update") }}</button>
   </form>
   </details>
   {% endif %}

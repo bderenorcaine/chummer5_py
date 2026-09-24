@@ -36,6 +36,7 @@ from chummer5.engine.resources import (
 from chummer5.engine.vehicles import VEHICLE_CATALOG, condition_monitor, create_vehicle_selection
 from chummer5.web.catalogs import PRIORITIES, templates
 from chummer5.web.forms import display_karma_to_nuyen
+from chummer5.web.i18n import Message
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -151,7 +152,7 @@ def _vehicles_context(
     ]
     budget = starting_nuyen(resources_letter, PRIORITIES) + display_karma_to_nuyen(karma_converted)
     spent = sum(int(row["subtotal"]) for group in vehicle_groups for row in group["rows"])
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None:
         try:
             create_vehicle_selection(
@@ -160,10 +161,7 @@ def _vehicles_context(
                 budget - gear_cost - lifestyle_cost - cyberware_cost - bioware_cost - foci_cost,
             )
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since priorities were last confirmed: {exc}. "
-                "Adjust the vehicles below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Vehicles", error=str(exc))
     return {
         "character": character,
         "vehicle_groups": vehicle_groups,

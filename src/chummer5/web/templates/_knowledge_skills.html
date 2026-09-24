@@ -1,19 +1,19 @@
 <div id="knowledge-skills" class="panel">
   {% if character %}
   <details open>
-  <summary class="panel__heading">Knowledge &amp; Language Skills</summary>
+  <summary class="panel__heading">{{ _("Web_Knowledge_Heading") }}</summary>
 
   {% if knowledge_error %}
-  <p class="error">{{ knowledge_error }}</p>
+  <p class="error">{{ knowledge_error | tr }}</p>
   {% endif %}
   {% if knowledge_budget_warning %}
-  <p class="warning">{{ knowledge_budget_warning }}</p>
+  <p class="warning">{{ knowledge_budget_warning | tr }}</p>
   {% endif %}
 
   <p>
-    Free points remaining: {{ knowledge_free_points - knowledge_points_spent }} / {{ knowledge_free_points }} ((Intuition + Logic) &times; 2).
-    Native languages: up to {{ native_language_limit }} free (marked below, no rating needed).
-    Karma remaining for knowledge/language: {{ knowledge_karma_remaining }} / {{ knowledge_karma_budget }}.
+    {{ _("Web_Knowledge_FreeRemaining", remaining=knowledge_free_points - knowledge_points_spent, budget=knowledge_free_points) }}
+    {{ _("Web_Knowledge_NativeLimit", limit=native_language_limit) }}
+    {{ _("Web_Knowledge_KarmaRemaining", remaining=knowledge_karma_remaining, budget=knowledge_karma_budget) }}
   </p>
 
   <form
@@ -22,25 +22,22 @@
     hx-swap="outerHTML"
     hx-trigger="change, input[event.target.type=='number'] delay:400ms"
   >
-    <h3>Knowledge skills</h3>
+    <h3>{{ _("Web_Knowledge_KnowledgeSkills") }}</h3>
     <p>
-      Freeform — type any name; the category determines the linked attribute. Suggested examples:
+      {{ _("Web_Knowledge_FreeformHelp") }}
       {% for category in knowledge_categories %}
-      {{ category.name }} ({{ category.linked_attribute }}: {{ category.examples | join(", ") }}){% if not loop.last %}; {% endif %}
+      {{ _("Web_Knowledge_CategoryExamples", category=category.name, attribute=_("String_Attribute" ~ category.linked_attribute ~ "Short"), examples=category.examples | join(_("Web_List_Separator"))) }}{% if not loop.last %}; {% endif %}
       {% endfor %}
     </p>
-    <p>
-      "Karma pts" (Step Seven) raises a committed skill's rating beyond its free-point spend, at
-      new Rating &times; 1 Karma per point.
-    </p>
+    <p>{{ _("Web_Knowledge_KarmaHelp") }}</p>
     <table>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Category</th>
-          <th>Rating</th>
-          <th>Karma pts</th>
-          <th>Pool</th>
+          <th>{{ _("String_Name") }}</th>
+          <th>{{ _("Web_Qualities_ColCategory") }}</th>
+          <th>{{ _("String_Rating") }}</th>
+          <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
+          <th>{{ _("Web_Skills_ColPool") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -83,16 +80,16 @@
       </tbody>
     </table>
 
-    <h3>Language skills</h3>
-    <p>Suggested examples: {{ suggested_languages | join(", ") }}.</p>
+    <h3>{{ _("Web_Knowledge_LanguageSkills") }}</h3>
+    <p>{{ _("Web_Knowledge_SuggestedLanguages", examples=suggested_languages | join(_("Web_List_Separator"))) }}</p>
     <table>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Rating</th>
-          <th>Native (free)</th>
-          <th>Karma pts</th>
-          <th>Pool</th>
+          <th>{{ _("String_Name") }}</th>
+          <th>{{ _("String_Rating") }}</th>
+          <th>{{ _("Web_Knowledge_ColNative") }}</th>
+          <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
+          <th>{{ _("Web_Skills_ColPool") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -126,15 +123,15 @@
               max="{{ max_skill_rating }}"
             />
           </td>
-          <td>{% if row.native %}N{% elif row.pool is not none %}{{ row.pool }}{% endif %}</td>
+          <td>{% if row.native %}{{ _("Web_Knowledge_NativeMarker") }}{% elif row.pool is not none %}{{ row.pool }}{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
-    <button type="submit">Update knowledge &amp; language skills</button>
+    <button type="submit">{{ _("Web_Knowledge_Update") }}</button>
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities on the Priorities page before adding knowledge/language skills.</p>
+  <p>{{ _("Web_Knowledge_Placeholder") }}</p>
   {% endif %}
 </div>

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chummer5 — {{ page.label }}</title>
+    <title>{{ _("Web_App_WindowTitle", page=_(page.label_key)) }}</title>
     {# WP97: no history snapshots -- back/forward always re-fetches the step page (as an
        HX-History-Restore-Request, which chummer5.web.routes.pages answers with the whole shell).
        A snapshot would restore a page as it was *before* whatever the player did elsewhere, e.g.
@@ -51,7 +51,7 @@
        content pane. Nav clicks swap only #page; see chummer5.web.routes.pages. #}
     <div class="app-shell">
       <header class="app-shell__titlebar">
-        <span class="app-shell__title">Chummer5</span>
+        <span class="app-shell__title">{{ _("Web_App_Title") }}</span>
         {# WP100/WP101: display preferences. Changing one is not a chargen change (see
            chummer5.web.prefs): the theme swaps only its own <link>, out of band; the language
            reloads the page, since every string on it changes. #}

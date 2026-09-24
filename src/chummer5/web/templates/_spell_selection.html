@@ -1,30 +1,27 @@
 <div id="spell-selection" class="panel">
   {% if character and character.magic_type == "Magician" %}
   <details open>
-  <summary class="panel__heading">Spells</summary>
+  <summary class="panel__heading">{{ _("String_Spells") }}</summary>
 
   {% if spell_error %}
-  <p class="error">{{ spell_error }}</p>
+  <p class="error">{{ spell_error | tr }}</p>
   {% endif %}
   {% if spell_budget_warning %}
-  <p class="error">{{ spell_budget_warning }}</p>
+  <p class="error">{{ spell_budget_warning | tr }}</p>
   {% endif %}
 
+  <p>{{ _("Web_Spells_Chosen", selected=spells_selected, budget=spell_budget, remaining=spells_remaining, cap=spell_max_known) }}</p>
   <p>
-    Spells chosen: {{ spells_selected }} / {{ spell_budget }} free ({{ spells_remaining }}
-    remaining free); known cap (Magic Rating x2): {{ spell_max_known }}.
-  </p>
-  <p>
-    Karma cost for spells beyond the free budget: {{ spell_karma_cost }}.
-    Karma remaining for spells: {{ spell_karma_remaining }} / {{ spell_karma_budget }}.
+    {{ _("Web_Spells_KarmaCost", cost=spell_karma_cost) }}
+    {{ _("Web_Spells_KarmaRemaining", remaining=spell_karma_remaining, budget=spell_karma_budget) }}
   </p>
 
   <label>
-    Show
+    {{ _("Web_Spells_Show") }}
     <select id="spell-known-filter">
-      <option value="all">All spells</option>
-      <option value="known">Known only</option>
-      <option value="unknown">Unknown only</option>
+      <option value="all">{{ _("Web_Spells_ShowAll") }}</option>
+      <option value="known">{{ _("Web_Spells_ShowKnown") }}</option>
+      <option value="unknown">{{ _("Web_Spells_ShowUnknown") }}</option>
     </select>
   </label>
 
@@ -44,12 +41,12 @@
         <table>
           <thead>
             <tr>
-              <th>Select</th>
-              <th>Spell</th>
-              <th>Type</th>
-              <th>Range</th>
-              <th>Duration</th>
-              <th>DV</th>
+              <th>{{ _("Web_Qualities_ColSelect") }}</th>
+              <th>{{ _("Web_Spells_ColSpell") }}</th>
+              <th>{{ _("Web_Spells_ColType") }}</th>
+              <th>{{ _("Web_Spells_ColRange") }}</th>
+              <th>{{ _("Web_Spells_ColDuration") }}</th>
+              <th>{{ _("Web_Spells_ColDrain") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -75,7 +72,7 @@
       </details>
       {% endfor %}
     </div>
-    <button type="submit">Update spells</button>
+    <button type="submit">{{ _("Web_Spells_Update") }}</button>
   </form>
   <script>
     (function () {

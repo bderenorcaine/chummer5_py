@@ -42,6 +42,7 @@ from chummer5.engine.character import (
 from chummer5.engine.magic import create_magic_attribute_points
 from chummer5.web.catalogs import PRIORITIES, templates
 from chummer5.web.forms import parse_points
+from chummer5.web.i18n import Message
 from chummer5.web.routes.contacts import _relink_contact_selection
 from chummer5.web.routes.qualities import _relink_metatype_qualities
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
@@ -164,7 +165,7 @@ def _attribute_allocation_context(
                 "value": display.attribute_value("MAG"),
             }
         )
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None:
         validation_choice = MetatypeChoice(
             character.metatype, character.special_attribute_points, karma=0
@@ -192,10 +193,7 @@ def _attribute_allocation_context(
                 karma_budget,
             )
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since priorities were last confirmed: {exc}. "
-                "Adjust the points below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Attributes", error=str(exc))
     return {
         "character": display,
         "attribute_rows": rows,

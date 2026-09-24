@@ -25,6 +25,7 @@ from chummer5.engine.magic import (
 )
 from chummer5.io.save_format import DEFAULT_TALENT_CODENAME
 from chummer5.web.catalogs import PRIORITIES, SKILLS, TRADITIONS, templates
+from chummer5.web.i18n import Message
 from chummer5.web.routes.foci import _remove_foci_improvements
 from chummer5.web.routes.powers import _remove_adept_power_improvements
 from chummer5.web.routes.qualities import _strip_mentor_spirit_selection
@@ -75,7 +76,7 @@ def _talent_selection_context(
         if selected_option is not None
         else ()
     )
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None and character.magic_type is not None:
         try:
             create_magic_selection(
@@ -88,10 +89,7 @@ def _talent_selection_context(
                 SKILLS,
             )
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since priorities were last confirmed: {exc}. "
-                "Reconfirm Talent below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Talent", error=str(exc))
     return {
         "character": character,
         "talent_letter": talent_letter,

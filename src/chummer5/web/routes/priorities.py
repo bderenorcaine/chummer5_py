@@ -28,6 +28,7 @@ from chummer5.engine.build_method import (
 from chummer5.engine.character import Character, metatype_choices
 from chummer5.engine.improvements import ImprovementIndex
 from chummer5.web.catalogs import METATYPES, PRIORITIES, templates
+from chummer5.web.i18n import Message, MessageJoin
 from chummer5.web.routes.contacts import _relink_contact_selection
 from chummer5.web.routes.qualities import _relink_metatype_qualities
 from chummer5.web.session import (
@@ -68,7 +69,7 @@ def _priority_form_context(
     build_method: str,
     metatype_id: str | None,
     character: object,
-    error: str | None,
+    error: Message | str | None,
 ) -> dict[str, Any]:
     """Context for `_priority_form.html`'s own fields (letters, metatype options, the
     duplicate-letter/unoffered-metatype `error`). Always passed through
@@ -172,7 +173,7 @@ def submit_priorities(
         resources_letter,
         talent_letter,
     )
-    error: str | None = None
+    error: Message | str | None = None
     character = session.character
 
     # WP44: which validity rule applies to the same 5 letters depends on `build_method` --
@@ -184,9 +185,9 @@ def submit_priorities(
     # to either real rule.
     if build_method == PRIORITY_BUILD_METHOD:
         if sorted(submitted_letters) != sorted(PRIORITY_LETTERS):
-            error = (
-                "Heritage, Talent, Attributes, Skills, and Resources must each use a different "
-                f"priority letter ({', '.join(PRIORITY_LETTERS)}), one each."
+            error = Message.of(
+                "Web_Priorities_ErrorLetters",
+                letters=MessageJoin(PRIORITY_LETTERS),
             )
     elif build_method == SUM_TO_TEN_BUILD_METHOD:
         try:
@@ -194,7 +195,7 @@ def submit_priorities(
         except ValueError as exc:
             error = str(exc)
     else:
-        error = f"Unsupported build method: {build_method!r}."
+        error = Message.of("Web_Priorities_ErrorBuildMethod", method=repr(build_method))
 
     if error is None:
         heritage = PRIORITIES.heritage[heritage_letter]
@@ -203,7 +204,7 @@ def submit_priorities(
             None,
         )
         if choice is None:
-            error = "Select a metatype offered for the chosen Heritage priority."
+            error = Message.of("Web_Priorities_ErrorMetatype")
         else:
             previous = session.character
             if previous is None:

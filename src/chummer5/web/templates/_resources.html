@@ -1,24 +1,26 @@
 <div id="resources" class="panel">
   {% if character %}
   <details open>
-  <summary class="panel__heading">Resources</summary>
+  <summary class="panel__heading">{{ _("Web_Priorities_Resources") }}</summary>
 
   {% if resources_error %}
-  <p class="error">{{ resources_error }}</p>
+  <p class="error">{{ resources_error | tr }}</p>
   {% endif %}
   {% if resources_budget_warning %}
-  <p class="warning">{{ resources_budget_warning }}</p>
+  <p class="warning">{{ resources_budget_warning | tr }}</p>
   {% endif %}
 
   <p>
-    Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget + karma_to_nuyen_amount }}
-    (spent {{ nuyen_spent }}{% if karma_to_nuyen_amount %}, +{{ karma_to_nuyen_amount }} from
-    Karma conversion{% endif %}).
+    {% if karma_to_nuyen_amount %}
+    {{ _("Web_Resources_NuyenRemainingConverted", remaining=nuyen_remaining, budget=nuyen_budget + karma_to_nuyen_amount, spent=nuyen_spent, converted=karma_to_nuyen_amount) }}
+    {% else %}
+    {{ _("Web_Resources_NuyenRemaining", remaining=nuyen_remaining, budget=nuyen_budget + karma_to_nuyen_amount, spent=nuyen_spent) }}
+    {% endif %}
   </p>
 
   <label>
-    Filter gear
-    <input type="text" id="gear-filter" placeholder="e.g. Medkit or Electronics" />
+    {{ _("Web_Resources_Filter") }}
+    <input type="text" id="gear-filter" placeholder="{{ _('Web_Resources_FilterPlaceholder') }}" />
   </label>
 
   <form
@@ -28,7 +30,7 @@
     hx-trigger="change, input[event.target.type=='number'] delay:400ms"
   >
     <label>
-      Convert Karma to nuyen (2,000¥ each, up to {{ max_karma_to_nuyen }})
+      {{ _("Web_Resources_ConvertKarma", rate=karma_to_nuyen_rate | nuyen, max=max_karma_to_nuyen) }}
       <input
         type="number"
         name="karma_converted"
@@ -45,11 +47,11 @@
       <table>
         <thead>
           <tr>
-            <th>Item</th>
-            <th>Cost</th>
-            <th>Rating</th>
-            <th>Quantity</th>
-            <th>Subtotal</th>
+            <th>{{ _("Web_Foci_ColItem") }}</th>
+            <th>{{ _("String_Cost") }}</th>
+            <th>{{ _("String_Rating") }}</th>
+            <th>{{ _("Web_Resources_ColQuantity") }}</th>
+            <th>{{ _("Web_Resources_ColSubtotal") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -57,7 +59,7 @@
           <tr data-gear-name="{{ row.item.name | lower }}" data-gear-category="{{ group.category | lower }}">
             <td>{{ row.item.name }}</td>
             <td>
-              {% if row.is_rating %}{{ row.unit_cost }}/rating{% else %}{{ row.item.cost }}{% endif %}
+              {% if row.is_rating %}{{ _("Web_Resources_PerRating", cost=row.unit_cost) }}{% else %}{{ row.item.cost }}{% endif %}
             </td>
             <td>
               {% if row.is_rating %}
@@ -84,7 +86,7 @@
     </details>
     {% endfor %}
     </div>
-    <button type="submit">Update gear</button>
+    <button type="submit">{{ _("Web_Resources_Update") }}</button>
   </form>
   <script>
     (function () {
@@ -111,6 +113,6 @@
   </script>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities on the Priorities page before spending starting nuyen.</p>
+  <p>{{ _("Web_Resources_Placeholder") }}</p>
   {% endif %}
 </div>

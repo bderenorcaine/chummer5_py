@@ -1,26 +1,22 @@
 <div id="cyberware" class="panel">
   {% if character %}
   <details open>
-  <summary class="panel__heading">Cyberware &amp; Bioware</summary>
+  <summary class="panel__heading">{{ _("Tab_Cyberware") }}</summary>
 
   {% if cyberware_error %}
-  <p class="error">{{ cyberware_error }}</p>
+  <p class="error">{{ cyberware_error | tr }}</p>
   {% endif %}
   {% if cyberware_budget_warning %}
-  <p class="warning">{{ cyberware_budget_warning }}</p>
+  <p class="warning">{{ cyberware_budget_warning | tr }}</p>
   {% endif %}
 
   <p>
-    Standard grade only. Shares the same nuyen budget as gear and Lifestyle, and one shared
-    Essence pool between cyberware and bioware:
-    nuyen remaining for cyberware/bioware {{ nuyen_remaining }} / {{ nuyen_available }} (spent
-    {{ nuyen_spent }}). Essence remaining: {{ essence_remaining }} / 6 (spent {{ essence_spent }}).
+    {{ _("Web_Cyberware_Intro") }}
+    {{ _("Web_Cyberware_Nuyen", remaining=nuyen_remaining, available=nuyen_available, spent=nuyen_spent) }}
+    {{ _("Web_Cyberware_Essence", remaining=essence_remaining, spent=essence_spent) }}
   </p>
-  <p>
-    Buying a cyberlimb, cybereyes or cyberears opens a subsystem list under it: an installed
-    subsystem costs the parent's <strong>Capacity</strong> and nuyen instead of Essence, and each
-    parent's remaining Capacity updates as you tick boxes.
-  </p>
+  {% set capacity_word %}<strong>{{ _("Web_Cyberware_CapacityWord") }}</strong>{% endset %}
+  <p>{{ _("Web_Cyberware_SubsystemHelp", capacity=capacity_word) }}</p>
 
   <form
     hx-post="/ui/cyberware"
@@ -28,19 +24,19 @@
     hx-swap="outerHTML"
     hx-trigger="change, input[event.target.type=='number'] delay:400ms"
   >
-    <h3>Cyberware</h3>
+    <h3>{{ _("Web_Cyberware_Cyberware") }}</h3>
     {% for group in cyberware_groups %}
     <details data-details-key="cyberware:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
       <summary>{{ group.category }}</summary>
       <table>
         <thead>
           <tr>
-            <th>Item</th>
-            <th>Cost</th>
-            <th>Essence</th>
-            <th>Capacity</th>
-            <th>Quantity</th>
-            <th>Subtotal</th>
+            <th>{{ _("Web_Foci_ColItem") }}</th>
+            <th>{{ _("String_Cost") }}</th>
+            <th>{{ _("Web_Cyberware_ColEssence") }}</th>
+            <th>{{ _("Web_Cyberware_CapacityWord") }}</th>
+            <th>{{ _("Web_Resources_ColQuantity") }}</th>
+            <th>{{ _("Web_Resources_ColSubtotal") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -74,12 +70,11 @@
               <details data-details-key="cyberware-unit:{{ row.item.id }}:{{ unit.index }}" open>
                 <summary>
                   {{ row.item.name }}{% if row.quantity > 1 %} #{{ unit.index + 1 }}{% endif %}
-                  — {{ unit.nuyen_cost }}¥, Essence {{ unit.essence }}
-                  {%- if unit.capacity_budget %}, Capacity {{ unit.capacity_remaining }} of {{ unit.capacity_budget }} remaining{% endif %}
+                  — {% if unit.capacity_budget %}{{ _("Web_Cyberware_UnitSummaryCapacity", cost=unit.nuyen_cost | nuyen, essence=unit.essence, remaining=unit.capacity_remaining, budget=unit.capacity_budget) }}{% else %}{{ _("Web_Cyberware_UnitSummary", cost=unit.nuyen_cost | nuyen, essence=unit.essence) }}{% endif %}
                 </summary>
                 {% if unit.rating_range %}
                 <label>
-                  Rating:
+                  {{ _("Web_Cyberware_RatingLabel") }}
                   <select name="cyberware_rating_{{ row.item.id }}_{{ unit.index }}">
                     {% for value in range(unit.rating_range[0], unit.rating_range[1] + 1) %}
                     <option value="{{ value }}" {% if unit.rating == value %}selected{% endif %}>{{ value }}</option>
@@ -88,17 +83,17 @@
                 </label>
                 {% endif %}
                 {% if unit.bundled_names %}
-                <p class="bundled">Included free: {{ unit.bundled_names | join(", ") }}.</p>
+                <p class="bundled">{{ _("Web_Cyberware_IncludedFree", names=unit.bundled_names | join(_("Web_List_Separator"))) }}</p>
                 {% endif %}
                 {% if unit.plugin_rows %}
                 <table>
                   <thead>
                     <tr>
-                      <th>Subsystem</th>
-                      <th>Install</th>
-                      <th>Rating</th>
-                      <th>Cost</th>
-                      <th>Capacity</th>
+                      <th>{{ _("Web_Cyberware_ColSubsystem") }}</th>
+                      <th>{{ _("Web_Cyberware_ColInstall") }}</th>
+                      <th>{{ _("String_Rating") }}</th>
+                      <th>{{ _("String_Cost") }}</th>
+                      <th>{{ _("Web_Cyberware_CapacityWord") }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -140,18 +135,18 @@
     </details>
     {% endfor %}
 
-    <h3>Bioware</h3>
+    <h3>{{ _("Web_Cyberware_Bioware") }}</h3>
     {% for group in bioware_groups %}
     <details data-details-key="bioware:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
       <summary>{{ group.category }}</summary>
       <table>
         <thead>
           <tr>
-            <th>Item</th>
-            <th>Cost</th>
-            <th>Essence</th>
-            <th>Quantity</th>
-            <th>Subtotal</th>
+            <th>{{ _("Web_Foci_ColItem") }}</th>
+            <th>{{ _("String_Cost") }}</th>
+            <th>{{ _("Web_Cyberware_ColEssence") }}</th>
+            <th>{{ _("Web_Resources_ColQuantity") }}</th>
+            <th>{{ _("Web_Resources_ColSubtotal") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -164,14 +159,14 @@
               <div class="bioware-skill-picks">
                 {% for index in range(row.quantity) %}
                 <label>
-                  Skill{% if row.quantity > 1 %} {{ index + 1 }}{% endif %}:
+                  {% if row.quantity > 1 %}{{ _("Web_Cyberware_SkillNumbered", number=index + 1) }}{% else %}{{ _("Web_Cyberware_Skill") }}{% endif %}
                   <select name="bioware_skill_{{ row.item.id }}_{{ index }}">
-                    <option value="">— choose a skill —</option>
+                    <option value="">{{ _("Web_Cyberware_ChooseSkill") }}</option>
                     {% for skill in row.skill_choices %}
                     <option
                       value="{{ skill.name }}"
                       {% if row.chosen_skills[index] == skill.name %}selected{% endif %}
-                    >{{ skill.name }} ({{ skill.attribute }})</option>
+                    >{{ skill.name }} ({{ _("String_Attribute" ~ skill.attribute ~ "Short") }})</option>
                     {% endfor %}
                   </select>
                 </label>
@@ -197,10 +192,10 @@
     </details>
     {% endfor %}
 
-    <button type="submit">Update cyberware &amp; bioware</button>
+    <button type="submit">{{ _("Web_Cyberware_Update") }}</button>
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities on the Priorities page before installing cyberware or bioware.</p>
+  <p>{{ _("Web_Cyberware_Placeholder") }}</p>
   {% endif %}
 </div>

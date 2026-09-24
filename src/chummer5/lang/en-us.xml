@@ -1,10 +1,448 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- This project's own UI strings (WP101): keys the legacy catalog does not have. Same schema as
-     legacy/Chummer/lang/en-us.xml; see README.md next to this file for the key rules. Keep entries
-     grouped by area and sorted within a group. -->
+<!-- This project's own UI strings (WP101/WP102): keys the legacy catalog does not have.
+     Same schema as legacy/Chummer/lang/en-us.xml; see README.md next to this file for the
+     key rules. Grouped by area (the key's second segment), sorted within a group. -->
 <chummer>
   <name>English (en-US)</name>
   <strings>
+    <!-- Application shell: title bar, nav, pages -->
+    <string>
+      <key>Web_App_Title</key>
+      <text>Chummer5</text>
+    </string>
+    <string>
+      <key>Web_App_WindowTitle</key>
+      <text>Chummer5 — {page}</text>
+    </string>
+    <!-- Attributes -->
+    <string>
+      <key>Web_Attributes_ColAttribute</key>
+      <text>Attribute</text>
+    </string>
+    <string>
+      <key>Web_Attributes_ColKarmaPoints</key>
+      <text>Karma points</text>
+    </string>
+    <string>
+      <key>Web_Attributes_ColPoints</key>
+      <text>Points</text>
+    </string>
+    <string>
+      <key>Web_Attributes_ColRange</key>
+      <text>Metatype range</text>
+    </string>
+    <string>
+      <key>Web_Attributes_ColValue</key>
+      <text>Value (augmented)</text>
+    </string>
+    <string>
+      <key>Web_Attributes_KarmaRemaining</key>
+      <text>Karma remaining for attribute increases: {remaining} / {budget}.</text>
+    </string>
+    <string>
+      <key>Web_Attributes_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before allocating attribute points.</text>
+    </string>
+    <string>
+      <key>Web_Attributes_PrimaryRemaining</key>
+      <text>Primary attribute points remaining: {remaining} / {budget}.</text>
+    </string>
+    <string>
+      <key>Web_Attributes_SpecialMagicRemaining</key>
+      <text>Special (Edge/Magic) points remaining: {remaining} / {budget}.</text>
+    </string>
+    <string>
+      <key>Web_Attributes_SpecialRemaining</key>
+      <text>Special (Edge) points remaining: {remaining} / {budget}.</text>
+    </string>
+    <string>
+      <key>Web_Attributes_Update</key>
+      <text>Update attributes</text>
+    </string>
+    <!-- BuildMethod -->
+    <string>
+      <key>Web_BuildMethod_Priority</key>
+      <text>Priority</text>
+    </string>
+    <string>
+      <key>Web_BuildMethod_SumtoTen</key>
+      <text>Sum-to-Ten</text>
+    </string>
+    <!-- Contacts -->
+    <string>
+      <key>Web_Contacts_ColConnection</key>
+      <text>Connection</text>
+    </string>
+    <string>
+      <key>Web_Contacts_ColFree</key>
+      <text>Free</text>
+    </string>
+    <string>
+      <key>Web_Contacts_ColLoyalty</key>
+      <text>Loyalty</text>
+    </string>
+    <string>
+      <key>Web_Contacts_ColPoints</key>
+      <text>Points</text>
+    </string>
+    <string>
+      <key>Web_Contacts_KarmaCost</key>
+      <text>Karma cost beyond free points: {cost}.</text>
+    </string>
+    <string>
+      <key>Web_Contacts_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before adding contacts.</text>
+    </string>
+    <string>
+      <key>Web_Contacts_Points</key>
+      <text>Free contact points: {free}. Points spent: {spent}.</text>
+    </string>
+    <string>
+      <key>Web_Contacts_Update</key>
+      <text>Update contacts</text>
+    </string>
+    <!-- Cyberware -->
+    <string>
+      <key>Web_Cyberware_Bioware</key>
+      <text>Bioware</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_CapacityWord</key>
+      <text>Capacity</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_ChooseSkill</key>
+      <text>— choose a skill —</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_ColEssence</key>
+      <text>Essence</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_ColInstall</key>
+      <text>Install</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_ColSubsystem</key>
+      <text>Subsystem</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_Cyberware</key>
+      <text>Cyberware</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_Essence</key>
+      <text>Essence remaining: {remaining} / 6 (spent {spent}).</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_IncludedFree</key>
+      <text>Included free: {names}.</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_Intro</key>
+      <text>Standard grade only. Shares the same nuyen budget as gear and Lifestyle, and one shared Essence pool between cyberware and bioware:</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_Nuyen</key>
+      <text>nuyen remaining for cyberware/bioware {remaining} / {available} (spent {spent}).</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before installing cyberware or bioware.</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_RatingLabel</key>
+      <text>Rating:</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_Skill</key>
+      <text>Skill:</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_SkillNumbered</key>
+      <text>Skill {number}:</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_SubsystemHelp</key>
+      <text>Buying a cyberlimb, cybereyes or cyberears opens a subsystem list under it: an installed subsystem costs the parent's {capacity} and nuyen instead of Essence, and each parent's remaining Capacity updates as you tick boxes.</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_UnitSummary</key>
+      <text>{cost}, Essence {essence}</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_UnitSummaryCapacity</key>
+      <text>{cost}, Essence {essence}, Capacity {remaining} of {budget} remaining</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_Update</key>
+      <text>Update cyberware &amp; bioware</text>
+    </string>
+    <!-- Export -->
+    <string>
+      <key>Web_Export_Heading</key>
+      <text>Character sheet &amp; export</text>
+    </string>
+    <!-- Foci -->
+    <string>
+      <key>Web_Foci_ColItem</key>
+      <text>Item</text>
+    </string>
+    <string>
+      <key>Web_Foci_ColKarmaPerForce</key>
+      <text>Karma/Force</text>
+    </string>
+    <string>
+      <key>Web_Foci_ColNuyenPerForce</key>
+      <text>Nuyen/Force</text>
+    </string>
+    <string>
+      <key>Web_Foci_ColSubtotal</key>
+      <text>Nuyen subtotal</text>
+    </string>
+    <string>
+      <key>Web_Foci_Karma</key>
+      <text>Shares the same leftover-Karma pool as Bound Spirits: Karma remaining {remaining} / {budget} (spent {spent}).</text>
+    </string>
+    <string>
+      <key>Web_Foci_Nuyen</key>
+      <text>Shares the same nuyen budget as gear/Lifestyle/cyberware/bioware: nuyen remaining {remaining} / {available} (spent {spent}).</text>
+    </string>
+    <string>
+      <key>Web_Foci_Rules</key>
+      <text>Bond up to {count} foci (one per Magic point), total Force at most {force} (Magic × 2 — the character-creation cap, tighter than the general Magic × 5 rule).</text>
+    </string>
+    <string>
+      <key>Web_Foci_Update</key>
+      <text>Update foci</text>
+    </string>
+    <!-- Format -->
+    <string>
+      <key>Web_Format_Nuyen</key>
+      <text>{amount}¥</text>
+    </string>
+    <!-- Gear -->
+    <string>
+      <key>Web_Gear_AttributeArray</key>
+      <text>Attribute Array {values}</text>
+    </string>
+    <string>
+      <key>Web_Gear_DataProcessing</key>
+      <text>Data Processing {value}</text>
+    </string>
+    <string>
+      <key>Web_Gear_DeviceRating</key>
+      <text>Device Rating {value}</text>
+    </string>
+    <string>
+      <key>Web_Gear_Firewall</key>
+      <text>Firewall {value}</text>
+    </string>
+    <string>
+      <key>Web_Gear_Programs</key>
+      <text>Programs {value}</text>
+    </string>
+    <!-- Knowledge -->
+    <string>
+      <key>Web_Knowledge_CategoryExamples</key>
+      <text>{category} ({attribute}: {examples})</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_ColNative</key>
+      <text>Native (free)</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_FreeRemaining</key>
+      <text>Free points remaining: {remaining} / {budget} ((Intuition + Logic) × 2).</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_FreeformHelp</key>
+      <text>Freeform — type any name; the category determines the linked attribute. Suggested examples:</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_Heading</key>
+      <text>Knowledge &amp; Language Skills</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_KarmaHelp</key>
+      <text>"Karma pts" (Step Seven) raises a committed skill's rating beyond its free-point spend, at new Rating × 1 Karma per point.</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_KarmaRemaining</key>
+      <text>Karma remaining for knowledge/language: {remaining} / {budget}.</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_KnowledgeSkills</key>
+      <text>Knowledge skills</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_LanguageSkills</key>
+      <text>Language skills</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_NativeLimit</key>
+      <text>Native languages: up to {limit} free (marked below, no rating needed).</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_NativeMarker</key>
+      <text>N</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before adding knowledge/language skills.</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_SuggestedLanguages</key>
+      <text>Suggested examples: {examples}.</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_Update</key>
+      <text>Update knowledge &amp; language skills</text>
+    </string>
+    <!-- Lifestyle -->
+    <string>
+      <key>Web_Lifestyle_Intro</key>
+      <text>Core rulebook, p. 369: every character must select one primary Lifestyle. It shares the same nuyen budget as starter gear ({budget} total).</text>
+    </string>
+    <string>
+      <key>Web_Lifestyle_Months</key>
+      <text>Months</text>
+    </string>
+    <string>
+      <key>Web_Lifestyle_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before selecting a Lifestyle.</text>
+    </string>
+    <string>
+      <key>Web_Lifestyle_Tier</key>
+      <text>Tier</text>
+    </string>
+    <string>
+      <key>Web_Lifestyle_TierOption</key>
+      <text>{name} ({cost}/month)</text>
+    </string>
+    <string>
+      <key>Web_Lifestyle_Update</key>
+      <text>Update lifestyle</text>
+    </string>
+    <!-- List -->
+    <string>
+      <key>Web_List_Plus</key>
+      <text> + </text>
+    </string>
+    <string>
+      <key>Web_List_Semicolon</key>
+      <text>; </text>
+    </string>
+    <string>
+      <key>Web_List_Separator</key>
+      <text>, </text>
+    </string>
+    <string>
+      <key>Web_List_Space</key>
+      <text> </text>
+    </string>
+    <!-- MagicType -->
+    <string>
+      <key>Web_MagicType_Adept</key>
+      <text>Adept</text>
+    </string>
+    <string>
+      <key>Web_MagicType_Magician</key>
+      <text>Magician</text>
+    </string>
+    <!-- Magic -->
+    <string>
+      <key>Web_Magic_FociUnavailable</key>
+      <text>Foci need a confirmed Magician or Adept Talent.</text>
+    </string>
+    <string>
+      <key>Web_Magic_LockedNote</key>
+      <text>Spells, adept powers, bound spirits and foci open up here once you confirm a Magician or Adept Talent.</text>
+    </string>
+    <string>
+      <key>Web_Magic_PowersUnavailable</key>
+      <text>Adept powers need a confirmed Adept Talent.</text>
+    </string>
+    <string>
+      <key>Web_Magic_SpellsUnavailable</key>
+      <text>Spells need a confirmed Magician Talent.</text>
+    </string>
+    <string>
+      <key>Web_Magic_SpiritsUnavailable</key>
+      <text>Bound spirits need a confirmed Magician Talent.</text>
+    </string>
+    <!-- Metatype -->
+    <string>
+      <key>Web_Metatype_Option_One</key>
+      <text>{name} (+{count} special attribute point)</text>
+    </string>
+    <string>
+      <key>Web_Metatype_Option_Other</key>
+      <text>{name} (+{count} special attribute points)</text>
+    </string>
+    <!-- Nav -->
+    <string>
+      <key>Web_Nav_AriaLabel</key>
+      <text>Chargen steps</text>
+    </string>
+    <string>
+      <key>Web_Nav_Augmentation</key>
+      <text>Augmentation</text>
+    </string>
+    <string>
+      <key>Web_Nav_Bio</key>
+      <text>Bio</text>
+    </string>
+    <string>
+      <key>Web_Nav_BioUnsupported</key>
+      <text>Character background details are not supported yet.</text>
+    </string>
+    <string>
+      <key>Web_Nav_Equipment</key>
+      <text>Equipment</text>
+    </string>
+    <string>
+      <key>Web_Nav_ResonanceUnsupported</key>
+      <text>Technomancers are not supported yet.</text>
+    </string>
+    <string>
+      <key>Web_Nav_StaleMarker</key>
+      <text>Some selections here no longer fit your priorities</text>
+    </string>
+    <!-- Panel -->
+    <string>
+      <key>Web_Panel_Empty</key>
+      <text>Confirm priorities and a metatype to see your budgets.</text>
+    </string>
+    <string>
+      <key>Web_Panel_Heading</key>
+      <text>Remaining</text>
+    </string>
+    <string>
+      <key>Web_Panel_Of</key>
+      <text>of {total}</text>
+    </string>
+    <string>
+      <key>Web_Panel_PowerPoints</key>
+      <text>Power Points</text>
+    </string>
+    <!-- Powers -->
+    <string>
+      <key>Web_Powers_ColPointsPerLevel</key>
+      <text>Points/level</text>
+    </string>
+    <string>
+      <key>Web_Powers_ColPower</key>
+      <text>Power</text>
+    </string>
+    <string>
+      <key>Web_Powers_Spent</key>
+      <text>Power Points spent: {spent} / {budget} ({remaining} remaining).</text>
+    </string>
+    <string>
+      <key>Web_Powers_Update</key>
+      <text>Update powers</text>
+    </string>
     <!-- Title bar: display preferences (WP100/WP101) -->
     <string>
       <key>Web_Prefs_Language</key>
@@ -14,6 +452,818 @@
       <key>Web_Prefs_Theme</key>
       <text>Theme</text>
     </string>
+    <!-- Priorities -->
+    <string>
+      <key>Web_Priorities_BuildMethod</key>
+      <text>Build method</text>
+    </string>
+    <string>
+      <key>Web_Priorities_Confirm</key>
+      <text>Confirm metatype &amp; priorities</text>
+    </string>
+    <string>
+      <key>Web_Priorities_Confirmed</key>
+      <text>Confirmed: {metatype}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_ErrorBuildMethod</key>
+      <text>Unsupported build method: {method}.</text>
+    </string>
+    <string>
+      <key>Web_Priorities_ErrorLetters</key>
+      <text>Heritage, Talent, Attributes, Skills, and Resources must each use a different priority letter ({letters}), one each.</text>
+    </string>
+    <string>
+      <key>Web_Priorities_ErrorMetatype</key>
+      <text>Select a metatype offered for the chosen Heritage priority.</text>
+    </string>
+    <string>
+      <key>Web_Priorities_Heading</key>
+      <text>Priority &amp; metatype selection</text>
+    </string>
+    <string>
+      <key>Web_Priorities_Heritage</key>
+      <text>Heritage</text>
+    </string>
+    <string>
+      <key>Web_Priorities_Intro</key>
+      <text>Assign each of Heritage, Talent, Attributes, Skills, and Resources a different priority letter (A-E). Talent's own archetype (Mundane/Magician/Adept) is chosen on the Magic page, once you confirm a letter for it here — which archetypes are offered depends on the letter.</text>
+    </string>
+    <string>
+      <key>Web_Priorities_MethodPriority</key>
+      <text>Priority (each of the 5 must use a different letter)</text>
+    </string>
+    <string>
+      <key>Web_Priorities_MethodSumToTen</key>
+      <text>Sum-to-Ten (letters may repeat; point values must total exactly {target})</text>
+    </string>
+    <string>
+      <key>Web_Priorities_Resources</key>
+      <text>Resources</text>
+    </string>
+    <string>
+      <key>Web_Priorities_StaleSelections</key>
+      <text>Some of your existing attribute, skill, or gear selections no longer fit these priorities — the affected steps are marked ⚠ in the step list.</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SumToTenTotal</key>
+      <text>Current total: {total} / {target}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SummaryAttributes</key>
+      <text>Attributes {letter} — {name}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SummaryBuildMethod</key>
+      <text>Build method: {method}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SummaryHeritage</key>
+      <text>Heritage {letter} — {name}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SummaryResources</key>
+      <text>Resources {letter} — {name}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SummarySkills</key>
+      <text>Skills {letter} — {name}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SummarySpecialPoints</key>
+      <text>Special attribute points (EDG budget): {points}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SummaryTalent</key>
+      <text>Talent {letter} — {name}</text>
+    </string>
+    <!-- Qualities -->
+    <string>
+      <key>Web_Qualities_ChooseArchetype</key>
+      <text>-- choose an archetype --</text>
+    </string>
+    <string>
+      <key>Web_Qualities_ColCategory</key>
+      <text>Category</text>
+    </string>
+    <string>
+      <key>Web_Qualities_ColDetail</key>
+      <text>Detail</text>
+    </string>
+    <string>
+      <key>Web_Qualities_ColQuality</key>
+      <text>Quality</text>
+    </string>
+    <string>
+      <key>Web_Qualities_ColSelect</key>
+      <text>Select</text>
+    </string>
+    <string>
+      <key>Web_Qualities_DetailPlaceholder</key>
+      <text>required detail (e.g. which SIN)</text>
+    </string>
+    <string>
+      <key>Web_Qualities_FreeFromMetatype</key>
+      <text>Free from metatype: {names}.</text>
+    </string>
+    <string>
+      <key>Web_Qualities_MentorAdeptBonus</key>
+      <text>Adept bonus: {bonus}.</text>
+    </string>
+    <string>
+      <key>Web_Qualities_MentorArchetype</key>
+      <text>Archetype</text>
+    </string>
+    <string>
+      <key>Web_Qualities_MentorGeneralBonus</key>
+      <text>General bonus: choose one</text>
+    </string>
+    <string>
+      <key>Web_Qualities_MentorLegend</key>
+      <text>Mentor Spirit archetype (only applies if the Mentor Spirit quality above is checked)</text>
+    </string>
+    <string>
+      <key>Web_Qualities_MentorMagicianBonus</key>
+      <text>Magician bonus: {bonus}.</text>
+    </string>
+    <string>
+      <key>Web_Qualities_MentorOnlyMatching</key>
+      <text>Only the one matching {type} applies.</text>
+    </string>
+    <string>
+      <key>Web_Qualities_NegativeKarma</key>
+      <text>Negative Quality karma: {spent} / {limit}.</text>
+    </string>
+    <string>
+      <key>Web_Qualities_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before selecting qualities.</text>
+    </string>
+    <string>
+      <key>Web_Qualities_PositiveKarma</key>
+      <text>Positive Quality karma: {spent} / {limit}.</text>
+    </string>
+    <string>
+      <key>Web_Qualities_Update</key>
+      <text>Update qualities</text>
+    </string>
+    <!-- Resources -->
+    <string>
+      <key>Web_Resources_ColQuantity</key>
+      <text>Quantity</text>
+    </string>
+    <string>
+      <key>Web_Resources_ColSubtotal</key>
+      <text>Subtotal</text>
+    </string>
+    <string>
+      <key>Web_Resources_ConvertKarma</key>
+      <text>Convert Karma to nuyen ({rate} each, up to {max})</text>
+    </string>
+    <string>
+      <key>Web_Resources_Filter</key>
+      <text>Filter gear</text>
+    </string>
+    <string>
+      <key>Web_Resources_FilterPlaceholder</key>
+      <text>e.g. Medkit or Electronics</text>
+    </string>
+    <string>
+      <key>Web_Resources_NuyenRemaining</key>
+      <text>Nuyen remaining: {remaining} / {budget} (spent {spent}).</text>
+    </string>
+    <string>
+      <key>Web_Resources_NuyenRemainingConverted</key>
+      <text>Nuyen remaining: {remaining} / {budget} (spent {spent}, +{converted} from Karma conversion).</text>
+    </string>
+    <string>
+      <key>Web_Resources_PerRating</key>
+      <text>{cost}/rating</text>
+    </string>
+    <string>
+      <key>Web_Resources_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before spending starting nuyen.</text>
+    </string>
+    <string>
+      <key>Web_Resources_Update</key>
+      <text>Update gear</text>
+    </string>
+    <!-- Sheet -->
+    <string>
+      <key>Web_Sheet_Boxes_One</key>
+      <text>{count} box</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Boxes_Other</key>
+      <text>{count} boxes</text>
+    </string>
+    <string>
+      <key>Web_Sheet_CapacityUsed</key>
+      <text>Capacity {spent} of {budget} used</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ConditionalLimit</key>
+      <text>{limit}, {test}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_DerivedStats</key>
+      <text>Derived stats</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Download</key>
+      <text>Download save (.json)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_DrainResistance</key>
+      <text>Drain Resistance: {pool}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_DroppedPowers</key>
+      <text>Dropped powers (not MVP-supported): {names}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_DroppedQualities</key>
+      <text>Dropped qualities (not MVP-supported): {names}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_DroppedSkills</key>
+      <text>Dropped skills (unresolvable): {names}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_DroppedSpells</key>
+      <text>Dropped spells (not SR5-scoped): {names}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ErrorCannotImport</key>
+      <text>Cannot import: {reasons}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ErrorChooseChum5</key>
+      <text>Choose a .chum5 file to import.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ErrorChooseSave</key>
+      <text>Choose a save file to load.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ErrorInvalidChum5</key>
+      <text>Not a valid .chum5 file: {error}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ErrorLoad</key>
+      <text>Could not load save: {error}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Essence</key>
+      <text>Essence: {essence} / 6.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_FociCosts</key>
+      <text>Foci nuyen cost: {nuyen}. Foci karma cost: {karma}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Focus</key>
+      <text>{name} (Force {force}, {cost}, {karma} Karma)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ImportButton</key>
+      <text>Import .chum5</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ImportHeading</key>
+      <text>Import legacy character</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Imported</key>
+      <text>Character imported.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_IncludedFree</key>
+      <text>included free</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Initiative</key>
+      <text>Initiative</text>
+    </string>
+    <string>
+      <key>Web_Sheet_InitiativeValue</key>
+      <text>{value} + {dice}D6</text>
+    </string>
+    <string>
+      <key>Web_Sheet_KarmaContact</key>
+      <text>Contact karma cost (beyond free points): {cost}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_KarmaKnowledge</key>
+      <text>Knowledge/language karma cost: {cost}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_KarmaQuality</key>
+      <text>Quality karma cost: {cost}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_KarmaRemaining</key>
+      <text>Karma remaining: {remaining} (spent: {spent}).</text>
+    </string>
+    <string>
+      <key>Web_Sheet_KarmaSkill</key>
+      <text>Skill/skill-group karma cost: {cost}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_KarmaSpell</key>
+      <text>Spell karma cost: {cost}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_LanguageCategory</key>
+      <text>Language</text>
+    </string>
+    <string>
+      <key>Web_Sheet_LegacySaveFile</key>
+      <text>Legacy Chummer5 save (.chum5)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Lifestyle_One</key>
+      <text>{tier} ({count} month, {cost}).</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Lifestyle_Other</key>
+      <text>{tier} ({count} months, {cost}).</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Load</key>
+      <text>Load</text>
+    </string>
+    <string>
+      <key>Web_Sheet_LoadButton</key>
+      <text>Load save</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Loaded</key>
+      <text>Character loaded.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MagicRating</key>
+      <text>Magic rating: {rating}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MagicRatingReduced</key>
+      <text>Magic rating: {rating} (reduced from {before} by Essence loss)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MagicType</key>
+      <text>Type: {type}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MentalLimit</key>
+      <text>Mental limit</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MentorSpirit</key>
+      <text>Mentor Spirit</text>
+    </string>
+    <string>
+      <key>Web_Sheet_NativeSaveFile</key>
+      <text>Native save file (.json)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_NoKnowledge</key>
+      <text>No knowledge or language skills recorded.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_NoSkills</key>
+      <text>No skills rated above 0.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_None</key>
+      <text>None.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_NoneInstalled</key>
+      <text>None installed.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_NonePurchased</key>
+      <text>None purchased.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_NoneSelected</key>
+      <text>None selected.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_NuyenRemaining</key>
+      <text>Nuyen remaining: {remaining} / {total}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_NuyenRemainingConverted</key>
+      <text>Nuyen remaining: {remaining} / {total} ({priority} priority + {converted_nuyen} from converting {karma} Karma).</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PairedBonus</key>
+      <text>(granted once for a matched pair, not per implant)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PhysicalCM</key>
+      <text>Physical condition monitor</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PhysicalLimit</key>
+      <text>Physical limit</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before viewing the character sheet.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Power</key>
+      <text>{name} (rating {rating})</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PowerPoints</key>
+      <text>Power Points: {points}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PowerWithAttribute</key>
+      <text>{name} (rating {rating}, {attribute})</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PriorityAttributes</key>
+      <text>Attributes {priority}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PriorityHeritage</key>
+      <text>Heritage {priority}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PriorityResources</key>
+      <text>Resources {priority}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PrioritySkills</key>
+      <text>Skills {priority}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_PriorityTalent</key>
+      <text>Talent {priority}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_RatingSuffix</key>
+      <text>(Rating {rating})</text>
+    </string>
+    <string>
+      <key>Web_Sheet_SocialLimit</key>
+      <text>Social limit</text>
+    </string>
+    <string>
+      <key>Web_Sheet_SpiritKarma</key>
+      <text>Bound Spirits karma cost: {cost}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Spirit_One</key>
+      <text>{type} (Force {force}, {count} service owed)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Spirit_Other</key>
+      <text>{type} (Force {force}, {count} services owed)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_StunCM</key>
+      <text>Stun condition monitor</text>
+    </string>
+    <string>
+      <key>Web_Sheet_TestHearingPerception</key>
+      <text>hearing Perception tests</text>
+    </string>
+    <string>
+      <key>Web_Sheet_TestJumping</key>
+      <text>Gymnastics (Jumping) tests</text>
+    </string>
+    <string>
+      <key>Web_Sheet_TestSoundSource</key>
+      <text>Perception tests to find a sound's source</text>
+    </string>
+    <string>
+      <key>Web_Sheet_TestSprinting</key>
+      <text>Running (Sprinting) tests</text>
+    </string>
+    <string>
+      <key>Web_Sheet_TestVisualPerception</key>
+      <text>visual Perception tests</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Tradition</key>
+      <text>Tradition: {tradition}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Unmodeled</key>
+      <text>Unmodeled real effects ({count})</text>
+    </string>
+    <string>
+      <key>Web_Sheet_VehicleCost</key>
+      <text>Vehicle nuyen cost: {cost}.</text>
+    </string>
+    <!-- Skills -->
+    <string>
+      <key>Web_Skills_ColGroup</key>
+      <text>Group</text>
+    </string>
+    <string>
+      <key>Web_Skills_ColKarmaPoints</key>
+      <text>Karma pts</text>
+    </string>
+    <string>
+      <key>Web_Skills_ColKarmaSpec</key>
+      <text>Karma spec</text>
+    </string>
+    <string>
+      <key>Web_Skills_ColPoints</key>
+      <text>Points</text>
+    </string>
+    <string>
+      <key>Web_Skills_ColPool</key>
+      <text>Pool</text>
+    </string>
+    <string>
+      <key>Web_Skills_ColRating</key>
+      <text>Rating (with bonuses)</text>
+    </string>
+    <string>
+      <key>Web_Skills_ColSkill</key>
+      <text>Skill</text>
+    </string>
+    <string>
+      <key>Web_Skills_ColSpecialization</key>
+      <text>Specialization</text>
+    </string>
+    <string>
+      <key>Web_Skills_Filter</key>
+      <text>Filter skills</text>
+    </string>
+    <string>
+      <key>Web_Skills_FilterPlaceholder</key>
+      <text>e.g. Automatics</text>
+    </string>
+    <string>
+      <key>Web_Skills_GroupKarmaHelp</key>
+      <text>"Karma pts" (Step Seven) raises a group's rating beyond its priority points, at new Rating × 5 Karma per point.</text>
+    </string>
+    <string>
+      <key>Web_Skills_GroupPointsRemaining</key>
+      <text>Skill group points remaining: {remaining} / {budget}.</text>
+    </string>
+    <string>
+      <key>Web_Skills_GroupsWinHelp</key>
+      <text>A skill's own points are ignored whenever its group has points spent (the group rating wins) — see the "strict skill groups" rule. A specialization costs 1 extra skill point (on top of whatever bought the rating) and only applies to a skill bought individually here — not one whose rating comes from a purchased skill group.</text>
+    </string>
+    <string>
+      <key>Web_Skills_Individual</key>
+      <text>Individual skills</text>
+    </string>
+    <string>
+      <key>Web_Skills_KarmaHelp</key>
+      <text>"Karma pts"/"Karma spec" (Step Seven) can raise or specialize a skill beyond what the columns above allow, at new Rating × 2 Karma per point / 7 Karma flat per specialization — including a skill whose rating comes from a purchased group, which permanently breaks that group from this point forward (its other members keep their current rating, but can no longer be raised together as a group).</text>
+    </string>
+    <string>
+      <key>Web_Skills_KarmaRemaining</key>
+      <text>Karma remaining for skills: {remaining} / {budget}.</text>
+    </string>
+    <string>
+      <key>Web_Skills_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before allocating skill points.</text>
+    </string>
+    <string>
+      <key>Web_Skills_PointsRemaining</key>
+      <text>Skill points remaining: {remaining} / {budget}.</text>
+    </string>
+    <string>
+      <key>Web_Skills_RatedOnly</key>
+      <text>Only rated skills</text>
+    </string>
+    <string>
+      <key>Web_Skills_SpecPlaceholder</key>
+      <text>e.g. Axes</text>
+    </string>
+    <string>
+      <key>Web_Skills_Update</key>
+      <text>Update skills</text>
+    </string>
+    <!-- Spells -->
+    <string>
+      <key>Web_Spells_Chosen</key>
+      <text>Spells chosen: {selected} / {budget} free ({remaining} remaining free); known cap (Magic Rating × 2): {cap}.</text>
+    </string>
+    <string>
+      <key>Web_Spells_ColDrain</key>
+      <text>DV</text>
+    </string>
+    <string>
+      <key>Web_Spells_ColDuration</key>
+      <text>Duration</text>
+    </string>
+    <string>
+      <key>Web_Spells_ColRange</key>
+      <text>Range</text>
+    </string>
+    <string>
+      <key>Web_Spells_ColSpell</key>
+      <text>Spell</text>
+    </string>
+    <string>
+      <key>Web_Spells_ColType</key>
+      <text>Type</text>
+    </string>
+    <string>
+      <key>Web_Spells_KarmaCost</key>
+      <text>Karma cost for spells beyond the free budget: {cost}.</text>
+    </string>
+    <string>
+      <key>Web_Spells_KarmaRemaining</key>
+      <text>Karma remaining for spells: {remaining} / {budget}.</text>
+    </string>
+    <string>
+      <key>Web_Spells_Show</key>
+      <text>Show</text>
+    </string>
+    <string>
+      <key>Web_Spells_ShowAll</key>
+      <text>All spells</text>
+    </string>
+    <string>
+      <key>Web_Spells_ShowKnown</key>
+      <text>Known only</text>
+    </string>
+    <string>
+      <key>Web_Spells_ShowUnknown</key>
+      <text>Unknown only</text>
+    </string>
+    <string>
+      <key>Web_Spells_Update</key>
+      <text>Update spells</text>
+    </string>
+    <!-- Spirits -->
+    <string>
+      <key>Web_Spirits_ColForce</key>
+      <text>Force</text>
+    </string>
+    <string>
+      <key>Web_Spirits_ColServices</key>
+      <text>Services (Karma)</text>
+    </string>
+    <string>
+      <key>Web_Spirits_ColType</key>
+      <text>Spirit type</text>
+    </string>
+    <string>
+      <key>Web_Spirits_Heading</key>
+      <text>Bound Spirits</text>
+    </string>
+    <string>
+      <key>Web_Spirits_KarmaSpent</key>
+      <text>Karma spent: {spent} / {budget} ({remaining} remaining).</text>
+    </string>
+    <string>
+      <key>Web_Spirits_Rules</key>
+      <text>Up to {max} bound spirits (one per Charisma point). Force may be 1 to {force} (your current Magic rating); cost is 1 Karma per service regardless of Force.</text>
+    </string>
+    <string>
+      <key>Web_Spirits_Update</key>
+      <text>Update bound spirits</text>
+    </string>
+    <!-- Stale -->
+    <string>
+      <key>Web_Stale_Attributes</key>
+      <text>No longer fits since priorities were last confirmed: {error}. Adjust the points below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_Cyberware</key>
+      <text>No longer fits since priorities were last confirmed: {error}. Adjust cyberware/bioware below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_Foci</key>
+      <text>No longer fits since priorities/attributes were last confirmed: {error}. Adjust Foci below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_Knowledge</key>
+      <text>No longer fits since attributes were last confirmed: {error}. Adjust the entries below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_Lifestyle</key>
+      <text>No longer fits since priorities were last confirmed: {breakdown} spend {total} exceeds Resources priority {letter}'s nuyen budget of {budget}. Adjust the lifestyle below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_Resources</key>
+      <text>No longer fits since priorities were last confirmed: {error}. Adjust the gear below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_Skills</key>
+      <text>No longer fits since priorities were last confirmed: {error}. Adjust the points below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_Spells</key>
+      <text>No longer fits since priorities/attributes were last confirmed: {error}. Reconfirm spells below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_SpendBioware</key>
+      <text>bioware ({amount})</text>
+    </string>
+    <string>
+      <key>Web_Stale_SpendCyberware</key>
+      <text>cyberware ({amount})</text>
+    </string>
+    <string>
+      <key>Web_Stale_SpendFoci</key>
+      <text>foci ({amount})</text>
+    </string>
+    <string>
+      <key>Web_Stale_SpendGear</key>
+      <text>gear ({amount})</text>
+    </string>
+    <string>
+      <key>Web_Stale_SpendLifestyle</key>
+      <text>lifestyle ({amount})</text>
+    </string>
+    <string>
+      <key>Web_Stale_SpendVehicles</key>
+      <text>vehicles ({amount})</text>
+    </string>
+    <string>
+      <key>Web_Stale_Spirits</key>
+      <text>No longer fits since priorities/attributes were last confirmed: {error}. Reconfirm Bound Spirits below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_Talent</key>
+      <text>No longer fits since priorities were last confirmed: {error}. Reconfirm Talent below to continue.</text>
+    </string>
+    <string>
+      <key>Web_Stale_Vehicles</key>
+      <text>No longer fits since priorities were last confirmed: {error}. Adjust the vehicles below to continue.</text>
+    </string>
+    <!-- Tab -->
+    <string>
+      <key>Web_Tab_ActiveSkills</key>
+      <text>Active skills</text>
+    </string>
+    <string>
+      <key>Web_Tab_BoundSpirits</key>
+      <text>Bound spirits</text>
+    </string>
+    <string>
+      <key>Web_Tab_KnowledgeLanguages</key>
+      <text>Knowledge &amp; languages</text>
+    </string>
+    <string>
+      <key>Web_Tab_Talent</key>
+      <text>Talent</text>
+    </string>
+    <!-- Tabs -->
+    <string>
+      <key>Web_Tabs_AriaLabel</key>
+      <text>{page} sections</text>
+    </string>
+    <!-- Talent -->
+    <string>
+      <key>Web_Talent_ChooseTradition</key>
+      <text>-- choose a tradition --</text>
+    </string>
+    <string>
+      <key>Web_Talent_Confirm</key>
+      <text>Confirm Talent</text>
+    </string>
+    <string>
+      <key>Web_Talent_Confirmed</key>
+      <text>Confirmed: {type} — Magic {rating}.</text>
+    </string>
+    <string>
+      <key>Web_Talent_ConfirmedWithTradition</key>
+      <text>Confirmed: {type} ({tradition}) — Magic {rating}.</text>
+    </string>
+    <string>
+      <key>Web_Talent_FreeSkillGrant_One</key>
+      <text>Free skill grant: choose {count} skill</text>
+    </string>
+    <string>
+      <key>Web_Talent_FreeSkillGrant_Other</key>
+      <text>Free skill grant: choose {count} skills</text>
+    </string>
+    <string>
+      <key>Web_Talent_NotConfirmed</key>
+      <text>Not yet confirmed — MVP defaults to Mundane until you confirm below.</text>
+    </string>
+    <string>
+      <key>Web_Talent_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before selecting Talent.</text>
+    </string>
+    <string>
+      <key>Web_Talent_Priority</key>
+      <text>Talent priority {letter} — {name}.</text>
+    </string>
+    <string>
+      <key>Web_Talent_Tradition</key>
+      <text>Tradition</text>
+    </string>
+    <string>
+      <key>Web_Talent_TraditionOption</key>
+      <text>{name} (Drain: {first} + {second})</text>
+    </string>
+    <!-- Theme names (WP100) -->
     <string>
       <key>Web_Theme_Classic</key>
       <text>Classic</text>
@@ -21,6 +1271,79 @@
     <string>
       <key>Web_Theme_Sketch</key>
       <text>Sketch</text>
+    </string>
+    <!-- Vehicles -->
+    <string>
+      <key>Web_Vehicles_ColAccel</key>
+      <text>Accel</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColArmor</key>
+      <text>Armor</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColAvail</key>
+      <text>Avail</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColBody</key>
+      <text>Body</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColCM</key>
+      <text>CM</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColCost</key>
+      <text>Cost</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColHandl</key>
+      <text>Handl</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColPilot</key>
+      <text>Pilot</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColQty</key>
+      <text>Qty</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColSeats</key>
+      <text>Seats</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColSensor</key>
+      <text>Sensor</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColSpeed</key>
+      <text>Speed</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColSubtotal</key>
+      <text>Subtotal</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_ColVehicle</key>
+      <text>Vehicle</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_Intro</key>
+      <text>Core rulebook, pp. 461–466. Stock, unmodified purchases only — vehicle and drone modifications are out of scope, so a vehicle bought here has no rigger interface (drones ship with one built in, p. 265).</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_Nuyen</key>
+      <text>Shares the same nuyen budget as gear/Lifestyle/cyberware/bioware: nuyen remaining {remaining} / {budget} (spent on vehicles {spent}).</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before buying vehicles.</text>
+    </string>
+    <string>
+      <key>Web_Vehicles_Update</key>
+      <text>Update vehicles</text>
     </string>
   </strings>
 </chummer>

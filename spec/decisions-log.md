@@ -1476,3 +1476,39 @@ converted the pages, so any other locale would render almost entirely in its Eng
 locale is added to `prefs.LOCALES` when its coverage justifies it. The picker ships as a deliverable
 anyway, with one entry. A language change answers `HX-Refresh`, because every string changes; the
 theme's out-of-band `<link>` swap does not apply.
+
+**2026-09-24 (WP102, Phase W) — where the chrome-string pass drew its line, and the mechanisms it
+needed.** All 22 templates and every web-layer Python module now route user-facing text through
+catalog keys: 327 `Web_*` keys plus reused legacy keys. Two tests enforce this from now on.
+`test_no_template_has_bare_user_facing_text` covers text nodes plus `title`/`placeholder`/
+`aria-label`/`alt`/button `value`. `test_no_web_python_module_builds_bare_user_facing_text` is an
+AST scan of `web/*.py` and `web/routes/*.py` with a five-entry identifier allowlist. The decisions
+worth knowing:
+
+- **Context builders return `Message`, not strings.** A step's context builder takes a
+  `Character`, not a session, so it cannot know the locale. Threading a locale through a dozen
+  signatures was the alternative. Instead, the builder returns `Message.of(key, **params)`, or a
+  `MessageJoin` for a list. The template renders it with `| tr`, in the request's locale. `| tr`
+  passes a plain `str` through, which is how engine errors still display.
+- **Engine exception texts stay English.** "No longer fits since…: {error}" is keyed; the
+  `{error}` is a `ValueError` message from `chummer5.engine`. Translating the engine's messages
+  means giving the rules layer message keys. That is a real project of its own, and it is out of
+  this WP's scope (web layer only). The same applies to English authored in `chummer5.data`
+  modules: `CONDITION_DESCRIPTIONS` and the unmodeled-effect notes, which the sheet shows verbatim.
+  Neither is chrome, and neither is XML game data for WP103. They are a third category with no WP
+  yet.
+- **Inline markup survives through `Markup` arguments.** The template-side `_()` escapes the
+  catalog text and then `Markup.format`s the arguments. A `<strong>` word the template builds is
+  kept; everything else is escaped. So a sentence with emphasis stays one key and the catalog never
+  holds a tag.
+- **Plurals use `_n()` over `_One`/`_Other` keys**, which is enough for every locale the legacy
+  catalogs ship; the limits are documented at `plural_key`. **Money uses one formatter** (`| nuyen`
+  → `Web_Format_Nuyen`), so no template contains a `¥`. Digit grouping is *identified, not solved*:
+  amounts stay ungrouped, as before. The one grouped literal (`2,000¥`) now reads `2000¥`, like
+  every other amount, and comes from the engine's `KARMA_TO_NUYEN_RATE` rather than a hand-typed
+  copy.
+- **Legacy reuse changed a few English labels on purpose.** The sidebar panel and tab labels
+  adopted legacy's Title Case ("Attribute Points", "Adept Powers", "Vehicles & Drones", "Free
+  Spells") so they could reuse `String_*`/`Tab_*` keys with real translations. Attribute codes
+  render through `String_Attribute<CODE>Short` (German `KON`, `GES`, …). Two raw codenames became
+  words: the build method, where `SumtoTen` now reads "Sum-to-Ten", and the magic type.

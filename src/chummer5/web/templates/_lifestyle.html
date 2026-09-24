@@ -1,18 +1,17 @@
 <div id="lifestyle" class="panel">
   {% if character %}
   <details open>
-  <summary class="panel__heading">Lifestyle</summary>
+  <summary class="panel__heading">{{ _("String_Lifestyle") }}</summary>
 
   {% if lifestyle_error %}
-  <p class="error">{{ lifestyle_error }}</p>
+  <p class="error">{{ lifestyle_error | tr }}</p>
   {% endif %}
   {% if lifestyle_budget_warning %}
-  <p class="warning">{{ lifestyle_budget_warning }}</p>
+  <p class="warning">{{ lifestyle_budget_warning | tr }}</p>
   {% endif %}
 
   <p>
-    Core rulebook, p. 369: every character must select one primary Lifestyle. It shares the same
-    nuyen budget as starter gear ({{ nuyen_budget }} total).
+    {{ _("Web_Lifestyle_Intro", budget=nuyen_budget) }}
   </p>
 
   <form
@@ -22,17 +21,17 @@
     hx-trigger="change, input[event.target.type=='number'] delay:400ms"
   >
     <label>
-      Tier
+      {{ _("Web_Lifestyle_Tier") }}
       <select name="lifestyle_tier">
         {% for tier in lifestyle_options %}
         <option value="{{ tier.name }}" {% if tier.name == selected_tier_name %}selected{% endif %}>
-          {{ tier.name }} ({{ tier.monthly_cost }}¥/month)
+          {{ _("Web_Lifestyle_TierOption", name=tier.name, cost=tier.monthly_cost | nuyen) }}
         </option>
         {% endfor %}
       </select>
     </label>
     <label>
-      Months
+      {{ _("Web_Lifestyle_Months") }}
       <input
         type="number"
         name="lifestyle_months"
@@ -41,10 +40,10 @@
         max="{{ max_lifestyle_months }}"
       />
     </label>
-    <button type="submit">Update lifestyle</button>
+    <button type="submit">{{ _("Web_Lifestyle_Update") }}</button>
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities on the Priorities page before selecting a Lifestyle.</p>
+  <p>{{ _("Web_Lifestyle_Placeholder") }}</p>
   {% endif %}
 </div>

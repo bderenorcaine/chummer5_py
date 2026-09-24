@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n (WP97-101 done; WP102-103 remaining)
+### Phase W — Post-MVP: application shell, theming, and i18n (WP97-102 done; WP103 remaining)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -294,7 +294,7 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
     exactly only in patches.
   See `spec/worklogs/WP101.md`.
 
-- [ ] **WP102 — Route every chrome string through the key layer.**
+- [x] **WP102 — Route every chrome string through the key layer.**
   Goal: the mechanical conversion pass — roughly **470** translatable text runs across the page and
   step templates, plus roughly **65** error/warning/diagnostic strings constructed in the
   `web/routes/*` modules.
@@ -312,6 +312,28 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   Acceptance: `pytest`/`ruff`/`mypy` green; a repo-wide check (test or lint rule) that the
   templates contain no bare user-facing text outside a `_()` call, so the property is *enforced*
   rather than asserted once and eroded by the next WP.
+  Landed.
+  - **Scope:** 334 template text runs and about 30 Python-built strings became 327 `Web_*` keys
+    plus reused legacy keys.
+  - **Enforcement:** three tests in `tests/unit/test_web_no_bare_text.py` cover templates,
+    template scripts, and web-layer Python (an AST scan). `test_web_i18n.py` adds checks for
+    literal and computed keys, and a render of every page for Mundane, Magician, and Adept that
+    asserts no `⟦Key⟧` marker.
+  - **New mechanisms:**
+    - `_n()` plurals;
+    - the `| nuyen` formatter, so no template contains a literal `¥`;
+    - `Message`/`MessageJoin` plus `| tr` for text a context builder builds without knowing the
+      locale;
+    - a Markup-aware `_()`, so inline `<strong>` stays in the template.
+  - **Out of scope, recorded in the decisions log:**
+    - engine `ValueError` texts;
+    - English authored in `chummer5.data` modules (`CONDITION_DESCRIPTIONS`, the unmodeled-effect
+      notes).
+  - **For WP103:**
+    - the skill and gear filter scripts match the player's typing against English
+      `data-*-name` attributes, so they need the display name too;
+    - knowledge categories and suggested languages live in `chummer5.data.knowledge`, not XML.
+  See `spec/worklogs/WP102.md`.
 
 - [ ] **WP103 — Game-data term translation in the loaders.**
   Goal: the half of i18n that no general-purpose library solves — skill names, quality names,

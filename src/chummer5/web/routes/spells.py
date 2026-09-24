@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from chummer5.engine.character import Character
 from chummer5.engine.magic import KARMA_PER_SPELL, create_spell_selection, offered_talent_options
 from chummer5.web.catalogs import PRIORITIES, SPELLS, templates
+from chummer5.web.i18n import Message
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -71,7 +72,7 @@ def _spell_selection_context(
     rows = [{"spell": spell, "selected": spell.id in ids} for spell in SPELLS]
     karma_spell_count = max(0, len(ids) - budget)
     karma_cost = karma_spell_count * KARMA_PER_SPELL
-    budget_warning: str | None = None
+    budget_warning: Message | None = None
     if error is None and character.spell_selection is not None:
         try:
             create_spell_selection(
@@ -82,10 +83,7 @@ def _spell_selection_context(
                 karma_budget,
             )
         except ValueError as exc:
-            budget_warning = (
-                f"No longer fits since priorities/attributes were last confirmed: {exc}. "
-                "Reconfirm spells below to continue."
-            )
+            budget_warning = Message.of("Web_Stale_Spells", error=str(exc))
     return {
         "character": character,
         "spell_rows": rows,

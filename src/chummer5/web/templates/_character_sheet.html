@@ -1,41 +1,41 @@
 <div id="character-sheet">
   {% if sheet_error %}
-  <p class="error">{{ sheet_error }}</p>
+  <p class="error">{{ sheet_error | tr }}</p>
   {% endif %}
   {% if sheet_info %}
-  <p class="info">{{ sheet_info }}</p>
+  <p class="info">{{ sheet_info | tr }}</p>
   {% endif %}
 
   {% if character %}
   <h2>{{ character.metatype.name }}</h2>
   <ul>
-    <li>Heritage {{ priority_summary.heritage }}</li>
-    <li>Talent {{ priority_summary.talent }}</li>
-    <li>Attributes {{ priority_summary.attributes }}</li>
-    <li>Skills {{ priority_summary.skills }}</li>
-    <li>Resources {{ priority_summary.resources }}</li>
+    <li>{{ _("Web_Sheet_PriorityHeritage", priority=priority_summary.heritage) }}</li>
+    <li>{{ _("Web_Sheet_PriorityTalent", priority=priority_summary.talent) }}</li>
+    <li>{{ _("Web_Sheet_PriorityAttributes", priority=priority_summary.attributes) }}</li>
+    <li>{{ _("Web_Sheet_PrioritySkills", priority=priority_summary.skills) }}</li>
+    <li>{{ _("Web_Sheet_PriorityResources", priority=priority_summary.resources) }}</li>
   </ul>
 
-  <h3>Attributes</h3>
+  <h3>{{ _("Label_Attributes") }}</h3>
   <table>
     <thead>
-      <tr><th>Attribute</th><th>Value (augmented)</th></tr>
+      <tr><th>{{ _("Web_Attributes_ColAttribute") }}</th><th>{{ _("Web_Attributes_ColValue") }}</th></tr>
     </thead>
     <tbody>
       {% for row in attribute_rows %}
       <tr>
-        <td>{{ row.code }}</td>
+        <td>{{ _("String_Attribute" ~ row.code ~ "Short") }}</td>
         <td>{{ row.natural }}{% if row.value != row.natural %} ({{ row.value }}){% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <h3>Skills</h3>
+  <h3>{{ _("Tab_Skills") }}</h3>
   {% if sheet_skill_rows %}
   <table>
     <thead>
-      <tr><th>Skill</th><th>Rating (with bonuses)</th><th>Specialization</th><th>Pool</th></tr>
+      <tr><th>{{ _("Web_Skills_ColSkill") }}</th><th>{{ _("Web_Skills_ColRating") }}</th><th>{{ _("Web_Skills_ColSpecialization") }}</th><th>{{ _("Web_Skills_ColPool") }}</th></tr>
     </thead>
     <tbody>
       {% for row in sheet_skill_rows %}
@@ -49,14 +49,14 @@
     </tbody>
   </table>
   {% else %}
-  <p>No skills rated above 0.</p>
+  <p>{{ _("Web_Sheet_NoSkills") }}</p>
   {% endif %}
 
-  <h3>Knowledge &amp; Language Skills</h3>
+  <h3>{{ _("Web_Knowledge_Heading") }}</h3>
   {% if knowledge_skill_rows or language_rows %}
   <table>
     <thead>
-      <tr><th>Name</th><th>Category</th><th>Rating</th></tr>
+      <tr><th>{{ _("String_Name") }}</th><th>{{ _("Web_Qualities_ColCategory") }}</th><th>{{ _("String_Rating") }}</th></tr>
     </thead>
     <tbody>
       {% for row in knowledge_skill_rows %}
@@ -65,36 +65,36 @@
       {% for row in language_rows %}
       <tr>
         <td>{{ row.name }}</td>
-        <td>Language</td>
-        <td>{% if row.native %}N{% else %}{{ row.rating }}{% endif %}</td>
+        <td>{{ _("Web_Sheet_LanguageCategory") }}</td>
+        <td>{% if row.native %}{{ _("Web_Knowledge_NativeMarker") }}{% else %}{{ row.rating }}{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <p>No knowledge or language skills recorded.</p>
+  <p>{{ _("Web_Sheet_NoKnowledge") }}</p>
   {% endif %}
 
   {% if magic_type %}
-  <h3>Magic</h3>
+  <h3>{{ _("String_AttributeMAGLong") }}</h3>
   <ul>
-    <li>Type: {{ magic_type }}</li>
+    <li>{{ _("Web_Sheet_MagicType", type=_("Web_MagicType_" ~ magic_type)) }}</li>
     {% if magic_essence_loss > 0 %}
-    <li>Magic rating: {{ magic_rating }} (reduced from {{ magic_rating_before_essence_loss }} by Essence loss)</li>
+    <li>{{ _("Web_Sheet_MagicRatingReduced", rating=magic_rating, before=magic_rating_before_essence_loss) }}</li>
     {% else %}
-    <li>Magic rating: {{ magic_rating }}</li>
+    <li>{{ _("Web_Sheet_MagicRating", rating=magic_rating) }}</li>
     {% endif %}
     {% if tradition_name %}
-    <li>Tradition: {{ tradition_name }}</li>
+    <li>{{ _("Web_Sheet_Tradition", tradition=tradition_name) }}</li>
     {% endif %}
     {% if magic_type == "Adept" %}
-    <li>Power Points: {{ power_points }}</li>
+    <li>{{ _("Web_Sheet_PowerPoints", points=power_points) }}</li>
     {% endif %}
-    <li>Drain Resistance: {{ drain_resistance }}</li>
+    <li>{{ _("Web_Sheet_DrainResistance", pool=drain_resistance) }}</li>
   </ul>
 
   {% if spell_names %}
-  <h4>Spells</h4>
+  <h4>{{ _("String_Spells") }}</h4>
   <ul>
     {% for name in spell_names %}
     <li>{{ name }}</li>
@@ -103,38 +103,38 @@
   {% endif %}
 
   {% if power_rows %}
-  <h4>Adept Powers</h4>
+  <h4>{{ _("Tab_Adept") }}</h4>
   <ul>
     {% for row in power_rows %}
     <li>
-      {{ row.name }} (rating {{ row.rating }}{% if row.selected_attribute %}, {{ row.selected_attribute }}{% endif %})
+      {% if row.selected_attribute %}{{ _("Web_Sheet_PowerWithAttribute", name=row.name, rating=row.rating, attribute=_("String_Attribute" ~ row.selected_attribute ~ "Short")) }}{% else %}{{ _("Web_Sheet_Power", name=row.name, rating=row.rating) }}{% endif %}
     </li>
     {% endfor %}
   </ul>
   {% endif %}
 
   {% if bound_spirit_rows %}
-  <h4>Bound Spirits</h4>
+  <h4>{{ _("Web_Spirits_Heading") }}</h4>
   <ul>
     {% for row in bound_spirit_rows %}
-    <li>{{ row.spirit_type }} (Force {{ row.force }}, {{ row.services }} service{{ "s" if row.services != 1 else "" }} owed)</li>
+    <li>{{ _n("Web_Sheet_Spirit", row.services, type=row.spirit_type, force=row.force) }}</li>
     {% endfor %}
   </ul>
-  <p>Bound Spirits karma cost: {{ bound_spirit_karma_cost }}.</p>
+  <p>{{ _("Web_Sheet_SpiritKarma", cost=bound_spirit_karma_cost) }}</p>
   {% endif %}
 
   {% if foci_rows %}
-  <h4>Foci</h4>
+  <h4>{{ _("Label_SummaryFoci") }}</h4>
   <ul>
     {% for row in foci_rows %}
-    <li>{{ row.name }} (Force {{ row.force }}, {{ row.nuyen_cost }}¥, {{ row.karma_cost }} Karma)</li>
+    <li>{{ _("Web_Sheet_Focus", name=row.name, force=row.force, cost=row.nuyen_cost | nuyen, karma=row.karma_cost) }}</li>
     {% endfor %}
   </ul>
-  <p>Foci nuyen cost: {{ foci_nuyen_cost }}. Foci karma cost: {{ foci_karma_cost }}.</p>
+  <p>{{ _("Web_Sheet_FociCosts", nuyen=foci_nuyen_cost, karma=foci_karma_cost) }}</p>
   {% endif %}
 
   {% if mentor_spirit %}
-  <h4>Mentor Spirit</h4>
+  <h4>{{ _("Web_Sheet_MentorSpirit") }}</h4>
   <p>
     {{ mentor_spirit.archetype.name }} —
     {{ mentor_spirit.general_choice.name }}; {{ mentor_spirit.gated_choice.name }}.
@@ -144,7 +144,7 @@
   {% endif %}
   {% endif %}
 
-  <h3>Qualities</h3>
+  <h3>{{ _("String_Qualities") }}</h3>
   {% if quality_names %}
   <ul>
     {% for name in quality_names %}
@@ -152,20 +152,17 @@
     {% endfor %}
   </ul>
   {% else %}
-  <p>None selected.</p>
+  <p>{{ _("Web_Sheet_NoneSelected") }}</p>
   {% endif %}
   {% if metatype_quality_names %}
-  <p>
-    Free from metatype:
-    {% for name in metatype_quality_names %}{{ name }}{% if not loop.last %}, {% endif %}{% endfor %}.
-  </p>
+  <p>{{ _("Web_Qualities_FreeFromMetatype", names=metatype_quality_names | join(_("Web_List_Separator"))) }}</p>
   {% endif %}
 
-  <h3>Contacts</h3>
+  <h3>{{ _("String_Contacts") }}</h3>
   {% if contacts %}
   <table>
     <thead>
-      <tr><th>Name</th><th>Connection</th><th>Loyalty</th><th>Points</th></tr>
+      <tr><th>{{ _("String_Name") }}</th><th>{{ _("Web_Contacts_ColConnection") }}</th><th>{{ _("Web_Contacts_ColLoyalty") }}</th><th>{{ _("Web_Contacts_ColPoints") }}</th></tr>
     </thead>
     <tbody>
       {% for contact in contacts %}
@@ -179,42 +176,42 @@
     </tbody>
   </table>
   {% else %}
-  <p>None.</p>
+  <p>{{ _("Web_Sheet_None") }}</p>
   {% endif %}
 
-  <h3>Lifestyle</h3>
+  <h3>{{ _("String_Lifestyle") }}</h3>
   {% if lifestyle_tier_name %}
-  <p>{{ lifestyle_tier_name }} ({{ lifestyle_months }} month{{ 's' if lifestyle_months != 1 else '' }}, {{ lifestyle_cost }}¥).</p>
+  <p>{{ _n("Web_Sheet_Lifestyle", lifestyle_months, tier=lifestyle_tier_name, cost=lifestyle_cost | nuyen) }}</p>
   {% else %}
-  <p>None selected.</p>
+  <p>{{ _("Web_Sheet_NoneSelected") }}</p>
   {% endif %}
 
-  <h3>Gear</h3>
+  <h3>{{ _("Tab_Gear") }}</h3>
   {% if gear_rows %}
   <ul>
     {% for row in gear_rows %}
     {# WP94: Matrix devices (commlinks, cyberdecks, RCCs) carry their printed stat block; every
        other gear row renders as the plain "name × qty" line it always has. #}
-    <li>{{ row.name }}{% if row.rating %} (Rating {{ row.rating }}){% endif %} × {{ row.quantity }}
-      {%- if row.matrix_stat_block %}<br /><small>{{ row.matrix_stat_block }}</small>{% endif %}</li>
+    <li>{{ row.name }}{% if row.rating %} {{ _("Web_Sheet_RatingSuffix", rating=row.rating) }}{% endif %} × {{ row.quantity }}
+      {%- if row.matrix_stat_block %}<br /><small>{{ row.matrix_stat_block | tr }}</small>{% endif %}</li>
     {% endfor %}
   </ul>
   {% else %}
-  <p>None purchased.</p>
+  <p>{{ _("Web_Sheet_NonePurchased") }}</p>
   {% endif %}
 
-  <h3>Cyberware</h3>
+  <h3>{{ _("Web_Cyberware_Cyberware") }}</h3>
   {% if cyberware_rows %}
   {# WP42: nested, so an installed subsystem reads as part of the limb/cybereye holding it rather
      than as a separate implant, and each conditional bonus carries the condition it applies under.
      Two levels, not a recursive macro: a plugin may not hold a plugin (the 2026-07-29 ruling, see
      `chummer5.engine.cyberware_subsystems`). #}
   {%- macro cyberware_label(row, quantity=None) -%}
-    {{- row.name }}{% if row.rating %} (Rating {{ row.rating }}){% endif %}
+    {{- row.name }}{% if row.rating %} {{ _("Web_Sheet_RatingSuffix", rating=row.rating) }}{% endif %}
     {%- if quantity %} × {{ quantity }}{% endif %}
-    {%- if row.bundled %} — included free{% endif %}
-    {%- if row.capacity_budget %} — Capacity {{ row.capacity_spent }} of {{ row.capacity_budget }} used{% endif %}
-    {%- for bonus in row.conditional_bonuses %}<br />+{{ bonus.value }} {{ bonus.limit }} — {{ bonus.condition }}{% if bonus.paired %} (granted once for a matched pair, not per implant){% endif %}
+    {%- if row.bundled %} — {{ _("Web_Sheet_IncludedFree") }}{% endif %}
+    {%- if row.capacity_budget %} — {{ _("Web_Sheet_CapacityUsed", spent=row.capacity_spent, budget=row.capacity_budget) }}{% endif %}
+    {%- for bonus in row.conditional_bonuses %}<br />+{{ bonus.value }} {{ _(bonus.limit_key) }} — {{ bonus.condition }}{% if bonus.paired %} {{ _("Web_Sheet_PairedBonus") }}{% endif %}
     {%- endfor -%}
   {%- endmacro -%}
   <ul>
@@ -231,10 +228,10 @@
     {% endfor %}
   </ul>
   {% else %}
-  <p>None installed.</p>
+  <p>{{ _("Web_Sheet_NoneInstalled") }}</p>
   {% endif %}
 
-  <h3>Bioware</h3>
+  <h3>{{ _("Web_Cyberware_Bioware") }}</h3>
   {% if bioware_rows %}
   <ul>
     {% for row in bioware_rows %}
@@ -242,20 +239,30 @@
     {% endfor %}
   </ul>
   {% else %}
-  <p>None installed.</p>
+  <p>{{ _("Web_Sheet_NoneInstalled") }}</p>
   {% endif %}
-  <p>Essence: {{ essence }} / 6.</p>
+  <p>{{ _("Web_Sheet_Essence", essence=essence) }}</p>
 
   {# WP93: purchased vehicles/drones. Handling/Speed print as on-road/off-road (`4/3`) where the
      book does; CM is the one derived number (12 + ⌈Body/2⌉, drones 6 + ⌈Body/2⌉, p. 199). #}
-  <h3>Vehicles &amp; drones</h3>
+  <h3>{{ _("Tab_Vehicles") }}</h3>
   {% if vehicle_rows %}
   <table>
     <thead>
       <tr>
-        <th>Vehicle</th><th>Qty</th><th>Handl</th><th>Speed</th><th>Accel</th><th>Body</th>
-        <th>Armor</th><th>Pilot</th><th>Sensor</th><th>Seats</th><th>CM</th><th>Avail</th>
-        <th>Cost</th>
+        <th>{{ _("Web_Vehicles_ColVehicle") }}</th>
+        <th>{{ _("Web_Vehicles_ColQty") }}</th>
+        <th>{{ _("Web_Vehicles_ColHandl") }}</th>
+        <th>{{ _("Web_Vehicles_ColSpeed") }}</th>
+        <th>{{ _("Web_Vehicles_ColAccel") }}</th>
+        <th>{{ _("Web_Vehicles_ColBody") }}</th>
+        <th>{{ _("Web_Vehicles_ColArmor") }}</th>
+        <th>{{ _("Web_Vehicles_ColPilot") }}</th>
+        <th>{{ _("Web_Vehicles_ColSensor") }}</th>
+        <th>{{ _("Web_Vehicles_ColSeats") }}</th>
+        <th>{{ _("Web_Vehicles_ColCM") }}</th>
+        <th>{{ _("Web_Vehicles_ColAvail") }}</th>
+        <th>{{ _("Web_Vehicles_ColCost") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -278,43 +285,43 @@
       {% endfor %}
     </tbody>
   </table>
-  <p>Vehicle nuyen cost: {{ vehicle_nuyen_cost }}.</p>
+  <p>{{ _("Web_Sheet_VehicleCost", cost=vehicle_nuyen_cost) }}</p>
   {% else %}
-  <p>None purchased.</p>
+  <p>{{ _("Web_Sheet_NonePurchased") }}</p>
   {% endif %}
 
-  <p>Nuyen remaining: {{ nuyen_remaining }} / {{ nuyen_budget + karma_to_nuyen_amount }}{% if karma_to_nuyen_amount %} ({{ nuyen_budget }} priority + {{ karma_to_nuyen_amount }} from converting {{ karma_converted }} Karma){% endif %}.</p>
+  <p>{% if karma_to_nuyen_amount %}{{ _("Web_Sheet_NuyenRemainingConverted", remaining=nuyen_remaining, total=nuyen_budget + karma_to_nuyen_amount, priority=nuyen_budget, converted_nuyen=karma_to_nuyen_amount, karma=karma_converted) }}{% else %}{{ _("Web_Sheet_NuyenRemaining", remaining=nuyen_remaining, total=nuyen_budget + karma_to_nuyen_amount) }}{% endif %}</p>
 
-  <h3>Derived stats</h3>
+  <h3>{{ _("Web_Sheet_DerivedStats") }}</h3>
   <table>
     <tbody>
-      <tr><th>Initiative</th><td>{{ initiative_value }} + {{ initiative_dice }}D6</td></tr>
-      <tr><th>Physical limit</th><td>{{ physical_limit }}</td></tr>
-      <tr><th>Mental limit</th><td>{{ mental_limit }}</td></tr>
-      <tr><th>Social limit</th><td>{{ social_limit }}</td></tr>
+      <tr><th>{{ _("Web_Sheet_Initiative") }}</th><td>{{ _("Web_Sheet_InitiativeValue", value=initiative_value, dice=initiative_dice) }}</td></tr>
+      <tr><th>{{ _("Web_Sheet_PhysicalLimit") }}</th><td>{{ physical_limit }}</td></tr>
+      <tr><th>{{ _("Web_Sheet_MentalLimit") }}</th><td>{{ mental_limit }}</td></tr>
+      <tr><th>{{ _("Web_Sheet_SocialLimit") }}</th><td>{{ social_limit }}</td></tr>
       {# WP42: only limits a conditional augmentation bonus actually changes -- see
          `_conditional_limit_rows`. #}
       {% for row in conditional_limit_rows %}
-      <tr><th>{{ row.limit }}, {{ row.test }}</th><td>{{ row.value }}</td></tr>
+      <tr><th>{{ _("Web_Sheet_ConditionalLimit", limit=_(row.limit_key), test=_(row.test_key)) }}</th><td>{{ row.value }}</td></tr>
       {% endfor %}
-      <tr><th>Physical condition monitor</th><td>{{ physical_cm }} boxes</td></tr>
-      <tr><th>Stun condition monitor</th><td>{{ stun_cm }} boxes</td></tr>
+      <tr><th>{{ _("Web_Sheet_PhysicalCM") }}</th><td>{{ _n("Web_Sheet_Boxes", physical_cm) }}</td></tr>
+      <tr><th>{{ _("Web_Sheet_StunCM") }}</th><td>{{ _n("Web_Sheet_Boxes", stun_cm) }}</td></tr>
     </tbody>
   </table>
 
-  <h3>Karma</h3>
+  <h3>{{ _("String_Karma") }}</h3>
   <p>
-    Quality karma cost: {{ quality_karma_cost }}.
-    Contact karma cost (beyond free points): {{ contact_karma_cost }}.
-    Skill/skill-group karma cost: {{ karma_skill_cost }}.
-    Knowledge/language karma cost: {{ karma_knowledge_cost }}.
-    Spell karma cost: {{ spell_karma_cost }}.
-    Karma remaining: {{ character.karma_remaining }} (spent: {{ character.karma_spent }}).
+    {{ _("Web_Sheet_KarmaQuality", cost=quality_karma_cost) }}
+    {{ _("Web_Sheet_KarmaContact", cost=contact_karma_cost) }}
+    {{ _("Web_Sheet_KarmaSkill", cost=karma_skill_cost) }}
+    {{ _("Web_Sheet_KarmaKnowledge", cost=karma_knowledge_cost) }}
+    {{ _("Web_Sheet_KarmaSpell", cost=spell_karma_cost) }}
+    {{ _("Web_Sheet_KarmaRemaining", remaining=character.karma_remaining, spent=character.karma_spent) }}
   </p>
 
   {% if unmodeled_effect_rows %}
   <details>
-    <summary>Unmodeled real effects ({{ unmodeled_effect_rows | length }})</summary>
+    <summary>{{ _("Web_Sheet_Unmodeled", count=unmodeled_effect_rows | length) }}</summary>
     <ul>
       {% for name, note in unmodeled_effect_rows %}
       <li><strong>{{ name }}</strong>: {{ note }}</li>
@@ -323,13 +330,13 @@
   </details>
   {% endif %}
 
-  <h3>Save</h3>
-  <p><a href="/character/save">Download save (.json)</a></p>
+  <h3>{{ _("String_Save") }}</h3>
+  <p><a href="/character/save">{{ _("Web_Sheet_Download") }}</a></p>
   {% else %}
-  <p>Confirm a metatype and priorities on the chargen page before viewing the character sheet.</p>
+  <p>{{ _("Web_Sheet_Placeholder") }}</p>
   {% endif %}
 
-  <h3>Load</h3>
+  <h3>{{ _("Web_Sheet_Load") }}</h3>
   <form
     hx-post="/character/load"
     hx-target="#character-sheet"
@@ -337,13 +344,13 @@
     hx-encoding="multipart/form-data"
   >
     <label>
-      Native save file (.json)
+      {{ _("Web_Sheet_NativeSaveFile") }}
       <input type="file" name="save_file" accept="application/json,.json" />
     </label>
-    <button type="submit">Load save</button>
+    <button type="submit">{{ _("Web_Sheet_LoadButton") }}</button>
   </form>
 
-  <h3>Import legacy character</h3>
+  <h3>{{ _("Web_Sheet_ImportHeading") }}</h3>
   <form
     hx-post="/character/import-chum5"
     hx-target="#character-sheet"
@@ -351,9 +358,9 @@
     hx-encoding="multipart/form-data"
   >
     <label>
-      Legacy Chummer5 save (.chum5)
+      {{ _("Web_Sheet_LegacySaveFile") }}
       <input type="file" name="chum5_file" accept=".chum5" />
     </label>
-    <button type="submit">Import .chum5</button>
+    <button type="submit">{{ _("Web_Sheet_ImportButton") }}</button>
   </form>
 </div>

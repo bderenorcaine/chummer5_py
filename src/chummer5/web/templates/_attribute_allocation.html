@@ -1,23 +1,23 @@
 <div id="attribute-allocation" class="panel">
   {% if character %}
   <details open>
-  <summary class="panel__heading">Attributes</summary>
+  <summary class="panel__heading">{{ _("Label_Attributes") }}</summary>
 
   {% if attribute_error %}
-  <p class="error">{{ attribute_error }}</p>
+  <p class="error">{{ attribute_error | tr }}</p>
   {% endif %}
   {% if attribute_budget_warning %}
-  <p class="warning">{{ attribute_budget_warning }}</p>
+  <p class="warning">{{ attribute_budget_warning | tr }}</p>
   {% endif %}
 
   <p>
-    Primary attribute points remaining: {{ primary_remaining }} / {{ primary_budget }}.
+    {{ _("Web_Attributes_PrimaryRemaining", remaining=primary_remaining, budget=primary_budget) }}
     {% if character.magic_type %}
-    Special (Edge/Magic) points remaining: {{ special_remaining }} / {{ special_budget }}.
+    {{ _("Web_Attributes_SpecialMagicRemaining", remaining=special_remaining, budget=special_budget) }}
     {% else %}
-    Special (Edge) points remaining: {{ special_remaining }} / {{ special_budget }}.
+    {{ _("Web_Attributes_SpecialRemaining", remaining=special_remaining, budget=special_budget) }}
     {% endif %}
-    Karma remaining for attribute increases: {{ attribute_karma_remaining }} / {{ attribute_karma_budget }}.
+    {{ _("Web_Attributes_KarmaRemaining", remaining=attribute_karma_remaining, budget=attribute_karma_budget) }}
   </p>
 
   <form
@@ -29,17 +29,17 @@
     <table>
       <thead>
         <tr>
-          <th>Attribute</th>
-          <th>Points</th>
-          <th>Karma points</th>
-          <th>Value (augmented)</th>
-          <th>Metatype range</th>
+          <th>{{ _("Web_Attributes_ColAttribute") }}</th>
+          <th>{{ _("Web_Attributes_ColPoints") }}</th>
+          <th>{{ _("Web_Attributes_ColKarmaPoints") }}</th>
+          <th>{{ _("Web_Attributes_ColValue") }}</th>
+          <th>{{ _("Web_Attributes_ColRange") }}</th>
         </tr>
       </thead>
       <tbody>
         {% for row in attribute_rows %}
         <tr>
-          <td>{{ row.code }}</td>
+          <td>{{ _("String_Attribute" ~ row.code ~ "Short") }}</td>
           <td>
             <input
               type="number"
@@ -66,10 +66,10 @@
         {% endfor %}
       </tbody>
     </table>
-    <button type="submit">Update attributes</button>
+    <button type="submit">{{ _("Web_Attributes_Update") }}</button>
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities on the Priorities page before allocating attribute points.</p>
+  <p>{{ _("Web_Attributes_Placeholder") }}</p>
   {% endif %}
 </div>
