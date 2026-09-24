@@ -1,7 +1,7 @@
 """The application shell's routes (WP97): `GET /`, `GET /ui/page/{slug}`, `GET /ui/nav`, and
 `GET /character/sheet` -- plus, from WP98, a composite page's tabs: `GET /ui/page/{slug}/{tab}`
 and `GET /ui/tabs/{slug}`, from WP99 the sidebar's `GET /ui/resource-panel`, and from WP100 the
-title bar's `POST /ui/prefs/theme`.
+title bar's `POST /ui/prefs/theme`, and from WP101 its `POST /ui/prefs/locale`.
 
 These are the only routes that render more than one step's own fragment. A nav click is an htmx
 `GET /ui/page/{slug}` that swaps just `#page` (plus the nav, out of band, so its current-step
@@ -32,6 +32,7 @@ from typing import Any
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
+from chummer5.web import prefs
 from chummer5.web.catalogs import templates
 from chummer5.web.prefs import THEMES, THEMES_BY_SLUG
 from chummer5.web.routes.character import _character_sheet_context
@@ -49,6 +50,8 @@ from chummer5.web.shell import (
 )
 
 router = APIRouter()
+
+_DEFAULT_LOCALE_ENTRY = prefs.LOCALES_BY_TAG[prefs.DEFAULT_LOCALE]
 
 
 def _page_or_404(slug: str) -> StepPage:
@@ -82,6 +85,9 @@ def _shell_context(
         "page": page,
         "theme": session.theme,
         "themes": THEMES,
+        "locale": session.locale,
+        "locales": prefs.LOCALES,
+        "html_lang": prefs.LOCALES_BY_TAG.get(session.locale, _DEFAULT_LOCALE_ENTRY).html_lang,
     }
     if page.tabbed:
         context |= tabs_context(session, page, chargen_ctx, resolve_tab(session, page, tab))
@@ -198,6 +204,23 @@ def set_theme(request: Request, theme: str = Form(...)) -> HTMLResponse:
     response = templates.TemplateResponse(
         request, "_theme_link.html", {"theme": theme, "oob_theme": True}
     )
+    if new_cookie is not None:
+        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    return response
+
+
+@router.post("/ui/prefs/locale", response_class=HTMLResponse)
+def set_locale(request: Request, locale: str = Form(...)) -> HTMLResponse:
+    """Switch the session's UI language (WP101). Unlike a theme, a language change touches every
+    string on the page, so the answer is `HX-Refresh` -- htmx reloads the current URL, which is
+    always a full-shell render of the page the player is on. `prefs.LOCALES_BY_TAG` is read at
+    call time (not imported by name) so a test can offer a stub locale."""
+    if locale not in prefs.LOCALES_BY_TAG:
+        raise HTTPException(status_code=422, detail=f"No such language: {locale!r}.")
+    session, new_cookie = resolve_session(request)
+    session.locale = locale
+    response = HTMLResponse("")
+    response.headers["HX-Refresh"] = "true"
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
     return response

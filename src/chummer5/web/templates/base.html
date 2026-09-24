@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ html_lang }}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -52,18 +52,27 @@
     <div class="app-shell">
       <header class="app-shell__titlebar">
         <span class="app-shell__title">Chummer5</span>
-        {# WP100: display preferences. Changing one is not a chargen change -- see
-           chummer5.web.prefs -- so the form swaps nothing but the theme link, out of band. #}
-        <form class="app-shell__prefs" hx-post="/ui/prefs/theme" hx-trigger="change" hx-swap="none">
+        {# WP100/WP101: display preferences. Changing one is not a chargen change (see
+           chummer5.web.prefs): the theme swaps only its own <link>, out of band; the language
+           reloads the page, since every string on it changes. #}
+        <div class="app-shell__prefs">
           <label class="app-shell__pref">
-            Theme
-            <select name="theme">
+            {{ _("Web_Prefs_Theme") }}
+            <select name="theme" hx-post="/ui/prefs/theme" hx-trigger="change" hx-swap="none">
               {% for option in themes %}
-              <option value="{{ option.slug }}" {% if option.slug == theme %}selected{% endif %}>{{ option.label }}</option>
+              <option value="{{ option.slug }}" {% if option.slug == theme %}selected{% endif %}>{{ _(option.label_key) }}</option>
               {% endfor %}
             </select>
           </label>
-        </form>
+          <label class="app-shell__pref">
+            {{ _("Web_Prefs_Language") }}
+            <select name="locale" hx-post="/ui/prefs/locale" hx-trigger="change" hx-swap="none">
+              {% for option in locales %}
+              <option value="{{ option.tag }}" lang="{{ option.html_lang }}" {% if option.tag == locale %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
       </header>
       <aside class="app-shell__sidebar">
         {% include "_step_nav.html" %}

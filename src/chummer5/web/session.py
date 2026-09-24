@@ -21,7 +21,7 @@ from fastapi import Request
 
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
 from chummer5.engine.character import Character
-from chummer5.web.prefs import DEFAULT_THEME
+from chummer5.web.prefs import DEFAULT_LOCALE, DEFAULT_THEME
 
 SESSION_COOKIE_NAME = "chummer5_session"
 
@@ -171,6 +171,9 @@ class ChargenSession:
     **WP100**: `theme` is the first display preference (`chummer5.web.prefs`) -- which
     `static/themes/<slug>.css` the shell links. Session-scoped like everything else here, so it
     lasts as long as the in-memory session does; it is never saved with a character.
+
+    **WP101**: `locale` is the second -- which string catalog `_()` reads (`chummer5.web.i18n`).
+    Same scope, same rule: presentation only, never saved, never read by rules code.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER
@@ -184,6 +187,7 @@ class ChargenSession:
     current_page: str = "priorities"
     page_tabs: dict[str, str] = field(default_factory=dict)
     theme: str = DEFAULT_THEME
+    locale: str = DEFAULT_LOCALE
 
 
 class SessionStore:

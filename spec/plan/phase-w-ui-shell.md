@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n (WP97-100 done; WP101-103 remaining)
+### Phase W — Post-MVP: application shell, theming, and i18n (WP97-101 done; WP102-103 remaining)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -247,7 +247,7 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   WP101:** put the language picker in the same `.app-shell__prefs` form area and route, but answer
   it with `HX-Refresh`. See `spec/worklogs/WP100.md`.
 
-- [ ] **WP101 — The i18n key layer.**
+- [x] **WP101 — The i18n key layer.**
   Goal: a string-lookup mechanism plus a locale on the session — the machinery only. No existing
   string is converted here (that is WP102), and only English ships.
   Deliverables: a catalog loader, a `_()` global registered on the Jinja environment, `locale` on
@@ -277,6 +277,22 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   Acceptance: `pytest`/`ruff`/`mypy` green; a test rendering a page under a non-English locale with
   a two-entry stub catalog and asserting the substitution happens; a test asserting an unknown key
   degrades to something visible and diagnosable rather than rendering blank.
+  Landed with the **dict-backed** mechanism (decisions log, 2026-09-24):
+  - `chummer5.data.lang` loads a locale's catalog as the legacy `lang/<locale>.xml`, with WinForms
+    mnemonics stripped, overlaid by `src/chummer5/lang/<locale>.xml` (`Web_*` keys only).
+  - `chummer5.web.i18n` provides `translate(locale, key, …)` and the `_()` Jinja global. Lookup
+    falls back from the locale to English, then to a visible `⟦Key⟧` marker plus a warning.
+  - `prefs.LOCALES` offers English only; `ChargenSession.locale` holds the choice.
+  - The language `<select>` in the title bar posts to `POST /ui/prefs/locale`, which answers
+    `HX-Refresh`. `<html lang>` follows the locale.
+  - The key rules are in `src/chummer5/lang/README.md`, and `Project Overview.md`'s i18n claim is
+    corrected in place.
+  - The only strings converted are the title bar's own picker labels and the theme names. Tests
+    already check that every literal `_("…")` key in a template exists in English; WP102's
+    "no bare text" check can grow from that one.
+  - **For WP102:** most keys will be new `Web_*` ones, because legacy keys match this UI's text
+    exactly only in patches.
+  See `spec/worklogs/WP101.md`.
 
 - [ ] **WP102 — Route every chrome string through the key layer.**
   Goal: the mechanical conversion pass — roughly **470** translatable text runs across the page and

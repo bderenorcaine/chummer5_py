@@ -1437,3 +1437,42 @@ swapped out of band into `<head>`. I checked in Chromium that htmx 2 swaps a `<h
 and that the link keeps its position ahead of `app.css`. **For WP101:** a language change cannot
 work that way, because every string on the page changes. Its route should sit under the same
 prefix and answer with `HX-Refresh: true`.
+
+**2026-09-24 (WP101, Phase W) — the i18n mechanism: a dict-backed `_()` over XML catalogs in the
+legacy schema, not Babel/gettext.** This was the one open call in Phase W. I chose the phase file's
+recommended option, for these reasons:
+
+- **Zero new dependencies.** gettext would add Babel as a dev dependency plus a `.pot`/`.po`/`.mo`
+  extract-and-compile step. Every catalog here is read at runtime straight from XML.
+- **One mechanism for chrome and game data.** WP103's `legacy/Chummer/lang/<locale>_data.xml` files
+  are XML keyed by English name, and no gettext tooling reads them. The same loader shape
+  (`chummer5.data.lang`) will serve both.
+- **Inherited translations.** `legacy/Chummer/lang/<locale>.xml` carries 2,767 English keys and
+  2,100-2,600 translated ones per locale (de-de, fr-fr, ja-jp, pt-br, zh-cn). A catalog in the same
+  schema layers over them, so any reused legacy key arrives translated.
+
+The trade is translator tooling: no PO editors or translation-memory platforms. That cost is
+accepted, because the translators this project could realistically draw on are the legacy app's,
+and they already work in this format.
+
+**Shape.** A locale's catalog is the legacy file, normalised, with `src/chummer5/lang/<locale>.xml`
+overlaid on it. Normalising strips WinForms mnemonics: `&File` → `File`, `&&` → `&`. The overlay
+holds only `Web_`-prefixed keys, so a key's layer is visible from its name and the two layers can
+never collide; a test enforces both. Lookup falls back from the session locale to English, and
+then to a visible `⟦Key⟧` marker plus a logged warning, never blank. Project keys use named
+placeholders, so translators can reorder them; legacy keys keep positional `{0}`, and `_()`
+passes both through `str.format`. Catalog text is plain text and is HTML-escaped like any template
+value. The full key rules are in `src/chummer5/lang/README.md`.
+
+**Key vocabulary finding.** Legacy keys are WinForms control captions, so they fit this UI in
+patches, not wholesale. `String_Karma`, `String_Qualities`, `String_Contacts`, `String_Export`,
+`Tab_Skills`, and `Tab_Gear` match exactly. `Tab_Lifestyle` ("Lifestyles"), `Tab_Vehicles`
+("Vehicles & Drones"), and `Tab_Magician` ("Spells & Spirits") are near misses. The rule is to reuse
+only on an exact match of both text and role, and to add a `Web_` key otherwise. I never edited a
+legacy text to make it fit. WP102 should expect most keys to be new.
+
+**Only English is offered.** The loader reads the five legacy locales today, but WP102 has not
+converted the pages, so any other locale would render almost entirely in its English fallback. A
+locale is added to `prefs.LOCALES` when its coverage justifies it. The picker ships as a deliverable
+anyway, with one entry. A language change answers `HX-Refresh`, because every string changes; the
+theme's out-of-band `<link>` swap does not apply.

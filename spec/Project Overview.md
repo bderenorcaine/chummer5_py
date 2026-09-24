@@ -85,7 +85,13 @@ test fixtures, it is a derivative work and is GPLv3 too. Not a decision point �
   below for why this can't be "zero."
 - Save/load in a new, native format (see [Data & save format](#data--save-format)).
 - Web UI (local, single-user, no auth) as the only supported interface.
-- All user-facing strings routed through an i18n key layer from day one, even though only English ships.
+- ~~All user-facing strings routed through an i18n key layer from day one, even though only English
+  ships.~~ **Corrected 2026-09-24 (WP101): this was never built during the MVP.** Every template and
+  route message was plain English text until Phase W. The key layer itself landed in WP101: string
+  catalogs in the legacy `lang/*.xml` schema, a `_()` template global, and a session locale (see
+  `src/chummer5/lang/README.md` for the key rules). Converting the existing strings is WP102.
+  Translating game-data names is WP103. Until both land, "structured so translation is an addition"
+  (Goal 5) is true of the mechanism but not yet of the pages.
 
 **A gap found after MVP shipped, not a deliberate cut:** Lifestyle selection — SR5's mandatory
 "Step Six" line item (core rulebook, p.369: "A character must select one of the lifestyles below to
@@ -135,7 +141,7 @@ Implementation Plan's WP20.
 - Technomancers/Resonance — reaffirmed out of scope, 2026-07-21 (already excluded per above; recorded
   again here since it came up explicitly in the same ruling as the items above).
 - Plugins.
-- Localization content (structure only, per above).
+- Localization content (structure only, per above; the structure itself arrived late, in Phase W).
 - Multi-user / hosted deployment, anything resembling ChummerHub.
 
 ## Unmodeled real effects

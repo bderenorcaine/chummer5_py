@@ -148,9 +148,9 @@ def test_an_unknown_theme_is_rejected_and_changes_nothing() -> None:
 def test_the_picker_offers_every_theme_and_posts_on_change() -> None:
     html = TestClient(create_app()).get("/").text
 
-    form = re.search(r'<form class="app-shell__prefs"[^>]*>', html)
-    assert form is not None
-    assert 'hx-post="/ui/prefs/theme"' in form.group(0)
-    assert 'hx-trigger="change"' in form.group(0)
+    select = re.search(r'<select name="theme"[^>]*>', html)
+    assert select is not None
+    assert 'hx-post="/ui/prefs/theme"' in select.group(0)
+    assert 'hx-trigger="change"' in select.group(0)
     for theme in THEMES:
         assert f'<option value="{theme.slug}"' in html

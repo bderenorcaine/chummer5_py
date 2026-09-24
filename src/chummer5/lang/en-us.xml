@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This project's own UI strings (WP101): keys the legacy catalog does not have. Same schema as
+     legacy/Chummer/lang/en-us.xml; see README.md next to this file for the key rules. Keep entries
+     grouped by area and sorted within a group. -->
+<chummer>
+  <name>English (en-US)</name>
+  <strings>
+    <!-- Title bar: display preferences (WP100/WP101) -->
+    <string>
+      <key>Web_Prefs_Language</key>
+      <text>Language</text>
+    </string>
+    <string>
+      <key>Web_Prefs_Theme</key>
+      <text>Theme</text>
+    </string>
+    <string>
+      <key>Web_Theme_Classic</key>
+      <text>Classic</text>
+    </string>
+    <string>
+      <key>Web_Theme_Sketch</key>
+      <text>Sketch</text>
+    </string>
+  </strings>
+</chummer>
