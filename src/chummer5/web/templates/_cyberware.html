@@ -27,7 +27,7 @@
     <h3>{{ _("Web_Cyberware_Cyberware") }}</h3>
     {% for group in cyberware_groups %}
     <details data-details-key="cyberware:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
-      <summary>{{ group.category }}</summary>
+      <summary>{{ group.category | dterm("cyberware.xml", "bioware.xml") }}</summary>
       <table>
         <thead>
           <tr>
@@ -42,7 +42,7 @@
         <tbody>
           {% for row in group.rows %}
           <tr>
-            <td>{{ row.item.name }}</td>
+            <td>{{ row.item | dterm("cyberware.xml", "bioware.xml") }}</td>
             {# WP42: the raw formula, since a rating-scaled row has no single price until a rating is
                picked below. For a flat row this is just the number, exactly as WP34 showed it. #}
             <td>{{ row.item.cost.raw }}</td>
@@ -69,7 +69,7 @@
             <td colspan="6">
               <details data-details-key="cyberware-unit:{{ row.item.id }}:{{ unit.index }}" open>
                 <summary>
-                  {{ row.item.name }}{% if row.quantity > 1 %} #{{ unit.index + 1 }}{% endif %}
+                  {{ row.item | dterm("cyberware.xml", "bioware.xml") }}{% if row.quantity > 1 %} #{{ unit.index + 1 }}{% endif %}
                   — {% if unit.capacity_budget %}{{ _("Web_Cyberware_UnitSummaryCapacity", cost=unit.nuyen_cost | nuyen, essence=unit.essence, remaining=unit.capacity_remaining, budget=unit.capacity_budget) }}{% else %}{{ _("Web_Cyberware_UnitSummary", cost=unit.nuyen_cost | nuyen, essence=unit.essence) }}{% endif %}
                 </summary>
                 {% if unit.rating_range %}
@@ -83,7 +83,7 @@
                 </label>
                 {% endif %}
                 {% if unit.bundled_names %}
-                <p class="bundled">{{ _("Web_Cyberware_IncludedFree", names=unit.bundled_names | join(_("Web_List_Separator"))) }}</p>
+                <p class="bundled">{{ _("Web_Cyberware_IncludedFree", names=unit.bundled_names | map("dterm", "cyberware.xml") | join(_("Web_List_Separator"))) }}</p>
                 {% endif %}
                 {% if unit.plugin_rows %}
                 <table>
@@ -99,7 +99,7 @@
                   <tbody>
                     {% for plugin in unit.plugin_rows %}
                     <tr>
-                      <td>{{ plugin.item.name }}</td>
+                      <td>{{ plugin.item | dterm("cyberware.xml") }}</td>
                       <td>
                         <input
                           type="checkbox"
@@ -138,7 +138,7 @@
     <h3>{{ _("Web_Cyberware_Bioware") }}</h3>
     {% for group in bioware_groups %}
     <details data-details-key="bioware:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
-      <summary>{{ group.category }}</summary>
+      <summary>{{ group.category | dterm("cyberware.xml", "bioware.xml") }}</summary>
       <table>
         <thead>
           <tr>
@@ -153,7 +153,7 @@
           {% for row in group.rows %}
           <tr>
             <td>
-              {{ row.item.name }}
+              {{ row.item | dterm("bioware.xml") }}
               {# WP80: one skill picker per bought unit -- SR5 p. 460 allows several recorders, one skill each. #}
               {% if row.skill_choices and row.quantity %}
               <div class="bioware-skill-picks">
@@ -166,7 +166,7 @@
                     <option
                       value="{{ skill.name }}"
                       {% if row.chosen_skills[index] == skill.name %}selected{% endif %}
-                    >{{ skill.name }} ({{ _("String_Attribute" ~ skill.attribute ~ "Short") }})</option>
+                    >{{ skill | dterm("skills.xml") }} ({{ _("String_Attribute" ~ skill.attribute ~ "Short") }})</option>
                     {% endfor %}
                   </select>
                 </label>

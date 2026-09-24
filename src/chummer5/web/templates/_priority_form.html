@@ -46,7 +46,7 @@
       >
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.heritage_letter %}selected{% endif %}>
-          {{ heritage_priorities[letter].name }}
+          {{ heritage_priorities[letter].name | dterm("priorities.xml") }}
         </option>
         {% endfor %}
       </select>
@@ -57,7 +57,7 @@
       <select name="talent_letter">
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.talent_letter %}selected{% endif %}>
-          {{ talent_priorities[letter].name }}
+          {{ talent_priorities[letter].name | dterm("priorities.xml") }}
         </option>
         {% endfor %}
       </select>
@@ -68,7 +68,7 @@
       <select name="attributes_letter">
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.attributes_letter %}selected{% endif %}>
-          {{ attributes_priorities[letter].name }}
+          {{ attributes_priorities[letter].name | dterm("priorities.xml") }}
         </option>
         {% endfor %}
       </select>
@@ -79,7 +79,7 @@
       <select name="skills_letter">
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.skills_letter %}selected{% endif %}>
-          {{ skills_priorities[letter].name }}
+          {{ skills_priorities[letter].name | dterm("priorities.xml") }}
         </option>
         {% endfor %}
       </select>
@@ -90,7 +90,7 @@
       <select name="resources_letter">
         {% for letter in letters %}
         <option value="{{ letter }}" {% if letter == selected.resources_letter %}selected{% endif %}>
-          {{ resources_priorities[letter].name }}
+          {{ resources_priorities[letter].name | dterm("priorities.xml") }}
         </option>
         {% endfor %}
       </select>
@@ -106,14 +106,14 @@
 
   {% if character %}
   <div id="character-summary">
-    <h2>{{ _("Web_Priorities_Confirmed", metatype=character.metatype.name) }}</h2>
+    <h2>{{ _("Web_Priorities_Confirmed", metatype=character.metatype | dterm("metatypes.xml")) }}</h2>
     <ul>
       <li>{{ _("Web_Priorities_SummaryBuildMethod", method=_("Web_BuildMethod_" ~ selected.build_method)) }}</li>
-      <li>{{ _("Web_Priorities_SummaryHeritage", letter=selected.heritage_letter, name=heritage_priorities[selected.heritage_letter].name) }}</li>
-      <li>{{ _("Web_Priorities_SummaryTalent", letter=selected.talent_letter, name=talent_priorities[selected.talent_letter].name) }}</li>
-      <li>{{ _("Web_Priorities_SummaryAttributes", letter=selected.attributes_letter, name=attributes_priorities[selected.attributes_letter].name) }}</li>
-      <li>{{ _("Web_Priorities_SummarySkills", letter=selected.skills_letter, name=skills_priorities[selected.skills_letter].name) }}</li>
-      <li>{{ _("Web_Priorities_SummaryResources", letter=selected.resources_letter, name=resources_priorities[selected.resources_letter].name) }}</li>
+      <li>{{ _("Web_Priorities_SummaryHeritage", letter=selected.heritage_letter, name=heritage_priorities[selected.heritage_letter].name | dterm("priorities.xml")) }}</li>
+      <li>{{ _("Web_Priorities_SummaryTalent", letter=selected.talent_letter, name=talent_priorities[selected.talent_letter].name | dterm("priorities.xml")) }}</li>
+      <li>{{ _("Web_Priorities_SummaryAttributes", letter=selected.attributes_letter, name=attributes_priorities[selected.attributes_letter].name | dterm("priorities.xml")) }}</li>
+      <li>{{ _("Web_Priorities_SummarySkills", letter=selected.skills_letter, name=skills_priorities[selected.skills_letter].name | dterm("priorities.xml")) }}</li>
+      <li>{{ _("Web_Priorities_SummaryResources", letter=selected.resources_letter, name=resources_priorities[selected.resources_letter].name | dterm("priorities.xml")) }}</li>
       <li>{{ _("Web_Priorities_SummarySpecialPoints", points=character.special_attribute_points) }}</li>
     </ul>
   </div>

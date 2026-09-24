@@ -37,7 +37,7 @@
         data-details-key="spellcat:{{ category }}"
         {% if rows | selectattr("selected") | list %}open{% endif %}
       >
-        <summary>{{ category }}</summary>
+        <summary>{{ category | dterm("spells.xml") }}</summary>
         <table>
           <thead>
             <tr>
@@ -60,7 +60,7 @@
                   {% if row.selected %}checked{% endif %}
                 />
               </td>
-              <td>{{ row.spell.name }}</td>
+              <td>{{ row.spell | dterm("spells.xml") }}</td>
               <td>{{ row.spell.type }}</td>
               <td>{{ row.spell.range }}</td>
               <td>{{ row.spell.duration }}</td>

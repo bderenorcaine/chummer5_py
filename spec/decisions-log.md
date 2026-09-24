@@ -1512,3 +1512,31 @@ worth knowing:
   Spells") so they could reuse `String_*`/`Tab_*` keys with real translations. Attribute codes
   render through `String_Attribute<CODE>Short` (German `KON`, `GES`, …). Two raw codenames became
   words: the build method, where `SumtoTen` now reads "Sum-to-Ten", and the magic type.
+
+**2026-09-24 (WP103, Phase W) — game-data names translate at display time, looked up by GUID
+*and* name, because the legacy translation files reuse GUIDs.** `chummer5.data.lang.load_data_terms`
+indexes `legacy/Chummer/lang/<locale>_data.xml`. Templates apply it only where a name is shown:
+`{{ obj | dterm("file.xml") }}`, plus `{{ mentor | dtext("advantage") }}` for long texts.
+Identity is never translated: form values, field names, ids, `data-details-key`, and saves stay
+English/GUID. A test proves a German session's save is byte-for-byte the English one's.
+
+**The GUID finding.** The phase file assumed lookup "keyed by the English name". Our catalogs
+carry the legacy GUIDs, so lookup by id looked strictly better, until the German file turned out
+to reuse ids. `adf31a50…` is the Pistols skill ("Pistolen") *and* an alternate "Handguns"
+("Handfeuerwaffen"). de-de has 26 such ids, and fr/ja/pt/zh 4-5 each. A last-wins id index
+silently showed "Handfeuerwaffen" for SR5's Pistols, and my own first test expectation encoded the
+wrong answer. The index is now `{GUID: {English name: translation}}`. A lookup takes the entry
+whose English matches the object's name, takes an id's sole entry when there is only one, and
+otherwise falls back to the name within the given files. Names are also ambiguous *within* a file:
+skills.xml's specialisations reuse skill names, so an item's own `<name>` outranks an
+attribute-translated text with the same English.
+
+**Display-name consequences.** The skill and gear filter scripts match the player's typing against
+`data-*-name`, which now carries the *display* name, because a German player types German.
+Sorting is still by English name, so a German list is not alphabetical; that is identified, not
+solved. English authored in `chummer5.data` modules (knowledge-category examples,
+`CONDITION_DESCRIPTIONS`, unmodeled-effect notes) has no legacy translation and stays English, as
+the WP102 entry records. **No locale besides English is offered yet.** The machinery covers all
+five legacy locales, but German chrome would still be mostly English fallback: 327 `Web_*` keys
+exist only in English. Offering one is now a translation job plus one `prefs.LOCALES` line, not
+engineering.

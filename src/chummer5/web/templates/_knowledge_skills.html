@@ -26,7 +26,7 @@
     <p>
       {{ _("Web_Knowledge_FreeformHelp") }}
       {% for category in knowledge_categories %}
-      {{ _("Web_Knowledge_CategoryExamples", category=category.name, attribute=_("String_Attribute" ~ category.linked_attribute ~ "Short"), examples=category.examples | join(_("Web_List_Separator"))) }}{% if not loop.last %}; {% endif %}
+      {{ _("Web_Knowledge_CategoryExamples", category=category.name | dterm("skills.xml"), attribute=_("String_Attribute" ~ category.linked_attribute ~ "Short"), examples=category.examples | join(_("Web_List_Separator"))) }}{% if not loop.last %}; {% endif %}
       {% endfor %}
     </p>
     <p>{{ _("Web_Knowledge_KarmaHelp") }}</p>
@@ -51,7 +51,7 @@
               <option value=""></option>
               {% for category in knowledge_categories %}
               <option value="{{ category.name }}" {% if row.category == category.name %}selected{% endif %}>
-                {{ category.name }}
+                {{ category.name | dterm("skills.xml") }}
               </option>
               {% endfor %}
             </select>
@@ -81,7 +81,7 @@
     </table>
 
     <h3>{{ _("Web_Knowledge_LanguageSkills") }}</h3>
-    <p>{{ _("Web_Knowledge_SuggestedLanguages", examples=suggested_languages | join(_("Web_List_Separator"))) }}</p>
+    <p>{{ _("Web_Knowledge_SuggestedLanguages", examples=suggested_languages | map("dterm", "skills.xml") | join(_("Web_List_Separator"))) }}</p>
     <table>
       <thead>
         <tr>

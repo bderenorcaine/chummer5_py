@@ -6,7 +6,7 @@
       <option value="">{{ _("Web_Talent_ChooseTradition") }}</option>
       {% for tradition in traditions %}
       <option value="{{ tradition.id }}" {% if tradition.id == selected_tradition_id %}selected{% endif %}>
-        {{ _("Web_Talent_TraditionOption", name=tradition.name, first=_("String_Attribute" ~ tradition.drain_attributes[0] ~ "Short"), second=_("String_Attribute" ~ tradition.drain_attributes[1] ~ "Short")) }}
+        {{ _("Web_Talent_TraditionOption", name=tradition | dterm("traditions.xml"), first=_("String_Attribute" ~ tradition.drain_attributes[0] ~ "Short"), second=_("String_Attribute" ~ tradition.drain_attributes[1] ~ "Short")) }}
       </option>
       {% endfor %}
     </select>
@@ -23,7 +23,7 @@
         name="granted_skill_id"
         value="{{ skill.id }}" {% if skill.id in selected_skill_ids %}checked{% endif %}
       />
-      {{ skill.name }}
+      {{ skill | dterm("skills.xml") }}
     </label>
     {% endfor %}
   </fieldset>

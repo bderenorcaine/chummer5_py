@@ -23,7 +23,7 @@
   >
     {% for group in vehicle_groups %}
     <details data-details-key="vehicle:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
-      <summary>{{ group.category }}</summary>
+      <summary>{{ group.category | dterm("vehicles.xml") }}</summary>
       <table>
         <thead>
           <tr>
@@ -46,7 +46,7 @@
         <tbody>
           {% for row in group.rows %}
           <tr>
-            <td>{{ row.name }}</td>
+            <td>{{ row | dterm("vehicles.xml") }}</td>
             <td>{{ row.handling }}</td>
             <td>{{ row.speed }}</td>
             <td>{{ row.acceleration }}</td>

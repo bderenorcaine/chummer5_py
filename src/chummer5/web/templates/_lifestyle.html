@@ -25,7 +25,7 @@
       <select name="lifestyle_tier">
         {% for tier in lifestyle_options %}
         <option value="{{ tier.name }}" {% if tier.name == selected_tier_name %}selected{% endif %}>
-          {{ _("Web_Lifestyle_TierOption", name=tier.name, cost=tier.monthly_cost | nuyen) }}
+          {{ _("Web_Lifestyle_TierOption", name=tier.name | dterm("lifestyles.xml"), cost=tier.monthly_cost | nuyen) }}
         </option>
         {% endfor %}
       </select>

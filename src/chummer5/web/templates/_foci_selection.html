@@ -24,7 +24,7 @@
   >
     {% for group in foci_groups %}
     <details data-details-key="focus:{{ group.category }}" {% if group.rows | selectattr("force", "gt", 0) | list %}open{% endif %}>
-      <summary>{{ group.category }}</summary>
+      <summary>{{ group.category | dterm("gear.xml") }}</summary>
       <table>
         <thead>
           <tr>
@@ -38,7 +38,7 @@
         <tbody>
           {% for row in group.rows %}
           <tr>
-            <td>{{ row.item.name }}</td>
+            <td>{{ row.item | dterm("gear.xml") }}</td>
             <td>{{ row.item.cost_per_force }}</td>
             <td>{{ row.item.bonding_karma_per_force }}</td>
             <td>

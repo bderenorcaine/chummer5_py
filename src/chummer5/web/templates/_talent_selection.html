@@ -3,9 +3,9 @@
   <details open>
   <summary class="panel__heading">{{ _("Web_Tab_Talent") }}</summary>
   <p>
-    {{ _("Web_Talent_Priority", letter=talent_letter, name=talent_letter_name) }}
+    {{ _("Web_Talent_Priority", letter=talent_letter, name=talent_letter_name | dterm("priorities.xml")) }}
     {% if character.magic_type and character.tradition %}
-    {{ _("Web_Talent_ConfirmedWithTradition", type=_("Web_MagicType_" ~ character.magic_type), tradition=character.tradition.name, rating=character.magic_rating) }}
+    {{ _("Web_Talent_ConfirmedWithTradition", type=_("Web_MagicType_" ~ character.magic_type), tradition=character.tradition | dterm("traditions.xml"), rating=character.magic_rating) }}
     {% elif character.magic_type %}
     {{ _("Web_Talent_Confirmed", type=_("Web_MagicType_" ~ character.magic_type), rating=character.magic_rating) }}
     {% else %}
@@ -40,7 +40,7 @@
         hx-swap="outerHTML"
         hx-include="[name='talent_letter'], [name='talent_codename']:checked"
       />
-      {{ option.name }}
+      {{ option.name | dterm("priorities.xml") }}
     </label>
     {% endfor %}
 

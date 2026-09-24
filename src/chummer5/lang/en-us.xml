@@ -885,26 +885,6 @@
       <text>{name} (rating {rating}, {attribute})</text>
     </string>
     <string>
-      <key>Web_Sheet_PriorityAttributes</key>
-      <text>Attributes {priority}</text>
-    </string>
-    <string>
-      <key>Web_Sheet_PriorityHeritage</key>
-      <text>Heritage {priority}</text>
-    </string>
-    <string>
-      <key>Web_Sheet_PriorityResources</key>
-      <text>Resources {priority}</text>
-    </string>
-    <string>
-      <key>Web_Sheet_PrioritySkills</key>
-      <text>Skills {priority}</text>
-    </string>
-    <string>
-      <key>Web_Sheet_PriorityTalent</key>
-      <text>Talent {priority}</text>
-    </string>
-    <string>
       <key>Web_Sheet_RatingSuffix</key>
       <text>(Rating {rating})</text>
     </string>

@@ -36,7 +36,7 @@
               <option value=""></option>
               {% for type_name in offered_spirit_types %}
               <option value="{{ type_name }}" {% if type_name == row.spirit_type %}selected{% endif %}>
-                {{ type_name }}
+                {{ type_name | dterm("traditions.xml") }}
               </option>
               {% endfor %}
             </select>

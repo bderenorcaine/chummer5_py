@@ -89,9 +89,12 @@ test fixtures, it is a derivative work and is GPLv3 too. Not a decision point â€
   ships.~~ **Corrected 2026-09-24 (WP101): this was never built during the MVP.** Every template and
   route message was plain English text until Phase W. The key layer itself landed in WP101: string
   catalogs in the legacy `lang/*.xml` schema, a `_()` template global, and a session locale (see
-  `src/chummer5/lang/README.md` for the key rules). Converting the existing strings is WP102.
-  Translating game-data names is WP103. Until both land, "structured so translation is an addition"
-  (Goal 5) is true of the mechanism but not yet of the pages.
+  `src/chummer5/lang/README.md` for the key rules). WP102 converted every template and web-layer
+  string and made that property test-enforced. WP103 translates game-data names at display time
+  from the legacy `<locale>_data.xml` files. So Goal 5's "translation is an addition" is now true
+  of the pages: offering a language means translating the `Web_*` catalog and adding one
+  `prefs.LOCALES` entry. Two things stay English by recorded decision (see `decisions-log.md`,
+  2026-09-24): engine exception texts, and English authored in `chummer5.data` modules.
 
 **A gap found after MVP shipped, not a deliberate cut:** Lifestyle selection â€” SR5's mandatory
 "Step Six" line item (core rulebook, p.369: "A character must select one of the lifestyles below to

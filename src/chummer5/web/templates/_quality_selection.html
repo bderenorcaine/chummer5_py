@@ -8,7 +8,7 @@
   {% endif %}
 
   {% if metatype_qualities %}
-  <p>{{ _("Web_Qualities_FreeFromMetatype", names=metatype_qualities | map(attribute="name") | join(_("Web_List_Separator"))) }}</p>
+  <p>{{ _("Web_Qualities_FreeFromMetatype", names=metatype_qualities | map("dterm", "qualities.xml") | join(_("Web_List_Separator"))) }}</p>
   {% endif %}
 
   <p>
@@ -43,8 +43,8 @@
               {% if row.selected %}checked{% endif %}
             />
           </td>
-          <td>{{ row.quality.name }}</td>
-          <td>{{ row.quality.category }}</td>
+          <td>{{ row.quality | dterm("qualities.xml") }}</td>
+          <td>{{ row.quality.category | dterm("qualities.xml") }}</td>
           <td>{{ row.quality.karma }}</td>
           <td>
             {% if row.needs_text %}
@@ -70,15 +70,15 @@
           <option value="">{{ _("Web_Qualities_ChooseArchetype") }}</option>
           {% for archetype in mentor_spirit_archetypes %}
           <option value="{{ archetype.id }}" {% if archetype.id == selected_mentor_spirit_archetype_id %}selected{% endif %}>
-            {{ archetype.name }}
+            {{ archetype | dterm("mentors.xml") }}
           </option>
           {% endfor %}
         </select>
       </label>
 
       {% if selected_mentor_spirit_archetype %}
-      <p>{{ selected_mentor_spirit_archetype.advantage }}</p>
-      <p>{{ selected_mentor_spirit_archetype.disadvantage }}</p>
+      <p>{{ selected_mentor_spirit_archetype | dtext("advantage") }}</p>
+      <p>{{ selected_mentor_spirit_archetype | dtext("disadvantage") }}</p>
 
       {% if selected_mentor_spirit_archetype.general_options|length > 1 %}
       <fieldset>
@@ -91,15 +91,15 @@
             value="{{ option.id }}"
             {% if option.id == selected_mentor_spirit_general_choice_id %}checked{% endif %}
           />
-          {{ option.name }}
+          {{ option | dterm("mentors.xml") }}
         </label>
         {% endfor %}
       </fieldset>
       {% endif %}
 
       <p>
-        {{ _("Web_Qualities_MentorMagicianBonus", bonus=selected_mentor_spirit_archetype.magician_choice.name) }}
-        {{ _("Web_Qualities_MentorAdeptBonus", bonus=selected_mentor_spirit_archetype.adept_choice.name) }}
+        {{ _("Web_Qualities_MentorMagicianBonus", bonus=selected_mentor_spirit_archetype.magician_choice | dterm("mentors.xml")) }}
+        {{ _("Web_Qualities_MentorAdeptBonus", bonus=selected_mentor_spirit_archetype.adept_choice | dterm("mentors.xml")) }}
         {% if character.magic_type %}{{ _("Web_Qualities_MentorOnlyMatching", type=_("Web_MagicType_" ~ character.magic_type)) }}{% endif %}
       </p>
       {% endif %}

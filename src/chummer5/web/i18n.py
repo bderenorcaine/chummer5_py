@@ -26,7 +26,7 @@ from jinja2.runtime import Context
 from markupsafe import Markup, escape
 from starlette.requests import Request
 
-from chummer5.data.lang import load_locale_strings
+from chummer5.data.lang import DataTerms, load_data_terms, load_locale_strings
 from chummer5.web.prefs import DEFAULT_LOCALE
 from chummer5.web.session import SESSION_COOKIE_NAME
 
@@ -61,6 +61,72 @@ def catalog(locale: str) -> Mapping[str, str]:
     if locale not in CATALOGS:
         CATALOGS[locale] = load_locale_strings(locale)
     return CATALOGS[locale]
+
+
+# Game-data translations by locale (WP103), loaded lazily like `CATALOGS`, and stub-able alike.
+DATA_TERMS: dict[str, DataTerms] = {}
+
+
+def data_terms(locale: str) -> DataTerms:
+    if locale not in DATA_TERMS:
+        DATA_TERMS[locale] = load_data_terms(locale)
+    return DATA_TERMS[locale]
+
+
+def data_term(locale: str, value: Any, *files: str) -> str:
+    """A game-data term's display name in `locale` (WP103) -- **display only, never identity**.
+
+    `value` is a catalog object or a context row (anything with a `name`, and ideally a legacy
+    GUID `id`, as attribute or mapping key) or a plain English string. Lookup order: the GUID
+    (checked against the English name, because GUIDs repeat in the legacy files), then the English
+    text in each of `files` (the legacy data files it can come from:
+    categories, skill groups, and the name-keyed catalogs -- lifestyle tiers, starter gear, talent
+    options, priority rows -- have no id). Anything untranslated is returned as its English name,
+    silently: the legacy `_data.xml` files cover what the legacy app shipped, not everything this
+    project offers, and a missing game-data translation is normal rather than a bug.
+
+    The returned string must never reach a form value, an id, a save, or a lookup key -- those
+    stay English/GUIDs, so saves stay locale-independent (`test_web_data_terms.py` pins that).
+    """
+    if isinstance(value, str):
+        guid, english = None, value
+    else:
+        guid = _field(value, "id")
+        english = str(_field(value, "name") or "")
+    terms = data_terms(locale)
+    if guid:
+        # The legacy files reuse a few GUIDs under two English names (see `DataTerms`), so the
+        # entry whose English matches is the one; an id with a single entry is taken as is (a
+        # translation file one data rename behind still translates).
+        by_name = terms.by_id.get(str(guid).lower(), {})
+        translated = by_name.get(english) or (
+            next(iter(by_name.values())) if len(by_name) == 1 else None
+        )
+        if translated:
+            return translated
+    for file in files:
+        translated = terms.by_file.get(file, {}).get(english)
+        if translated:
+            return translated
+    return english
+
+
+def data_text(locale: str, value: Any, field: str) -> str:
+    """A game-data item's long-text `field` (a mentor's `advantage`, …) in `locale`, falling back
+    silently to the item's own English `field` -- `data_term`'s counterpart for prose, display
+    only in the same way."""
+    guid = _field(value, "id")
+    if guid:
+        translated = data_terms(locale).fields.get((str(guid).lower(), field))
+        if translated:
+            return translated
+    return str(_field(value, field) or "")
+
+
+def _field(value: Any, name: str) -> Any:
+    if isinstance(value, Mapping):
+        return value.get(name)
+    return getattr(value, name, None)
 
 
 def missing_key_marker(key: str) -> str:
@@ -212,3 +278,16 @@ def jinja_render_message(context: Context, message: Message | MessageJoin | str)
     """The `| tr` template filter: `render_message` in the rendered request's locale. Used on every
     `*_error`/`*_budget_warning`/`sheet_*` value, which may be a `Message` or an engine string."""
     return render_message(request_locale(context.get("request")), message)
+
+
+@pass_context
+def jinja_data_term(context: Context, value: Any, *files: str) -> str:
+    """The `| dterm("file.xml", ...)` template filter: `data_term` in the rendered request's
+    locale. Display only -- never apply it to a form value, id, or `data-*` identity attribute."""
+    return data_term(request_locale(context.get("request")), value, *files)
+
+
+@pass_context
+def jinja_data_text(context: Context, value: Any, field: str) -> str:
+    """The `| dtext("advantage")` template filter: `data_text` in the rendered request's locale."""
+    return data_text(request_locale(context.get("request")), value, field)

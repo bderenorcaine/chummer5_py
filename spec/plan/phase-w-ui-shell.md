@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n (WP97-102 done; WP103 remaining)
+### Phase W — Post-MVP: application shell, theming, and i18n (done, WP97-103)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -335,7 +335,7 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
     - knowledge categories and suggested languages live in `chummer5.data.knowledge`, not XML.
   See `spec/worklogs/WP102.md`.
 
-- [ ] **WP103 — Game-data term translation in the loaders.**
+- [x] **WP103 — Game-data term translation in the loaders.**
   Goal: the half of i18n that no general-purpose library solves — skill names, quality names,
   metatype names, gear names, categories, all of which come from `legacy/Chummer/data/*.xml` and
   vastly outnumber the chrome strings.
@@ -354,3 +354,16 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   Acceptance: `pytest`/`ruff`/`mypy` green; a test asserting a selection made under a non-English
   locale round-trips through save → load with **English-keyed ids unchanged**; a test asserting an
   untranslated entry falls back to its English name without raising.
+  Landed.
+  - **Loader:** `chummer5.data.lang.load_data_terms` builds a per-locale index: by GUID *and*
+    English name (the legacy files reuse GUIDs; see the decisions log), by `(file, English text)`,
+    and by `(GUID, field)` for long texts.
+  - **Lookup:** `chummer5.web.i18n.data_term`/`data_text`, exposed as the `| dterm("file.xml", …)`
+    and `| dtext("field")` filters. They are applied at every name display site in all templates
+    and never to an identity attribute.
+  - **Sheet context:** `priority_summary` and the bioware rows now pass their parts separately
+    rather than as pre-joined English.
+  - **Tests:** `tests/unit/test_web_data_terms.py` uses the real de-de catalog. Its round trip
+    shows a German session's save equals the English one's. The filter scripts now match on
+    display names.
+  See `spec/worklogs/WP103.md`.

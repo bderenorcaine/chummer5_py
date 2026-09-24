@@ -29,7 +29,7 @@
       <tbody>
         {% for row in power_rows %}
         <tr>
-          <td>{{ row.power.name }}</td>
+          <td>{{ row.power | dterm("powers.xml") }}</td>
           <td>{{ row.power.points }}</td>
           <td>
             <input

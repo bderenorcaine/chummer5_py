@@ -425,35 +425,31 @@ def _character_sheet_context(
         {"quantity": quantity, **vehicle_stat_block(vehicles_by_name[name])}
         for name, quantity in sorted(vehicle_counts.items())
     ]
-    bioware_counts: dict[str, int] = {}
+    # WP103: tallied by (name, chosen skill) rather than a pre-joined "Name (Skill)" label, so the
+    # sheet can translate each half for display on its own.
+    bioware_counts: dict[tuple[str, str | None], int] = {}
     for purchase in bioware_selection.purchases if bioware_selection is not None else ():
-        label = (
-            f"{purchase.item.name} ({purchase.chosen_skill})"
-            if purchase.chosen_skill is not None
-            else purchase.item.name
-        )
-        bioware_counts[label] = bioware_counts.get(label, 0) + 1
+        key = (purchase.item.name, purchase.chosen_skill)
+        bioware_counts[key] = bioware_counts.get(key, 0) + 1
 
     return {
         "character": character,
+        # WP103: letter and priority-row name kept apart, so the sheet can translate the name.
         "priority_summary": {
             "heritage": (
-                f"{session.heritage_letter} — {PRIORITIES.heritage[session.heritage_letter].name}"
+                session.heritage_letter,
+                PRIORITIES.heritage[session.heritage_letter].name,
             ),
             "attributes": (
-                f"{session.attributes_letter} — "
-                f"{PRIORITIES.attributes[session.attributes_letter].name}"
+                session.attributes_letter,
+                PRIORITIES.attributes[session.attributes_letter].name,
             ),
-            "skills": (
-                f"{session.skills_letter} — {PRIORITIES.skills[session.skills_letter].name}"
-            ),
+            "skills": (session.skills_letter, PRIORITIES.skills[session.skills_letter].name),
             "resources": (
-                f"{session.resources_letter} — "
-                f"{PRIORITIES.resources[session.resources_letter].name}"
+                session.resources_letter,
+                PRIORITIES.resources[session.resources_letter].name,
             ),
-            "talent": (
-                f"{session.talent_letter} — {PRIORITIES.talent[session.talent_letter].name}"
-            ),
+            "talent": (session.talent_letter, PRIORITIES.talent[session.talent_letter].name),
         },
         # WP81: `natural` alongside `value` so the sheet can render `4 (6)` for an augmented
         # attribute rather than a bare `6` -- the core rulebook's own notation (p. 95: "Record
@@ -590,8 +586,10 @@ def _character_sheet_context(
         "cyberware_rows": cyberware_rows,
         # WP45: same recap for bioware, alongside cyberware's.
         "bioware_rows": [
-            {"name": name, "quantity": quantity}
-            for name, quantity in sorted(bioware_counts.items())
+            {"name": name, "skill": skill, "quantity": quantity}
+            for (name, skill), quantity in sorted(
+                bioware_counts.items(), key=lambda kv: (kv[0][0], kv[0][1] or "")
+            )
         ],
         # WP93: purchased vehicles/drones -- the full printed stat block plus the one derived
         # number (Condition Monitor, p. 199), tallied by name so a four-Fly-Spy buy is one line.

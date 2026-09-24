@@ -43,7 +43,7 @@
     <div id="gear-tables">
     {% for group in gear_groups %}
     <details data-details-key="gear:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>
-      <summary>{{ group.category }}</summary>
+      <summary>{{ group.category | dterm("gear.xml", "armor.xml", "weapons.xml") }}</summary>
       <table>
         <thead>
           <tr>
@@ -56,8 +56,8 @@
         </thead>
         <tbody>
           {% for row in group.rows %}
-          <tr data-gear-name="{{ row.item.name | lower }}" data-gear-category="{{ group.category | lower }}">
-            <td>{{ row.item.name }}</td>
+          <tr data-gear-name="{{ (row.item | dterm("gear.xml", "armor.xml", "weapons.xml")) | lower }}" data-gear-category="{{ (group.category | dterm("gear.xml", "armor.xml", "weapons.xml")) | lower }}">
+            <td>{{ row.item | dterm("gear.xml", "armor.xml", "weapons.xml") }}</td>
             <td>
               {% if row.is_rating %}{{ _("Web_Resources_PerRating", cost=row.unit_cost) }}{% else %}{{ row.item.cost }}{% endif %}
             </td>

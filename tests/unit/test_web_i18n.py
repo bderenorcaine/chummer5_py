@@ -338,3 +338,24 @@ def test_no_page_renders_a_missing_key_marker(
     for html in pages:
         assert "⟦" not in html
     assert "i18n" not in caplog.text
+
+
+def test_no_project_key_is_an_orphan() -> None:
+    """Every `Web_*` key is used by some template or web module -- literally, as the base of an
+    `_n()` pair, or through one of the computed families -- so dead keys cannot pile up for
+    translators to translate for nothing."""
+    computed_prefixes = ("Web_BuildMethod_", "Web_MagicType_")
+    sources = "\n".join(
+        path.read_text()
+        for path in [
+            *Path(TEMPLATES_DIR).glob("*.html"),
+            *Path(TEMPLATES_DIR).parent.rglob("*.py"),
+        ]
+    )
+    orphans = []
+    for key in load_string_file(PROJECT_LANG_DIR / "en-us.xml"):
+        base = re.sub(r"_(One|Other)$", "", key)
+        if key.startswith(computed_prefixes) or f'"{base}"' in sources or f"'{base}'" in sources:
+            continue
+        orphans.append(key)
+    assert orphans == []

@@ -7,13 +7,13 @@
   {% endif %}
 
   {% if character %}
-  <h2>{{ character.metatype.name }}</h2>
+  <h2>{{ character.metatype | dterm("metatypes.xml") }}</h2>
   <ul>
-    <li>{{ _("Web_Sheet_PriorityHeritage", priority=priority_summary.heritage) }}</li>
-    <li>{{ _("Web_Sheet_PriorityTalent", priority=priority_summary.talent) }}</li>
-    <li>{{ _("Web_Sheet_PriorityAttributes", priority=priority_summary.attributes) }}</li>
-    <li>{{ _("Web_Sheet_PrioritySkills", priority=priority_summary.skills) }}</li>
-    <li>{{ _("Web_Sheet_PriorityResources", priority=priority_summary.resources) }}</li>
+    <li>{{ _("Web_Priorities_SummaryHeritage", letter=priority_summary.heritage[0], name=priority_summary.heritage[1] | dterm("priorities.xml")) }}</li>
+    <li>{{ _("Web_Priorities_SummaryTalent", letter=priority_summary.talent[0], name=priority_summary.talent[1] | dterm("priorities.xml")) }}</li>
+    <li>{{ _("Web_Priorities_SummaryAttributes", letter=priority_summary.attributes[0], name=priority_summary.attributes[1] | dterm("priorities.xml")) }}</li>
+    <li>{{ _("Web_Priorities_SummarySkills", letter=priority_summary.skills[0], name=priority_summary.skills[1] | dterm("priorities.xml")) }}</li>
+    <li>{{ _("Web_Priorities_SummaryResources", letter=priority_summary.resources[0], name=priority_summary.resources[1] | dterm("priorities.xml")) }}</li>
   </ul>
 
   <h3>{{ _("Label_Attributes") }}</h3>
@@ -40,7 +40,7 @@
     <tbody>
       {% for row in sheet_skill_rows %}
       <tr>
-        <td>{{ row.skill.name }}</td>
+        <td>{{ row.skill | dterm("skills.xml") }}</td>
         <td>{{ row.natural_rating }}{% if row.rating != row.natural_rating %} ({{ row.rating }}){% endif %}</td>
         <td>{{ row.specialization or "—" }}</td>
         <td>{{ row.pool }}</td>
@@ -60,7 +60,7 @@
     </thead>
     <tbody>
       {% for row in knowledge_skill_rows %}
-      <tr><td>{{ row.name }}</td><td>{{ row.category }}</td><td>{{ row.rating }}</td></tr>
+      <tr><td>{{ row.name }}</td><td>{{ row.category | dterm("skills.xml") }}</td><td>{{ row.rating }}</td></tr>
       {% endfor %}
       {% for row in language_rows %}
       <tr>
@@ -85,7 +85,7 @@
     <li>{{ _("Web_Sheet_MagicRating", rating=magic_rating) }}</li>
     {% endif %}
     {% if tradition_name %}
-    <li>{{ _("Web_Sheet_Tradition", tradition=tradition_name) }}</li>
+    <li>{{ _("Web_Sheet_Tradition", tradition=tradition_name | dterm("traditions.xml")) }}</li>
     {% endif %}
     {% if magic_type == "Adept" %}
     <li>{{ _("Web_Sheet_PowerPoints", points=power_points) }}</li>
@@ -97,7 +97,7 @@
   <h4>{{ _("String_Spells") }}</h4>
   <ul>
     {% for name in spell_names %}
-    <li>{{ name }}</li>
+    <li>{{ name | dterm("spells.xml") }}</li>
     {% endfor %}
   </ul>
   {% endif %}
@@ -107,7 +107,7 @@
   <ul>
     {% for row in power_rows %}
     <li>
-      {% if row.selected_attribute %}{{ _("Web_Sheet_PowerWithAttribute", name=row.name, rating=row.rating, attribute=_("String_Attribute" ~ row.selected_attribute ~ "Short")) }}{% else %}{{ _("Web_Sheet_Power", name=row.name, rating=row.rating) }}{% endif %}
+      {% if row.selected_attribute %}{{ _("Web_Sheet_PowerWithAttribute", name=row.name | dterm("powers.xml"), rating=row.rating, attribute=_("String_Attribute" ~ row.selected_attribute ~ "Short")) }}{% else %}{{ _("Web_Sheet_Power", name=row.name | dterm("powers.xml"), rating=row.rating) }}{% endif %}
     </li>
     {% endfor %}
   </ul>
@@ -117,7 +117,7 @@
   <h4>{{ _("Web_Spirits_Heading") }}</h4>
   <ul>
     {% for row in bound_spirit_rows %}
-    <li>{{ _n("Web_Sheet_Spirit", row.services, type=row.spirit_type, force=row.force) }}</li>
+    <li>{{ _n("Web_Sheet_Spirit", row.services, type=row.spirit_type | dterm("traditions.xml"), force=row.force) }}</li>
     {% endfor %}
   </ul>
   <p>{{ _("Web_Sheet_SpiritKarma", cost=bound_spirit_karma_cost) }}</p>
@@ -127,7 +127,7 @@
   <h4>{{ _("Label_SummaryFoci") }}</h4>
   <ul>
     {% for row in foci_rows %}
-    <li>{{ _("Web_Sheet_Focus", name=row.name, force=row.force, cost=row.nuyen_cost | nuyen, karma=row.karma_cost) }}</li>
+    <li>{{ _("Web_Sheet_Focus", name=row.name | dterm("gear.xml"), force=row.force, cost=row.nuyen_cost | nuyen, karma=row.karma_cost) }}</li>
     {% endfor %}
   </ul>
   <p>{{ _("Web_Sheet_FociCosts", nuyen=foci_nuyen_cost, karma=foci_karma_cost) }}</p>
@@ -136,11 +136,11 @@
   {% if mentor_spirit %}
   <h4>{{ _("Web_Sheet_MentorSpirit") }}</h4>
   <p>
-    {{ mentor_spirit.archetype.name }} —
-    {{ mentor_spirit.general_choice.name }}; {{ mentor_spirit.gated_choice.name }}.
+    {{ mentor_spirit.archetype | dterm("mentors.xml") }} —
+    {{ mentor_spirit.general_choice | dterm("mentors.xml") }}; {{ mentor_spirit.gated_choice | dterm("mentors.xml") }}.
   </p>
-  <p>{{ mentor_spirit.archetype.advantage }}</p>
-  <p>{{ mentor_spirit.archetype.disadvantage }}</p>
+  <p>{{ mentor_spirit.archetype | dtext("advantage") }}</p>
+  <p>{{ mentor_spirit.archetype | dtext("disadvantage") }}</p>
   {% endif %}
   {% endif %}
 
@@ -148,14 +148,14 @@
   {% if quality_names %}
   <ul>
     {% for name in quality_names %}
-    <li>{{ name }}</li>
+    <li>{{ name | dterm("qualities.xml") }}</li>
     {% endfor %}
   </ul>
   {% else %}
   <p>{{ _("Web_Sheet_NoneSelected") }}</p>
   {% endif %}
   {% if metatype_quality_names %}
-  <p>{{ _("Web_Qualities_FreeFromMetatype", names=metatype_quality_names | join(_("Web_List_Separator"))) }}</p>
+  <p>{{ _("Web_Qualities_FreeFromMetatype", names=metatype_quality_names | map("dterm", "qualities.xml") | join(_("Web_List_Separator"))) }}</p>
   {% endif %}
 
   <h3>{{ _("String_Contacts") }}</h3>
@@ -181,7 +181,7 @@
 
   <h3>{{ _("String_Lifestyle") }}</h3>
   {% if lifestyle_tier_name %}
-  <p>{{ _n("Web_Sheet_Lifestyle", lifestyle_months, tier=lifestyle_tier_name, cost=lifestyle_cost | nuyen) }}</p>
+  <p>{{ _n("Web_Sheet_Lifestyle", lifestyle_months, tier=lifestyle_tier_name | dterm("lifestyles.xml"), cost=lifestyle_cost | nuyen) }}</p>
   {% else %}
   <p>{{ _("Web_Sheet_NoneSelected") }}</p>
   {% endif %}
@@ -192,7 +192,7 @@
     {% for row in gear_rows %}
     {# WP94: Matrix devices (commlinks, cyberdecks, RCCs) carry their printed stat block; every
        other gear row renders as the plain "name × qty" line it always has. #}
-    <li>{{ row.name }}{% if row.rating %} {{ _("Web_Sheet_RatingSuffix", rating=row.rating) }}{% endif %} × {{ row.quantity }}
+    <li>{{ row.name | dterm("gear.xml", "armor.xml", "weapons.xml") }}{% if row.rating %} {{ _("Web_Sheet_RatingSuffix", rating=row.rating) }}{% endif %} × {{ row.quantity }}
       {%- if row.matrix_stat_block %}<br /><small>{{ row.matrix_stat_block | tr }}</small>{% endif %}</li>
     {% endfor %}
   </ul>
@@ -207,7 +207,7 @@
      Two levels, not a recursive macro: a plugin may not hold a plugin (the 2026-07-29 ruling, see
      `chummer5.engine.cyberware_subsystems`). #}
   {%- macro cyberware_label(row, quantity=None) -%}
-    {{- row.name }}{% if row.rating %} {{ _("Web_Sheet_RatingSuffix", rating=row.rating) }}{% endif %}
+    {{- row | dterm("cyberware.xml") }}{% if row.rating %} {{ _("Web_Sheet_RatingSuffix", rating=row.rating) }}{% endif %}
     {%- if quantity %} × {{ quantity }}{% endif %}
     {%- if row.bundled %} — {{ _("Web_Sheet_IncludedFree") }}{% endif %}
     {%- if row.capacity_budget %} — {{ _("Web_Sheet_CapacityUsed", spent=row.capacity_spent, budget=row.capacity_budget) }}{% endif %}
@@ -235,7 +235,7 @@
   {% if bioware_rows %}
   <ul>
     {% for row in bioware_rows %}
-    <li>{{ row.name }} × {{ row.quantity }}</li>
+    <li>{{ row.name | dterm("bioware.xml") }}{% if row.skill %} ({{ row.skill | dterm("skills.xml") }}){% endif %} × {{ row.quantity }}</li>
     {% endfor %}
   </ul>
   {% else %}
@@ -268,7 +268,7 @@
     <tbody>
       {% for row in vehicle_rows %}
       <tr>
-        <td>{{ row.name }}</td>
+        <td>{{ row.name | dterm("vehicles.xml") }}</td>
         <td>{{ row.quantity }}</td>
         <td>{{ row.handling }}</td>
         <td>{{ row.speed }}</td>

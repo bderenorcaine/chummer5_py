@@ -32,6 +32,8 @@ from chummer5.engine.lifestyle import MIN_LIFESTYLE_MONTHS
 from chummer5.engine.magic import MAGICAL_SKILL_CATEGORIES, mvp_power_catalog
 from chummer5.engine.qualities import MENTOR_SPIRIT_QUALITY_NAME, mvp_quality_catalog
 from chummer5.web.i18n import (
+    jinja_data_term,
+    jinja_data_text,
     jinja_nuyen,
     jinja_render_message,
     jinja_translate,
@@ -49,6 +51,9 @@ templates.env.globals["_n"] = jinja_translate_plural  # WP102: `_n("Key", count,
 templates.env.filters["nuyen"] = jinja_nuyen
 # WP102: `{{ value | tr }}` -- a context builder's `Message`, or an engine error's plain text.
 templates.env.filters["tr"] = jinja_render_message
+# WP103: `{{ skill | dterm("skills.xml") }}` -- a game-data term's display name, never its identity.
+templates.env.filters["dterm"] = jinja_data_term
+templates.env.filters["dtext"] = jinja_data_text  # WP103: `{{ mentor | dtext("advantage") }}`
 
 # Static rules data: parsed once per process, not per request (Project Overview's "parsed once at
 # startup" rule for `chummer5.data` loaders).
