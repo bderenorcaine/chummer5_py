@@ -34,6 +34,8 @@
   --tab-hover-bg: #f2f4f7;
   --tab-current-accent: #35404f;
   --tab-disabled-fg: #9aa2ad;
+  --panel-muted-fg: #6b7482;
+  --panel-over-fg: #8c1d1d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -62,6 +64,8 @@
     --tab-hover-bg: #23272e;
     --tab-current-accent: #c6ccd6;
     --tab-disabled-fg: #5c6470;
+    --panel-muted-fg: #8f98a6;
+    --panel-over-fg: #f2b8b5;
   }
 }
 
@@ -142,6 +146,58 @@ a.step-nav__item:hover {
 
 .step-nav__marker {
   color: var(--warning-fg);
+}
+
+/* --- The remaining-resources panel (WP99) -------------------------------------------------------- */
+
+.resource-panel {
+  margin: 0.5rem 0.75rem 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.9rem;
+}
+
+.resource-panel__heading {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  color: var(--summary-fg);
+}
+
+.resource-panel__list {
+  margin: 0;
+}
+
+.resource-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 0.5rem;
+  padding: 0.1rem 0;
+}
+
+.resource-panel__label {
+  color: var(--nav-item-fg);
+}
+
+/* `auto` keeps the figure right-aligned even when a long label wraps it onto its own line. */
+.resource-panel__value {
+  margin: 0 0 0 auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.resource-panel__of {
+  font-weight: normal;
+  color: var(--panel-muted-fg);
+}
+
+.resource-panel__row--over .resource-panel__value {
+  color: var(--panel-over-fg);
+}
+
+.resource-panel__empty {
+  margin: 0;
+  color: var(--panel-muted-fg);
 }
 
 /* Narrow screens: the nav becomes a wrapping row above the page instead of a column beside it. */

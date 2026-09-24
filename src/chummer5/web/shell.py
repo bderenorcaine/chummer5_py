@@ -20,9 +20,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from chummer5.engine.character import Character
-from chummer5.engine.resources import resources_gear_args
-from chummer5.web.catalogs import DEFAULT_LIFESTYLE_MONTHS, DEFAULT_LIFESTYLE_TIER_NAME
+from chummer5.engine.character import STARTING_KARMA, Character
+from chummer5.engine.resources import available_nuyen, resources_gear_args
+from chummer5.web.catalogs import (
+    DEFAULT_LIFESTYLE_MONTHS,
+    DEFAULT_LIFESTYLE_TIER_NAME,
+    PRIORITIES,
+)
 from chummer5.web.routes.attributes import _attribute_allocation_context
 from chummer5.web.routes.contacts import _contacts_context
 from chummer5.web.routes.cyberware import _cyberware_context
@@ -292,6 +296,86 @@ def tabs_context(
         not item["available"] for item in items if not item["current"]
     )
     return {"tab_items": items, "current_tab": current_tab, "tabs_locked": locked}
+
+
+def resource_panel_context(session: ChargenSession, chargen_ctx: dict[str, Any]) -> dict[str, Any]:
+    """The sidebar's remaining-resources panel (WP99): one row per budget, each `(remaining, of)`.
+
+    Nothing here is accounting. Karma is `Character.karma_remaining`, Phase O's unified ledger, so
+    the panel cannot disagree with it. Nuyen is the Resources letter's pool (with any Karma
+    converted into it) less `Character.nuyen_spent`. The point pools are read off `chargen_ctx` --
+    the same numbers each step shows on its own page, computed from committed state -- by keys
+    unique to one step context (the generic `nuyen_remaining`/`free_points` keys are merged over by
+    several and would be whichever step happened to merge last; see WP60's worklog for that bug
+    the first time).
+
+    Magic's own pools only appear for the archetype that has them, the same way those sections'
+    tabs do (WP98): free spells for a Magician, Power Points for an Adept.
+    """
+    character = session.character
+    if character is None:
+        return {"resource_rows": []}
+    karma_converted = (
+        character.resources_selection.karma_converted
+        if character.resources_selection is not None
+        else 0
+    )
+    nuyen_pool = available_nuyen(session.resources_letter, PRIORITIES, karma_converted)
+    rows: list[dict[str, Any]] = [
+        {"label": "Karma", "remaining": character.karma_remaining, "of": STARTING_KARMA},
+        {
+            "label": "Nuyen",
+            "remaining": nuyen_pool - character.nuyen_spent,
+            "of": nuyen_pool,
+            "nuyen": True,
+        },
+        {
+            "label": "Attribute points",
+            "remaining": chargen_ctx["primary_remaining"],
+            "of": chargen_ctx["primary_budget"],
+        },
+        {
+            "label": "Special attribute points",
+            "remaining": chargen_ctx["special_remaining"],
+            "of": chargen_ctx["special_budget"],
+        },
+        {
+            "label": "Skill points",
+            "remaining": chargen_ctx["skills_remaining"],
+            "of": chargen_ctx["skills_budget"],
+        },
+        {
+            "label": "Skill group points",
+            "remaining": chargen_ctx["groups_remaining"],
+            "of": chargen_ctx["groups_budget"],
+        },
+        {
+            "label": "Knowledge points",
+            "remaining": (
+                chargen_ctx["knowledge_free_points"] - chargen_ctx["knowledge_points_spent"]
+            ),
+            "of": chargen_ctx["knowledge_free_points"],
+        },
+    ]
+    if character.magic_type == "Magician":
+        rows.append(
+            {
+                "label": "Free spells",
+                "remaining": chargen_ctx["spells_remaining"],
+                "of": chargen_ctx["spell_budget"],
+            }
+        )
+    elif character.magic_type == "Adept":
+        rows.append(
+            {
+                "label": "Power Points",
+                "remaining": chargen_ctx["power_points_remaining"],
+                "of": chargen_ctx["power_point_budget"],
+            }
+        )
+    for row in rows:
+        row["over"] = row["remaining"] < 0
+    return {"resource_rows": rows}
 
 
 def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> dict[str, Any]:

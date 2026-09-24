@@ -1379,3 +1379,32 @@ go stale on every fragment `POST`, exactly as the nav would have without its sel
 refresh would rebuild WP99's resource panel inside one page. The panel will show the global nuyen
 figure from every page, so a page-level copy would be redundant. The per-fragment "remaining" lines
 stay as they are.
+
+**2026-09-24 (WP99, Phase W) — the resource panel sits *above* the per-step "remaining" lines, and
+nuyen gained a character-level total.** The WP99 entry asked for a deliberate decision on whether the
+sidebar panel replaces the ten per-step remaining lines. It does not. The panel shows the global
+pools. The per-step lines still answer "how much of this budget is left for what I'm doing here",
+which the panel does not. For example, the Skills page's own Karma line is the Karma available to
+*that* step's Karma spend, net of what that step already spent.
+
+Two sourcing rules keep the panel from becoming a second accounting path:
+
+- **Karma is `Character.karma_remaining`, verbatim.**
+- **Nuyen needed one new engine term, `Character.nuyen_spent`,** which sums gear, lifestyle,
+  cyberware, bioware, foci, and vehicles, as `karma_spent`'s counterpart. Until now the only way to
+  that total was to thread the six costs through context-builder arguments. `chargen_context` does
+  that six times over, and no one place summed them. The pool's size stays with
+  `available_nuyen(letter, …)`, because the Resources letter lives on the session, not on
+  `Character`.
+
+The point pools (attribute, special, skill, skill-group, knowledge, free spells, Power Points) are
+read off `chargen_context` by keys unique to one step context. They are the exact numbers each step
+prints. The generic keys (`nuyen_remaining`, `free_points`, …) are merged over by several step
+contexts, the same clobbering WP60 fixed for Karma. That is also why Contacts' free-point pool is not
+in the panel yet: it is only exposed under the generic `free_points`.
+
+**The WP99 entry's "out-of-band swap from every step's `POST`" was not built.** Per WP97's entry
+above, the panel re-fetches itself on `chargen-changed`, the same as the nav and WP98's tab strip.
+Its acceptance test asserts that event wiring instead of an OOB swap. After every change the browser
+now makes three small `GET`s (nav, panel, and, on a composite page, tabs). Each measured about 3 ms
+locally, which is not worth merging them into one endpoint while the app is local and single-user.

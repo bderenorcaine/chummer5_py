@@ -449,6 +449,28 @@ class Character:
         """
         return STARTING_KARMA - self.karma_spent
 
+    @property
+    def nuyen_spent(self) -> int:
+        """WP99: Σ every committed spender of Step Six's one shared nuyen pool -- gear, the primary
+        Lifestyle, cyberware, bioware, foci, and vehicles/drones -- `karma_spent`'s nuyen
+        counterpart. Until this, the only way to that total was to thread each of the six costs
+        through a context builder's argument list (`chummer5.web.shell.chargen_context` does, six
+        times over); this is the one place that sums them. The pool's *size* is not here, because it
+        depends on the Resources priority letter, which lives on the web session, not on
+        `Character` -- see `chummer5.engine.resources.available_nuyen`.
+
+        `resources_selection.nuyen_spent` is gear only (WP9's meaning, unchanged); the Karma-to-
+        Nuyen conversion it also records tops the pool up rather than spending from it.
+        """
+        return (
+            (self.resources_selection.nuyen_spent if self.resources_selection is not None else 0)
+            + (self.lifestyle_selection.total_cost if self.lifestyle_selection is not None else 0)
+            + (self.cyberware_selection.nuyen_spent if self.cyberware_selection is not None else 0)
+            + (self.bioware_selection.nuyen_spent if self.bioware_selection is not None else 0)
+            + (self.foci_selection.nuyen_cost if self.foci_selection is not None else 0)
+            + (self.vehicle_selection.nuyen_spent if self.vehicle_selection is not None else 0)
+        )
+
     def attribute_range(self, code: str) -> AttributeRange:
         return self.metatype.attributes[code]
 

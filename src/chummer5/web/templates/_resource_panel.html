@@ -1,0 +1,28 @@
+{# WP99: the sidebar's remaining-resources panel -- every budget's remaining figure, visible from
+   every page (chummer5.web.shell.resource_panel_context). Re-fetches itself on `chargen-changed`
+   like the step nav, so no step route has to render it. #}
+<section
+  id="resource-panel"
+  class="resource-panel"
+  aria-labelledby="resource-panel-heading"
+  hx-get="/ui/resource-panel"
+  hx-trigger="chargen-changed from:body"
+  hx-swap="outerHTML"
+>
+  <h2 id="resource-panel-heading" class="resource-panel__heading">Remaining</h2>
+  {% if resource_rows %}
+  <dl class="resource-panel__list">
+    {% for row in resource_rows %}
+    <div class="resource-panel__row{% if row.over %} resource-panel__row--over{% endif %}">
+      <dt class="resource-panel__label">{{ row.label }}</dt>
+      <dd class="resource-panel__value">
+        {{ row.remaining }}{% if row.nuyen %}¥{% endif %}
+        <span class="resource-panel__of">of {{ row.of }}{% if row.nuyen %}¥{% endif %}</span>
+      </dd>
+    </div>
+    {% endfor %}
+  </dl>
+  {% else %}
+  <p class="resource-panel__empty">Confirm priorities and a metatype to see your budgets.</p>
+  {% endif %}
+</section>

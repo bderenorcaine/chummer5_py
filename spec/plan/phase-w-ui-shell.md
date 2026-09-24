@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n (WP97-98 done; WP99-103 remaining)
+### Phase W — Post-MVP: application shell, theming, and i18n (WP97-99 done; WP100-103 remaining)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -174,7 +174,7 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   Equipment page-level nuyen line was *not* built; see the decisions log for why it belongs in the
   panel. See `spec/worklogs/WP98.md`.
 
-- [ ] **WP99 — The remaining-resources panel.**
+- [x] **WP99 — The remaining-resources panel.**
   Goal: the sidebar's lower box — one always-visible display of remaining Karma, nuyen, and the
   priority-derived point pools, refreshed on every change from any page.
   Deliverables: a single `_resource_panel_context(character)` builder and `_resource_panel.html`
@@ -199,6 +199,15 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   Acceptance: `pytest`/`ruff`/`mypy` green; a test asserting the panel's Karma figure equals
   `Character.karma_remaining` after a spend on each of ≥3 different pages; a test asserting the
   out-of-band swap is present in a step `POST`'s response body.
+  Landed as `shell.resource_panel_context(session, chargen_ctx)` + `_resource_panel.html` in the
+  sidebar, plus `GET /ui/resource-panel`. The panel sits **above** the per-step lines; they stay
+  (decisions log, 2026-09-24). It shows Karma (`Character.karma_remaining` verbatim), nuyen (the
+  Resources pool less a new `Character.nuyen_spent`, which sums all six spenders), and the
+  attribute, special, skill, group, and knowledge pools, read off `chargen_context` by unique keys.
+  Magicians also get free spells and Adepts get Power Points. It **self-refreshes on
+  `chargen-changed`** instead of the OOB swap this entry asked for, so the acceptance test asserts
+  that wiring. Class hooks for WP100: `.resource-panel*` (`__row--over` for a negative pool).
+  Contacts' free pool is not shown; see the decisions log. See `spec/worklogs/WP99.md`.
 
 - [ ] **WP100 — Theme tokens and a theme selector.**
   Goal: make the graphical furniture — separators, backgrounds, fonts, border weights, the nav's own

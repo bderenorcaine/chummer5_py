@@ -1,6 +1,6 @@
 """The application shell's routes (WP97): `GET /`, `GET /ui/page/{slug}`, `GET /ui/nav`, and
 `GET /character/sheet` -- plus, from WP98, a composite page's tabs: `GET /ui/page/{slug}/{tab}`
-and `GET /ui/tabs/{slug}`.
+and `GET /ui/tabs/{slug}`, and from WP99 the sidebar's `GET /ui/resource-panel`.
 
 These are the only routes that render more than one step's own fragment. A nav click is an htmx
 `GET /ui/page/{slug}` that swaps just `#page` (plus the nav, out of band, so its current-step
@@ -42,6 +42,7 @@ from chummer5.web.shell import (
     chargen_context,
     nav_context,
     resolve_tab,
+    resource_panel_context,
     tabs_context,
 )
 
@@ -72,7 +73,12 @@ def _shell_context(
     """
     chargen_ctx = chargen_context(session, _session_priority_form_context(session))
     page_ctx = _character_sheet_context(session) if page.slug == "export" else chargen_ctx
-    context = {**page_ctx, **nav_context(session, chargen_ctx), "page": page}
+    context = {
+        **page_ctx,
+        **nav_context(session, chargen_ctx),
+        **resource_panel_context(session, chargen_ctx),
+        "page": page,
+    }
     if page.tabbed:
         context |= tabs_context(session, page, chargen_ctx, resolve_tab(session, page, tab))
     return context
@@ -156,6 +162,20 @@ def step_nav(request: Request) -> HTMLResponse:
     chargen_ctx = chargen_context(session, _session_priority_form_context(session))
     response = templates.TemplateResponse(
         request, "_step_nav.html", nav_context(session, chargen_ctx)
+    )
+    if new_cookie is not None:
+        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    return response
+
+
+@router.get("/ui/resource-panel", response_class=HTMLResponse)
+def resource_panel(request: Request) -> HTMLResponse:
+    """The remaining-resources panel alone (WP99), re-fetched by the panel itself on
+    `chargen-changed` -- the same self-refresh the nav uses, so no step route renders it."""
+    session, new_cookie = resolve_session(request)
+    chargen_ctx = chargen_context(session, _session_priority_form_context(session))
+    response = templates.TemplateResponse(
+        request, "_resource_panel.html", resource_panel_context(session, chargen_ctx)
     )
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
