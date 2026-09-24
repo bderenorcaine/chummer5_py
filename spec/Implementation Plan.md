@@ -121,8 +121,9 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | T | UI bugfixes & skill-picker QoL | done (WP60-61) | [phase-t-ui-bugfixes.md](plan/phase-t-ui-bugfixes.md) |
 | U | UI bugfixes round 2 | done (WP64-66) | [phase-u-ui-bugfixes-2.md](plan/phase-u-ui-bugfixes-2.md) |
 | V | UI improvement requests | done (WP67-71, WP83-84) | [phase-v-ui-improvements.md](plan/phase-v-ui-improvements.md) |
+| W | UI shell, theming, i18n | planned (WP97-103) | [phase-w-ui-shell.md](plan/phase-w-ui-shell.md) |
 
-Next unclaimed WP number: **WP97** (see Phase P's own file for why WP57-59 were claimed; Phase T
+Next unclaimed WP number: **WP104** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V
 claimed WP64-71 on 2026-07-27 from a second manual-testing pass — see those phase files for scope;
 Phase S's WP59 research pass claimed WP72-76 on 2026-07-29 for its synthetic-fixture WP list;
@@ -140,3 +141,7 @@ Phase O claimed WP89 from the same pass, for a stale WP43 deferral that WP51 sil
 WP85-89 all landed the same day, closing both of those reopened phases. Phase P then claimed
 **WP90-96** the same day: WP90 is its long-pending research pass (landed), and WP91-96 are the
 implementation breakdown that pass produced — see that phase file's own §7.
+Phase W claimed **WP97-103** on 2026-09-24, from a hand-drawn target layout for the whole
+application shell (`examples/ui/main_ui.png`) plus the two structural questions raised with it
+(themability, i18n) — see that phase file's own findings for why all three are one phase rather
+than three.
