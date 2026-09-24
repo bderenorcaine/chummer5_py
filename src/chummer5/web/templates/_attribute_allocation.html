@@ -1,7 +1,7 @@
-<div id="attribute-allocation">
+<div id="attribute-allocation" class="panel">
   {% if character %}
-  <details {% if open_section == "attribute-allocation" %}open{% endif %}>
-  <summary>Attributes{% if attribute_error or attribute_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Attributes</summary>
 
   {% if attribute_error %}
   <p class="error">{{ attribute_error }}</p>
@@ -70,6 +70,6 @@
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities above before allocating attribute points.</p>
+  <p>Confirm a metatype and priorities on the Priorities page before allocating attribute points.</p>
   {% endif %}
 </div>

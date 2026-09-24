@@ -201,7 +201,7 @@ def _quality_selection_context(
 @router.post("/ui/qualities", response_class=HTMLResponse)
 async def submit_qualities(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "quality-selection"  # WP61
+    session.current_page = "qualities"  # WP61/WP97
     if session.character is None:
         context = _quality_selection_context(None, ())
     else:
@@ -257,7 +257,6 @@ async def submit_qualities(request: Request) -> HTMLResponse:
             context = _quality_selection_context(
                 session.character, quality_ids, quality_text=quality_text
             )
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_quality_selection.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

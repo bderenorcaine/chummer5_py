@@ -1,7 +1,11 @@
-/* The chargen page is one long stack of ~14 collapsible sections (see _chargen_body.html), which
-   with no styling at all ran together as undifferentiated text. This sheet exists to separate them
-   visually; it is deliberately small, and does not attempt to restyle the forms/tables inside a
-   section. */
+/* WP97: the application shell -- a title bar over a sidebar step nav and one content pane (see
+   base.html). Deliberately small, and it does not restyle the forms/tables inside a step.
+
+   Every rule below selects on a semantic class hook (.app-shell__*, .step-nav__*, .panel*, .page*)
+   rather than on ids or tag structure, so a later theme (WP100) can restyle the furniture by
+   redefining tokens instead of matching the DOM shape. Two live constraints (WP84): nothing may set
+   `display` on a `tr` (the step filters toggle the `hidden` attribute), and light/dark stay handled
+   by prefers-color-scheme + color-scheme. */
 
 :root {
   color-scheme: light dark;
@@ -18,6 +22,14 @@
   --warning-bg: #fdf3dd;
   --info-fg: #17506b;
   --info-bg: #e6f2f8;
+  --titlebar-bg: #35404f;
+  --titlebar-fg: #ffffff;
+  --sidebar-bg: #f2f4f7;
+  --sidebar-width: 13rem;
+  --nav-item-fg: #35404f;
+  --nav-item-current-bg: #ffffff;
+  --nav-item-current-accent: #7a8595;
+  --nav-item-disabled-fg: #9aa2ad;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -35,69 +47,168 @@
     --warning-bg: #382e12;
     --info-fg: #a8d5e8;
     --info-bg: #14303d;
+    --titlebar-bg: #0e1013;
+    --titlebar-fg: #e6e8eb;
+    --sidebar-bg: #1c1f24;
+    --nav-item-fg: #c6ccd6;
+    --nav-item-current-bg: #23272e;
+    --nav-item-current-accent: #6b7686;
+    --nav-item-disabled-fg: #5c6470;
   }
 }
 
 body {
-  margin: 0 auto;
-  padding: 1rem 1.25rem 4rem;
-  max-width: 72rem;
+  margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.45;
   color: var(--page-fg);
   background: var(--page-bg);
 }
 
-nav {
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--rule);
+/* --- The shell -------------------------------------------------------------------------------- */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "titlebar titlebar"
+    "sidebar main";
+  min-height: 100vh;
 }
 
-/* One box per chargen section. Alternating tints plus a rule between neighbours, so two adjacent
-   *collapsed* sections (the common case — the accordion opens one at a time) still read as two
-   separate things rather than two lines of text. */
-#chargen-body > div {
+.app-shell__titlebar {
+  grid-area: titlebar;
+  padding: 0.5rem 1.25rem;
+  color: var(--titlebar-fg);
+  background: var(--titlebar-bg);
+}
+
+.app-shell__title {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.app-shell__sidebar {
+  grid-area: sidebar;
+  border-right: 1px solid var(--rule);
+  background: var(--sidebar-bg);
+}
+
+.app-shell__main {
+  grid-area: main;
+  padding: 1rem 1.25rem 4rem;
+  max-width: 72rem;
+}
+
+/* --- The step nav ----------------------------------------------------------------------------- */
+
+.step-nav__list {
+  margin: 0;
+  padding: 0.5rem 0;
+  list-style: none;
+}
+
+.step-nav__item {
+  display: block;
+  padding: 0.35rem 1rem;
+  border-left: 4px solid transparent;
+  color: var(--nav-item-fg);
+  text-decoration: none;
+}
+
+a.step-nav__item:hover {
+  background: var(--nav-item-current-bg);
+}
+
+.step-nav__item--current {
+  font-weight: 600;
+  border-left-color: var(--nav-item-current-accent);
+  background: var(--nav-item-current-bg);
+}
+
+.step-nav__item--disabled {
+  color: var(--nav-item-disabled-fg);
+  cursor: not-allowed;
+}
+
+.step-nav__marker {
+  color: var(--warning-fg);
+}
+
+/* Narrow screens: the nav becomes a wrapping row above the page instead of a column beside it. */
+@media (max-width: 40rem) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "titlebar"
+      "sidebar"
+      "main";
+  }
+
+  .app-shell__sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .step-nav__list {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+
+/* --- A page and its step panels --------------------------------------------------------------- */
+
+.page__heading {
+  margin-top: 0;
+  font-size: 1.3rem;
+  color: var(--summary-fg);
+}
+
+/* One box per step fragment. A composite page (Skills, Magic, Equipment) stacks several, so
+   neighbours are told apart by a rule plus alternating tint. */
+.panel {
   padding: 0.75rem 1rem;
   border-top: 1px solid var(--rule);
   border-left: 4px solid var(--section-accent);
   background: var(--section-bg-a);
 }
 
-#chargen-body > div:nth-child(even) {
+.panel:nth-child(even of .panel) {
   background: var(--section-bg-b);
 }
 
-#chargen-body > div:last-child {
+.panel:last-child {
   border-bottom: 1px solid var(--rule);
 }
 
-/* A section's own <summary> is its heading; the nested ones (skill categories, gear/cyberware
+/* A panel's own <summary> is its heading; the nested ones (skill categories, gear/cyberware
    groups) are deliberately left plain so the two levels don't compete. */
-#chargen-body > div > details > summary {
+.panel__heading {
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--summary-fg);
   cursor: pointer;
 }
 
-#chargen-body > div > details[open] > summary {
+details[open] > .panel__heading {
   margin-bottom: 0.5rem;
   padding-bottom: 0.4rem;
   border-bottom: 1px solid var(--rule);
 }
 
-#chargen-body summary summary {
+.panel summary {
   cursor: pointer;
 }
 
-/* Sub-sections inside a section (skill categories, gear groups, cyberware slots). */
-#chargen-body > div details details {
+/* Sub-sections inside a panel (skill categories, gear groups, cyberware slots). */
+.panel details details {
   margin: 0.35rem 0;
   padding-left: 0.6rem;
   border-left: 2px solid var(--rule);
 }
 
-/* The status classes the templates already emit (error/warning/info) had no styling at all. */
+/* The status classes the templates already emit (error/warning/info). */
 .error,
 .warning,
 .info {
@@ -121,17 +232,17 @@ nav {
   background: var(--info-bg);
 }
 
-/* Just enough table styling that a section's rows read as rows against the section tint. */
-#chargen-body table {
+/* Just enough table styling that a panel's rows read as rows against the panel tint. */
+.page table {
   border-collapse: collapse;
 }
 
-#chargen-body th,
-#chargen-body td {
+.page th,
+.page td {
   padding: 0.15rem 0.4rem;
   text-align: left;
 }
 
-#chargen-body thead th {
+.page thead th {
   border-bottom: 1px solid var(--rule);
 }

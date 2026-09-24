@@ -278,7 +278,7 @@ def _knowledge_selection_context(
 @router.post("/ui/knowledge", response_class=HTMLResponse)
 async def submit_knowledge(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "knowledge-skills"  # WP61
+    session.current_page = "skills"  # WP61/WP97
     if session.character is None:
         context = _knowledge_selection_context(None, (), ())
     else:
@@ -318,7 +318,6 @@ async def submit_knowledge(request: Request) -> HTMLResponse:
             context = _knowledge_selection_context(
                 session.character, knowledge_skills, languages, karma_points
             )
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_knowledge_skills.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

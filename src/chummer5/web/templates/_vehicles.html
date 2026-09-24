@@ -1,7 +1,7 @@
-<div id="vehicles">
+<div id="vehicles" class="panel">
   {% if character %}
-  <details {% if open_section == "vehicles" %}open{% endif %}>
-  <summary>Vehicles &amp; drones{% if vehicles_error or vehicles_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Vehicles &amp; drones</summary>
 
   {% if vehicles_error %}
   <p class="error">{{ vehicles_error }}</p>
@@ -76,6 +76,6 @@
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities above before buying vehicles.</p>
+  <p>Confirm a metatype and priorities on the Priorities page before buying vehicles.</p>
   {% endif %}
 </div>

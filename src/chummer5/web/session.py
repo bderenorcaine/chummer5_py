@@ -153,6 +153,14 @@ class ChargenSession:
     store from whatever the server rendered. The same mechanism fixes the sub-accordion defect
     (a manually collapsed skill category snapping back open when an unrelated skill change swapped
     the section) -- sub-category `<details>` carry an explicit `data-details-key` the store keys on.
+
+    **WP97**: the accordion is gone (Phase W's application shell -- a sidebar step nav over one
+    content pane), and `open_section` with it: it is now `current_page`, holding a nav slug from
+    `chummer5.web.shell.STEP_PAGES` (`"priorities"`, `"skills"`, ...) rather than a section div id.
+    Its role is unchanged -- server-side "which step is showing" -- and every step's `POST` still
+    sets it, now to the slug of the page that step lives on (so the five Magic fragments all set
+    `"magic"`). The step nav marks it as the current entry. The WP64 section-exclusivity script
+    went with the accordion; its sub-category `data-details-key` half survives in `base.html`.
     """
 
     heritage_letter: str = DEFAULT_HERITAGE_LETTER
@@ -163,7 +171,7 @@ class ChargenSession:
     build_method: str = PRIORITY_BUILD_METHOD
     metatype_id: str | None = None
     character: Character | None = None
-    open_section: str = "priority-section"
+    current_page: str = "priorities"
 
 
 class SessionStore:

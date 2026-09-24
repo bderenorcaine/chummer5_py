@@ -136,7 +136,7 @@ def _spirit_selection_context(
 @router.post("/ui/spirits", response_class=HTMLResponse)
 async def submit_spirits(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "spirit-selection"  # WP61
+    session.current_page = "magic"  # WP61/WP97
     if session.character is None or session.character.magic_type != "Magician":
         context = _spirit_selection_context(session.character, ())
     else:
@@ -159,7 +159,6 @@ async def submit_spirits(request: Request) -> HTMLResponse:
         else:
             session.character = replace(character, bound_spirit_selection=selection)
             context = _spirit_selection_context(session.character, picks)
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_spirit_selection.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

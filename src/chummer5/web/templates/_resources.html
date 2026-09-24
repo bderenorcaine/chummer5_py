@@ -1,7 +1,7 @@
-<div id="resources">
+<div id="resources" class="panel">
   {% if character %}
-  <details {% if open_section == "resources" %}open{% endif %}>
-  <summary>Resources{% if resources_error or resources_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Resources</summary>
 
   {% if resources_error %}
   <p class="error">{{ resources_error }}</p>
@@ -111,6 +111,6 @@
   </script>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities above before spending starting nuyen.</p>
+  <p>Confirm a metatype and priorities on the Priorities page before spending starting nuyen.</p>
   {% endif %}
 </div>

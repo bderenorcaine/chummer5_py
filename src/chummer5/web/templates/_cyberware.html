@@ -1,7 +1,7 @@
-<div id="cyberware">
+<div id="cyberware" class="panel">
   {% if character %}
-  <details {% if open_section == "cyberware" %}open{% endif %}>
-  <summary>Cyberware &amp; Bioware{% if cyberware_error or cyberware_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Cyberware &amp; Bioware</summary>
 
   {% if cyberware_error %}
   <p class="error">{{ cyberware_error }}</p>
@@ -201,6 +201,6 @@
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities above before installing cyberware or bioware.</p>
+  <p>Confirm a metatype and priorities on the Priorities page before installing cyberware or bioware.</p>
   {% endif %}
 </div>

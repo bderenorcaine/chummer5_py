@@ -1,0 +1,37 @@
+{# WP97: the sidebar step nav. Re-fetches itself whenever a response carries the
+   `chargen-changed` trigger (every successful POST -- see chummer5.web.app), so a step marked
+   stale by a priorities change (WP19) shows it here without that step's page being open. The
+   links set their own hx-swap because the nav's outerHTML would otherwise be inherited. #}
+<nav
+  id="step-nav"
+  class="step-nav"
+  aria-label="Chargen steps"
+  hx-get="/ui/nav"
+  hx-trigger="chargen-changed from:body"
+  hx-swap="outerHTML"
+  {% if oob_nav %}hx-swap-oob="true"{% endif %}
+>
+  <ol class="step-nav__list">
+    {% for item in nav_items %}
+    <li class="step-nav__entry">
+      {% if item.page.enabled %}
+      <a
+        class="step-nav__item{% if item.current %} step-nav__item--current{% endif %}{% if item.stale %} step-nav__item--stale{% endif %}"
+        href="/ui/page/{{ item.page.slug }}"
+        hx-get="/ui/page/{{ item.page.slug }}"
+        hx-target="#page"
+        hx-swap="innerHTML"
+        hx-push-url="true"
+        {% if item.current %}aria-current="page"{% endif %}
+      >{{ item.page.label }}{% if item.stale %} <span class="step-nav__marker" title="Some selections here no longer fit your priorities">⚠</span>{% endif %}</a>
+      {% else %}
+      <span
+        class="step-nav__item step-nav__item--disabled"
+        aria-disabled="true"
+        title="{{ item.page.disabled_reason }}"
+      >{{ item.page.label }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</nav>

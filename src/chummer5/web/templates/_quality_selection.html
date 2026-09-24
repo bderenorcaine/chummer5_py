@@ -1,7 +1,7 @@
-<div id="quality-selection">
+<div id="quality-selection" class="panel">
   {% if character %}
-  <details {% if open_section == "quality-selection" %}open{% endif %}>
-  <summary>Qualities{% if quality_error %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Qualities</summary>
 
   {% if quality_error %}
   <p class="error">{{ quality_error }}</p>
@@ -113,6 +113,6 @@
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities above before selecting qualities.</p>
+  <p>Confirm a metatype and priorities on the Priorities page before selecting qualities.</p>
   {% endif %}
 </div>

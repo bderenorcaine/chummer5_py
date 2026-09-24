@@ -56,11 +56,11 @@ def _confirm_human(client: TestClient) -> None:
 def test_index_before_confirmation_shows_a_placeholder() -> None:
     client = TestClient(create_app())
 
-    response = client.get("/")
+    response = client.get("/ui/page/augmentation")
 
     assert (
-        "Confirm a metatype and priorities above before installing cyberware or bioware."
-        in response.text
+        "Confirm a metatype and priorities on the Priorities page before installing cyberware "
+        "or bioware." in response.text
     )
 
 
@@ -68,7 +68,7 @@ def test_index_after_confirmation_lists_every_catalog_item() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/augmentation")
 
     assert "Datajack" in response.text
     assert "Synthetic Full Arm" in response.text
@@ -194,6 +194,7 @@ def test_reconfirming_priorities_keeps_the_cyberware_selection() -> None:
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/augmentation")  # WP97
 
     assert f'name="cyberware_{DATAJACK.id}"\n                value="1"' in response.text
     sheet = client.get("/character/sheet")
@@ -236,6 +237,7 @@ def test_reconfirming_priorities_with_a_lower_resources_budget_flags_the_existin
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/augmentation")  # WP97
 
     assert response.status_code == 200
     # still shown, not reset

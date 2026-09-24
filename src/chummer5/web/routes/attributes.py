@@ -204,10 +204,11 @@ def _attribute_allocation_context(
         "special_budget": character.special_attribute_points,
         "special_remaining": character.special_attribute_points - special_spent,
         # WP60: prefixed (not the generic "karma_budget"/"karma_remaining" this key used through
-        # WP59) -- `_chargen_body_context` merges this dict together with `_skill_allocation_
-        # context`'s and `_knowledge_selection_context`'s own, and all three used to return the
-        # identical generic key, so whichever was merged last (Knowledge) silently clobbered the
-        # other two's numbers on every full-page render. See spec/worklogs/WP60.md.
+        # WP59) -- `shell.chargen_context` (WP97; `_chargen_body_context` before it) merges this
+        # dict with `_skill_allocation_context`'s and `_knowledge_selection_context`'s own, and all
+        # three used to return the identical generic key, so whichever was merged last (Knowledge)
+        # silently clobbered the other two's numbers on every full-page render. See
+        # spec/worklogs/WP60.md.
         "attribute_karma_budget": karma_budget,
         "attribute_karma_remaining": karma_budget - karma_preview_cost,
         "attribute_error": error,
@@ -218,7 +219,7 @@ def _attribute_allocation_context(
 @router.post("/ui/attributes", response_class=HTMLResponse)
 async def submit_attributes(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "attribute-allocation"  # WP61
+    session.current_page = "attributes"  # WP61/WP97
     if session.character is None:
         context = _attribute_allocation_context(None, {})
     else:
@@ -314,7 +315,6 @@ async def submit_attributes(request: Request) -> HTMLResponse:
             context = _attribute_allocation_context(
                 character, attribute_points, magic_points, karma_points
             )
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_attribute_allocation.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

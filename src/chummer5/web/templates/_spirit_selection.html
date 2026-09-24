@@ -1,7 +1,7 @@
-<div id="spirit-selection">
+<div id="spirit-selection" class="panel">
   {% if character and character.magic_type == "Magician" %}
-  <details {% if open_section == "spirit-selection" %}open{% endif %}>
-  <summary>Bound Spirits{% if spirit_error or spirit_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Bound Spirits</summary>
 
   {% if spirit_error %}
   <p class="error">{{ spirit_error }}</p>

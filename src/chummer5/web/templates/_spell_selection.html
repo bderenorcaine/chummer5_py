@@ -1,7 +1,7 @@
-<div id="spell-selection">
+<div id="spell-selection" class="panel">
   {% if character and character.magic_type == "Magician" %}
-  <details {% if open_section == "spell-selection" %}open{% endif %}>
-  <summary>Spells{% if spell_error or spell_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Spells</summary>
 
   {% if spell_error %}
   <p class="error">{{ spell_error }}</p>

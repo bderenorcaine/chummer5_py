@@ -1,11 +1,13 @@
-"""Character-sheet/save/load/import routes: `GET /character/sheet`, `GET /character/save`,
-`POST /character/load` (WP11's native format), `POST /character/import-chum5` (WP12's legacy
-import).
+"""Character-sheet/save/load/import routes: `GET /character/save`, `POST /character/load` (WP11's
+native format), `POST /character/import-chum5` (WP12's legacy import).
 
 **WP62**: split out of the former `chummer5.web.app` -- see `spec/plan/phase-r-architecture-
 cleanup.md`'s WP58 audit for the target shape this module is part of. Houses the two genuinely
 cross-cutting aggregator/save helpers that read every committed selection off `Character` at once
-(`_character_sheet_context`, `_character_save_from_session`), not just the four routes.
+(`_character_sheet_context`, `_character_save_from_session`), not just the routes.
+
+**WP97**: `GET /character/sheet` moved to `chummer5.web.routes.pages` -- it is now the shell's
+Export page under its old URL. The load/import routes stay here and set `current_page` to it.
 """
 
 from __future__ import annotations
@@ -904,16 +906,6 @@ def _apply_built_character_to_session(
     session.character = built
 
 
-@router.get("/character/sheet", response_class=HTMLResponse)
-def character_sheet(request: Request) -> HTMLResponse:
-    session, new_cookie = resolve_session(request)
-    context = _character_sheet_context(session)
-    response = templates.TemplateResponse(request, "character_sheet.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
-    return response
-
-
 @router.get("/character/save")
 def download_save(request: Request) -> Response:
     session, new_cookie = resolve_session(request)
@@ -935,6 +927,7 @@ def download_save(request: Request) -> Response:
 @router.post("/character/load", response_class=HTMLResponse)
 async def load_save(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
+    session.current_page = "export"  # WP97
     form = await request.form()
     upload = form.get("save_file")
     error: str | None = None
@@ -982,6 +975,7 @@ async def load_save(request: Request) -> HTMLResponse:
 @router.post("/character/import-chum5", response_class=HTMLResponse)
 async def import_chum5_route(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
+    session.current_page = "export"  # WP97
     form = await request.form()
     upload = form.get("chum5_file")
     error: str | None = None

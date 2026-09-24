@@ -58,32 +58,35 @@ def _human_character():
 def test_index_before_confirmation_shows_placeholders_for_all_three_new_sections() -> None:
     client = TestClient(create_app())
 
-    response = client.get("/")
+    qualities = client.get("/ui/page/qualities").text
+    contacts = client.get("/ui/page/contacts").text
+    equipment = client.get("/ui/page/equipment").text
 
-    assert "Confirm a metatype and priorities above before selecting qualities." in response.text
-    assert "Confirm a metatype and priorities above before adding contacts." in response.text
-    assert (
-        "Confirm a metatype and priorities above before spending starting nuyen." in response.text
-    )
+    placeholder = "Confirm a metatype and priorities on the Priorities page before"
+    assert f"{placeholder} selecting qualities." in qualities
+    assert f"{placeholder} adding contacts." in contacts
+    assert f"{placeholder} spending starting nuyen." in equipment
 
 
 def test_index_after_confirmation_shows_full_budgets() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    qualities = client.get("/ui/page/qualities").text
+    contacts = client.get("/ui/page/contacts").text
+    equipment = client.get("/ui/page/equipment").text
 
-    assert f"0 / {QUALITY_KARMA_LIMIT}" in response.text
+    assert f"0 / {QUALITY_KARMA_LIMIT}" in qualities
     character = _human_character()
     free_points = character.attribute_value("CHA") * 3
-    assert f"Free contact points: {free_points}." in response.text
+    assert f"Free contact points: {free_points}." in contacts
     budget = PRIORITIES.resources["D"].nuyen
-    assert f"{budget} / {budget}" in response.text
+    assert f"{budget} / {budget}" in equipment
     # Every MVP-offered quality and every starter-gear item is listed.
     for quality in MVP_QUALITIES:
-        assert quality.name in response.text
+        assert quality.name in qualities
     for item in STARTER_GEAR_CATALOG:
-        assert item.name in response.text
+        assert item.name in equipment
 
 
 def test_selecting_catlike_grants_the_sneaking_bonus_matching_the_engine() -> None:
@@ -142,6 +145,7 @@ def test_quality_improvements_survive_reconfirming_priorities() -> None:
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/qualities")  # WP97
 
     # The checkbox is still shown checked -- quality_selection isn't reset on reconfirmation.
     assert f'value="{_CATLIKE.id}"' in response.text
@@ -177,7 +181,7 @@ def test_elf_metatype_quality_is_shown_free_and_not_purchasable() -> None:
     _confirm_elf(client)
     low_light = next(q for q in MVP_QUALITIES if q.name == "Low-Light Vision")
 
-    response = client.get("/")
+    response = client.get("/ui/page/qualities")
 
     assert "Free from metatype:" in response.text
     assert "Low-Light Vision" in response.text
@@ -213,7 +217,7 @@ def test_human_offerable_catalog_unaffected_by_wp23() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/qualities")
 
     assert "Free from metatype:" not in response.text
     for quality in MVP_QUALITIES:
@@ -331,7 +335,7 @@ def test_contacts_free_points_reflects_a_later_attribute_change() -> None:
     )
 
     client.post("/ui/attributes", data={"attr_CHA": "2"})
-    response = client.get("/")
+    response = client.get("/ui/page/contacts")
 
     heritage = PRIORITIES.heritage["A"]
     human_choice = next(
@@ -348,7 +352,7 @@ def test_at_most_max_contact_rows_are_offered() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/contacts")
 
     assert response.text.count("contact_name_") == MAX_CONTACT_ROWS
 
@@ -371,7 +375,7 @@ def test_gear_picker_offers_a_name_category_filter() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/equipment")
 
     assert response.status_code == 200
     assert 'id="gear-filter"' in response.text
@@ -524,6 +528,7 @@ def test_reconfirming_priorities_with_a_new_resources_letter_keeps_gear() -> Non
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/equipment")  # WP97
 
     budget = PRIORITIES.resources["C"].nuyen
     assert f"{budget - meta_link.cost} / {budget}" in response.text
@@ -571,6 +576,7 @@ def test_reconfirming_priorities_with_a_lower_resources_budget_flags_the_existin
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/equipment")  # WP97
 
     assert response.status_code == 200
     new_budget = PRIORITIES.resources["D"].nuyen

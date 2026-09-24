@@ -406,10 +406,8 @@ def test_vendored_htmx_is_served_locally_not_from_a_cdn() -> None:
     assert "htmx" in script.text
 
 
-def test_stylesheet_is_served_locally_and_separates_the_chargen_sections() -> None:
-    # The chargen page stacks ~14 sections in one #chargen-body (see _chargen_body.html); without
-    # a stylesheet they ran together as undifferentiated text. Served from the same local /static
-    # mount as htmx, for the same no-CDN reason.
+def test_stylesheet_is_served_locally_and_styles_the_shell_through_class_hooks() -> None:
+    # Served from the same local /static mount as htmx, for the same no-CDN reason.
     client = TestClient(create_app())
 
     index = client.get("/")
@@ -417,8 +415,11 @@ def test_stylesheet_is_served_locally_and_separates_the_chargen_sections() -> No
 
     sheet = client.get("/static/app.css")
     assert sheet.status_code == 200
-    # Each section is its own box, and adjacent ones are told apart two ways (rule + alternating
-    # tint) so two *collapsed* neighbours still read as two things.
-    assert "#chargen-body > div {" in sheet.text
+    # WP97: the shell is a grid, and each step panel is its own box, told apart from a neighbour
+    # on a composite page by a rule plus alternating tint.
+    assert ".app-shell {" in sheet.text
+    assert ".panel {" in sheet.text
     assert "border-top" in sheet.text
-    assert "#chargen-body > div:nth-child(even)" in sheet.text
+    # WP97/WP100: selectors hang off semantic class hooks, never the retired accordion's
+    # id-and-tag-structure selectors, so a theme can restyle without knowing the DOM shape.
+    assert "#chargen-body" not in sheet.text

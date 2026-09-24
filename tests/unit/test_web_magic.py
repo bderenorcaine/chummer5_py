@@ -97,21 +97,24 @@ def _confirm_human(client: TestClient, *, talent_letter: str) -> None:
 def test_talent_section_before_confirmation_shows_a_placeholder() -> None:
     client = TestClient(create_app())
 
-    response = client.get("/")
+    response = client.get("/ui/page/magic")
 
-    assert "Confirm a metatype and priorities above before selecting Talent." in response.text
+    assert (
+        "Confirm a metatype and priorities on the Priorities page before selecting Talent."
+        in response.text
+    )
 
 
 def test_talent_defaults_to_mundane_at_letter_e_and_hides_spell_and_power_sections() -> None:
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="E")
 
-    response = client.get("/")
+    response = client.get("/ui/page/magic")
 
     assert "Not yet confirmed" in response.text
     assert 'value="Mundane"' in response.text
     assert "Adept Powers" not in response.text
-    assert "<summary>Spells" not in response.text
+    assert 'panel__heading">Spells' not in response.text
 
     sheet = client.get("/character/sheet")
     assert "Type: Magician" not in sheet.text
@@ -223,7 +226,7 @@ def test_mundane_characters_skill_picker_still_excludes_magical_active_skills() 
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="E")  # letter E: Mundane
 
-    response = client.get("/")
+    response = client.get("/ui/page/skills")
 
     assert "Ritual Spellcasting" not in response.text
     assert "Spellcasting" not in response.text
@@ -587,6 +590,7 @@ def test_priorities_reconfirmation_carries_forward_magic_and_flags_staleness() -
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/magic")  # WP97
 
     assert response.status_code == 200
     assert "No longer fits since priorities were last confirmed" in response.text
@@ -614,7 +618,7 @@ def test_attribute_form_shows_no_mag_row_for_mundane() -> None:
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="E")
 
-    response = client.get("/")
+    response = client.get("/ui/page/attributes")
 
     assert 'name="attr_MAG"' not in response.text
 
@@ -627,7 +631,7 @@ def test_attribute_form_shows_a_mag_row_once_talent_is_confirmed() -> None:
         data={"talent_letter": "C", "talent_codename": "Adept", "granted_skill_id": [PISTOLS.id]},
     )
 
-    response = client.get("/")
+    response = client.get("/ui/page/attributes")
 
     assert 'name="attr_MAG"' in response.text
 
@@ -714,7 +718,7 @@ def test_talent_resubmission_resets_magic_attribute_points() -> None:
 
     sheet_after = client.get("/character/sheet")
     assert "Magic rating: 4" in sheet_after.text  # back to the raw Talent-granted rating
-    response = client.get("/")
+    response = client.get("/ui/page/attributes")
     # The MAG row's own points input reset to 0 -- match regardless of attribute
     # order/whitespace inside the <input> tag itself (unlike inter-tag whitespace, `_compact`
     # doesn't normalize that).

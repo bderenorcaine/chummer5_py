@@ -187,7 +187,7 @@ def talent_options_fragment(
 @router.post("/ui/talent", response_class=HTMLResponse)
 async def submit_talent(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "talent-selection"  # WP61
+    session.current_page = "magic"  # WP61/WP97
     if session.character is None:
         context = _talent_selection_context(None, session.talent_letter, "Mundane", None, ())
     else:
@@ -224,7 +224,6 @@ async def submit_talent(request: Request) -> HTMLResponse:
                 tradition_id,
                 selection.granted_skill_ids,
             )
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_talent_selection.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

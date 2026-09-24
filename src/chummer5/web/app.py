@@ -27,7 +27,9 @@ environment note), then open http://127.0.0.1:8000/.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from collections.abc import Awaitable, Callable
+
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 
 from chummer5.web.catalogs import (
@@ -48,6 +50,7 @@ from chummer5.web.routes import (
     foci,
     knowledge,
     lifestyle,
+    pages,
     powers,
     priorities,
     qualities,
@@ -59,6 +62,9 @@ from chummer5.web.routes import (
     vehicles,
 )
 from chummer5.web.session import SessionStore
+
+# The htmx event name `_step_nav.html` listens for (`hx-trigger="chargen-changed from:body"`).
+CHARGEN_CHANGED_EVENT = "chargen-changed"
 
 __all__ = [
     "create_app",
@@ -78,6 +84,22 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Chummer5")
     app.state.sessions = SessionStore()
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    # WP97: the application shell -- `GET /`, the nav's page/nav routes, and the Export page.
+    app.include_router(pages.router)
+
+    # WP97: every successful POST changes committed chargen state, which can move any step's
+    # stale-selection marker in the step nav (a priorities change most of all -- WP19). Rather
+    # than every step route re-rendering the nav out of band, each such response carries one
+    # htmx event the nav listens for and re-fetches itself on (`_step_nav.html`).
+    @app.middleware("http")
+    async def _signal_chargen_changed(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+        if request.method == "POST" and response.status_code < 400:
+            response.headers["HX-Trigger"] = CHARGEN_CHANGED_EVENT
+        return response
 
     # WP62: one router per chargen step (see `chummer5.web.routes`'s own docstring); registration
     # order here is cosmetic (routes are matched by path/method, not declaration order) but mirrors

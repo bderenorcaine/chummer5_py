@@ -64,7 +64,7 @@ def test_index_after_confirmation_lists_every_bioware_catalog_item() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/augmentation")
 
     # Jinja2 autoescapes the apostrophe as `&#39;`.
     assert "Cat&#39;s Eyes" in response.text
@@ -212,6 +212,7 @@ def test_reconfirming_priorities_keeps_the_bioware_selection() -> None:
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/augmentation")  # WP97
 
     assert f'name="bioware_{SLEEP_REGULATOR.id}"\n                value="1"' in response.text
     sheet = client.get("/character/sheet")
@@ -376,6 +377,7 @@ def test_reconfirming_priorities_keeps_a_reflex_recorders_chosen_skill() -> None
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/augmentation")  # WP97
 
     assert 'value="Longarms" selected' in _squash(response.text)
     sheet = client.get("/character/sheet")

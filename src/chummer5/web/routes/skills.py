@@ -194,10 +194,11 @@ def _skill_allocation_context(
         "groups_remaining": budget.skill_groups - sum(allocation.group_points.values()),
         "max_skill_rating": MAX_SKILL_RATING_CREATE,
         # WP60: prefixed (not the generic "karma_budget"/"karma_remaining" this key used through
-        # WP59) -- `_chargen_body_context` merges this dict together with `_skill_allocation_
-        # context`'s and `_knowledge_selection_context`'s own, and all three used to return the
-        # identical generic key, so whichever was merged last (Knowledge) silently clobbered the
-        # other two's numbers on every full-page render. See spec/worklogs/WP60.md.
+        # WP59) -- `shell.chargen_context` (WP97; `_chargen_body_context` before it) merges this
+        # dict with `_skill_allocation_context`'s and `_knowledge_selection_context`'s own, and all
+        # three used to return the identical generic key, so whichever was merged last (Knowledge)
+        # silently clobbered the other two's numbers on every full-page render. See
+        # spec/worklogs/WP60.md.
         "skill_karma_budget": karma_budget,
         "skill_karma_remaining": (
             karma_budget - preview_karma_selection.karma_cost
@@ -211,7 +212,7 @@ def _skill_allocation_context(
 @router.post("/ui/skills", response_class=HTMLResponse)
 async def submit_skills(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "skill-allocation"  # WP61
+    session.current_page = "skills"  # WP61/WP97
     if session.character is None:
         context = _skill_allocation_context(None, session.skills_letter, {}, {})
     else:
@@ -288,7 +289,6 @@ async def submit_skills(request: Request) -> HTMLResponse:
                 karma_group_points,
                 karma_specializations,
             )
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_skill_allocation.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

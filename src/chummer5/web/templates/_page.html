@@ -1,0 +1,14 @@
+{# WP97: one nav page's content -- its step fragments, each unchanged and still posting to and
+   swapping its own wrapper (see chummer5.web.shell.STEP_PAGES). An htmx nav request gets this
+   alone swapped into #page, plus the nav out-of-band so its current-step marker follows. #}
+<div class="page page--{{ page.slug }}">
+  {% if page.heading %}
+  <h1 class="page__heading">{{ page.heading }}</h1>
+  {% endif %}
+  {% for fragment in page.fragments %}
+  {% include fragment %}
+  {% endfor %}
+</div>
+{% if oob_nav %}
+{% include "_step_nav.html" %}
+{% endif %}

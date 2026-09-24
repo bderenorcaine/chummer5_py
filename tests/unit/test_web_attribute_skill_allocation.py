@@ -58,13 +58,16 @@ def _confirm_human(client: TestClient) -> None:
 def test_index_before_confirmation_shows_placeholder_not_allocation_forms() -> None:
     client = TestClient(create_app())
 
-    response = client.get("/")
+    attributes_page = client.get("/ui/page/attributes")
+    skills_page = client.get("/ui/page/skills")
 
-    assert "Confirm a metatype and priorities above before allocating attribute points." in (
-        response.text
+    assert (
+        "Confirm a metatype and priorities on the Priorities page before allocating attribute "
+        "points." in attributes_page.text
     )
-    assert "Confirm a metatype and priorities above before allocating skill points." in (
-        response.text
+    assert (
+        "Confirm a metatype and priorities on the Priorities page before allocating skill "
+        "points." in skills_page.text
     )
 
 
@@ -72,11 +75,12 @@ def test_index_after_confirmation_shows_allocation_forms_with_full_budget() -> N
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    attributes_page = client.get("/ui/page/attributes")
+    response = client.get("/ui/page/skills")
 
     expected_primary_budget = PRIORITIES.attributes["B"].points
     expected_skills_budget = PRIORITIES.skills["C"].skills
-    assert f"{expected_primary_budget} / {expected_primary_budget}" in response.text
+    assert f"{expected_primary_budget} / {expected_primary_budget}" in attributes_page.text
     assert f"{expected_skills_budget} / {expected_skills_budget}" in response.text
     # Magic-linked skills are excluded from the mundane MVP allocation UI (see app.py's
     # MUNDANE_SKILLS comment) -- Spellcasting (Sorcery group, MAG-linked) must not appear.
@@ -162,7 +166,7 @@ def test_submitting_over_budget_attribute_points_is_rejected_and_state_unchanged
 
     # The committed session state is untouched -- reloading the page shows the old (zero) spend,
     # not the rejected one.
-    index = client.get("/")
+    index = client.get("/ui/page/attributes")
     assert f"{budget} / {budget}" in index.text
 
 
@@ -262,12 +266,18 @@ def test_reconfirming_priorities_with_a_still_fitting_budget_keeps_the_allocatio
         },
     )
 
+    assert "no longer fit" not in response.text  # the priorities page's own aggregate warning
+    # WP97: the priorities POST re-renders only its own page; the carried-forward spend shows on
+    # each step's page.
+    attributes_page = client.get("/ui/page/attributes")
+    skills_page = client.get("/ui/page/skills")
     primary_budget = PRIORITIES.attributes["B"].points
     skills_budget = PRIORITIES.skills["C"].skills
-    assert f"{primary_budget - 2} / {primary_budget}" in response.text
-    assert f"{skills_budget - 3} / {skills_budget}" in response.text
-    assert 'value="2"' in response.text  # BOD's spent points still echoed in the form
-    assert "No longer fits" not in response.text
+    assert f"{primary_budget - 2} / {primary_budget}" in attributes_page.text
+    assert f"{skills_budget - 3} / {skills_budget}" in skills_page.text
+    assert 'value="2"' in attributes_page.text  # BOD's spent points still echoed in the form
+    assert "No longer fits" not in attributes_page.text
+    assert "No longer fits" not in skills_page.text
 
 
 def test_reconfirming_priorities_with_a_lower_attributes_budget_flags_the_existing_spend() -> None:
@@ -298,6 +308,8 @@ def test_reconfirming_priorities_with_a_lower_attributes_budget_flags_the_existi
     )
 
     assert response.status_code == 200
+    assert "no longer fit" in response.text  # the priorities page's own aggregate warning
+    response = client.get("/ui/page/attributes")  # WP97: the spend itself shows on its own page
     new_budget = PRIORITIES.attributes["D"].points
     assert new_budget == 14
     # The old spend (15 points) is still shown, over the new 14-point budget -- not reset to 0.
@@ -334,6 +346,7 @@ def test_reconfirming_priorities_with_a_lower_skills_budget_flags_the_existing_s
     )
 
     assert response.status_code == 200
+    response = client.get("/ui/page/skills")  # WP97: the spend itself shows on its own page
     new_budget = PRIORITIES.skills["D"].skills
     assert new_budget == 22
     assert f"-3 / {new_budget}" in response.text
@@ -574,7 +587,8 @@ def test_full_page_reload_shows_each_sections_own_karma_numbers_not_knowledges()
     client.post("/ui/attributes", data={"karma_attr_EDG": "1"})
     client.post("/ui/skills", data={f"karma_skill_{skill.id}": "1"})
 
-    response = client.get("/")
+    attributes_page = client.get("/ui/page/attributes")
+    skills_page = client.get("/ui/page/skills")
 
     both_spent_remaining = STARTING_KARMA - edg_cost - skill_cost
     attribute_budget = STARTING_KARMA - skill_cost  # excludes only Attributes' own commitment
@@ -583,9 +597,11 @@ def test_full_page_reload_shows_each_sections_own_karma_numbers_not_knowledges()
 
     assert (
         f"Karma remaining for attribute increases: {both_spent_remaining} / {attribute_budget}"
-        in response.text
+        in attributes_page.text
     )
-    assert f"Karma remaining for skills: {both_spent_remaining} / {skill_budget}" in response.text
+    assert (
+        f"Karma remaining for skills: {both_spent_remaining} / {skill_budget}" in skills_page.text
+    )
 
 
 def test_character_sheet_shows_karma_funded_specialization() -> None:

@@ -1,10 +1,10 @@
-<div id="priority-section">
-  <details {% if open_section == "priority-section" %}open{% endif %}>
-  <summary>Priority &amp; metatype selection{% if error or priority_stale_selections %} ⚠{% endif %}</summary>
+<div id="priority-section" class="panel">
+  <details open>
+  <summary class="panel__heading">Priority &amp; metatype selection</summary>
   <p>
     Assign each of Heritage, Talent, Attributes, Skills, and Resources a different priority
-    letter (A-E). Talent's own archetype (Mundane/Magician/Adept) is chosen in the Talent section
-    below, once you confirm a letter for it here — which archetypes are offered depends on the
+    letter (A-E). Talent's own archetype (Mundane/Magician/Adept) is chosen on the Magic page,
+    once you confirm a letter for it here — which archetypes are offered depends on the
     letter.
   </p>
 
@@ -14,14 +14,14 @@
   {% if priority_stale_selections %}
   <p class="warning">
     Some of your existing attribute, skill, or gear selections no longer fit these priorities —
-    see the sections below for details.
+    the affected steps are marked ⚠ in the step list.
   </p>
   {% endif %}
 
   <form
     id="priority-form"
     hx-post="/ui/priorities"
-    hx-target="#chargen-body"
+    hx-target="#priority-section"
     hx-swap="outerHTML"
   >
     <fieldset>

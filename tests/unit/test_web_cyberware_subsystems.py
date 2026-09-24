@@ -83,7 +83,7 @@ def test_rating_scaled_items_are_offered_now_that_the_picker_reads_the_full_cata
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/augmentation")
 
     assert f'name="cyberware_{CYBEREYES.id}"' in response.text
     assert f'name="cyberware_{CYBEREARS.id}"' in response.text
@@ -97,7 +97,7 @@ def test_requireparent_rows_are_not_offered_as_standalone_purchases() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/augmentation")
 
     assert CUSTOMIZED_AGILITY.requires_parent
     assert f'name="cyberware_{CUSTOMIZED_AGILITY.id}"' not in response.text
@@ -299,6 +299,7 @@ def test_committed_plugins_survive_a_full_page_re_render() -> None:
     response = client.post(
         "/ui/priorities", data={**PRIORITY_LETTERS, "metatype_id": human.metatype.id}
     )
+    response = client.get("/ui/page/augmentation")  # WP97
 
     compact = _compact(response.text)
     checkbox = f'name="plugin_{CYBEREYES.id}_0_{VISION_ENHANCEMENT.id}" value="1" checked'

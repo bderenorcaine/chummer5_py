@@ -100,18 +100,18 @@ def test_foci_section_hidden_for_mundane() -> None:
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="E")
 
-    response = client.get("/")
+    response = client.get("/ui/page/magic")
 
-    assert "<summary>Foci" not in response.text
+    assert 'panel__heading">Foci' not in response.text
 
 
 def test_foci_section_shown_for_magician() -> None:
     client = TestClient(create_app())
     _confirm_magician(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/magic")
 
-    assert "<summary>Foci" in response.text
+    assert 'panel__heading">Foci' in response.text
     assert ALCHEMICAL.name in response.text
 
 
@@ -121,9 +121,9 @@ def test_foci_section_shown_for_adept_too() -> None:
     client = TestClient(create_app())
     _confirm_adept(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/magic")
 
-    assert "<summary>Foci" in response.text
+    assert 'panel__heading">Foci' in response.text
 
 
 def test_bonding_a_focus_within_budget_shows_on_the_sheet() -> None:

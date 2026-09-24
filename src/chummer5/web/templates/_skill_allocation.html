@@ -1,7 +1,7 @@
-<div id="skill-allocation">
+<div id="skill-allocation" class="panel">
   {% if character %}
-  <details {% if open_section == "skill-allocation" %}open{% endif %}>
-  <summary>Skills{% if skill_error or skill_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Skills</summary>
 
   {% if skill_error %}
   <p class="error">{{ skill_error }}</p>
@@ -204,6 +204,6 @@
   </script>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities above before allocating skill points.</p>
+  <p>Confirm a metatype and priorities on the Priorities page before allocating skill points.</p>
   {% endif %}
 </div>

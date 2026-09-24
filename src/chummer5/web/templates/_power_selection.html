@@ -1,7 +1,7 @@
-<div id="power-selection">
+<div id="power-selection" class="panel">
   {% if character and character.magic_type == "Adept" %}
-  <details {% if open_section == "power-selection" %}open{% endif %}>
-  <summary>Adept Powers{% if power_error %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Adept Powers</summary>
 
   {% if power_error %}
   <p class="error">{{ power_error }}</p>

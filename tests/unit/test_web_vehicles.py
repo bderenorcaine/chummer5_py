@@ -65,7 +65,7 @@ def test_the_picker_lists_the_offerable_catalog_and_nothing_else() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    body = client.get("/").text
+    body = client.get("/ui/page/equipment").text
 
     assert FLY_SPY.name in body
     assert AMERICAR.name in body
@@ -80,7 +80,7 @@ def test_the_picker_renders_the_printed_stat_block() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    body = _squash(client.get("/").text)
+    body = _squash(client.get("/ui/page/equipment").text)
 
     # The Growler is the one SR5 row printing an on-road/off-road pair in *both* columns (p. 462) --
     # rendered as printed, not collapsed to one number.

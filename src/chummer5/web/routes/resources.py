@@ -296,7 +296,7 @@ def _resources_context(
 @router.post("/ui/resources", response_class=HTMLResponse)
 async def submit_resources(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "resources"  # WP61
+    session.current_page = "equipment"  # WP61/WP97
     if session.character is None:
         context = _resources_context(None, session.resources_letter, (), 0, 0, 0, 0)
     else:
@@ -359,7 +359,6 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 vehicle_cost,
                 rating_gear=rating_gear,
             )
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_resources.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

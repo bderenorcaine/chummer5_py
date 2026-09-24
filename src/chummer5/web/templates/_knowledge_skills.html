@@ -1,7 +1,7 @@
-<div id="knowledge-skills">
+<div id="knowledge-skills" class="panel">
   {% if character %}
-  <details {% if open_section == "knowledge-skills" %}open{% endif %}>
-  <summary>Knowledge &amp; Language Skills{% if knowledge_error or knowledge_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Knowledge &amp; Language Skills</summary>
 
   {% if knowledge_error %}
   <p class="error">{{ knowledge_error }}</p>
@@ -135,6 +135,6 @@
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities above before adding knowledge/language skills.</p>
+  <p>Confirm a metatype and priorities on the Priorities page before adding knowledge/language skills.</p>
   {% endif %}
 </div>

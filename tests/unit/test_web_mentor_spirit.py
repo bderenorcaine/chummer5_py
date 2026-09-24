@@ -92,7 +92,7 @@ def test_archetype_picker_hidden_for_mundane() -> None:
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="E")
 
-    response = client.get("/")
+    response = client.get("/ui/page/qualities")
 
     assert "Mentor Spirit" not in response.text
 
@@ -101,7 +101,7 @@ def test_archetype_picker_shown_for_magician() -> None:
     client = TestClient(create_app())
     _confirm_magician(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/qualities")
 
     assert "Mentor Spirit archetype" in response.text
     assert DOG.name in response.text
@@ -111,7 +111,7 @@ def test_archetype_picker_shown_for_adept_too() -> None:
     client = TestClient(create_app())
     _confirm_adept(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/qualities")
 
     assert "Mentor Spirit archetype" in response.text
 

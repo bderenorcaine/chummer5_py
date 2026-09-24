@@ -121,7 +121,7 @@ def _contacts_context(
 @router.post("/ui/contacts", response_class=HTMLResponse)
 async def submit_contacts(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "contacts"  # WP61
+    session.current_page = "contacts"  # WP61/WP97
     if session.character is None:
         context = _contacts_context(None, ())
     else:
@@ -134,7 +134,6 @@ async def submit_contacts(request: Request) -> HTMLResponse:
         else:
             session.character = replace(session.character, contact_selection=selection)
             context = _contacts_context(session.character, contacts)
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_contacts.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

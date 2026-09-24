@@ -75,7 +75,7 @@ def test_spirit_section_hidden_for_mundane() -> None:
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="E")
 
-    response = client.get("/")
+    response = client.get("/ui/page/magic")
 
     assert "Bound Spirits" not in response.text
 
@@ -84,7 +84,7 @@ def test_spirit_section_shown_for_magician_with_offered_tradition_types() -> Non
     client = TestClient(create_app())
     _confirm_magician(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/magic")
 
     assert "Bound Spirits" in response.text
     for spirit_type in HERMETIC.spirits.offered_types:

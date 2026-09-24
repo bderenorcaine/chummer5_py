@@ -1,7 +1,7 @@
-<div id="talent-selection">
+<div id="talent-selection" class="panel">
   {% if character %}
-  <details {% if open_section == "talent-selection" %}open{% endif %}>
-  <summary>Talent{% if talent_error or talent_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Talent</summary>
   <p>
     Talent priority {{ talent_letter }} — {{ talent_letter_name }}.
     {% if character.magic_type %}
@@ -49,6 +49,6 @@
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities above before selecting Talent.</p>
+  <p>Confirm a metatype and priorities on the Priorities page before selecting Talent.</p>
   {% endif %}
 </div>

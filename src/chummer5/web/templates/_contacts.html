@@ -1,7 +1,7 @@
-<div id="contacts">
+<div id="contacts" class="panel">
   {% if character %}
-  <details {% if open_section == "contacts" %}open{% endif %}>
-  <summary>Contacts{% if contact_error %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Contacts</summary>
 
   {% if contact_error %}
   <p class="error">{{ contact_error }}</p>
@@ -68,6 +68,6 @@
   </form>
   </details>
   {% else %}
-  <p>Confirm a metatype and priorities above before adding contacts.</p>
+  <p>Confirm a metatype and priorities on the Priorities page before adding contacts.</p>
   {% endif %}
 </div>

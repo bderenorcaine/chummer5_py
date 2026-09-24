@@ -1296,3 +1296,41 @@ fixtures asserting dice pools and budgets could not have caught a divergence tha
 The next such gap will be found the same way — by a new metric key reading something the harness
 never populated — so a WP adding one should check what populates it in `build_character` before
 assuming the harness already does.
+
+**2026-09-24 (WP97, Phase W) — WP64's `<details>` store was half accordion, half not; only the
+accordion half was deleted.** Phase W's Finding 2 says the ~70-line script in `base.html` existed
+"solely" to make the stacked sections behave one-at-a-time, and WP97's entry says to delete it, not
+port it. Reading it showed two jobs: (a) section-level exclusivity, which is accordion machinery and
+went, and (b) remembering a *sub-category* `<details>`'s manual open/closed state (skill
+categories, gear groups, cyberware slots, keyed on `data-details-key`) across an htmx swap. (b) is
+the fix for a Phase U bug report — a collapsed skill category snapping open whenever any rating in
+that step changed — and it has nothing to do with the accordion: a step's own fragment still swaps
+itself on every change under the shell. Deleting it would have reintroduced that bug. It survives
+as a ~20-line keyed store, now in `<head>` so a history-restore body swap cannot re-run it and
+stack a second set of listeners, and now also survives a *page* swap (which is the WP's own
+"window-level stores must survive a page swap" trap, applied to the store the trap did not list).
+
+**2026-09-24 (WP97, Phase W) — the step nav re-fetches itself on a response header, instead of every
+route re-rendering it.** A priorities change can make any step stale (WP19), and a player fixing a
+step should see its ⚠ clear, so the nav has to refresh after every mutation. The two options were
+an out-of-band nav in every step `POST`'s response (fifteen routes, each needing `chargen_context`
+just to render the nav) or one `http` middleware adding `HX-Trigger: chargen-changed` to every
+successful `POST`, with the nav doing `hx-get="/ui/nav" hx-trigger="chargen-changed from:body"`.
+The second costs one extra `GET` per change and touches no step route. **WP99 should reuse the
+event** for the resource panel rather than implement its entry's "out-of-band swap from every
+step's `POST`" as written — the wording predates this and would re-do per route what the middleware
+already does once. Page `GET`s still carry the nav out of band, because a nav click is not a
+mutation but does move the current-step marker.
+
+**2026-09-24 (WP97, Phase W) — found, not fixed: every step form's submit button does a native GET.**
+Since WP65 at the latest, thirteen step forms carry an `hx-trigger` (`"change, input[...] delay:400ms"`, or just
+`"change"` on Spells and Powers), which *replaces*
+htmx's default `submit` trigger rather than adding to it. So each "Update skills"/"Update gear"/…
+button (and Enter in a text field) is a plain HTML form submission — method GET, action the current
+URL. Before WP97 that silently reloaded `/`; now it loads `/ui/page/<slug>?<every field>`, which
+renders the same page (the query is ignored) but leaves the whole form in the address bar. Nothing
+is lost that the `change` trigger had not already posted, which is why it went unnoticed, but the
+buttons have never done what their labels say. The fix is adding `submit` to those thirteen
+`hx-trigger` lists; it is a behaviour change to every step fragment, so it was left out of a WP whose
+acceptance is "no step's contents change" — it belongs in its own small WP (or in WP98 if that WP is
+open to it).

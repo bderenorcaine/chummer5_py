@@ -61,11 +61,11 @@ def _human_character(attribute_points: dict[str, int] | None = None):
 def test_index_before_confirmation_shows_placeholder() -> None:
     client = TestClient(create_app())
 
-    response = client.get("/")
+    response = client.get("/ui/page/skills")
 
     assert (
-        "Confirm a metatype and priorities above before adding knowledge/language skills."
-        in response.text
+        "Confirm a metatype and priorities on the Priorities page before adding knowledge/"
+        "language skills." in response.text
     )
 
 
@@ -73,7 +73,7 @@ def test_index_after_confirmation_shows_full_budget() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/skills")
 
     character = _human_character()
     free_points = character.attribute_value("INT") + character.attribute_value("LOG")
@@ -157,7 +157,7 @@ def test_submitting_over_budget_knowledge_is_rejected_and_state_unchanged() -> N
     # Submitted (invalid) value is echoed back, per the skill-allocation precedent.
     assert 'value="Corporations"' in response.text
 
-    index = client.get("/")
+    index = client.get("/ui/page/skills")
     assert "Free points remaining: 4 / 4" in index.text
 
 
@@ -222,7 +222,7 @@ def test_reconfirming_a_lower_attributes_budget_flags_the_existing_knowledge_spe
     # staleness warning surfaces on the next full-page render instead (same as every other
     # carried-forward selection's WP19-style re-validation).
     client.post("/ui/attributes", data={"attr_INT": "0"})
-    response = client.get("/")
+    response = client.get("/ui/page/skills")
 
     assert "No longer fits since attributes were last confirmed" in response.text
     # The committed selection itself survives (still shown, not discarded).

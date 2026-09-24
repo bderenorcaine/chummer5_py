@@ -221,11 +221,14 @@ def test_importing_a_non_xml_file_is_rejected() -> None:
 
 
 def test_nav_links_to_the_character_sheet_from_every_page() -> None:
+    """WP97: the character sheet is the step nav's Export page, reached through the page route;
+    its pre-shell URL still renders it."""
     client = TestClient(create_app())
 
     response = client.get("/")
 
-    assert 'href="/character/sheet"' in response.text
+    assert 'href="/ui/page/export"' in response.text
+    assert 'id="character-sheet"' in client.get("/character/sheet").text
 
 
 # --- WP56: unmodeled-effects disclosure section --------------------------------------------------

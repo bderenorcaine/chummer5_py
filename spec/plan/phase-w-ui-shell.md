@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n
+### Phase W — Post-MVP: application shell, theming, and i18n (WP97 done; WP98-103 remaining)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -82,7 +82,7 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
 
 ---
 
-- [ ] **WP97 — The application shell: title bar, step nav, content pane.**
+- [x] **WP97 — The application shell: title bar, step nav, content pane.**
   Goal: replace the single-page accordion with the sketch's three-area frame, and move the six 1:1
   steps (Priorities, Attributes, Qualities, Contacts, Augmentation, Export) into it unchanged.
   Deliverables:
@@ -120,6 +120,23 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   the six moved templates is unchanged (this WP does not restructure any step's *contents*); a
   priorities change that invalidates a committed skill spend still surfaces that warning to the
   player without the Skills page being open.
+  Landed as `chummer5.web.shell` (the `STEP_PAGES` table, `chargen_context` — the aggregator,
+  moved out of `routes/priorities.py` — and `nav_context`) plus `chummer5.web.routes.pages` (`GET /`,
+  `GET /ui/page/{slug}`, `GET /ui/nav`, and `GET /character/sheet`, which is now the Export page
+  under its old URL). Four calls worth knowing before WP98-100:
+  **(1) the nav refreshes itself** — every successful `POST` gets an `HX-Trigger: chargen-changed`
+  header from one middleware in `app.py`, and the nav re-fetches `/ui/nav` on it, so no step route
+  had to learn to render the nav. WP99's panel can listen for the same event instead of every step
+  route growing an out-of-band swap; the WP99 entry's "OOB from every step's `POST`" wording
+  predates this. **(2) The composites stack their fragments** (Skills/Magic/Equipment render their
+  old sections in accordion order, each panel open) — WP98's intra-page pattern is still wholly
+  open. **(3) WP64's sub-category store was kept, trimmed**, not deleted — Finding 2 was wrong that
+  the whole script served the accordion; see the decisions log. **(4) htmx's history cache is off**
+  (`historyCacheSize: 0`), so back/forward re-fetches the page rather than restoring a stale
+  snapshot. Class hooks for WP100: `.app-shell__*`, `.step-nav__item` (`--current`/`--stale`/
+  `--disabled`), `.step-nav__marker`, `.page`/`.page__heading`, and `.panel`/`.panel__heading` on
+  every step fragment; `app.css` no longer selects on any id or tag structure. See
+  `spec/worklogs/WP97.md`.
 
 - [ ] **WP98 — The three composite pages: Skills, Magic, Equipment.**
   Goal: give the three nav items that own more than one of today's sections (Finding 4) a real

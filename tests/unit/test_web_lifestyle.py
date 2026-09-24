@@ -48,16 +48,19 @@ def _confirm_human(client: TestClient) -> None:
 def test_index_before_confirmation_shows_a_placeholder() -> None:
     client = TestClient(create_app())
 
-    response = client.get("/")
+    response = client.get("/ui/page/equipment")
 
-    assert "Confirm a metatype and priorities above before selecting a Lifestyle." in response.text
+    assert (
+        "Confirm a metatype and priorities on the Priorities page before selecting a Lifestyle."
+        in response.text
+    )
 
 
 def test_index_after_confirmation_lists_every_tier_and_defaults_to_street() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    response = client.get("/")
+    response = client.get("/ui/page/equipment")
 
     for tier in LIFESTYLES:
         assert tier.name in response.text
@@ -76,7 +79,7 @@ def test_selecting_a_paid_tier_matches_engine_output() -> None:
     selection = create_lifestyle_selection("Low", 1, LIFESTYLES)
     assert selection.total_cost == 2000
     # The resources section (rendered separately) reflects the combined remaining budget.
-    resources_response = client.get("/")
+    resources_response = client.get("/ui/page/equipment")
     budget = PRIORITIES.resources["D"].nuyen
     assert f"{budget - selection.total_cost} / {budget}" in resources_response.text
 
@@ -185,6 +188,7 @@ def test_reconfirming_priorities_keeps_the_lifestyle_selection() -> None:
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/equipment")  # WP97
 
     assert 'value="Low" selected' in response.text
     assert 'value="2"' in response.text
@@ -227,6 +231,7 @@ def test_reconfirming_priorities_with_a_lower_resources_budget_flags_the_existin
             "metatype_id": human_choice.metatype.id,
         },
     )
+    response = client.get("/ui/page/equipment")  # WP97
 
     assert response.status_code == 200
     assert 'value="Luxury" selected' in response.text  # still shown, not reset

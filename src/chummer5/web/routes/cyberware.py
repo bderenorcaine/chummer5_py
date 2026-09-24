@@ -566,7 +566,7 @@ def _cyberware_context(
 @router.post("/ui/cyberware", response_class=HTMLResponse)
 async def submit_cyberware(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "cyberware"  # WP61
+    session.current_page = "augmentation"  # WP61/WP97
     if session.character is None:
         context = _cyberware_context(None, session.resources_letter, (), (), 0, 0, 0)
     else:
@@ -655,7 +655,6 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 foci_cost,
                 vehicle_cost,
             )
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_cyberware.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

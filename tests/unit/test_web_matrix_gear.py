@@ -106,7 +106,7 @@ def test_over_cap_matrix_devices_are_not_offered_by_the_picker() -> None:
     client = TestClient(create_app())
     _confirm_human_with_resources_a(client)
 
-    page = client.get("/")
+    page = client.get("/ui/page/equipment")
 
     assert "Transys Avalon" in page.text  # avail 12, exactly on the cap
     for name in (

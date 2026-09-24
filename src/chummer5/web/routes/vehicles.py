@@ -202,7 +202,7 @@ def _other_section_costs(character: Character) -> tuple[int, int, int, int, int,
 @router.post("/ui/vehicles", response_class=HTMLResponse)
 async def submit_vehicles(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
-    session.open_section = "vehicles"  # WP61
+    session.current_page = "equipment"  # WP61/WP97
     if session.character is None:
         context = _vehicles_context(None, session.resources_letter, (), 0, 0, 0, 0)
     else:
@@ -272,7 +272,6 @@ async def submit_vehicles(request: Request) -> HTMLResponse:
                 karma_converted,
                 foci,
             )
-    context["open_section"] = session.open_section  # WP61
     response = templates.TemplateResponse(request, "_vehicles.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

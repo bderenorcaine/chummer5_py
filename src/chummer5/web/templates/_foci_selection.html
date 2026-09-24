@@ -1,7 +1,7 @@
-<div id="foci-selection">
+<div id="foci-selection" class="panel">
   {% if character and character.magic_type %}
-  <details {% if open_section == "foci-selection" %}open{% endif %}>
-  <summary>Foci{% if foci_error or foci_budget_warning %} ⚠{% endif %}</summary>
+  <details open>
+  <summary class="panel__heading">Foci</summary>
 
   {% if foci_error %}
   <p class="error">{{ foci_error }}</p>
