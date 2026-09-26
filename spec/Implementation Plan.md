@@ -122,8 +122,9 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | U | UI bugfixes round 2 | done (WP64-66) | [phase-u-ui-bugfixes-2.md](plan/phase-u-ui-bugfixes-2.md) |
 | V | UI improvement requests | done (WP67-71, WP83-84) | [phase-v-ui-improvements.md](plan/phase-v-ui-improvements.md) |
 | W | UI shell, theming, i18n | done (WP97-106) | [phase-w-ui-shell.md](plan/phase-w-ui-shell.md) |
+| X | Closing the "Creating a Shadowrunner" gaps | planned (WP107-135) | [phase-x-rulebook-completeness.md](plan/phase-x-rulebook-completeness.md) |
 
-Next unclaimed WP number: **WP107** (see Phase P's own file for why WP57-59 were claimed; Phase T
+Next unclaimed WP number: **WP136** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V
 claimed WP64-71 on 2026-07-27 from a second manual-testing pass — see those phase files for scope;
 Phase S's WP59 research pass claimed WP72-76 on 2026-07-29 for its synthetic-fixture WP list;
@@ -147,3 +148,5 @@ application shell (`examples/ui/main_ui.png`) plus the two structural questions 
 than three. WP104 was added to it on 2026-09-26: a Shadowrun theme styled on the SR5 core
 rulebook's page design, made the default. WP105 followed the same day: a Shadowrun 4 theme
 styled on the SR4 core rulebook; then WP106, a "Fonts?" hint beside the theme picker.
+Phase X claimed **WP107-135** on 2026-09-26, from a second full gap survey of the "Creating a
+Shadowrunner" chapter and the user's per-step rulings on it — see that phase file's own intro.

@@ -1566,3 +1566,30 @@ guard skips the arguments of `FontSuggestion(...)` calls, the same way it alread
 `HTTPException(detail=...)`. That is narrower than adding ten names to `ALLOWED_PYTHON_STRINGS`,
 and it needs no upkeep when a theme's suggestions change. The role labels stay catalog keys
 (`Web_Fonts_Role_*`), so translatable text still cannot hide in that call.
+
+## 2026-09-26 — Phase X, planning pass: a second full-chapter gap survey, and the user's rulings on it
+
+A gap survey walked every step of `spec/rulebooks/character_creation_chapter.md` against the code as
+of WP106, the first since the 2026-07-21 survey that produced Phases L-P. It checked live catalogs and
+validators, not documents. The user then ruled per step. The full ruling table and the resulting
+WP107-135 are in `spec/plan/phase-x-rulebook-completeness.md`; what matters beyond that phase:
+
+- **Rulings that stand past this phase.** Street-level/Prime Runner play is left alone for now.
+  Mystic Adept, Technomancer, Resonance and Living Persona stay out. Vehicle modifications stay out.
+  The per-contact 7-Karma cap stays unenforced (WP9's Yeti reason). Already-offered flat gear and
+  cyberware over Availability 12 **stay offered by explicit ruling**. Only rating-scaled items get
+  capped (WP126). This retires the Project Overview's "flagged, not scheduled" Availability-backfill
+  note rather than scheduling it.
+- **Two rulings are display caps, not rules the engine enforces.** The 5,000¥ nuyen carryover and the
+  7-Karma carryover are shown capped on the character sheet (WP133), and the Lifestyle starting-nuyen
+  roll is a notice, because it happens when play begins.
+- **The phase-wide enforcement convention.** Per-action limits are rejected by `create_*` validators;
+  whole-character "finish" rules are reported by a validation panel that never blocks saving (WP135).
+  See the phase file's intro.
+- **Every core quality is to be offered**, including ones whose whole effect is in play. The user was
+  explicit that this project shouldn't only offer qualities that move a sheet number. This extends
+  the 2026-07-24 registry policy from "permitted" to "the plan".
+- **Three rulebook findings the survey itself got wrong or missed.** Used-grade implants are legal at
+  creation (p. 451). The checklist's "dwarf/troll gear-cost modifiers" are the Lifestyle surcharge
+  restated (p. 420), not a separate mechanic. Adepts have been offered magic-group skills since WP61,
+  against p. 69. Details are in the phase file's Findings 1, 2 and 4.
