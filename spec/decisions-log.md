@@ -1729,3 +1729,20 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   For an Aspected Magician, the two it can never learn are arguably "physically incapable" choices
   (p. 81), which the rulebook forbids. `choice_options` doesn't see the aspect. Left for WP135's
   whole-character check, where the full character is in view.
+
+## 2026-09-26 — WP122: how the mentor slots are applied
+
+- **Conditional pools are shown, not applied.** A Magician slot's category or spirit-type dice
+  can't be an unconditional Improvement without inflating every Spellcasting or Summoning pool.
+  The sheet lists the pool each affected skill would roll for such a test. That is the same
+  "why a bonus applies only sometimes" pattern as WP42's conditional limits.
+- **Free powers are power instances on the mentor pick**, applied under the archetype's
+  `MENTOR_SPIRIT` source. So a Talent change strips them with the rest of the pick (WP48). They
+  don't count against Power Points. **Known gap:** a free level and a bought level of the same
+  power aren't capped *together* at the Magic rating; each is checked alone.
+- **The player names what the free powers need**, in slot order (`mentor_spirit_power_targets`):
+  Critical Strike's skill, Improved Sense's sense, Improved Ability's skill within the mentor's
+  narrowing. A single-option target, Wolf's Agility, is filled in. Dragonslayer's skill of choice is
+  its own field. Both are saved.
+- **Eagle's Allergy is granted, not bought.** It sits on the mentor pick (`granted_qualities`), is
+  listed on the sheet, and carries the Allergy's registry note. It is outside both 25-Karma caps.

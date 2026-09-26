@@ -125,6 +125,34 @@
         {{ _("Web_Qualities_MentorAdeptBonus", bonus=selected_mentor_spirit_archetype.adept_choice | dterm("mentors.xml")) }}
         {% if character.magic_type %}{{ _("Web_Qualities_MentorOnlyMatching", type=_("Web_MagicType_" ~ character.magic_type)) }}{% endif %}
       </p>
+
+      {#- WP122: what the archetype's slots ask the player to name. -#}
+      {% if mentor_skill_options %}
+      <label>
+        {{ _("Web_Qualities_MentorSkillChoice") }}
+        <select name="mentor_spirit_skill_choice">
+          <option value="">{{ _("Web_Qualities_Choose") }}</option>
+          {% for code in mentor_skill_options %}
+          <option value="{{ code }}" {% if code == selected_mentor_skill_choice %}selected{% endif %}>{{ code | dterm("skills.xml") }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+      {% for slot in mentor_power_slots %}
+      <label>
+        {{ _("Web_Qualities_MentorPowerTarget", power=slot.power_name | dterm("powers.xml")) }}
+        {% if slot.options %}
+        <select name="mentor_spirit_power_target_{{ slot.index }}">
+          <option value="">{{ _("Web_Qualities_Choose") }}</option>
+          {% for code in slot.options %}
+          <option value="{{ code }}" {% if code == slot.value %}selected{% endif %}>{{ code | dterm("skills.xml") }}</option>
+          {% endfor %}
+        </select>
+        {% else %}
+        <input type="text" name="mentor_spirit_power_target_{{ slot.index }}" value="{{ slot.value or '' }}" />
+        {% endif %}
+      </label>
+      {% endfor %}
       {% endif %}
     </fieldset>
     {% endif %}

@@ -1211,12 +1211,15 @@ def test_build_character_allows_an_adept_to_pick_a_mentor_spirit() -> None:
         talent_letter="D",
         talent_codename="Adept",
         mentor_spirit_archetype_id=DOG_ID,
+        # WP122: Dog's Adept slot grants two Improved Sense powers, each naming a sense.
+        mentor_spirit_power_targets=("Low-light vision", "Direction Sense"),
     )
     character = _build_magician(save)
     assert character.quality_selection is not None
     pick = character.quality_selection.mentor_spirit
     assert pick is not None
     assert pick.gated_choice is pick.archetype.adept_choice
+    assert [p.target for p in pick.free_powers] == ["Low-light vision", "Direction Sense"]
 
 
 # -- WP49: knowledge_skill_picks / language_skill_picks -------------------------------------------

@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from chummer5.data.mentors import MentorSpiritArchetype
+from chummer5.data.mentors import FreePower, MentorSpiritArchetype, gated_choice
 from chummer5.data.qualities import BonusSupport, Quality
 from chummer5.engine.character import Character
 from chummer5.engine.cyberware_subsystems import (
@@ -34,6 +34,9 @@ from chummer5.engine.qualities import (
     choice_options,
     create_quality_selection,
     later_step_facts,
+    mentor_free_power_options,
+    mentor_free_powers_needing_a_target,
+    mentor_skill_choice_options,
     offerable_quality_catalog,
     resolve_metatype_qualities,
 )
@@ -255,6 +258,8 @@ def _quality_selection_context(
     *,
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
+    mentor_spirit_skill_choice: str | None = None,
+    mentor_spirit_power_targets: tuple[str | None, ...] | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
     """Context for `_quality_selection.html`. `picks` is whatever should be shown selected -- the
@@ -312,6 +317,14 @@ def _quality_selection_context(
         mentor_spirit_archetype_id = committed_pick.archetype.id
         if mentor_spirit_general_choice_id is None:
             mentor_spirit_general_choice_id = committed_pick.general_choice.id
+        if mentor_spirit_skill_choice is None:
+            mentor_spirit_skill_choice = committed_pick.skill_choice
+        if mentor_spirit_power_targets is None:
+            mentor_spirit_power_targets = committed_pick.chosen_power_targets
+    skill_options, power_slots = _mentor_choice_fields(
+        mentor_spirit_archetype_id, character.magic_type
+    )
+    targets = mentor_spirit_power_targets or ()
     selected_archetype: MentorSpiritArchetype | None = next(
         (a for a in MENTORS if a.id == mentor_spirit_archetype_id), None
     )
@@ -331,8 +344,35 @@ def _quality_selection_context(
         "selected_mentor_spirit_archetype_id": mentor_spirit_archetype_id,
         "selected_mentor_spirit_archetype": selected_archetype,
         "selected_mentor_spirit_general_choice_id": mentor_spirit_general_choice_id,
+        # WP122: Dragonslayer's skill of choice and an Adept's free-power targets.
+        "mentor_skill_options": skill_options,
+        "selected_mentor_skill_choice": mentor_spirit_skill_choice,
+        "mentor_power_slots": [
+            {
+                "index": i,
+                "power_name": free.power_name,
+                "options": mentor_free_power_options(free),
+                "value": targets[i] if i < len(targets) else None,
+            }
+            for i, free in enumerate(power_slots)
+        ],
         "quality_error": error,
     }
+
+
+def _mentor_choice_fields(
+    archetype_id: str | None, magic_type: str | None
+) -> tuple[tuple[str, ...], tuple[FreePower, ...]]:
+    """WP122: what the picked archetype asks the player for -- its skill-of-choice options, and
+    the free powers that need a target -- or nothing, for no or an unknown archetype."""
+    archetype = next((a for a in MENTORS if a.id == archetype_id), None)
+    if archetype is None or magic_type is None:
+        return (), ()
+    gated = gated_choice(archetype, magic_type)
+    return (
+        mentor_skill_choice_options((*archetype.general_options, gated)),
+        mentor_free_powers_needing_a_target(gated),
+    )
 
 
 def _committed_quality_warning(character: Character, offered: Iterable[Quality]) -> str | None:
@@ -352,6 +392,8 @@ def _committed_quality_warning(character: Character, offered: Iterable[Quality])
             mentor_catalog=MENTORS,
             mentor_spirit_archetype_id=mentor_pick.archetype.id if mentor_pick else None,
             mentor_spirit_general_choice_id=mentor_pick.general_choice.id if mentor_pick else None,
+            mentor_spirit_skill_choice=mentor_pick.skill_choice if mentor_pick else None,
+            mentor_spirit_power_targets=mentor_pick.chosen_power_targets if mentor_pick else (),
             **_gate_kwargs(character),
         )
     except ValueError as exc:
@@ -420,11 +462,25 @@ async def submit_qualities(request: Request) -> HTMLResponse:
         # orphaned pick, meant for a tampered/stale request, not this ordinary UI interaction).
         mentor_spirit_archetype_id: str | None = None
         mentor_spirit_general_choice_id: str | None = None
+        mentor_spirit_skill_choice: str | None = None
+        mentor_spirit_power_targets: tuple[str | None, ...] = ()
         if any(p.quality_id == MENTOR_SPIRIT_QUALITY.id for p in picks):
             raw_archetype_id = str(form.get("mentor_spirit_archetype_id") or "")
             mentor_spirit_archetype_id = raw_archetype_id or None
             raw_general_choice_id = str(form.get("mentor_spirit_general_choice_id") or "")
             mentor_spirit_general_choice_id = raw_general_choice_id or None
+            # WP122: the slots' own choices, read only as far as the archetype asks for them.
+            skill_options, power_slots = _mentor_choice_fields(
+                mentor_spirit_archetype_id, session.character.magic_type
+            )
+            if skill_options:
+                mentor_spirit_skill_choice = (
+                    str(form.get("mentor_spirit_skill_choice") or "") or None
+                )
+            mentor_spirit_power_targets = tuple(
+                str(form.get(f"mentor_spirit_power_target_{i}") or "") or None
+                for i in range(len(power_slots))
+            )
         try:
             selection = create_quality_selection(
                 picks,
@@ -433,6 +489,8 @@ async def submit_qualities(request: Request) -> HTMLResponse:
                 mentor_catalog=MENTORS,
                 mentor_spirit_archetype_id=mentor_spirit_archetype_id,
                 mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
+                mentor_spirit_skill_choice=mentor_spirit_skill_choice,
+                mentor_spirit_power_targets=mentor_spirit_power_targets,
                 **_gate_kwargs(session.character),
             )
         except ValueError as exc:
@@ -441,6 +499,8 @@ async def submit_qualities(request: Request) -> HTMLResponse:
                 picks,
                 mentor_spirit_archetype_id=mentor_spirit_archetype_id,
                 mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
+                mentor_spirit_skill_choice=mentor_spirit_skill_choice,
+                mentor_spirit_power_targets=mentor_spirit_power_targets,
                 error=str(exc),
             )
         else:

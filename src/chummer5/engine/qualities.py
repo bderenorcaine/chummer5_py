@@ -58,17 +58,19 @@ never interprets it. **A rated quality's cap can span several catalog rows**
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from chummer5.data.actions import load_matrix_action_names
-from chummer5.data.mentors import MentorChoice, MentorSpiritArchetype, gated_choice
+from chummer5.data.mentors import FreePower, MentorChoice, MentorSpiritArchetype, gated_choice
 from chummer5.data.metatypes import Metatype
+from chummer5.data.powers import Power, load_powers
 from chummer5.data.qualities import BonusSupport, Quality, Requirement
 from chummer5.data.skills import Skill, load_skills
 from chummer5.data.traditions import load_core_spirit_types
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
+from chummer5.engine.magic import PowerPick, power_pick_improvements, power_target_options
 from chummer5.engine.skills import skill_rating
 
 # CharacterSettings.QualityKarmaLimit (legacy default: `_intQualityKarmaLimit = 25`) -- the maximum
@@ -353,6 +355,27 @@ class MentorSpiritPick:
     archetype: MentorSpiritArchetype
     general_choice: MentorChoice
     gated_choice: MentorChoice
+    # WP122: Dragonslayer's "one social skill of choice"; the Adept slot's free powers, as power
+    # instances outside the Power Point budget; Eagle's granted Allergy, at 0 Karma.
+    skill_choice: str | None = None
+    free_powers: tuple[PowerPick, ...] = ()
+    granted_qualities: tuple[QualityPick, ...] = ()
+
+    @property
+    def slots(self) -> tuple[MentorChoice, MentorChoice]:
+        return (self.general_choice, self.gated_choice)
+
+    @property
+    def chosen_power_targets(self) -> tuple[str | None, ...]:
+        """The targets the player named for the free powers, in slot order -- the ones
+        `create_quality_selection` asks for, not the auto-filled ones (WP122)."""
+        needing = list(mentor_free_powers_needing_a_target(self.gated_choice))
+        targets: list[str | None] = []
+        for free, power_pick in zip(self.gated_choice.free_powers, self.free_powers, strict=True):
+            if needing and free is needing[0]:
+                needing.pop(0)
+                targets.append(power_pick.target)
+        return tuple(targets)
 
 
 @dataclass(frozen=True)
@@ -563,6 +586,77 @@ class QualitySelection:
         return tuple(pick.to_request() for pick in self.qualities)
 
 
+# WP122: what a mentor slot's choices resolve against.
+_POWERS_BY_NAME: Mapping[str, Power] = {p.name: p for p in load_powers()}
+_SKILLS_BY_NAME: Mapping[str, Skill] = {s.name: s for s in load_skills()}
+
+
+def mentor_skill_choice_options(pick_slots: Iterable[MentorChoice]) -> tuple[str, ...]:
+    """WP122: the skills a slot's "one skill of choice" may name (Dragonslayer: Social Active), or
+    `()` when no slot asks for one."""
+    categories = {c for slot in pick_slots for c in slot.skill_choice_categories}
+    return tuple(sorted(s.name for s in _SKILLS_BY_NAME.values() if s.category in categories))
+
+
+def mentor_free_power_options(free: FreePower) -> tuple[str, ...]:
+    """WP122: the targets a mentor's free power may name -- the `<bonusoverride>` narrowing (Sea:
+    an athletic skill) or else the power's own options. `()` for a power that names nothing or
+    takes free text."""
+    if free.target_attributes:
+        return free.target_attributes
+    if free.target_skill_categories or free.target_skill_groups:
+        return tuple(
+            sorted(
+                s.name
+                for s in _SKILLS_BY_NAME.values()
+                if s.category in free.target_skill_categories
+                or s.skill_group in free.target_skill_groups
+            )
+        )
+    return power_target_options(_POWERS_BY_NAME[free.power_name])
+
+
+def mentor_free_powers_needing_a_target(slot: MentorChoice) -> tuple[FreePower, ...]:
+    """WP122: the slot's free powers the player must name a target for, in order: Critical
+    Strike's skill, Improved Sense's sense, Improved Ability's skill, ... A single-option target
+    (Wolf's Agility) is filled in, not asked."""
+    return tuple(
+        free
+        for free in slot.free_powers
+        if _POWERS_BY_NAME[free.power_name].target_kind is not None
+        and len(mentor_free_power_options(free)) != 1
+    )
+
+
+def _resolve_free_powers(
+    slot: MentorChoice, targets: Sequence[str | None]
+) -> tuple[PowerPick, ...]:
+    needing = mentor_free_powers_needing_a_target(slot)
+    if len(targets) != len(needing):
+        raise ValueError(
+            f"the mentor spirit's free powers need {len(needing)} target(s), got {len(targets)}"
+        )
+    remaining = iter(targets)
+    picks: list[PowerPick] = []
+    for free in slot.free_powers:
+        power = _POWERS_BY_NAME[free.power_name]
+        options = mentor_free_power_options(free)
+        target: str | None = None
+        if power.target_kind is not None:
+            target = options[0] if len(options) == 1 else next(remaining)
+            if power.target_kind == "text":
+                if not target or not target.strip():
+                    raise ValueError(f"the mentor spirit's free {power.name} needs a detail")
+                target = target.strip()
+            elif target not in options:
+                raise ValueError(
+                    f"the mentor spirit's free {power.name} needs one of {list(options)}, "
+                    f"got {target!r}"
+                )
+        picks.append(PowerPick(power=power, rating=free.levels, target=target))
+    return tuple(picks)
+
+
 def create_quality_selection(
     picks: Iterable[str | QualityPickRequest],
     catalog: Iterable[Quality],
@@ -575,6 +669,8 @@ def create_quality_selection(
     granted_quality_names: Iterable[str] = (),
     later_steps: LaterStepFacts | None = None,
     power_names: Iterable[str] = (),
+    mentor_spirit_skill_choice: str | None = None,
+    mentor_spirit_power_targets: Sequence[str | None] = (),
 ) -> QualitySelection:
     """Build a `QualitySelection`, validating against the MVP-offered catalog and the karma cap.
 
@@ -734,13 +830,33 @@ def create_quality_selection(
                     f"{mentor_spirit_general_choice_id!r}"
                 )
             general_choice = resolved_choice
+        gated = gated_choice(archetype, magic_type)
+        # WP122: the slots' own choices, and what they grant.
+        skill_options = mentor_skill_choice_options((general_choice, gated))
+        if skill_options and mentor_spirit_skill_choice not in skill_options:
+            raise ValueError(
+                f"{archetype.name}: its skill of choice must be one of {list(skill_options)}, "
+                f"got {mentor_spirit_skill_choice!r}"
+            )
+        if not skill_options and mentor_spirit_skill_choice is not None:
+            raise ValueError(f"{archetype.name} has no skill of choice")
+        by_name = {q.name: q for q in catalog}
         mentor_spirit_pick = MentorSpiritPick(
             archetype=archetype,
             general_choice=general_choice,
-            gated_choice=gated_choice(archetype, magic_type),
+            gated_choice=gated,
+            skill_choice=mentor_spirit_skill_choice,
+            free_powers=_resolve_free_powers(gated, mentor_spirit_power_targets),
+            granted_qualities=tuple(
+                QualityPick(quality=by_name[name], text=detail or None)
+                for slot in (general_choice, gated)
+                for name, detail in slot.granted_qualities
+            ),
         )
     elif mentor_spirit_archetype_id is not None:
         raise ValueError("a Mentor Spirit archetype was picked without the Mentor Spirit quality")
+    elif mentor_spirit_skill_choice is not None or mentor_spirit_power_targets:
+        raise ValueError("a mentor spirit's choices were given without the Mentor Spirit quality")
 
     return QualitySelection(
         qualities=tuple(resolved),
@@ -826,21 +942,29 @@ def apply_mentor_spirit_improvements(character: Character, pick: MentorSpiritPic
     `ImprovementIndex.remove_source(ImprovementSource.MENTOR_SPIRIT, pick.archetype.id)` cleanly
     retracts exactly what one archetype pick granted -- independent of whatever `QUALITY`-sourced
     Improvements the Mentor Spirit quality's own (always-empty) `flat_bonuses` would apply via
-    `apply_quality_improvements`. A no-op for the `NOT_YET_SUPPORTED`/`NO_EFFECT` slots most
-    archetypes have at least one of -- see `chummer5.data.mentors`'s own docstring for the full
-    per-archetype classification.
+    `apply_quality_improvements`. Since WP122 it also applies the slot's skill of choice
+    (Dragonslayer) and the Adept slot's free powers; a slot's conditional pools are shown on the
+    sheet rather than applied, and Eagle's granted Allergy is carried on the pick.
     """
     for choice in (pick.general_choice, pick.gated_choice):
         for flat_bonus in choice.flat_bonuses:
             character.improvements.add(
                 Improvement(
                     improvement_type=_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
-                    target=flat_bonus.target_name,
+                    # WP122: an empty skill target is the slot's skill of choice (Dragonslayer).
+                    target=flat_bonus.target_name or (pick.skill_choice or ""),
                     value=flat_bonus.value,
                     source_type=ImprovementSource.MENTOR_SPIRIT,
                     source_id=pick.archetype.id,
                 )
             )
+    # WP122: the Adept slot's free powers apply like bought ones, under the archetype's id so a
+    # Talent change strips them with the rest of the pick.
+    for power_pick in pick.free_powers:
+        for improvement in power_pick_improvements(
+            power_pick, ImprovementSource.MENTOR_SPIRIT, pick.archetype.id
+        ):
+            character.improvements.add(improvement)
 
 
 def apply_metatype_bonus_improvements(character: Character) -> None:

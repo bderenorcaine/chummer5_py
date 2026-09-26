@@ -6,6 +6,9 @@ from __future__ import annotations
 
 from chummer5.data.mentors import (
     BonusSupport,
+    ConditionalPool,
+    FlatBonus,
+    FreePower,
     MentorSpiritArchetype,
     count_by_support,
     gated_choice,
@@ -86,27 +89,31 @@ def test_fire_bringer_and_wise_warrior_also_have_a_two_option_general_choice() -
     }
 
 
-def test_bear_general_bonus_is_not_yet_supported() -> None:
-    # <bonus><damageresistance>2</damageresistance></bonus> -- an in-play resistance-test bonus
-    # this engine doesn't compute.
+def test_bear_general_bonus_is_damage_resistance() -> None:
+    # <bonus><damageresistance>2</damageresistance></bonus> -- WP48 left it unsupported; WP122
+    # applies it into WP109's Damage Resistance pool (p. 321: "+2 dice for tests to resist damage
+    # (not including Drain)").
     bear = next(m for m in MENTORS if m.name == "Bear")
     general = bear.general_options[0]
-    assert general.bonus_support == BonusSupport.NOT_YET_SUPPORTED
-    assert general.flat_bonuses == ()
+    assert general.bonus_support == BonusSupport.FLAT_BONUS
+    assert general.flat_bonuses == (FlatBonus("damage_resistance", "", 2),)
 
 
-def test_dragonslayer_general_bonus_is_not_yet_supported() -> None:
-    # <bonus><selectskill skillcategory="Social Active">...</selectskill></bonus> -- a
-    # pick-any-skill-in-category mechanism with no fixed target.
-    dragonslayer = next(m for m in MENTORS if m.name == "Dragonslayer")
-    assert dragonslayer.general_options[0].bonus_support == BonusSupport.NOT_YET_SUPPORTED
+def test_dragonslayer_general_bonus_is_a_social_skill_of_choice() -> None:
+    # <bonus><selectskill skillcategory="Social Active"><val>2</val></selectskill></bonus> -- "+2
+    # dice pool modifier for one social skill of choice" (p. 321), a choice since WP122.
+    general = next(m for m in MENTORS if m.name == "Dragonslayer").general_options[0]
+    assert general.bonus_support == BonusSupport.FLAT_BONUS
+    assert general.flat_bonuses == (FlatBonus("skill", "", 2),)
+    assert general.skill_choice_categories == ("Social Active",)
 
 
-def test_eagle_general_bonus_is_not_yet_supported() -> None:
-    # Compound <addqualities>+<specificskill> node -- addqualities isn't a recognized shape, so the
-    # whole node fails classification (never partially applied).
-    eagle = next(m for m in MENTORS if m.name == "Eagle")
-    assert eagle.general_options[0].bonus_support == BonusSupport.NOT_YET_SUPPORTED
+def test_eagle_general_bonus_grants_perception_and_an_allergy() -> None:
+    # Compound <addqualities>+<specificskill> -- WP122 recognizes both halves.
+    general = next(m for m in MENTORS if m.name == "Eagle").general_options[0]
+    assert general.bonus_support == BonusSupport.FLAT_BONUS
+    assert general.flat_bonuses == (FlatBonus("skill", "Perception", 2),)
+    assert general.granted_qualities == (("Allergy (Common, Mild)", "Pollutants"),)
 
 
 def test_mountain_magician_choice_is_flat_bonus() -> None:
@@ -120,12 +127,30 @@ def test_mountain_magician_choice_is_flat_bonus() -> None:
     assert bonus.value == 2
 
 
-def test_eagle_and_sea_and_thunderbird_magician_choices_are_conditional_and_unsupported() -> None:
-    # <specificskill> with an extra <condition> child (e.g. "Spirits of Air") -- 3 children, not the
-    # 2-child flat shape, so classification correctly falls through to NOT_YET_SUPPORTED.
-    for name in ("Eagle", "Sea", "Thunderbird"):
-        archetype = next(m for m in MENTORS if m.name == name)
-        assert archetype.magician_choice.bonus_support == BonusSupport.NOT_YET_SUPPORTED, name
+def test_eagle_and_sea_and_thunderbird_magician_choices_are_conditional_pools() -> None:
+    # <specificskill> with a <condition> child ("Spirits of Air") -- WP48 left it unsupported;
+    # WP122 shows it as a conditional Summoning pool.
+    for name, spirits in (
+        ("Eagle", "Spirits of Air"),
+        ("Sea", "Spirits of Water"),
+        ("Thunderbird", "Spirits of Air"),
+    ):
+        choice = next(m for m in MENTORS if m.name == name).magician_choice
+        assert choice.bonus_support == BonusSupport.FLAT_BONUS, name
+        assert choice.conditional_pools == (
+            ConditionalPool(("Summoning",), 2, f"summoning {spirits}"),
+        )
+
+
+def test_spell_category_choices_cover_spells_rituals_and_preparations() -> None:
+    choice = next(m for m in MENTORS if m.name == "Bear").magician_choice
+    assert choice.conditional_pools == (
+        ConditionalPool(
+            ("Spellcasting", "Ritual Spellcasting", "Alchemy"),
+            2,
+            "Health spells, preparations and rituals",
+        ),
+    )
 
 
 def test_rat_magician_choice_is_verified_no_effect() -> None:
@@ -136,21 +161,30 @@ def test_rat_magician_choice_is_verified_no_effect() -> None:
     assert rat.magician_choice.flat_bonuses == ()
 
 
-def test_every_adept_choice_is_not_yet_supported() -> None:
-    # Every Adept-slot choice is <specificpower> -- a free-Power-outside-the-PP-budget grant this
-    # engine doesn't model, classified uniformly unsupported.
+def test_every_adept_choice_grants_free_powers() -> None:
+    # Every Adept-slot choice is <specificpower> -- WP122 grants them outside the PP budget.
     for archetype in MENTORS:
-        assert archetype.adept_choice.bonus_support == BonusSupport.NOT_YET_SUPPORTED, (
-            archetype.name
-        )
+        assert archetype.adept_choice.bonus_support == BonusSupport.FLAT_BONUS, archetype.name
+        assert archetype.adept_choice.free_powers, archetype.name
+    wolf = next(m for m in MENTORS if m.name == "Wolf").adept_choice
+    assert wolf.free_powers == (FreePower("Attribute Boost", 2, target_attributes=("AGI",)),)
 
 
 def test_supported_vs_unsupported_counts_are_visible() -> None:
+    # WP122: every slot is supported but Rat's reagent harvesting, which has no <bonus>.
     counts = count_by_support(MENTORS)
-    assert counts[BonusSupport.FLAT_BONUS] == 17
+    assert counts[BonusSupport.FLAT_BONUS] == 50
     assert counts[BonusSupport.NO_EFFECT] == 1
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 33
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 0
     assert sum(counts.values()) == 51
+
+
+def test_every_archetype_but_eagle_registers_its_disadvantage() -> None:
+    for archetype in MENTORS:
+        if archetype.name == "Eagle":  # its disadvantage is the granted Allergy
+            assert archetype.unmodeled_effect_note is None
+        else:
+            assert archetype.unmodeled_effect_note, archetype.name
 
 
 def test_archetype_fields_hand_checked_against_the_raw_xml() -> None:

@@ -37,9 +37,10 @@ from chummer5.engine.skills import natural_skill_rating
 
 # This phase's offered subset of each Talent letter's real option list (Implementation Plan's Phase
 # I intro; WP121 added the Aspected Magician): Mystic Adept (explicit product decision, not
-# deferred) and Technomancer/A.I./Apprentice/Explorer/Enchanter/Aware (each a real archetype with its own restricted-access
-# rules neither of this phase's two fixtures exercises) are all excluded. "Mundane" is included so a
-# player assigning Talent a letter that happens to offer it can still choose it -- none of A-D
+# deferred) and Technomancer/A.I./Apprentice/Explorer/Enchanter/Aware (each a real archetype with
+# its own restricted-access rules neither of this phase's two fixtures exercises) are all excluded.
+# "Mundane" is included so a player assigning Talent a letter that happens to offer it can still
+# choose it -- none of A-D
 # currently do (every option at those letters is a real archetype; only E offers "Mundane" -- see
 # `chummer5.data.priorities.PriorityTable.mundane_talent`), but this module doesn't hardcode that,
 # it just restricts to the *name*.
@@ -706,6 +707,24 @@ def create_power_selection(
     )
 
 
+def power_pick_improvements(
+    pick: PowerPick, source_type: ImprovementSource, source_id: str
+) -> tuple[Improvement, ...]:
+    """The Improvements one power instance grants (WP122: shared with a mentor's free powers)."""
+    return tuple(
+        Improvement(
+            improvement_type=_POWER_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
+            # An empty target on a target-taking power means "what this instance names" (WP119).
+            target=flat_bonus.target_name or pick.target or "",
+            value=pick.rating,
+            source_type=source_type,
+            source_id=source_id,
+            unique_name=flat_bonus.unique_name,
+        )
+        for flat_bonus in pick.power.flat_bonuses
+    )
+
+
 def apply_power_improvements(character: Character, selection: PowerSelection) -> None:
     """Add every purchased power's `PowerFlatBonus`es to `character.improvements`.
 
@@ -718,16 +737,7 @@ def apply_power_improvements(character: Character, selection: PowerSelection) ->
     multiplication needed.
     """
     for pick in selection.picks:
-        for flat_bonus in pick.power.flat_bonuses:
-            # An empty target on a target-taking power means "what this instance names" (WP119).
-            target = flat_bonus.target_name or pick.target or ""
-            character.improvements.add(
-                Improvement(
-                    improvement_type=_POWER_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
-                    target=target,
-                    value=pick.rating,
-                    source_type=ImprovementSource.ADEPT_POWER,
-                    source_id=pick.power.id,
-                    unique_name=flat_bonus.unique_name,
-                )
-            )
+        for improvement in power_pick_improvements(
+            pick, ImprovementSource.ADEPT_POWER, pick.power.id
+        ):
+            character.improvements.add(improvement)

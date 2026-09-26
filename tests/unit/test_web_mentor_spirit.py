@@ -236,9 +236,17 @@ def test_adept_can_pick_a_mentor_spirit() -> None:
 
     response = client.post(
         "/ui/qualities",
-        data={"quality_id": [MENTOR_SPIRIT_QUALITY_ID], "mentor_spirit_archetype_id": DOG.id},
+        data={
+            "quality_id": [MENTOR_SPIRIT_QUALITY_ID],
+            "mentor_spirit_archetype_id": DOG.id,
+            # WP122: Dog's two free Improved Sense powers each name a sense.
+            "mentor_spirit_power_target_0": "Low-light vision",
+            "mentor_spirit_power_target_1": "Perfect Pitch",
+        },
     )
 
     assert response.status_code == 200
+    assert 'name="mentor_spirit_power_target_1"' in response.text
     sheet = client.get("/character/sheet")
     assert DOG.adept_choice.name in sheet.text
+    assert "Free from the mentor: Improved Sense (rating 1, Perfect Pitch)." in sheet.text

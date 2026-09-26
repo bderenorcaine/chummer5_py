@@ -652,6 +652,14 @@
       <text>Paranoia/Anxiety</text>
     </string>
     <string>
+      <key>Web_Qualities_MentorSkillChoice</key>
+      <text>The mentor's skill of choice</text>
+    </string>
+    <string>
+      <key>Web_Qualities_MentorPowerTarget</key>
+      <text>Free {power} for</text>
+    </string>
+    <string>
       <key>Web_Qualities_ChooseArchetype</key>
       <text>-- choose an archetype --</text>
     </string>
@@ -928,6 +936,26 @@
     <string>
       <key>Web_Sheet_MentalLimit</key>
       <text>Mental limit</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MentorSkillChoice</key>
+      <text>+2 dice on {skill} (the mentor's skill of choice).</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MentorFreePower</key>
+      <text>Free from the mentor: {name} (rating {rating}).</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MentorFreePowerWithTarget</key>
+      <text>Free from the mentor: {name} (rating {rating}, {target}).</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MentorGrantedQuality</key>
+      <text>Granted by the mentor, at no Karma: {name} ({detail}).</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MentorPool</key>
+      <text>{skill}: {pool} dice for {condition} (+{value} from the mentor).</text>
     </string>
     <string>
       <key>Web_Sheet_MentorSpirit</key>

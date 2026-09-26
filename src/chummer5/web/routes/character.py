@@ -285,6 +285,36 @@ def _conditional_limit_rows(character: Character) -> list[dict[str, Any]]:
     return rows
 
 
+def _mentor_pool_rows(character: Character) -> list[dict[str, Any]]:
+    """WP122: a mentor's conditional dice ("+2 dice for Health spells, preparations and rituals"),
+    as the pool each affected skill the character has would roll for such a test."""
+    pick = (
+        character.quality_selection.mentor_spirit
+        if character.quality_selection is not None
+        else None
+    )
+    allocation = character.skill_allocation
+    if pick is None or allocation is None:
+        return []
+    by_name = {skill.name: skill for skill in SKILLS}
+    rows: list[dict[str, Any]] = []
+    for slot in pick.slots:
+        for pool in slot.conditional_pools:
+            for name in pool.skills:
+                skill = by_name[name]
+                if skill_rating(character, allocation, skill) == 0:
+                    continue
+                rows.append(
+                    {
+                        "skill": skill,
+                        "condition": pool.condition,
+                        "value": pool.value,
+                        "pool": dice_pool(character, allocation, skill) + pool.value,
+                    }
+                )
+    return rows
+
+
 def _character_sheet_context(
     session: ChargenSession,
     *,
@@ -565,6 +595,7 @@ def _character_sheet_context(
             if character.quality_selection is not None
             else None
         ),
+        "mentor_pool_rows": _mentor_pool_rows(character),  # WP122
         "drain_resistance": drain_resistance(character),
         "spell_names": (
             [spell.name for spell in character.spell_selection.spells]
@@ -862,6 +893,12 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         ),
         mentor_spirit_general_choice_id=(
             mentor_spirit.general_choice.id if mentor_spirit is not None else None
+        ),
+        mentor_spirit_skill_choice=(
+            mentor_spirit.skill_choice if mentor_spirit is not None else None
+        ),
+        mentor_spirit_power_targets=(
+            mentor_spirit.chosen_power_targets if mentor_spirit is not None else ()
         ),
         build_method=session.build_method,
         knowledge_skill_picks=knowledge_skill_picks,

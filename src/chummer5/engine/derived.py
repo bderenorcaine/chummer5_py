@@ -351,6 +351,11 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
                 mentor_spirit.archetype.name,
                 getattr(mentor_spirit.archetype, "unmodeled_effect_note", None),
             )
+            # WP122: what the mentor grants -- free powers, and Eagle's Allergy.
+            for free in mentor_spirit.free_powers:
+                add(free.power.name, getattr(free.power, "unmodeled_effect_note", None))
+            for granted in mentor_spirit.granted_qualities:
+                add(granted.quality.name, getattr(granted.quality, "unmodeled_effect_note", None))
     if character.power_selection is not None:
         for power_pick in character.power_selection.picks:
             add(power_pick.power.name, getattr(power_pick.power, "unmodeled_effect_note", None))

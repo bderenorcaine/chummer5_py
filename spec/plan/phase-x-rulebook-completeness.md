@@ -355,7 +355,7 @@ the rules it checks.
   Acceptance: a Priority B Aspected (Conjuring) Magician gets Conjuring 4 free, can bind spirits,
   and can't pick spells.
 
-- [ ] **WP122 — Mentor spirit bonuses, complete.**
+- [x] **WP122 — Mentor spirit bonuses, complete.**
   Goal: apply every core mentor slot. Today 17 of 48 are applied.
   Deliverables:
   - **Adept slot:** free power levels granted outside the Power Point budget (`specificpower`), using

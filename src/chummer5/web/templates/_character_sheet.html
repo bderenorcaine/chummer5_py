@@ -142,6 +142,19 @@
   </p>
   <p>{{ mentor_spirit.archetype | dtext("advantage") }}</p>
   <p>{{ mentor_spirit.archetype | dtext("disadvantage") }}</p>
+  {#- WP122: what the slots grant beyond flat dice. -#}
+  <ul>
+    {% if mentor_spirit.skill_choice %}<li>{{ _("Web_Sheet_MentorSkillChoice", skill=mentor_spirit.skill_choice | dterm("skills.xml")) }}</li>{% endif %}
+    {% for free in mentor_spirit.free_powers %}
+    <li>{% if free.target %}{% set kind = free.power.target_kind %}{% set code = free.target %}{% set target_label %}{% include "_power_target_label.html" %}{% endset %}{{ _("Web_Sheet_MentorFreePowerWithTarget", name=free.power | dterm("powers.xml"), rating=free.rating, target=target_label) }}{% else %}{{ _("Web_Sheet_MentorFreePower", name=free.power | dterm("powers.xml"), rating=free.rating) }}{% endif %}</li>
+    {% endfor %}
+    {% for granted in mentor_spirit.granted_qualities %}
+    <li>{{ _("Web_Sheet_MentorGrantedQuality", name=granted.quality | dterm("qualities.xml"), detail=granted.text or "") }}</li>
+    {% endfor %}
+    {% for row in mentor_pool_rows %}
+    <li>{{ _("Web_Sheet_MentorPool", skill=row.skill | dterm("skills.xml"), pool=row.pool, value=row.value, condition=row.condition) }}</li>
+    {% endfor %}
+  </ul>
   {% endif %}
   {% endif %}
 

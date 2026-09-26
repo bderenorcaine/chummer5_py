@@ -428,6 +428,9 @@ class CharacterSave:
     # selection field defaults to.
     mentor_spirit_archetype_id: str | None = None
     mentor_spirit_general_choice_id: str | None = None
+    # WP122: Dragonslayer's skill of choice, and the Adept slot's free-power targets in order.
+    mentor_spirit_skill_choice: str | None = None
+    mentor_spirit_power_targets: tuple[str | None, ...] = ()
     # WP44: which priority-letter validity rule produced the 5 letters above -- see module
     # docstring for why this is carried through unvalidated rather than re-checked here.
     build_method: str = PRIORITY_BUILD_METHOD
@@ -498,6 +501,8 @@ def create_character_save(
     foci_picks: Iterable[FociPickPair] = (),
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
+    mentor_spirit_skill_choice: str | None = None,
+    mentor_spirit_power_targets: Iterable[str | None] = (),
     build_method: str = PRIORITY_BUILD_METHOD,
     knowledge_skill_picks: Iterable[KnowledgeSkillPickTriple] = (),
     language_skill_picks: Iterable[LanguageSkillPickTriple] = (),
@@ -550,6 +555,8 @@ def create_character_save(
         foci_picks=tuple(foci_picks),
         mentor_spirit_archetype_id=mentor_spirit_archetype_id,
         mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
+        mentor_spirit_skill_choice=mentor_spirit_skill_choice,
+        mentor_spirit_power_targets=tuple(mentor_spirit_power_targets),
         build_method=build_method,
         knowledge_skill_picks=tuple(knowledge_skill_picks),
         language_skill_picks=tuple(language_skill_picks),
@@ -711,6 +718,8 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         ],
         "mentor_spirit_archetype_id": save.mentor_spirit_archetype_id,
         "mentor_spirit_general_choice_id": save.mentor_spirit_general_choice_id,
+        "mentor_spirit_skill_choice": save.mentor_spirit_skill_choice,
+        "mentor_spirit_power_targets": list(save.mentor_spirit_power_targets),
         "build_method": save.build_method,
         "knowledge_skill_picks": [
             {"name": name, "category": category, "rating": rating}
@@ -789,6 +798,8 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         foci_picks=((p["focus_id"], p["force"]) for p in data.get("foci_picks", ())),
         mentor_spirit_archetype_id=data.get("mentor_spirit_archetype_id"),
         mentor_spirit_general_choice_id=data.get("mentor_spirit_general_choice_id"),
+        mentor_spirit_skill_choice=data.get("mentor_spirit_skill_choice"),
+        mentor_spirit_power_targets=tuple(data.get("mentor_spirit_power_targets", ())),
         build_method=data.get("build_method", PRIORITY_BUILD_METHOD),
         knowledge_skill_picks=(
             (p["name"], p["category"], p["rating"]) for p in data.get("knowledge_skill_picks", ())
@@ -938,6 +949,8 @@ def build_character(
         mentor_catalog=mentors,
         mentor_spirit_archetype_id=save.mentor_spirit_archetype_id,
         mentor_spirit_general_choice_id=save.mentor_spirit_general_choice_id,
+        mentor_spirit_skill_choice=save.mentor_spirit_skill_choice,
+        mentor_spirit_power_targets=save.mentor_spirit_power_targets,
         metatype_name=character.metatype.name,
         granted_quality_names=(q.name for q in metatype_qualities),
     )

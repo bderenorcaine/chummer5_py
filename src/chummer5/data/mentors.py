@@ -20,44 +20,26 @@ of these choices carry is UI-dropdown-layout-only (which of two dropdown widgets
 a gating mechanism, so this loader never reads it. See `MentorSpiritArchetype.general_options`/
 `.magician_choice`/`.adept_choice` below for how the 3 slots surface once parsed.
 
-**Bonus classification (`BonusSupport`, a fresh 3-way enum mirroring `chummer5.data.foci`'s own
-precedent rather than reusing `chummer5.data.qualities`'s -- only one flat shape, `<specificskill>`
-with just `name`+`bonus` children, ever appears here):**
+**Bonus classification (`BonusSupport`, a 3-way enum mirroring `chummer5.data.foci`'s precedent).**
+WP48 recognized only a flat `<specificskill>` and left 33 of 51 slots unsupported. **WP122**
+recognizes every shape a core slot uses (`_parse_slot`), so 50 slots are `FLAT_BONUS`:
 
-- `FLAT_BONUS` (17 of 48 classifiable slots: 10 fixed General bonuses, the 6 sub-options across
-  Cat/Fire-Bringer/Wise Warrior's General choice-pairs, and Mountain's Magician choice -- the one
-  Magician-slot `<specificskill>` with no `<condition>` child) -- an unconditional, flat skill dice
-  bonus, the same shape `chummer5.data.qualities`/`chummer5.data.foci` already recognize.
-- `NO_EFFECT` (1: Rat's Magician choice, "+2 dice to Alchemy tests when harvesting reagents, and
-  you may use reagents of any tradition", p. 323) -- has **no `<bonus>` element at all** in the raw
-  XML, confirmed to be the legacy data authors' own deliberate choice (harvesting reagents isn't a
-  tracked dice pool), not an extraction gap -- classified via a name-gated allowlist, mirroring
-  `chummer5.data.qualities`'s `_VERIFIED_NO_EFFECT_NAMES` discipline ("verified inert", not "any
-  missing `<bonus>` qualifies").
-- `NOT_YET_SUPPORTED` (everything else: 3 General bonuses whose one node doesn't match a
-  recognized flat shape -- Bear's `<damageresistance>`, an in-play resistance-test bonus this
-  engine doesn't compute; Dragonslayer's `<selectskill skillcategory=...>`, a pick-any-skill
-  mechanism with no fixed target; Eagle's compound `<addqualities>` + `<specificskill>` node,
-  failing as a whole since `addqualities` -- which silently grants the Allergy (pollutants, mild)
-  quality per the rulebook's own Disadvantages text, p. 322 -- isn't a recognized shape and this
-  project's "all children must be recognized" rule doesn't partially apply a compound bonus; every
-  other Magician choice, all `<spellcategory>` (a category-wide spellcasting dice pool this engine
-  never computes, since it resolves no in-play Tests at all); every Adept choice, all
-  `<specificpower>` (granting free Adept Power levels **outside** the normal Power Point budget --
-  a new "grant a Power for free" shape this engine has never built, classified uniformly
-  unsupported even for the mechanically simplest single-`<specificpower>` cases, mirroring
-  `chummer5.data.foci`'s Qi/Power Focus verdict: "no computed equivalent" is the bar, not "the XML
-  shape looks simple").
+- flat skill dice (`<specificskill>`), and Bear's `<damageresistance>` into WP109's pool;
+- Dragonslayer's `<selectskill skillcategory="Social Active">` -- "+2 dice pool modifier for one
+  social skill of choice" (p. 321), carried as `skill_choice_categories` and a pick-time choice;
+- Eagle's `<addqualities>` -- its disadvantage, "You get the Allergy (pollutants, mild) quality"
+  (p. 322), granted at 0 Karma (`granted_qualities`);
+- every Magician slot's `<spellcategory>` or conditional `<specificskill>` -- dice that count only
+  for some tests (`ConditionalPool`), shown on the sheet as the pool such a test rolls;
+- every Adept slot's `<specificpower>` -- free power levels outside the Power Point budget
+  (`FreePower`), applied as power instances, with a target where the power takes one.
 
-Every archetype is offered regardless of classification -- mirrors `chummer5.data.foci`'s "offer
-the full catalog, apply only the classified-supported subset" precedent (WP47), not
-`chummer5.data.qualities`'s "exclude entirely" one: the primary player-facing decision here is
-picking an archetype for its narrative advantage/disadvantage identity, not shopping a purely
-mechanical catalog, and every archetype still contributes at least *some* real, applied bonus
-(even Bear/Dragonslayer/Eagle -- whose General bonus is unsupported -- have no fully-unsupported
-choice slot: Bear/Eagle's Adept-choice is unsupported too, so those two archetypes currently apply
-nothing at all if the player is an Adept, same honest "verified, not silently wrong" posture WP47
-already accepted for 30 of 32 foci).
+`NO_EFFECT` stays for one slot, Rat's Magician choice ("+2 dice to Alchemy tests when harvesting
+reagents", p. 323), which has **no `<bonus>` element at all** in the raw XML. Harvesting isn't a
+tracked pool, and it is name-gated (`_VERIFIED_NO_EFFECT_CHOICES`).
+
+Every archetype is offered. Each archetype's disadvantage, which is in play, is its
+`unmodeled_effect_note` (WP122); Eagle's is the granted Allergy instead.
 
 `chummer5.engine.qualities` is what actually turns a picked archetype's `FLAT_BONUS` slots into
 real `Improvement`s (as part of applying the Mentor Spirit quality) -- this module only loads and
@@ -105,44 +87,151 @@ class BonusSupport(Enum):
 
 @dataclass(frozen=True)
 class FlatBonus:
-    """One unconditional, flat skill dice bonus -- the only shape this file's `<bonus>` nodes ever
-    resolve to `FLAT_BONUS` with."""
+    """One unconditional, flat bonus. `target_kind` is "skill" (a skill's dice) or, since WP122,
+    "damage_resistance" (Bear). An empty `target_name` on a "skill" bonus means "the skill the
+    pick chose" (Dragonslayer's "one social skill of choice")."""
 
-    target_kind: str  # always "skill" for this catalog
+    target_kind: str
     target_name: str
     value: int
+
+
+@dataclass(frozen=True)
+class ConditionalPool:
+    """WP122: dice that count only for some tests of some skills -- a Magician slot's "+2 dice for
+    Health spells, preparations, and rituals" (Spellcasting, Ritual Spellcasting and Alchemy for
+    that category), or "+2 dice summoning spirits of air". `condition` is the printed phrase."""
+
+    skills: tuple[str, ...]
+    value: int
+    condition: str
+
+
+@dataclass(frozen=True)
+class FreePower:
+    """WP122: an Adept slot's free power levels, granted outside the Power Point budget. The
+    `target_*` fields narrow what the instance may name (`<bonusoverride>`): Sea's Improved Ability
+    must be on an athletic skill, Wolf's Attribute Boost is Agility's."""
+
+    power_name: str
+    levels: int
+    target_skill_categories: tuple[str, ...] = ()
+    target_skill_groups: tuple[str, ...] = ()
+    target_attributes: tuple[str, ...] = ()
 
 
 def _is_flat_skill_bonus(elem: ET.Element) -> bool:
     return {child.tag for child in elem} == _FLAT_SKILL_FIELDS
 
 
+# WP122: a `<spellcategory>` bonus counts for the category's spells, rituals and preparations
+# (p. 321-324: "+2 dice for health spells, preparations, and rituals") -- the three skills that
+# cast, perform or brew them.
+_SPELL_CATEGORY_SKILLS = ("Spellcasting", "Ritual Spellcasting", "Alchemy")
+
+
+@dataclass(frozen=True)
+class _SlotBonuses:
+    """Everything one slot's `<bonus>` grants (WP122)."""
+
+    flat_bonuses: tuple[FlatBonus, ...] = ()
+    conditional_pools: tuple[ConditionalPool, ...] = ()
+    free_powers: tuple[FreePower, ...] = ()
+    skill_choice_categories: tuple[str, ...] = ()
+    granted_qualities: tuple[tuple[str, str], ...] = ()  # (quality name, its detail)
+
+
+def _parse_free_power(elem: ET.Element) -> FreePower:
+    override = elem.find("bonusoverride")
+    categories: tuple[str, ...] = ()
+    groups: tuple[str, ...] = ()
+    attributes: tuple[str, ...] = ()
+    if override is not None:
+        select_skill = override.find("selectskill")
+        if select_skill is not None:
+            listed = tuple(c.text or "" for c in select_skill.findall("skillcategories/category"))
+            single = select_skill.get("skillcategory")
+            categories = listed or ((single,) if single else ())
+            groups = tuple(g for g in select_skill.get("skillgroup", "").split(",") if g)
+        attributes = tuple(a.text or "" for a in override.findall("selectattribute/attribute"))
+    return FreePower(
+        power_name=elem.findtext("name", ""),
+        levels=int(elem.findtext("val", "1")),
+        target_skill_categories=categories,
+        target_skill_groups=groups,
+        target_attributes=attributes,
+    )
+
+
+def _parse_slot(bonus_elem: ET.Element) -> _SlotBonuses | None:
+    """WP122: every child shape a core mentor slot uses, or None if one isn't recognized."""
+    flat: list[FlatBonus] = []
+    pools: list[ConditionalPool] = []
+    powers: list[FreePower] = []
+    choice_categories: tuple[str, ...] = ()
+    granted: list[tuple[str, str]] = []
+    for child in bonus_elem:
+        tags = {c.tag for c in child}
+        if child.tag == "specificskill" and tags == _FLAT_SKILL_FIELDS:
+            flat.append(
+                FlatBonus("skill", child.findtext("name", ""), int(child.findtext("bonus", "0")))
+            )
+        elif child.tag == "specificskill" and tags == {*_FLAT_SKILL_FIELDS, "condition"}:
+            pools.append(
+                ConditionalPool(
+                    skills=(child.findtext("name", ""),),
+                    value=int(child.findtext("bonus", "0")),
+                    condition=f"summoning {child.findtext('condition', '')}",
+                )
+            )
+        elif child.tag == "spellcategory" and tags == {"name", "val"}:
+            category = child.findtext("name", "")
+            pools.append(
+                ConditionalPool(
+                    skills=_SPELL_CATEGORY_SKILLS,
+                    value=int(child.findtext("val", "0")),
+                    condition=f"{category} spells, preparations and rituals",
+                )
+            )
+        elif child.tag == "damageresistance" and len(child) == 0 and child.text:
+            flat.append(FlatBonus("damage_resistance", "", int(child.text)))
+        elif child.tag == "selectskill" and tags == {"val"} and child.get("skillcategory"):
+            flat.append(FlatBonus("skill", "", int(child.findtext("val", "0"))))
+            choice_categories = (child.get("skillcategory", ""),)
+        elif child.tag == "addqualities":
+            granted.extend((q.text or "", q.get("select", "")) for q in child.findall("addquality"))
+        elif child.tag == "specificpower":
+            powers.append(_parse_free_power(child))
+        else:
+            return None
+    return _SlotBonuses(
+        flat_bonuses=tuple(flat),
+        conditional_pools=tuple(pools),
+        free_powers=tuple(powers),
+        skill_choice_categories=choice_categories,
+        granted_qualities=tuple(granted),
+    )
+
+
 def _classify_bonus(
     context_name: str, bonus_elem: ET.Element | None
-) -> tuple[BonusSupport, tuple[FlatBonus, ...]]:
+) -> tuple[BonusSupport, _SlotBonuses]:
     """Classify one bonus slot's `<bonus>` node. `context_name` is the enclosing `<choice>`'s own
     `<name>` (used only to look up `_VERIFIED_NO_EFFECT_CHOICES` when `bonus_elem` is absent) --
     irrelevant, and unused, when called for a General slot expressed as a fixed top-level `<bonus>`
     (see `MentorSpiritArchetype.general_options`'s own construction below).
+
+    **WP122**: every core slot's shape is now recognized (`_parse_slot`), so every slot but Rat's
+    reagent-harvesting one is `FLAT_BONUS`.
     """
     if bonus_elem is None:
         if context_name in _VERIFIED_NO_EFFECT_CHOICES:
-            return BonusSupport.NO_EFFECT, ()
-        return BonusSupport.NOT_YET_SUPPORTED, ()
-
-    flat_bonuses = []
-    for child in bonus_elem:
-        if child.tag == "specificskill" and _is_flat_skill_bonus(child):
-            flat_bonuses.append(
-                FlatBonus(
-                    target_kind="skill",
-                    target_name=child.findtext("name", ""),
-                    value=int(child.findtext("bonus", "0")),
-                )
-            )
-        else:
-            return BonusSupport.NOT_YET_SUPPORTED, ()
-    return BonusSupport.FLAT_BONUS, tuple(flat_bonuses)
+            return BonusSupport.NO_EFFECT, _SlotBonuses()
+        return BonusSupport.NOT_YET_SUPPORTED, _SlotBonuses()
+    parsed = _parse_slot(bonus_elem)
+    if parsed is None:
+        return BonusSupport.NOT_YET_SUPPORTED, _SlotBonuses()
+    return BonusSupport.FLAT_BONUS, parsed
 
 
 @dataclass(frozen=True)
@@ -159,6 +248,11 @@ class MentorChoice:
     name: str
     bonus_support: BonusSupport
     flat_bonuses: tuple[FlatBonus, ...]
+    # WP122: the rest of what a slot can grant -- see `_SlotBonuses`.
+    conditional_pools: tuple[ConditionalPool, ...] = ()
+    free_powers: tuple[FreePower, ...] = ()
+    skill_choice_categories: tuple[str, ...] = ()
+    granted_qualities: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -182,16 +276,85 @@ class MentorSpiritArchetype:
     adept_choice: MentorChoice
     source: str
     page: int
+    # WP122: the disadvantage's in-play part (the Project Overview registry).
+    unmodeled_effect_note: str | None = None
+
+
+# WP122: each core mentor's disadvantage, which is in play for every archetype but Eagle (whose
+# Allergy is granted as a quality). Condensed from the printed text (pp. 321-324).
+_BERSERK = (
+    "may go berserk for up to 3 turns after taking Physical damage in combat, resisted with a "
+    "Charisma + Willpower Test"
+)
+_DISADVANTAGE_NOTES: dict[str, str] = {
+    "Bear": f"Disadvantage: {_BERSERK}, or when someone in their care is badly injured (p. 321)",
+    "Cat": (
+        "Disadvantage: can't make an incapacitating attack without a Charisma + Willpower (3) Test "
+        "at the start of combat (p. 321)"
+    ),
+    "Dog": (
+        "Disadvantage: can't leave someone behind or betray a comrade without a Charisma + "
+        "Willpower (3) Test (p. 321)"
+    ),
+    "Dragonslayer": (
+        "Disadvantage: -1 dice to all actions after breaking a promise, until it is made good "
+        "(p. 321)"
+    ),
+    "Fire-Bringer": (
+        "Disadvantage: can't refuse a sincere request for help without a Charisma + Willpower (3) "
+        "Test (p. 322)"
+    ),
+    "Mountain": ("Disadvantage: abandoning a plan takes a Charisma + Willpower (3) Test (p. 322)"),
+    "Rat": (
+        "Disadvantage: must flee or seek cover in combat unless a Charisma + Willpower (3) Test "
+        "succeeds (p. 323)"
+    ),
+    "Raven": (
+        "Disadvantage: a Charisma + Willpower (3) Test to resist exploiting someone's misfortune "
+        "or pulling a prank (p. 323)"
+    ),
+    "Sea": "Disadvantage: giving anything away takes a Charisma + Willpower (3) Test (p. 323)",
+    "Seducer": (
+        "Disadvantage: a Charisma + Willpower (3) Test to resist an available vice (p. 323)"
+    ),
+    "Shark": f"Disadvantage: {_BERSERK} (p. 323)",
+    "Snake": (
+        "Disadvantage: a Charisma + Willpower (3) Test to resist chasing rare secrets (p. 324)"
+    ),
+    "Thunderbird": (
+        "Disadvantage: a Charisma + Willpower (3) Test to avoid answering an insult in kind (p. "
+        "324)"
+    ),
+    "Wise Warrior": (
+        "Disadvantage: -1 dice to all actions after acting dishonorably, until atoned for (p. 324)"
+    ),
+    "Wolf": "Disadvantage: retreating from a fight takes a Charisma + Willpower (3) Test (p. 324)",
+}
+
+
+def _disadvantage_note(name: str) -> str | None:
+    note = _DISADVANTAGE_NOTES.get(name)
+    return None if note is None else f"{note} -- no in-play test or consequence tracking exists."
 
 
 def _parse_choice(archetype_id: str, elem: ET.Element) -> MentorChoice:
     name = elem.findtext("name", "")
-    support, flat_bonuses = _classify_bonus(name, elem.find("bonus"))
+    support, bonuses = _classify_bonus(name, elem.find("bonus"))
+    return _choice(f"{archetype_id}:{name}", name, support, bonuses)
+
+
+def _choice(
+    choice_id: str, name: str, support: BonusSupport, bonuses: _SlotBonuses
+) -> MentorChoice:
     return MentorChoice(
-        id=f"{archetype_id}:{name}",
+        id=choice_id,
         name=name,
         bonus_support=support,
-        flat_bonuses=flat_bonuses,
+        flat_bonuses=bonuses.flat_bonuses,
+        conditional_pools=bonuses.conditional_pools,
+        free_powers=bonuses.free_powers,
+        skill_choice_categories=bonuses.skill_choice_categories,
+        granted_qualities=bonuses.granted_qualities,
     )
 
 
@@ -219,14 +382,9 @@ def _parse_mentor(elem: ET.Element) -> MentorSpiritArchetype:
         raise ValueError(f"{name}: expected both a Magician: and an Adept: choice")
 
     if general_bonus_elem is not None:
-        general_support, general_flat_bonuses = _classify_bonus("", general_bonus_elem)
+        general_support, general_bonuses = _classify_bonus("", general_bonus_elem)
         general_options: tuple[MentorChoice, ...] = (
-            MentorChoice(
-                id=f"{mentor_id}:general",
-                name="General",
-                bonus_support=general_support,
-                flat_bonuses=general_flat_bonuses,
-            ),
+            _choice(f"{mentor_id}:general", "General", general_support, general_bonuses),
         )
     else:
         general_options = tuple(ungated_choices)
@@ -241,6 +399,7 @@ def _parse_mentor(elem: ET.Element) -> MentorSpiritArchetype:
         adept_choice=adept_choice,
         source=elem.findtext("source", ""),
         page=int(elem.findtext("page", "0")),
+        unmodeled_effect_note=_disadvantage_note(name),
     )
 
 

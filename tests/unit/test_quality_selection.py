@@ -790,6 +790,7 @@ def test_create_quality_selection_gated_choice_resolves_from_magic_type() -> Non
         magic_type="Adept",
         mentor_catalog=MENTORS,
         mentor_spirit_archetype_id=DOG.id,
+        mentor_spirit_power_targets=("Low-light vision", "Direction Sense"),  # WP122
     )
     assert selection.mentor_spirit is not None
     assert selection.mentor_spirit.gated_choice == DOG.adept_choice
@@ -831,10 +832,10 @@ def test_apply_mentor_spirit_improvements_dog_general_flat_bonus() -> None:
         assert imp.source_id == DOG.id
 
 
-def test_apply_mentor_spirit_improvements_bear_applies_nothing_for_magician() -> None:
-    # Bear's General bonus (<damageresistance>) and Magician choice (<spellcategory>) are both
-    # NOT_YET_SUPPORTED -- a real, honestly-classified "this pick currently applies no computed
-    # bonus" case (see chummer5.data.mentors' own docstring).
+def test_apply_mentor_spirit_improvements_bear_gives_a_magician_damage_resistance() -> None:
+    # WP48 found Bear applied nothing at all. WP122 applies its General +2 Damage Resistance; its
+    # Magician slot's Health-spell dice are a conditional pool, shown on the sheet, not an
+    # Improvement.
     character = _magician()
     selection = create_quality_selection(
         [MENTOR_SPIRIT.id],
@@ -847,7 +848,9 @@ def test_apply_mentor_spirit_improvements_bear_applies_nothing_for_magician() ->
 
     apply_mentor_spirit_improvements(character, selection.mentor_spirit)
 
-    assert character.improvements.improvements == ()
+    assert [(i.improvement_type, i.value) for i in character.improvements.improvements] == [
+        (ImprovementType.DAMAGE_RESISTANCE, 2)
+    ]
 
 
 def test_apply_mentor_spirit_improvements_can_be_retracted_via_remove_source() -> None:
