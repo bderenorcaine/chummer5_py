@@ -5,5 +5,7 @@
 {%- elif kind == "home_ground" -%}{{ _("Web_HomeGround_" ~ code) }}
 {%- elif kind == "spirit_type" -%}{{ code | dterm("traditions.xml") }}
 {%- elif kind == "matrix_action" -%}{{ code | dterm("actions.xml") }}
+{%- elif kind == "scorched_effect" -%}{{ _("Web_Scorched_" ~ code) }}
+{%- elif kind == "skill" -%}{{ code | dterm("skills.xml") }}
 {%- else -%}{{ code }}
 {%- endif -%}

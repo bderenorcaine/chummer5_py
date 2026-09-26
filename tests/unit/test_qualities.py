@@ -63,12 +63,14 @@ def test_conditional_skill_bonus_is_registered_not_applied() -> None:
     assert analytical_mind.unmodeled_effect_note
 
 
-def test_quality_with_no_bonus_element_is_not_yet_supported() -> None:
+def test_quality_with_no_bonus_element_is_offered_only_by_name() -> None:
     # Gremlins uses <firstlevelbonus> instead of <bonus> — no <bonus> element is present at all.
+    # WP115 name-gated it NO_EFFECT with a note; the absent element is still recorded as such.
     qualities = load_qualities()
     gremlins = next(q for q in qualities if q.name == "Gremlins")
-    assert gremlins.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    assert gremlins.bonus_support == BonusSupport.NO_EFFECT
     assert gremlins.raw_bonus is None
+    assert gremlins.unmodeled_effect_note
 
 
 def test_select_text_quality_is_classified_correctly() -> None:
@@ -117,16 +119,14 @@ def test_sinner_variants_forbid_each_other() -> None:
 
 
 def test_natural_immunity_forbids_weak_immune_system() -> None:
-    # Hand-checked: both Natural Immunity variants forbid Weak Immune System (itself NOT_YET_
-    # SUPPORTED -- not offered by mvp_quality_catalog -- so this exclusion is unreachable via the
-    # offered catalog today; still parsed correctly, per WP55's "implement it correctly even though
-    # it currently can't fire" instruction).
+    # Hand-checked: both Natural Immunity variants forbid Weak Immune System. WP55 parsed this
+    # before Weak Immune System was offered; WP115 offers it, so the exclusion now fires.
     qualities = load_qualities()
     for name in ("Natural Immunity (Natural)", "Natural Immunity (Synthetic)"):
         quality = next(q for q in qualities if q.name == name)
         assert quality.forbidden_names == ("Weak Immune System",)
     weak_immune_system = next(q for q in qualities if q.name == "Weak Immune System")
-    assert weak_immune_system.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    assert weak_immune_system.bonus_support == BonusSupport.NO_EFFECT
 
 
 def test_quality_with_no_forbidden_block_has_empty_forbidden_names() -> None:
@@ -199,13 +199,16 @@ def test_supported_vs_unsupported_counts_are_visible() -> None:
     # NOT_YET_SUPPORTED: 96 - 7 - 8 - 9 = 72. WP112 adds 2 FLAT_BONUS attribute-maximum raises
     # (Exceptional Attribute, Lucky): 9 FLAT_BONUS, 70 NOT_YET_SUPPORTED. WP114 adds 4 FLAT_BONUS
     # (Toughness, High Pain Tolerance, Will to Live, Photographic Memory) and 15 NO_EFFECT (12
-    # registry rows + 3 choice rows): 13 FLAT_BONUS, 23 NO_EFFECT, 51 NOT_YET_SUPPORTED.
+    # registry rows + 3 choice rows): 13 FLAT_BONUS, 23 NO_EFFECT, 51 NOT_YET_SUPPORTED. WP115
+    # adds 5 FLAT_BONUS (Dependents x3, Low Pain Tolerance, Loss of Confidence), 13 NO_EFFECT (11
+    # registry rows + Scorched and Spirit Bane) and 18 SELECT_TEXT (Addiction x4, Allergy x8,
+    # Prejudiced x6).
     qualities = load_qualities()
     counts = count_by_support(qualities)
-    assert counts[BonusSupport.FLAT_BONUS] == 13
-    assert counts[BonusSupport.NO_EFFECT] == 23
-    assert counts[BonusSupport.SELECT_TEXT] == 9
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 51
+    assert counts[BonusSupport.FLAT_BONUS] == 18
+    assert counts[BonusSupport.NO_EFFECT] == 36
+    assert counts[BonusSupport.SELECT_TEXT] == 27
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 15
 
 
 def test_indomitable_mental_limit_bonus_is_supported() -> None:
@@ -240,16 +243,22 @@ def test_verified_no_effect_quality_has_no_flat_bonuses() -> None:
     assert gearhead.flat_bonuses == ()
 
 
-def test_empty_bonus_quality_is_no_effect_only_by_name() -> None:
+def test_empty_bonus_quality_is_no_effect_only_by_name(tmp_path: Path) -> None:
     # Human-Looking has an empty <bonus/> and needed the metatype gate WP108 built; WP114 then
-    # name-gated it NO_EFFECT with a note. Gremlins, whose effect is not yet registered (WP115),
-    # shows an empty/absent <bonus> is still not swept in on shape alone.
+    # name-gated it NO_EFFECT with a note. Since WP115 every real empty-<bonus/> SR5 row is
+    # name-gated, so an unknown name shows an empty <bonus/> is still not swept in on shape alone.
     qualities = load_qualities()
     human_looking = next(q for q in qualities if q.name == "Human-Looking")
     assert human_looking.bonus_support == BonusSupport.NO_EFFECT
     assert human_looking.unmodeled_effect_note
-    gremlins = next(q for q in qualities if q.name == "Gremlins")
-    assert gremlins.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    xml = tmp_path / "qualities.xml"
+    xml.write_text(
+        "<chummer><qualities><quality><id>x</id><name>Unverified</name><karma>-5</karma>"
+        "<category>Negative</category><bonus /><source>SR5</source><page>1</page></quality>"
+        "</qualities></chummer>"
+    )
+    (unverified,) = load_qualities(xml)
+    assert unverified.bonus_support == BonusSupport.NOT_YET_SUPPORTED
 
 
 def test_flat_attribute_bonus_shape_is_supported() -> None:

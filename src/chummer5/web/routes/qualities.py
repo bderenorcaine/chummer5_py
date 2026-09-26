@@ -28,10 +28,11 @@ from chummer5.engine.qualities import (
     apply_quality_improvements,
     choice_options,
     create_quality_selection,
+    later_step_facts,
     offerable_quality_catalog,
     resolve_metatype_qualities,
 )
-from chummer5.web.catalogs import MENTOR_SPIRIT_QUALITY, MENTORS, QUALITIES, templates
+from chummer5.web.catalogs import MENTOR_SPIRIT_QUALITY, MENTORS, QUALITIES, SKILLS, templates
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -61,22 +62,27 @@ def _relink_metatype_qualities(character: Character) -> Character:
     )
     apply_metatype_bonus_improvements(character)
     character = replace(character, metatype_qualities=metatype_qualities)
-    # The Lifestyle surcharge may have just changed (Human -> Troll doubles it), and a committed
-    # selection carries its computed total -- re-price it at the new percent.
+    # The Lifestyle surcharge may have just changed (Human -> Troll doubles it).
+    return _reprice_lifestyle(character)
+
+
+def _reprice_lifestyle(character: Character) -> Character:
+    """Re-price a committed Lifestyle at the character's current Σ `LIFESTYLE_COST` (WP113). A
+    committed selection carries its computed total, so a metatype change or (WP115) a Dependents
+    pick has to refresh it."""
     selection = character.lifestyle_selection
-    if selection is not None:
-        character = replace(
-            character,
-            lifestyle_selection=replace(
-                selection,
-                cost_percent=lifestyle_cost_percent(character),
-                total_cost=surcharged_monthly_cost(
-                    selection.tier.monthly_cost, lifestyle_cost_percent(character)
-                )
-                * selection.months,
-            ),
-        )
-    return character
+    if selection is None:
+        return character
+    percent = lifestyle_cost_percent(character)
+    return replace(
+        character,
+        lifestyle_selection=replace(
+            selection,
+            cost_percent=percent,
+            total_cost=surcharged_monthly_cost(selection.tier.monthly_cost, percent)
+            * selection.months,
+        ),
+    )
 
 
 def _strip_mentor_spirit_selection(
@@ -110,14 +116,20 @@ def _strip_mentor_spirit_selection(
         if pick.quality.name != MENTOR_SPIRIT_QUALITY_NAME
     ]
     offered = offerable_quality_catalog(character, QUALITIES)
-    return create_quality_selection(remaining, offered, **_gate_kwargs(character))
+    # WP115: without the later-step facts -- this only removes a pick, and a Loss of Confidence
+    # that a skill edit left stale must stay a warning here, not an exception.
+    kwargs = {**_gate_kwargs(character), "later_steps": None}
+    return create_quality_selection(remaining, offered, **kwargs)
 
 
 def _gate_kwargs(character: Character) -> dict[str, Any]:
-    """The metatype half of `create_quality_selection`'s WP108 prerequisite check."""
+    """The metatype half of `create_quality_selection`'s WP108 prerequisite check, plus (WP115)
+    the skill ratings and cyberdeck ownership Loss of Confidence and Scorched are checked
+    against."""
     return {
         "metatype_name": character.metatype.name,
         "granted_quality_names": tuple(q.name for q in character.metatype_qualities),
+        "later_steps": later_step_facts(character, SKILLS),
     }
 
 
@@ -139,7 +151,8 @@ def _replace_committed_qualities(character: Character, selection: QualitySelecti
     apply_quality_improvements(character, selection.qualities)
     if selection.mentor_spirit is not None:
         apply_mentor_spirit_improvements(character, selection.mentor_spirit)
-    return replace(character, quality_selection=selection)
+    # WP115: Dependents change the Lifestyle surcharge.
+    return _reprice_lifestyle(replace(character, quality_selection=selection))
 
 
 def _row_key(quality_id: str, index: int) -> str:

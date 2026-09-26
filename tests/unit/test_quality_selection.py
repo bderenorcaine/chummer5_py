@@ -83,7 +83,7 @@ def _by_name(name: str) -> Quality:
     return next(q for q in QUALITIES if q.name == name)
 
 
-def test_mvp_quality_catalog_is_exactly_the_forty_five_offerable_qualities() -> None:
+def test_mvp_quality_catalog_is_exactly_the_eighty_one_offerable_qualities() -> None:
     # WP8's 3 FLAT_BONUS qualities (Catlike, Double-Jointed, Natural Athlete) + WP22's 3 new
     # FLAT_BONUS Indomitable qualities + WP22's 8 verified-NO_EFFECT qualities = 14, +1 for WP49's
     # Bilingual (see spec/rulebooks/learnings.md's WP49 entry -- Bilingual was NOT_YET_SUPPORTED
@@ -93,9 +93,46 @@ def test_mvp_quality_catalog_is_exactly_the_forty_five_offerable_qualities() -> 
     # plus the 4 SINner variants, Code of Honor, Codeblock, and Social Stress (7 more) are
     # Negative -- 9 Negative qualities total, the rest (15) Positive. WP112 adds Exceptional
     # Attribute and Lucky (Positive) = 26. WP114 adds the 19 remaining in-scope Positive qualities
-    # (Aptitude is WP116's; Mentor Spirit is widened per-character, not here) = 45.
+    # (Aptitude is WP116's; Mentor Spirit is widened per-character, not here) = 45. WP115 adds 36
+    # Negative qualities (Incompetent, Uncouth, Uneducated and Sensitive System are WP117's) = 81.
     offered = mvp_quality_catalog(QUALITIES)
     assert {q.name for q in offered} == {
+        "Addiction (Mild)",
+        "Addiction (Moderate)",
+        "Addiction (Severe)",
+        "Addiction (Burnout)",
+        "Allergy (Uncommon, Mild)",
+        "Allergy (Uncommon, Moderate)",
+        "Allergy (Uncommon, Severe)",
+        "Allergy (Uncommon, Extreme)",
+        "Allergy (Common, Mild)",
+        "Allergy (Common, Moderate)",
+        "Allergy (Common, Severe)",
+        "Allergy (Common, Extreme)",
+        "Astral Beacon",
+        "Bad Luck",
+        "Bad Rep",
+        "Combat Paralysis",
+        "Dependent (Nuisance)",
+        "Dependent (Inconvenience)",
+        "Dependent (Demanding)",
+        "Distinctive Style",
+        "Elf Poser",
+        "Gremlins",
+        "Insomnia (Basic)",
+        "Insomnia (Full)",
+        "Loss of Confidence",
+        "Low Pain Tolerance",
+        "Ork Poser",
+        "Prejudiced (Common, Biased)",
+        "Prejudiced (Common, Outspoken)",
+        "Prejudiced (Common, Radical)",
+        "Prejudiced (Specific, Biased)",
+        "Prejudiced (Specific, Outspoken)",
+        "Prejudiced (Specific, Radical)",
+        "Scorched",
+        "Spirit Bane",
+        "Weak Immune System",
         "Ambidextrous",
         "Analytical Mind",
         "Astral Chameleon",
@@ -158,6 +195,42 @@ def test_mvp_quality_catalog_is_exactly_the_forty_five_offerable_qualities() -> 
         "Code of Honor",
         "Codeblock",
         "Social Stress",
+        "Addiction (Mild)",
+        "Addiction (Moderate)",
+        "Addiction (Severe)",
+        "Addiction (Burnout)",
+        "Allergy (Uncommon, Mild)",
+        "Allergy (Uncommon, Moderate)",
+        "Allergy (Uncommon, Severe)",
+        "Allergy (Uncommon, Extreme)",
+        "Allergy (Common, Mild)",
+        "Allergy (Common, Moderate)",
+        "Allergy (Common, Severe)",
+        "Allergy (Common, Extreme)",
+        "Astral Beacon",
+        "Bad Luck",
+        "Bad Rep",
+        "Combat Paralysis",
+        "Dependent (Nuisance)",
+        "Dependent (Inconvenience)",
+        "Dependent (Demanding)",
+        "Distinctive Style",
+        "Elf Poser",
+        "Gremlins",
+        "Insomnia (Basic)",
+        "Insomnia (Full)",
+        "Loss of Confidence",
+        "Low Pain Tolerance",
+        "Ork Poser",
+        "Prejudiced (Common, Biased)",
+        "Prejudiced (Common, Outspoken)",
+        "Prejudiced (Common, Radical)",
+        "Prejudiced (Specific, Biased)",
+        "Prejudiced (Specific, Outspoken)",
+        "Prejudiced (Specific, Radical)",
+        "Scorched",
+        "Spirit Bane",
+        "Weak Immune System",
     }
 
 
@@ -170,37 +243,34 @@ def test_mvp_quality_catalog_excludes_qualities_researched_and_rejected_this_wp(
     # (see that WP's own entry) -- Home Ground, Spirit Affinity, and the 6 Prejudiced variants stay
     # excluded (each needs its own, still-unbuilt kind of engine support: a branching bonus, a
     # magic-gate, a dice-pool-modifier mechanism, respectively).
-    offered_names = {q.name for q in mvp_quality_catalog(QUALITIES)}
-    excluded_names = {
-        # Astral Chameleon, Focused Concentration, Home Ground and Spirit Affinity left this list in
-        # WP114, which offered them (gated, with registry notes / choices).
-        "Astral Beacon",
-        "Gremlins",
-        "Prejudiced (Common, Biased)",
-        "Prejudiced (Common, Outspoken)",
-        "Prejudiced (Common, Radical)",
-        "Prejudiced (Specific, Biased)",
-        "Prejudiced (Specific, Outspoken)",
-        "Prejudiced (Specific, Radical)",
+    #
+    # WP114 and WP115 offered every one of them. What is still unoffered is exactly what the rest
+    # of Phase X schedules (Aptitude: WP116; the four purchase-rule qualities: WP117), plus the
+    # rows that are never offered from this catalog on purpose.
+    unoffered = {q.name for q in QUALITIES} - {q.name for q in mvp_quality_catalog(QUALITIES)}
+    assert unoffered == {
+        "Aptitude",
+        "Incompetent",
+        "Uncouth",
+        "Uneducated",
+        "Sensitive System",
+        "Mentor Spirit",  # widened per character (WP48)
+        "Resistance to Pathogens/Toxins",  # the Dwarf's racial row (WP114)
+        *OUT_OF_SCOPE_QUALITY_NAMES,
     }
-    assert excluded_names.isdisjoint(offered_names)
-    # Every name above is a real SR5 quality, not a typo -- guards this test itself against silently
-    # asserting nothing.
-    real_names = {q.name for q in QUALITIES}
-    assert excluded_names <= real_names
 
 
 def test_mvp_quality_catalog_excludes_not_yet_supported_quality() -> None:
     # Explicit acceptance-criteria test: a NOT_YET_SUPPORTED quality is excluded from the offered
     # list entirely, not offered with its bonus silently dropped. (Analytical Mind was the example
-    # until WP114 registered it; Gremlins waits for WP115.)
-    gremlins = _by_name("Gremlins")
-    assert gremlins.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    # until WP114 registered it, then Gremlins until WP115; Uncouth waits for WP117.)
+    uncouth = _by_name("Uncouth")
+    assert uncouth.bonus_support == BonusSupport.NOT_YET_SUPPORTED
     offered_names = {q.name for q in mvp_quality_catalog(QUALITIES)}
-    assert gremlins.name not in offered_names
+    assert uncouth.name not in offered_names
 
     with pytest.raises(ValueError, match="not an MVP-offered quality id"):
-        create_quality_selection([gremlins.id], QUALITIES)
+        create_quality_selection([uncouth.id], QUALITIES)
 
 
 def test_create_quality_selection_single_positive_quality() -> None:
@@ -512,12 +582,20 @@ def test_offerable_quality_catalog_excludes_metatype_granted_quality() -> None:
     # mundane) -- this excludes exactly the granted one(s).
     assert {q.name for q in offered} == {q.name for q in mvp_quality_catalog(QUALITIES)} - {
         "Low-Light Vision",
+        "Elf Poser",  # WP115: humans only
         *_MAGIC_GATED,
     }
 
 
 # WP114: offered qualities a mundane character's gate hides (WP108).
-_MAGIC_GATED = {"Astral Chameleon", "Focused Concentration", "Spirit Affinity"}
+_MAGIC_GATED = {
+    "Astral Chameleon",
+    "Focused Concentration",
+    "Spirit Affinity",
+    # WP115
+    "Astral Beacon",
+    "Spirit Bane",
+}
 
 
 def test_offerable_quality_catalog_unaffected_for_human() -> None:
@@ -1115,15 +1193,16 @@ def test_a_gate_built_only_from_non_core_conditions_can_never_be_met() -> None:
 
 def test_out_of_scope_rows_are_excluded_by_name_and_the_catalog_size_is_pinned() -> None:
     """Loud on data drift: 96 SR5 rows, 8 out of scope, 1 metatype-only (the Dwarf's racial
-    Resistance row, WP114), 45 offered today (WP112 added 2, WP114 19). WP115-WP117 move the
-    offered count towards 87 (every purchasable in-scope row) and must update this number."""
+    Resistance row, WP114), 81 offered today (WP112 added 2, WP114 19, WP115 36). WP116-WP117
+    move the offered count towards 87 (every purchasable in-scope row) and must update this
+    number."""
     names = {q.name for q in QUALITIES}
     assert len(QUALITIES) == 96
     assert OUT_OF_SCOPE_QUALITY_NAMES <= names
     assert len(OUT_OF_SCOPE_QUALITY_NAMES) == 8
     offered = {q.name for q in mvp_quality_catalog(QUALITIES)}
     assert not offered & OUT_OF_SCOPE_QUALITY_NAMES
-    assert len(offered) == 45
+    assert len(offered) == 81
     forced = tuple(replace(q, bonus_support=BonusSupport.NO_EFFECT) for q in QUALITIES)
     assert len(mvp_quality_catalog(forced)) == 87
 

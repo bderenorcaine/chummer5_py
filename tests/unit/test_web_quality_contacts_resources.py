@@ -17,6 +17,7 @@ from chummer5.engine.character import create_character, metatype_choices
 from chummer5.engine.qualities import QUALITY_KARMA_LIMIT, offerable_quality_catalog
 from chummer5.engine.resources import STARTER_GEAR_CATALOG
 from chummer5.web.app import MAX_CONTACT_ROWS, MVP_QUALITIES, create_app
+from chummer5.web.catalogs import SKILLS
 
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
@@ -759,3 +760,51 @@ def test_home_ground_offers_its_five_bonuses_and_shows_the_choice() -> None:
     sheet = client.get("/character/sheet").text
     assert "Home Ground (Street Politics)" in sheet
     assert "<th>Memory</th>" in sheet
+
+
+# --- WP115: negative qualities --------------------------------------------------------------------
+
+_LOSS_OF_CONFIDENCE = next(q for q in MVP_QUALITIES if q.name == "Loss of Confidence")
+_DEPENDENT_DEMANDING = next(q for q in MVP_QUALITIES if q.name == "Dependent (Demanding)")
+_SCORCHED = next(q for q in MVP_QUALITIES if q.name == "Scorched")
+
+
+def test_loss_of_confidence_needs_the_skill_at_four_and_goes_stale_below_it() -> None:
+    pistols = next(s for s in SKILLS if s.name == "Pistols")
+    client = TestClient(create_app())
+    _confirm_human(client)
+    loss = {
+        "quality_id": _LOSS_OF_CONFIDENCE.id,
+        f"quality_choice_{_LOSS_OF_CONFIDENCE.id}": "Pistols",
+    }
+    assert "rating 4 or higher; Pistols is at 0" in client.post("/ui/qualities", data=loss).text
+
+    client.post("/ui/skills", data={f"skill_{pistols.id}": "4"})
+    assert "rating 4 or higher" not in client.post("/ui/qualities", data=loss).text
+    assert "Loss of Confidence (Pistols)" in client.get("/character/sheet").text
+
+    # Lowering the skill afterwards leaves the pick committed, with the WP19 warning.
+    client.post("/ui/skills", data={f"skill_{pistols.id}": "3"})
+    page = client.get("/ui/page/qualities").text
+    assert 'class="warning"' in page
+    assert "Pistols is at 3" in page
+
+
+def test_a_dependent_re_prices_the_committed_lifestyle() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post("/ui/lifestyle", data={"lifestyle_tier": "Low", "lifestyle_months": "2"})
+    assert "Low (2 months, 4000¥)" in client.get("/character/sheet").text
+    client.post("/ui/qualities", data={"quality_id": _DEPENDENT_DEMANDING.id})
+    assert "Low (2 months, 5200¥)" in client.get("/character/sheet").text  # 2,000 x 1.3 x 2
+
+
+def test_scorched_offers_the_side_effects_table() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    assert "Paranoia/Anxiety" in client.get("/ui/page/qualities").text
+    response = client.post(
+        "/ui/qualities",
+        data={"quality_id": _SCORCHED.id, f"quality_choice_{_SCORCHED.id}": "Migraines"},
+    )
+    assert "Scorched requires an Addiction to BTLs" in response.text

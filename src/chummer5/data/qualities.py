@@ -97,11 +97,18 @@ _GLOBAL_BONUS_TAGS = {
     # WP114: Toughness's Damage Resistance die and Photographic Memory's Memory dice.
     "damageresistance": "damage_resistance",
     "memory": "memory",
+    # WP115: Dependents' +10/20/30% Lifestyle cost.
+    "lifestylecost": "lifestyle_cost",
 }
 
 # WP114: `<conditionmonitor>` holding exactly one of these leaves -- High Pain Tolerance's ignored
 # wound box and Will to Live's Overflow box, both per rating.
-_CONDITION_MONITOR_TAGS = {"thresholdoffset": "cm_threshold_offset", "overflow": "cm_overflow"}
+# WP115 adds Low Pain Tolerance's `threshold` (-1: a wound modifier per 2 boxes, not 3).
+_CONDITION_MONITOR_TAGS = {
+    "thresholdoffset": "cm_threshold_offset",
+    "overflow": "cm_overflow",
+    "threshold": "cm_threshold",
+}
 
 # WP22 Tranche 2: SR5 qualities individually verified (rulebook text + a `grep` of the legacy C#
 # for by-name special-casing, both turning up nothing) to have zero mechanical effect this engine's
@@ -137,6 +144,19 @@ _VERIFIED_NO_EFFECT_NAMES = frozenset(
         "Resistance to Pathogens",
         "Resistance to Toxins",
         "Resistance to Pathogens and Toxins",
+        # WP115: the negative qualities whose whole effect is in play (Gremlins is rated 1-4 and
+        # carries no `<bonus>` at all; its Notoriety comes from `_NOTORIETY_OVERRIDES`).
+        "Astral Beacon",
+        "Bad Luck",
+        "Bad Rep",
+        "Combat Paralysis",
+        "Distinctive Style",
+        "Elf Poser",
+        "Gremlins",
+        "Insomnia (Basic)",
+        "Insomnia (Full)",
+        "Ork Poser",
+        "Weak Immune System",
     }
 )
 
@@ -146,6 +166,10 @@ _CHOICE_KIND_NAMES: Mapping[str, str] = {
     "Codeslinger": "matrix_action",
     "Home Ground": "home_ground",
     "Spirit Affinity": "spirit_type",
+    # WP115: Scorched names one effect from p. 83's Scorched Physical Side Effects Table; Spirit
+    # Bane names a spirit type, like Spirit Affinity (the data's `<selecttext>` lists spirits).
+    "Scorched": "scorched_effect",
+    "Spirit Bane": "spirit_type",
 }
 
 # WP55: 9 SR5 qualities individually verified (rulebook text via `pdftotext -layout`, cross-checked
@@ -165,8 +189,90 @@ _VERIFIED_SELECT_TEXT_NAMES = frozenset(
         "Social Stress",
         "Natural Immunity (Natural)",
         "Natural Immunity (Synthetic)",
+        # WP115: the substance, the allergen, the target group. Addiction (Burnout)'s
+        # `<skillcategory>` is parsed alongside the text (see `_classify_bonus`).
+        "Addiction (Mild)",
+        "Addiction (Moderate)",
+        "Addiction (Severe)",
+        "Addiction (Burnout)",
+        "Allergy (Uncommon, Mild)",
+        "Allergy (Uncommon, Moderate)",
+        "Allergy (Uncommon, Severe)",
+        "Allergy (Uncommon, Extreme)",
+        "Allergy (Common, Mild)",
+        "Allergy (Common, Moderate)",
+        "Allergy (Common, Severe)",
+        "Allergy (Common, Extreme)",
+        "Prejudiced (Common, Biased)",
+        "Prejudiced (Common, Outspoken)",
+        "Prejudiced (Common, Radical)",
+        "Prejudiced (Specific, Biased)",
+        "Prejudiced (Specific, Outspoken)",
+        "Prejudiced (Specific, Radical)",
     }
 )
+
+# WP115: the three negative families whose rows differ only by severity. Each tuple is the
+# severity's in-play effect as p. 78 (Addiction, Allergy Table) and p. 82 (Prejudiced) print it.
+_ADDICTION_EFFECTS = {
+    "Mild": ("Monthly cravings", "-2", "Its +1 Notoriety is"),
+    "Moderate": ("Cravings every two weeks", "-4", "Its +1 Notoriety is"),
+    "Severe": (
+        "Weekly cravings",
+        "-4",
+        "Its constant -2 dice on Social Tests and +1 Notoriety are",
+    ),
+    "Burnout": (
+        "Daily cravings",
+        "-6",
+        "Its constant -3 dice on Social Tests and +1 Notoriety are",
+    ),
+}
+_ALLERGY_EFFECTS = {
+    "Mild": ("-2 dice to Physical Tests while symptomatic", 1),
+    "Moderate": ("-4 dice to all Physical Tests while symptomatic", 2),
+    "Severe": (
+        "-4 dice to all tests while symptomatic, and 1 box of unresisted Physical damage per "
+        "minute of exposure",
+        3,
+    ),
+    "Extreme": (
+        "anaphylactic shock: -6 dice to everything, and 1 box of unresisted Physical damage per "
+        "30 seconds of exposure",
+        4,
+    ),
+}
+_PREJUDICE_LEVELS = {"Biased": 1, "Outspoken": 2, "Radical": 3}
+
+_SEVERITY_NOTES: Mapping[str, str] = {
+    **{
+        f"Addiction ({severity})": (
+            f"{cravings}; a failed Withdrawal Test gives {penalty} dice to Mental- or "
+            f"Physical-based tests until the craving is satisfied (pp. 77-78, 414) -- no craving "
+            f"or Withdrawal Test tracking exists. ({applied} applied.)"
+        )
+        for severity, (cravings, penalty, applied) in _ADDICTION_EFFECTS.items()
+    },
+    **{
+        f"Allergy ({prevalence}, {severity})": (
+            f"On contact with the allergen, {effect}; and {dice} fewer "
+            f"{'die' if dice == 1 else 'dice'} on Resistance Tests against attacks using it "
+            f"(p. 78) -- no exposure, symptom or damage resolution exists. The allergen is "
+            f"recorded."
+        )
+        for prevalence in ("Uncommon", "Common")
+        for severity, (effect, dice) in _ALLERGY_EFFECTS.items()
+    },
+    **{
+        f"Prejudiced ({prevalence}, {degree})": (
+            f"-{2 * level} dice on all Social Tests when dealing with the target group, and "
+            f"+{2 * level} dice for them in negotiations with the character (p. 82) -- no Social "
+            f"test resolution exists. The target group is recorded."
+        )
+        for prevalence in ("Common", "Specific")
+        for degree, level in _PREJUDICE_LEVELS.items()
+    },
+}
 
 # WP56: Project Overview's "Unmodeled real effects" table, transcribed here as the runtime source
 # `_parse_quality` reads (the markdown table itself is a hand-kept mirror, not read at runtime --
@@ -310,6 +416,87 @@ _UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
         "-- bound spirits' services are the player's own entry here and no Binding Test exists. "
         "The chosen type is recorded."
     ),
+    # WP115: the negative qualities offered with their in-play effect registered.
+    **_SEVERITY_NOTES,
+    "Astral Beacon": (
+        "Its astral signature is highly visible and lasts twice as long, and Assensing Tests "
+        "against it get -1 to the threshold (p. 78) -- no astral-signature or Assensing "
+        "resolution exists."
+    ),
+    "Bad Luck": (
+        "Whenever Edge is spent, a 1 on 1D6 spends the point for the opposite effect, at most once "
+        "per session (p. 79) -- no Edge-spend resolution exists. (Its +1 Notoriety is applied.)"
+    ),
+    "Bad Rep": (
+        "How NPCs react to the bad reputation, removable only by resolving its source and buying "
+        "the quality off (p. 79) -- no NPC-reaction or buy-off tracking exists. (Its Notoriety of "
+        "3 is applied.)"
+    ),
+    "Combat Paralysis": (
+        "The first Initiative Score of a combat is halved (rounded up), -3 dice on Surprise "
+        "Tests, and +1 threshold on Composure Tests under fire (p. 80) -- no combat, Surprise or "
+        "Composure resolution exists. (Its +1 Notoriety is applied.)"
+    ),
+    "Dependent (Nuisance)": (
+        "Learning or improving a skill takes 50% longer, and so does any long-term project (p. "
+        "80) -- no training-time tracking exists. (Its +10% Lifestyle cost is applied.)"
+    ),
+    "Dependent (Inconvenience)": (
+        "Learning or improving a skill takes 50% longer, and so does any long-term project (p. "
+        "80) -- no training-time tracking exists. (Its +20% Lifestyle cost is applied.)"
+    ),
+    "Dependent (Demanding)": (
+        "Learning or improving a skill takes 50% longer, and so does any long-term project (p. "
+        "80) -- no training-time tracking exists. (Its +30% Lifestyle cost is applied.)"
+    ),
+    "Distinctive Style": (
+        "+2 dice for anyone trying to identify, trace or locate the character, and -1 to the "
+        "threshold of NPC Memory Tests about them (p. 80) -- no search or NPC Memory resolution "
+        "exists."
+    ),
+    "Elf Poser": (
+        "Passes as an elf; elves who discover the secret react with contempt or hostility (p. "
+        "81) -- no Social-modifier resolution exists. (Its +1 Notoriety is applied.)"
+    ),
+    "Gremlins": (
+        "One fewer 1 is needed for a glitch per level when using a moderately sophisticated "
+        "device (p. 81) -- no test or glitch resolution exists. (Its +1 Notoriety is applied.)"
+    ),
+    "Insomnia (Basic)": (
+        "An Intuition + Willpower (4) Test before each Stun recovery roll; failure doubles the "
+        "recovery time and delays Edge refresh by up to 24 hours (pp. 81-82) -- no healing or "
+        "Edge-refresh resolution exists."
+    ),
+    "Insomnia (Full)": (
+        "An Intuition + Willpower (4) Test before each Stun recovery roll; failure negates that "
+        "recovery attempt and delays Edge refresh by 24 hours (p. 82) -- no healing or "
+        "Edge-refresh resolution exists."
+    ),
+    "Loss of Confidence": (
+        "Edge can't be used on tests with the chosen skill (p. 82) -- no Edge-spend resolution "
+        "exists. (Its -2 dice and the lost specialization are applied.)"
+    ),
+    "Ork Poser": (
+        "Passes as an ork; orks who discover the secret may turn hostile, and prejudiced humans "
+        "or elves see a race traitor (p. 82) -- no Social-modifier resolution exists. (Its +1 "
+        "Notoriety is applied.)"
+    ),
+    "Scorched": (
+        "The chosen side effect, for 6 hours (24 on a glitch) after a failed Body + Willpower (4) "
+        "Test on entering VR or slotting a BTL, plus a Willpower (3) Test to face Black or "
+        "Psychotropic IC and -2 dice resisting its damage (p. 83) -- no VR, BTL or IC resolution "
+        "exists. The chosen effect is recorded. (Its +1 Notoriety is applied.)"
+    ),
+    "Spirit Bane": (
+        "Spirits of the chosen type resent the character: -2 dice to summon or bind them, +2 "
+        "dice for them to resist the character's banishing, and they single the character out in "
+        "combat (p. 85) -- no summoning, binding or spirit-combat resolution exists. The chosen "
+        "type is recorded. (Its +1 Notoriety is applied.)"
+    ),
+    "Weak Immune System": (
+        "+2 to the Power of any disease the character resists (p. 87) -- no toxin/pathogen "
+        "resistance subsystem exists. (Its +1 Notoriety is applied.)"
+    ),
 }
 
 
@@ -330,6 +517,10 @@ _RULEBOOK_FORBIDDEN_ADDITIONS: Mapping[str, tuple[tuple[str, str], ...]] = {
     "Resistance to Pathogens": (("quality", "Resistance to Pathogens/Toxins"),),
     "Resistance to Toxins": (("quality", "Resistance to Pathogens/Toxins"),),
     "Resistance to Pathogens and Toxins": (("quality", "Resistance to Pathogens/Toxins"),),
+    # WP115: p. 87, Weak Immune System "cannot be combined with [...] Resistance to
+    # Pathogens/Toxins" -- the printed name is exactly the Dwarf's racial row, which the data's
+    # own forbidden list leaves out.
+    "Weak Immune System": (("quality", "Resistance to Pathogens/Toxins"),),
 }
 
 
@@ -372,6 +563,16 @@ class FlatBonus:
     target_kind: str
     target_name: str
     value: int
+
+
+# WP115: bonuses the rulebook prints but the data lacks, rulebook wins. p. 78: a Severe addict
+# "suffers a -2 dice pool modifier to all Social Tests, whether he is in withdrawal or not" -- the
+# data gives Burnout its -3 as a Social Active `<skillcategory>` and Severe nothing.
+_RULEBOOK_BONUS_ADDITIONS: Mapping[str, tuple[FlatBonus, ...]] = {
+    "Addiction (Severe)": (
+        FlatBonus(target_kind="skill_category_pool", target_name="Social Active", value=-2),
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -430,6 +631,9 @@ class Quality:
     choice_kind: str | None = None
     # WP112: attributes a `choice_kind == "attribute"` pick may not name (`<excludeattribute>`).
     choice_excludes: tuple[str, ...] = ()
+    # WP115: the rating a `choice_kind == "skill"` pick's skill must already have
+    # (`<selectskill minimumrating>`) -- Loss of Confidence's 4. 0 means no minimum.
+    choice_minimum_rating: int = 0
 
     @property
     def max_rating(self) -> int:
@@ -471,13 +675,16 @@ def _classify_bonus(
     """
     if name in _VERIFIED_NO_EFFECT_NAMES or name in _CHOICE_KIND_NAMES:
         return BonusSupport.NO_EFFECT, ()
-    if name in _VERIFIED_SELECT_TEXT_NAMES:
-        return BonusSupport.SELECT_TEXT, ()
-    if bonus_elem is None or len(bonus_elem) == 0:
+    # WP115: a SELECT_TEXT quality's other children are parsed like anyone's -- Addiction
+    # (Burnout)'s Social Active penalty sits beside its `<selecttext>`.
+    select_text = name in _VERIFIED_SELECT_TEXT_NAMES
+    if not select_text and (bonus_elem is None or len(bonus_elem) == 0):
         return BonusSupport.NOT_YET_SUPPORTED, ()
 
     flat_bonuses = []
-    for child in bonus_elem:
+    for child in bonus_elem if bonus_elem is not None else ():
+        if select_text and child.tag == "selecttext":
+            continue
         if child.tag == "notoriety":
             # WP110/WP112: read separately into `Quality.notoriety`. Recognised here only
             # *alongside* another supported child (the check after this loop), so a quality whose
@@ -543,11 +750,44 @@ def _classify_bonus(
                     value=int(child.text),
                 )
             )
+        elif child.tag == "skillcategory" and _is_flat_skill_bonus(child):
+            # WP115: a dice-pool modifier to every skill of one category, not a rating bonus.
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind="skill_category_pool",
+                    target_name=child.findtext("name", ""),
+                    value=int(child.findtext("bonus", "0")),
+                )
+            )
+        elif child.tag == "selectskill" and _is_select_skill_pool(child):
+            # WP115: Loss of Confidence -- a dice-pool modifier on the chosen skill, and that
+            # skill's specialization switched off. Empty target: "the pick's `choice`".
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind="skill_pool",
+                    target_name="",
+                    value=int(child.findtext("val", "0")),
+                )
+            )
+            if child.find("disablespecializationeffects") is not None:
+                flat_bonuses.append(
+                    FlatBonus(target_kind="specialization_disabled", target_name="", value=1)
+                )
         else:
             return BonusSupport.NOT_YET_SUPPORTED, ()
+    flat_bonuses.extend(_RULEBOOK_BONUS_ADDITIONS.get(name, ()))
+    if select_text:
+        return BonusSupport.SELECT_TEXT, tuple(flat_bonuses)
     if not flat_bonuses:
         return BonusSupport.NOT_YET_SUPPORTED, ()
     return BonusSupport.FLAT_BONUS, tuple(flat_bonuses)
+
+
+def _is_select_skill_pool(elem: ET.Element) -> bool:
+    """`<selectskill>` holding one `<val>` and optionally `<disablespecializationeffects/>` --
+    a pool modifier on a chosen skill. Aptitude's `<max>` shape is not this."""
+    tags = [c.tag for c in elem]
+    return tags.count("val") == 1 and set(tags) <= {"val", "disablespecializationeffects"}
 
 
 def _is_select_attribute_maximum(elem: ET.Element) -> bool:
@@ -565,6 +805,8 @@ def _choice_kind(name: str, flat_bonuses: tuple[FlatBonus, ...]) -> str | None:
         return _CHOICE_KIND_NAMES[name]
     if any(b.target_kind == "attribute_maximum" and not b.target_name for b in flat_bonuses):
         return "attribute"
+    if any(b.target_kind == "skill_pool" and not b.target_name for b in flat_bonuses):
+        return "skill"
     return None
 
 
@@ -616,6 +858,14 @@ def _with_forbidden_additions(
     return (*forbidden, Requirement(mode="oneof", conditions=additions))
 
 
+def _select_skill_minimum_rating(elem: ET.Element) -> int:
+    """WP115: `<selectskill minimumrating="N">`'s N, or 0."""
+    select_skill = elem.find("bonus/selectskill")
+    if select_skill is None:
+        return 0
+    return int(select_skill.get("minimumrating", "0"))
+
+
 def _parse_quality(elem: ET.Element) -> Quality:
     bonus_elem = elem.find("bonus")
     support, flat_bonuses = _classify_bonus(elem.findtext("name", ""), bonus_elem)
@@ -647,6 +897,7 @@ def _parse_quality(elem: ET.Element) -> Quality:
             for e in elem.findall("bonus/selectattributes/selectattribute/excludeattribute")
             if e.text
         ),
+        choice_minimum_rating=_select_skill_minimum_rating(elem),
         include_in_limit=tuple(
             n.text for n in elem.findall("includeinlimit/name") if n.text is not None
         ),

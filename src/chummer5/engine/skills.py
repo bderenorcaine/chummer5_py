@@ -552,17 +552,28 @@ def dice_pool(
 
     WP53: also true when `skill.id` has a Karma-funded specialization in
     `character.karma_skill_selection.specializations`.
+
+    WP115: `SKILL_POOL` (by skill name) and `SKILL_CATEGORY_POOL` (by category) modifiers are added
+    to the pool, defaulting included -- Addiction's "-2 to all Social Tests" applies whether or not
+    the skill is known. `SPECIALIZATION_DISABLED` (Loss of Confidence) drops the specialization's
+    +2 even when `specialized=True` is passed.
     """
     if specialized is None:
         karma = character.karma_skill_selection
         specialized = skill.id in allocation.specializations or (
             karma is not None and skill.id in karma.specializations
         )
+    index = character.improvements
+    if index.resolve(ImprovementType.SPECIALIZATION_DISABLED, skill.name) > 0:
+        specialized = False
+    modifier = index.resolve(ImprovementType.SKILL_POOL, skill.name) + index.resolve(
+        ImprovementType.SKILL_CATEGORY_POOL, skill.category
+    )
     rating = skill_rating(character, allocation, skill)
     attribute_value = character.attribute_value(skill.attribute)
     if rating > 0:
         spec_bonus = SPECIALIZATION_BONUS if specialized and not skill.exotic else 0
-        return max(0, rating + attribute_value + spec_bonus)
+        return max(0, rating + attribute_value + spec_bonus + modifier)
     if skill.can_default:
-        return max(0, attribute_value + DEFAULT_MODIFIER)
+        return max(0, attribute_value + DEFAULT_MODIFIER + modifier)
     return 0

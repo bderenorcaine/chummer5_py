@@ -244,7 +244,7 @@ the rules it checks.
   Acceptance: the offered-count test from WP108 moves by exactly this list; every row has a
   registry entry or a computed test.
 
-- [ ] **WP115 — Negative qualities: the remaining core catalog.**
+- [x] **WP115 — Negative qualities: the remaining core catalog.**
   Goal: the same, for negatives.
   Deliverables:
   - **Computed:**

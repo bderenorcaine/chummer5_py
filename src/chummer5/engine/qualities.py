@@ -58,16 +58,18 @@ never interprets it. **A rated quality's cap can span several catalog rows**
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from chummer5.data.actions import load_matrix_action_names
 from chummer5.data.mentors import MentorChoice, MentorSpiritArchetype, gated_choice
 from chummer5.data.metatypes import Metatype
 from chummer5.data.qualities import BonusSupport, Quality, Requirement
+from chummer5.data.skills import Skill, load_skills
 from chummer5.data.traditions import load_core_spirit_types
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
+from chummer5.engine.skills import skill_rating
 
 # CharacterSettings.QualityKarmaLimit (legacy default: `_intQualityKarmaLimit = 25`) -- the maximum
 # karma a character may spend on Positive Qualities, and independently, the maximum karma it may
@@ -98,6 +100,12 @@ _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "memory": ImprovementType.MEMORY,
     "cm_threshold_offset": ImprovementType.CM_THRESHOLD_OFFSET,
     "cm_overflow": ImprovementType.CM_OVERFLOW,
+    # WP115: Low Pain Tolerance, Dependents, Addiction, Loss of Confidence.
+    "cm_threshold": ImprovementType.CM_THRESHOLD,
+    "lifestyle_cost": ImprovementType.LIFESTYLE_COST,
+    "skill_category_pool": ImprovementType.SKILL_CATEGORY_POOL,
+    "skill_pool": ImprovementType.SKILL_POOL,
+    "specialization_disabled": ImprovementType.SPECIALIZATION_DISABLED,
 }
 
 # WP114: Home Ground's five bonuses (p. 74), as stable ids -- the page translates each through
@@ -111,6 +119,26 @@ HOME_GROUND_CHOICES = (
 )
 MATRIX_ACTION_CHOICES = load_matrix_action_names()
 SPIRIT_TYPE_CHOICES = load_core_spirit_types()
+
+# WP115: the five rows of p. 83's Scorched Physical Side Effects Table, as stable ids translated
+# through `Web_Scorched_<id>`.
+SCORCHED_EFFECT_CHOICES = (
+    "MemoryLossShortTerm",
+    "MemoryLossLongTerm",
+    "Blackout",
+    "Migraines",
+    "ParanoiaAnxiety",
+)
+# WP115: what a `choice_kind == "skill"` pick (Loss of Confidence) may name -- every active skill
+# by name, Resonance skills left out with Resonance itself. The skill's own rating is checked
+# separately, against `LaterStepFacts`.
+SKILL_CHOICES = tuple(sorted(s.name for s in load_skills() if s.category != "Resonance Active"))
+SCORCHED_QUALITY_NAME = "Scorched"
+# WP115: an Addiction pick's detail naming one of these makes it a BTL addiction, the first of
+# Scorched's two prerequisites (p. 83). Matched case-insensitively.
+_BTL_WORDS = ("btl", "better-than-life", "better than life")
+_CYBERDECK_GEAR_CATEGORY = "Cyberdecks"
+_CYBERDECK_IMPLANT_NAME = "Cyberdeck"
 
 # WP114: catalog rows only a metatype can grant. `Resistance to Pathogens/Toxins` is the Dwarf's
 # racial "+2 dice vs. pathogen/toxin" as `metatypes.xml` encodes it; the purchasable quality is the
@@ -359,6 +387,10 @@ def choice_options(quality: Quality, magic_type: str | None) -> tuple[str, ...]:
         return HOME_GROUND_CHOICES
     if quality.choice_kind == "spirit_type":
         return SPIRIT_TYPE_CHOICES
+    if quality.choice_kind == "scorched_effect":
+        return SCORCHED_EFFECT_CHOICES
+    if quality.choice_kind == "skill":
+        return SKILL_CHOICES
     if quality.choice_kind is None:
         return ()
     raise ValueError(f"{quality.name}: unsupported choice kind {quality.choice_kind!r}")
@@ -387,6 +419,68 @@ def requested_attribute_maximum_bonuses(
             if code:
                 bonuses[code] = bonuses.get(code, 0) + bonus.value * request.rating
     return bonuses
+
+
+@dataclass(frozen=True)
+class LaterStepFacts:
+    """What a quality pick needs from steps resolved *after* qualities (WP115).
+
+    Two negative qualities have prerequisites outside the quality step: Loss of Confidence names a
+    skill that must already be at rating 4+ (p. 82), and Scorched needs a BTL Addiction or being a
+    decker (p. 83), which this project reads as owning a cyberdeck. A save and a legacy import
+    resolve qualities before skills and gear, so they pass no facts and these two checks are
+    skipped there; the web route passes them at pick time and on every re-render, which is where
+    the WP19 "no longer fits" warning surfaces a pick a later edit broke.
+    """
+
+    skill_ratings: Mapping[str, int]  # by skill name
+    owns_cyberdeck: bool
+
+
+def later_step_facts(character: Character, skills: Iterable[Skill]) -> LaterStepFacts:
+    """The `LaterStepFacts` of `character` as it stands (WP115)."""
+    allocation = character.skill_allocation
+    ratings = (
+        {skill.name: skill_rating(character, allocation, skill) for skill in skills}
+        if allocation is not None
+        else {}
+    )
+    gear = character.resources_selection.gear if character.resources_selection is not None else ()
+    implants = (
+        character.cyberware_selection.walk() if character.cyberware_selection is not None else ()
+    )
+    owns_cyberdeck = any(item.category == _CYBERDECK_GEAR_CATEGORY for item in gear) or any(
+        node.item.name == _CYBERDECK_IMPLANT_NAME for node in implants
+    )
+    return LaterStepFacts(skill_ratings=ratings, owns_cyberdeck=owns_cyberdeck)
+
+
+def _check_later_step_prerequisites(
+    picks: Iterable[QualityPick], later_steps: LaterStepFacts
+) -> None:
+    """WP115: Loss of Confidence's skill rating and Scorched's BTL-or-decker prerequisite."""
+    picks = tuple(picks)
+    for pick in picks:
+        minimum = pick.quality.choice_minimum_rating
+        if minimum and pick.choice is not None:
+            rating = later_steps.skill_ratings.get(pick.choice, 0)
+            if rating < minimum:
+                raise ValueError(
+                    f"{pick.quality.name} needs a skill at rating {minimum} or higher; "
+                    f"{pick.choice} is at {rating}"
+                )
+    if not any(p.quality.name == SCORCHED_QUALITY_NAME for p in picks):
+        return
+    btl_addiction = any(
+        p.quality.name.startswith("Addiction (")
+        and p.text is not None
+        and any(word in p.text.lower() for word in _BTL_WORDS)
+        for p in picks
+    )
+    if not btl_addiction and not later_steps.owns_cyberdeck:
+        raise ValueError(
+            "Scorched requires an Addiction to BTLs (name BTLs in its detail) or a cyberdeck"
+        )
 
 
 def _as_request(pick: str | QualityPickRequest) -> QualityPickRequest:
@@ -433,6 +527,7 @@ def create_quality_selection(
     mentor_spirit_general_choice_id: str | None = None,
     metatype_name: str | None = None,
     granted_quality_names: Iterable[str] = (),
+    later_steps: LaterStepFacts | None = None,
 ) -> QualitySelection:
     """Build a `QualitySelection`, validating against the MVP-offered catalog and the karma cap.
 
@@ -468,6 +563,9 @@ def create_quality_selection(
     selected, `mentor_spirit_archetype_id` must be `None` -- an orphaned archetype pick with no
     quality backing it is rejected the same "don't silently ignore a stale/tampered field" way
     `create_foci_selection` rejects an unknown catalog id.
+
+    **WP115**: `later_steps`, when given, checks the two prerequisites that live in later steps
+    (see `LaterStepFacts`); `None` skips them.
     """
     offered_by_id = _add_mentor_spirit_if_eligible(
         {q.id: q for q in mvp_quality_catalog(catalog)}, catalog, magic_type
@@ -545,6 +643,9 @@ def create_quality_selection(
         failure = requirement_failure(quality, context)
         if failure is not None:
             raise ValueError(failure)
+
+    if later_steps is not None:
+        _check_later_step_prerequisites(resolved, later_steps)
 
     positive_karma = sum(p.karma for p in resolved if p.quality.category == "Positive")
     negative_karma = -sum(p.karma for p in resolved if p.quality.category == "Negative")

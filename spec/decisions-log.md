@@ -1623,3 +1623,31 @@ constant and one test is the whole change.
 The user resolved WP111's open question: Astral Initiative uses **3D6**, following p. 314's Astral
 Attributes Table ("+2D6 (3D6 total)") and legacy Chummer's default, over the 2D6 printed in the
 Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_DICE` is now 3.
+
+## 2026-09-26 — WP115: prerequisites that live in later steps, and three rulebook-wins calls
+
+- **Two quality prerequisites depend on steps resolved after qualities.** Loss of Confidence needs
+  its skill at rating 4+ (p. 82). Scorched needs a BTL Addiction or being a decker (p. 83).
+  `create_quality_selection` takes an optional `LaterStepFacts` (skill ratings, cyberdeck
+  ownership). The web route passes them at pick time and on every re-render, so the WP19 "no
+  longer fits" warning catches a later skill edit. A save or a legacy import resolves qualities
+  before skills and gear, so it passes none and these two checks are skipped there. This matches
+  the phase's "reported, never enforced" rule for imports. WP135's validator should re-run them.
+  Consequence for the player: a skill must be bought before Loss of Confidence can be picked
+  (the pick is rejected with the skill's current rating).
+- **"Decker" means owning a cyberdeck**, as gear or as the implanted Cyberdeck. **A BTL Addiction**
+  is an Addiction pick whose free text names BTLs ("BTL", "better-than-life"). The second half of
+  the BTL branch, "possess the gear necessary to use BTLs", is not checked: the book names no
+  specific item, and BTL chips themselves are out of the offered catalog.
+- **Rulebook wins, three times.** (1) Addiction (Severe) gets −2 dice on Social Active skills. p. 78
+  prints it, and the data has only Burnout's −3. (2) Weak Immune System is forbidden to Dwarfs. p. 87
+  says it "cannot be combined with [...] Resistance to Pathogens/Toxins", and that is exactly the
+  name of the Dwarf's racial row. The data's own forbidden list leaves the racial row out. (3)
+  Scorched's pick is one of the five rows of p. 83's side-effects table, not the data's free text.
+- **Two Burnout Addictions stack their −3.** The book is silent. Legacy stacks. A dedup group would
+  keep the *highest* value, which for a penalty is the wrong one.
+- **Legacy import now reads a choice from `<extra>`** for every choice-bearing quality (Exceptional
+  Attribute, Codeslinger, Home Ground, Spirit Affinity, Spirit Bane, Scorched, Loss of Confidence).
+  Before this, an imported choice quality reached `create_quality_selection` with no choice and
+  would have raised. No curated fixture hit that path. An `<extra>` that doesn't resolve to an
+  offered option now drops the quality, reported like any other.

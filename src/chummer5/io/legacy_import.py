@@ -259,6 +259,7 @@ violation this module's own checks don't anticipate) surfaces as `build_characte
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -279,7 +280,7 @@ from chummer5.engine.build_method import SUPPORTED_BUILD_METHODS
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character, sr5_metatypes
 from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
 from chummer5.engine.magic import OFFERED_TALENT_CODENAMES, mvp_power_catalog
-from chummer5.engine.qualities import QualityPickRequest, mvp_quality_catalog
+from chummer5.engine.qualities import QualityPickRequest, choice_options, mvp_quality_catalog
 from chummer5.engine.resources import Contact
 from chummer5.io.legacy_chum5 import LegacyCharacter, LegacyCyberware, load_chum5, priority_letter
 from chummer5.io.save_format import (
@@ -569,6 +570,24 @@ class ImportResult:
     dropped_specializations: tuple[str, ...]
 
 
+def _legacy_quality_choice(quality: Quality, extra: str | None, magic_enabled: bool) -> str | None:
+    """WP115: a legacy `<extra>` read as a `QualityPick.choice`, or `None` if it names no option.
+
+    Legacy writes the choice as display text: an attribute code (`INT`), a bare spirit type
+    (`Man` for "Spirit of Man"), a skill or action name, or a table row's own wording
+    ("Memory Loss (short term)"). Each is tried verbatim, as a spirit type, and squashed to this
+    project's PascalCase ids (`MemoryLossShortTerm`, `YouKnowAGuy`).
+    """
+    if not extra:
+        return None
+    options = choice_options(quality, "Magician" if magic_enabled else None)
+    squashed = "".join(w[:1].upper() + w[1:] for w in re.split(r"[^A-Za-z0-9]+", extra) if w)
+    for candidate in (extra, f"Spirit of {extra}", squashed):
+        if candidate in options:
+            return candidate
+    return None
+
+
 def import_legacy_character(
     legacy: LegacyCharacter,
     *,
@@ -749,7 +768,15 @@ def import_legacy_character(
         # create_quality_selection requires -- the same field LegacyPower.extra already threads
         # through for select-attribute powers (see chummer5.io.legacy_chum5's docstring).
         text = legacy_quality.extra if offered.bonus_support == BonusSupport.SELECT_TEXT else None
-        quality_picks.append(QualityPickRequest(quality_id=offered.id, text=text))
+        # WP115: a choice-bearing quality's pick is its <extra> too. One that doesn't resolve to
+        # an offered option is dropped and reported, like any other quality this can't carry.
+        choice = None
+        if offered.choice_kind is not None:
+            choice = _legacy_quality_choice(offered, legacy_quality.extra, legacy.magic_enabled)
+            if choice is None:
+                dropped_qualities.append(legacy_quality.name)
+                continue
+        quality_picks.append(QualityPickRequest(quality_id=offered.id, text=text, choice=choice))
 
     contacts = tuple(
         Contact(name=c.name, connection=c.connection, loyalty=c.loyalty, free=c.free)

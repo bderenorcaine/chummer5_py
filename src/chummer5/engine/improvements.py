@@ -168,6 +168,13 @@ class ImprovementType(Enum):
     REACH = auto()
     # WP114: dice added to the Memory pool (LOG + WIL) -- Photographic Memory.
     MEMORY = auto()
+    # WP115: dice-pool modifiers that are *not* rating changes, unlike `SKILL`. `SKILL_POOL`
+    # targets a skill name (Loss of Confidence's -2); `SKILL_CATEGORY_POOL` targets a skill
+    # category (Addiction's -2/-3 to Social Active skills). `SPECIALIZATION_DISABLED` > 0 on a
+    # skill name means its specialization bonus doesn't apply (Loss of Confidence).
+    SKILL_POOL = auto()
+    SKILL_CATEGORY_POOL = auto()
+    SPECIALIZATION_DISABLED = auto()
 
 
 class ImprovementSource(Enum):

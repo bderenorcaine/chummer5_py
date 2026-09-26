@@ -604,6 +604,26 @@
       <text>Street Politics</text>
     </string>
     <string>
+      <key>Web_Scorched_MemoryLossShortTerm</key>
+      <text>Memory Loss (short term)</text>
+    </string>
+    <string>
+      <key>Web_Scorched_MemoryLossLongTerm</key>
+      <text>Memory Loss (long term)</text>
+    </string>
+    <string>
+      <key>Web_Scorched_Blackout</key>
+      <text>Blackout</text>
+    </string>
+    <string>
+      <key>Web_Scorched_Migraines</key>
+      <text>Migraines</text>
+    </string>
+    <string>
+      <key>Web_Scorched_ParanoiaAnxiety</key>
+      <text>Paranoia/Anxiety</text>
+    </string>
+    <string>
       <key>Web_Qualities_ChooseArchetype</key>
       <text>-- choose an archetype --</text>
     </string>
