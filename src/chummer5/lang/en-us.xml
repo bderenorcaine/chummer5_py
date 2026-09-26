@@ -946,6 +946,30 @@
       <text>Public Awareness</text>
     </string>
     <string>
+      <key>Web_Sheet_AstralInitiative</key>
+      <text>Astral Initiative</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MatrixARInitiative</key>
+      <text>Matrix AR Initiative</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MatrixColdInitiative</key>
+      <text>Matrix VR Initiative (cold-sim)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MatrixHotInitiative</key>
+      <text>Matrix VR Initiative (hot-sim)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MatrixVRDevice</key>
+      <text>Data Processing {dp}, from the {device}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MatrixVRFromArray</key>
+      <text>Assumes the {device}'s highest array value, {dp}, is assigned to Data Processing.</text>
+    </string>
+    <string>
       <key>Web_Sheet_PhysicalCM</key>
       <text>Physical condition monitor</text>
     </string>

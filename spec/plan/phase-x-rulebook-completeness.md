@@ -173,7 +173,7 @@ the rules it checks.
   two Addictions give +2).
   Acceptance: a synthetic character with SINner (Criminal) and Bad Rep shows Notoriety 4.
 
-- [ ] **WP111 — Initiative variants: Astral and Matrix.**
+- [x] **WP111 — Initiative variants: Astral and Matrix.**
   Goal: the remaining Step 8 initiative rows (Living Persona is out of scope).
   Deliverables:
   - **Astral Initiative** `INT×2 + 2D6`, shown only for characters who can astrally project

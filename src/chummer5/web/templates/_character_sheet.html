@@ -296,6 +296,23 @@
   <table>
     <tbody>
       <tr><th>{{ _("Web_Sheet_Initiative") }}</th><td>{{ _("Web_Sheet_InitiativeValue", value=initiative_value, dice=initiative_dice) }}</td></tr>
+      {# WP111: Astral (projecting Magicians only), Matrix AR (everyone: the physical figures), and
+         Matrix VR (only with a sim module, a DNI and a persona device). #}
+      {% if astral_initiative is not none %}
+      <tr><th>{{ _("Web_Sheet_AstralInitiative") }}</th><td>{{ _("Web_Sheet_InitiativeValue", value=astral_initiative, dice=astral_initiative_dice) }}</td></tr>
+      {% endif %}
+      <tr><th>{{ _("Web_Sheet_MatrixARInitiative") }}</th><td>{{ _("Web_Sheet_InitiativeValue", value=initiative_value, dice=initiative_dice) }}</td></tr>
+      {% if matrix_vr %}
+      <tr>
+        <th>{{ _("Web_Sheet_MatrixColdInitiative") }}</th>
+        <td>{{ _("Web_Sheet_InitiativeValue", value=matrix_vr.value, dice=cold_sim_dice) }}
+          <br />{% if matrix_vr.from_array %}{{ _("Web_Sheet_MatrixVRFromArray", dp=matrix_vr.data_processing, device=matrix_vr.device | dterm("gear.xml")) }}{% else %}{{ _("Web_Sheet_MatrixVRDevice", dp=matrix_vr.data_processing, device=matrix_vr.device | dterm("gear.xml")) }}{% endif %}
+        </td>
+      </tr>
+      {% if matrix_vr.hot_sim %}
+      <tr><th>{{ _("Web_Sheet_MatrixHotInitiative") }}</th><td>{{ _("Web_Sheet_InitiativeValue", value=matrix_vr.value, dice=hot_sim_dice) }}</td></tr>
+      {% endif %}
+      {% endif %}
       <tr><th>{{ _("Web_Sheet_PhysicalLimit") }}</th><td>{{ physical_limit }}</td></tr>
       <tr><th>{{ _("Web_Sheet_MentalLimit") }}</th><td>{{ mental_limit }}</td></tr>
       <tr><th>{{ _("Web_Sheet_SocialLimit") }}</th><td>{{ social_limit }}</td></tr>

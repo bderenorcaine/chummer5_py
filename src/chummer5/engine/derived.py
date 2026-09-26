@@ -79,6 +79,23 @@ something to target:
 - **Damage Resistance** (`damage_resistance`): `BOD + Armor + Σ DAMAGE_RESISTANCE` (legacy
   `DamageResistancePool`).
 
+**WP111 adds the remaining Step Eight initiative rows** (Living Persona is out of scope):
+
+- **Astral Initiative** (`astral_initiative`): `INT x 2` + 2D6, and only for a character who can
+  astrally *project* -- a Magician. p. 313: "Only characters who are full Magicians can astrally
+  project"; an Adept or an Aspected Magician can at most *perceive*, and a perceiving character
+  stays in its body on the physical Initiative (p. 159 swaps to Astral Initiative on the action
+  that *projects*). The dice follow the Step Eight table and p. 159's chart (2D6); p. 314's Astral
+  Attributes table prints "+2D6 (3D6 total)" and legacy defaults to 3 -- a printed conflict,
+  recorded in `spec/rulebooks/learnings/phase-x.md`.
+- **Matrix AR Initiative** is the physical Initiative, augmentations and all (p. 229: "When in AR,
+  you use your normal Initiative and Initiative Dice"; the User Modes Table says the same). It is
+  shown for everyone, as its own row, with the physical numbers.
+- **Matrix VR Initiative** (`matrix_vr_initiative`): Data Processing + INT, with 3D6 (cold-sim) or
+  4D6 (hot-sim) (pp. 229-230). VR needs a sim module *and* a direct neural interface (pp. 227, 438)
+  and a device to run the persona on; hot-sim needs a hot-sim module, which every cyberdeck has
+  built in (p. 439). See that function for which purchases provide which.
+
 **`WoundModifier` (a damage-penalty term `Character.InitiativeValue` adds on top of REA+INT) is
 always 0 here** -- MVP chargen never tracks damage (no career mode, no condition monitor boxes
 filled in), so there is nothing for it to read.
@@ -125,6 +142,26 @@ BASE_WOUND_BOXES_PER_MODIFIER = 3
 
 # The gear category whose items are body armor or `+N` accessories (armor.xml's own category name).
 ARMOR_CATEGORY = "Armor"
+
+# WP111: Astral Initiative's dice (the Step Eight table and p. 159 -- see module docstring for the
+# p. 314 conflict), and the two VR modes' (pp. 229-230).
+ASTRAL_INITIATIVE_DICE = 2
+COLD_SIM_INITIATIVE_DICE = 3
+HOT_SIM_INITIATIVE_DICE = 4
+
+# WP111: what provides the pieces VR needs, by catalog name. A direct neural interface: trodes, or
+# an implanted datajack, commlink, cyberdeck or control rig ("like getting a free datajack",
+# p. 452) -- pp. 227, 438, 451-452. A sim module: the commlink upgrade (p. 438), an implanted
+# commlink ("comes with a sim module at no additional cost", p. 451), a control rig ("It has a
+# built-in sim module", p. 452). Hot-sim: the upgrade's hot-sim version, or any cyberdeck ("All
+# cyberdecks include illegal hot-sim modules right out of the box", p. 439).
+_DNI_GEAR = frozenset({"Trodes"})
+_DNI_CYBERWARE = frozenset({"Datajack", "Commlink", "Cyberdeck", "Control Rig"})
+_COLD_SIM_GEAR = frozenset({"Sim Module"})
+_HOT_SIM_GEAR = frozenset({"Sim Module, Hot"})
+_SIM_CYBERWARE = frozenset({"Commlink", "Control Rig"})
+_COMMLINK_CATEGORY = "Commlinks"
+_CYBERDECK_CATEGORY = "Cyberdecks"
 
 
 def _ceil_div(numerator: int, denominator: int) -> int:
@@ -472,3 +509,76 @@ def public_awareness(character: Character) -> int:
     default and not in the rulebook, so it isn't followed."""
     del character
     return 0
+
+
+def astral_initiative(character: Character) -> int | None:
+    """Astral Initiative's attribute part (WP111): `INT x 2`, or `None` for a character who can't
+    astrally project (anyone but a Magician) -- see module docstring. Add
+    `ASTRAL_INITIATIVE_DICE` D6."""
+    if character.magic_type != "Magician":
+        return None
+    return character.attribute_value("INT") * 2
+
+
+@dataclass(frozen=True)
+class MatrixVRInitiative:
+    """Matrix VR Initiative (WP111): `data_processing + INT`, with cold-sim always available when
+    VR is, and hot-sim only when a hot-sim module is (`hot_sim`).
+
+    `device` is the purchase whose Data Processing is used: the character's best persona device, a
+    cyberdeck over a commlink when both are owned since the deck is what a decker runs. A cyberdeck
+    has no fixed Data Processing -- its Attribute Array is assigned by the decker (p. 439) -- so
+    `from_array` says the figure assumes its highest array value there.
+    """
+
+    data_processing: int
+    device: StarterGearItem
+    from_array: bool
+    hot_sim: bool
+    intuition: int
+
+    @property
+    def value(self) -> int:
+        return self.data_processing + self.intuition
+
+
+def matrix_vr_initiative(character: Character) -> MatrixVRInitiative | None:
+    """The VR Initiative rows (WP111), or `None` when the character can't enter VR at all.
+
+    VR needs three things (pp. 227, 229, 438): a direct neural interface, a sim module, and a device
+    to run the persona on. `None` if any is missing -- so a character with only a commlink gets the
+    AR row and nothing else, which is what the book says a plain commlink user has.
+    """
+    gear = character.resources_selection.gear if character.resources_selection is not None else ()
+    gear_names = {item.name for item in gear}
+    cyberware_names = (
+        {node.item.name for node in character.cyberware_selection.walk()}
+        if character.cyberware_selection is not None
+        else set()
+    )
+    decks = [item for item in gear if item.category == _CYBERDECK_CATEGORY and item.attribute_array]
+    commlinks = [
+        item for item in gear if item.category == _COMMLINK_CATEGORY and item.data_processing
+    ]
+    has_dni = bool(gear_names & _DNI_GEAR or cyberware_names & _DNI_CYBERWARE)
+    hot_sim = bool(decks or gear_names & _HOT_SIM_GEAR)
+    has_sim = hot_sim or bool(gear_names & _COLD_SIM_GEAR or cyberware_names & _SIM_CYBERWARE)
+    if not has_dni or not has_sim or not (decks or commlinks):
+        return None
+    if decks:
+        deck = max(decks, key=lambda item: max(item.attribute_array or (0,)))
+        return MatrixVRInitiative(
+            data_processing=max(deck.attribute_array or (0,)),
+            device=deck,
+            from_array=True,
+            hot_sim=True,
+            intuition=character.attribute_value("INT"),
+        )
+    commlink = max(commlinks, key=lambda item: item.data_processing or 0)
+    return MatrixVRInitiative(
+        data_processing=commlink.data_processing or 0,
+        device=commlink,
+        from_array=False,
+        hot_sim=hot_sim,
+        intuition=character.attribute_value("INT"),
+    )

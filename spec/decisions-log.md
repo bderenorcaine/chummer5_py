@@ -1608,3 +1608,12 @@ WP107-135 are in `spec/plan/phase-x-rulebook-completeness.md`; what matters beyo
 - **`<includeinlimit>` is parsed.** It is how the data says Indomitable's three rows share one
   3-level cap (p. 75). Any future catalog loader that offers rated items should check whether its
   file uses the same block.
+
+## 2026-09-26 — WP111: Astral Initiative dice follow the 2D6 printing, pending a ruling
+
+The core rulebook prints Astral Initiative's dice two ways. The Step Eight table and p. 159's chart
+say 2D6. p. 314's Astral Attributes Table says "+2D6 (3D6 total)". The book's own sample characters
+split between the two, and legacy defaults to 3. WP111 follows 2D6, the reading the Phase X plan
+states, and puts it in one constant (`chummer5.engine.derived.ASTRAL_INITIATIVE_DICE`). **Open for
+the user to rule on**: if 3D6 is preferred (legacy's choice, and possibly an erratum), changing that
+constant and one test is the whole change.

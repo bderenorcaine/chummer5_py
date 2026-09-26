@@ -383,3 +383,21 @@ def test_the_sheet_shows_the_reputation_row() -> None:
     assert "<th>Street Cred</th><td>0</td>" in sheet
     assert "<th>Notoriety</th><td>1</td>" in sheet
     assert "<th>Public Awareness</th><td>0</td>" in sheet
+
+
+def test_the_sheet_shows_matrix_rows_only_for_what_the_gear_provides() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post("/ui/resources", data={"gear_Meta Link": "1"})
+    sheet = client.get("/character/sheet").text
+    assert "Matrix AR Initiative" in sheet
+    assert "Matrix VR Initiative" not in sheet
+    assert "Astral Initiative" not in sheet
+
+    client.post(
+        "/ui/resources", data={"gear_Meta Link": "1", "gear_Sim Module": "1", "gear_Trodes": "1"}
+    )
+    sheet = client.get("/character/sheet").text
+    assert "Matrix VR Initiative (cold-sim)" in sheet
+    assert "Data Processing 1, from the Meta Link." in sheet
+    assert "Matrix VR Initiative (hot-sim)" not in sheet
