@@ -178,6 +178,19 @@ class ImprovementType(Enum):
     # WP116: raises one skill's purchase cap (6 at creation) and its rating ceiling (12) --
     # Aptitude, target: the skill name. Legacy folds the same thing into `Skill.RatingMaximum`.
     SKILL_MAXIMUM = auto()
+    # WP117: the purchase-rule qualities. Cost changes are *extra percent* (Uncouth's 200% cost is
+    # +100), summed, so two sources combine additively. Targets are skill categories ("Social
+    # Active"), except `SKILL_GROUP_DISABLED` (a group name, Incompetent's choice) and the two
+    # augmentation ones (`""`). The rest are flags: any value > 0 switches the rule on.
+    SKILL_CATEGORY_POINT_COST_PERCENT = auto()
+    SKILL_CATEGORY_KARMA_COST_PERCENT = auto()
+    SKILL_CATEGORY_SPECIALIZATION_KARMA_COST_PERCENT = auto()
+    SKILL_GROUP_CATEGORY_KARMA_COST_PERCENT = auto()
+    SKILL_GROUP_CATEGORY_DISABLED = auto()
+    SKILL_GROUP_DISABLED = auto()
+    SKILL_CATEGORY_DEFAULTING_BLOCKED = auto()
+    CYBERWARE_ESSENCE_PERCENT = auto()
+    BIOWARE_DISABLED = auto()
 
 
 class ImprovementSource(Enum):

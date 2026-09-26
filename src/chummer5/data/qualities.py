@@ -103,6 +103,26 @@ _GLOBAL_BONUS_TAGS = {
 
 # WP114: `<conditionmonitor>` holding exactly one of these leaves -- High Pain Tolerance's ignored
 # wound box and Will to Live's Overflow box, both per rating.
+# WP117: the purchase-rule qualities' `<bonus>` shapes (Uncouth, Uneducated, Incompetent,
+# Sensitive System), each mapped to its `FlatBonus.target_kind`. Cost multipliers are
+# `<name>category</name><val>percent</val>`; the category flags hold the category as text.
+_COST_MULTIPLIER_TAGS = {
+    "skillcategorypointcostmultiplier": "skill_category_point_cost_percent",
+    "skillcategorykarmacostmultiplier": "skill_category_karma_cost_percent",
+    "skillcategoryspecializationkarmacostmultiplier": (
+        "skill_category_specialization_karma_cost_percent"
+    ),
+    "skillgroupcategorykarmacostmultiplier": "skill_group_category_karma_cost_percent",
+}
+_CATEGORY_FLAG_TAGS = {
+    "skillgroupcategorydisable": "skill_group_category_disabled",
+    "blockskillcategorydefaulting": "skill_category_defaulting_blocked",
+}
+_UNTARGETED_FLAG_TAGS = {
+    "skillgroupdisablechoice": "skill_group_disabled",
+    "disablebioware": "bioware_disabled",
+}
+
 # WP115 adds Low Pain Tolerance's `threshold` (-1: a wound modifier per 2 boxes, not 3).
 _CONDITION_MONITOR_TAGS = {
     "thresholdoffset": "cm_threshold_offset",
@@ -493,6 +513,30 @@ _UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
         "combat (p. 85) -- no summoning, binding or spirit-combat resolution exists. The chosen "
         "type is recorded. (Its +1 Notoriety is applied.)"
     ),
+    # WP117: the purchase-rule qualities. Their cost and access rules are applied.
+    "Incompetent": (
+        "Gear that grants a bonus to, or needs, a skill of the group gives the character nothing, "
+        "and the GM may call for Success Tests for ordinary tasks (p. 81) -- no gear-skill or test "
+        "resolution exists. (The group's ban, unawareness in its skills and +1 Notoriety are "
+        "applied.)"
+    ),
+    "Sensitive System": (
+        "For a magic user, a Willpower (2) Test before each Drain Test, with +2 Drain Value on a "
+        "failure (p. 83) -- no Drain resolution exists. (The doubled cyberware Essence and the ban "
+        "on bioware are applied.)"
+    ),
+    "Uncouth": (
+        "-2 dice on Social Tests to resist acting improperly or impulsively, and the GM may call "
+        "for Success Tests in ordinary social situations (p. 85) -- no Social test resolution "
+        "exists. (Its doubled Social skill costs, the ban on Social skill groups, unawareness in "
+        "unknown Social skills and +1 Notoriety are applied.)"
+    ),
+    "Uneducated": (
+        "The GM may call for Success Tests for tasks most people take for granted, and may rule "
+        "some skill groups of these categories out for good (p. 87) -- no GM-adjudicated test "
+        "exists. (Its doubled Karma costs, unawareness in unknown Technical, Academic and "
+        "Professional skills and +1 Notoriety are applied.)"
+    ),
     "Weak Immune System": (
         "+2 to the Power of any disease the character resists (p. 87) -- no toxin/pathogen "
         "resistance subsystem exists. (Its +1 Notoriety is applied.)"
@@ -571,6 +615,14 @@ class FlatBonus:
 _RULEBOOK_BONUS_ADDITIONS: Mapping[str, tuple[FlatBonus, ...]] = {
     "Addiction (Severe)": (
         FlatBonus(target_kind="skill_category_pool", target_name="Social Active", value=-2),
+    ),
+    # WP117, p. 85: Uncouth characters "are treated as 'unaware' in any Social skills that they do
+    # not possess at Rating 1 or higher" -- the data blocks defaulting for Uneducated's categories
+    # but not for Uncouth's.
+    "Uncouth": (
+        FlatBonus(
+            target_kind="skill_category_defaulting_blocked", target_name="Social Active", value=1
+        ),
     ),
 }
 
@@ -750,6 +802,35 @@ def _classify_bonus(
                     value=int(child.text),
                 )
             )
+        elif child.tag in _COST_MULTIPLIER_TAGS and {c.tag for c in child} == {"name", "val"}:
+            # WP117: a 200% cost is stored as +100 extra percent (see `ImprovementType`).
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind=_COST_MULTIPLIER_TAGS[child.tag],
+                    target_name=child.findtext("name", ""),
+                    value=int(child.findtext("val", "100")) - 100,
+                )
+            )
+        elif child.tag in _CATEGORY_FLAG_TAGS and len(child) == 0 and child.text:
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind=_CATEGORY_FLAG_TAGS[child.tag], target_name=child.text, value=1
+                )
+            )
+        elif child.tag in _UNTARGETED_FLAG_TAGS and len(child) == 0:
+            # WP117: Incompetent's group choice (empty target: "the pick's `choice`"), and
+            # Sensitive System's ban on bioware.
+            flat_bonuses.append(
+                FlatBonus(target_kind=_UNTARGETED_FLAG_TAGS[child.tag], target_name="", value=1)
+            )
+        elif child.tag == "cyberwaretotalessmultiplier" and len(child) == 0 and child.text:
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind="cyberware_essence_percent",
+                    target_name="",
+                    value=int(child.text) - 100,
+                )
+            )
         elif child.tag == "skillcategory" and _is_flat_skill_bonus(child):
             # WP115: a dice-pool modifier to every skill of one category, not a rating bonus.
             flat_bonuses.append(
@@ -816,10 +897,11 @@ def _choice_kind(name: str, flat_bonuses: tuple[FlatBonus, ...]) -> str | None:
     if any(b.target_kind == "attribute_maximum" and not b.target_name for b in flat_bonuses):
         return "attribute"
     if any(
-        b.target_kind in ("skill_pool", "skill_maximum") and not b.target_name
-        for b in flat_bonuses
+        b.target_kind in ("skill_pool", "skill_maximum") and not b.target_name for b in flat_bonuses
     ):
         return "skill"
+    if any(b.target_kind == "skill_group_disabled" for b in flat_bonuses):
+        return "skill_group"
     return None
 
 

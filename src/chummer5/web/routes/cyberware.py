@@ -57,6 +57,7 @@ from chummer5.engine.bioware import (
     BiowarePurchaseRequest,
     BiowareSelection,
     apply_bioware_improvements,
+    bioware_disabled,
     create_bioware_selection,
     select_skill_choices,
 )
@@ -67,6 +68,7 @@ from chummer5.engine.cyberware_subsystems import (
     apply_cyberware_tree_improvements,
     create_cyberware_tree_selection,
     cyberlimb_attribute_maximums,
+    cyberware_essence_multiplier,
     cyberware_rating_bounds,
 )
 from chummer5.engine.derived import BASE_ESSENCE
@@ -274,7 +276,9 @@ def _parse_bioware(
 
 
 def _cyberware_groups(
-    requests: Sequence[CyberwarePurchaseRequest], attribute_maximums: Mapping[str, int]
+    requests: Sequence[CyberwarePurchaseRequest],
+    attribute_maximums: Mapping[str, int],
+    essence_multiplier: Decimal = Decimal(1),
 ) -> list[dict[str, Any]]:
     """Category-grouped picker rows for the cyberware half (WP42).
 
@@ -292,7 +296,9 @@ def _cyberware_groups(
         {
             "category": category,
             "rows": [
-                _cyberware_row(item, units_by_item.get(item.id, []), attribute_maximums)
+                _cyberware_row(
+                    item, units_by_item.get(item.id, []), attribute_maximums, essence_multiplier
+                )
                 for item in items
             ],
         }
@@ -306,9 +312,10 @@ def _cyberware_row(
     item: CyberwareEntry,
     units: Sequence[CyberwarePurchaseRequest],
     attribute_maximums: Mapping[str, int],
+    essence_multiplier: Decimal = Decimal(1),
 ) -> dict[str, Any]:
     unit_rows = [
-        _cyberware_unit_row(item, index, request, attribute_maximums)
+        _cyberware_unit_row(item, index, request, attribute_maximums, essence_multiplier)
         for index, request in enumerate(units)
     ]
     return {
@@ -325,6 +332,7 @@ def _cyberware_unit_row(
     index: int,
     request: CyberwarePurchaseRequest,
     attribute_maximums: Mapping[str, int],
+    essence_multiplier: Decimal = Decimal(1),
 ) -> dict[str, Any]:
     """One bought copy of one catalog row: its rating control, its own prices, and its subsystems.
 
@@ -361,7 +369,9 @@ def _cyberware_unit_row(
         "nuyen_cost": nuyen_cost,
         # Dual costing: a standalone purchase is the only thing that charges Essence -- every plugin
         # below contributes exactly zero (module docstring of `engine.cyberware_subsystems`).
-        "essence": item.essence_cost.resolve(rating=rating, min_rating=minimum),
+        # WP117: doubled by Sensitive System.
+        "essence": item.essence_cost.resolve(rating=rating, min_rating=minimum)
+        * essence_multiplier,
         "capacity_budget": budget,
         "capacity_spent": spent,
         "capacity_remaining": budget - spent,
@@ -513,7 +523,9 @@ def _cyberware_context(
         return {"character": None, "cyberware_error": error}
     attribute_maximums = cyberlimb_attribute_maximums(character)
     bioware_by_id = {item.id: item for item in BIOWARE}
-    cyberware_groups = _cyberware_groups(cyberware_requests, attribute_maximums)
+    cyberware_groups = _cyberware_groups(
+        cyberware_requests, attribute_maximums, cyberware_essence_multiplier(character)
+    )
     bioware_groups = _bioware_groups(bioware_requests, bioware_by_id)
     budget = starting_nuyen(resources_letter, PRIORITIES) + display_karma_to_nuyen(karma_converted)
     nuyen_available = budget - gear_cost - lifestyle_cost - foci_cost - vehicle_cost
@@ -537,6 +549,7 @@ def _cyberware_context(
                 CYBERWARE_ENTRIES,
                 nuyen_available,
                 attribute_maximums=attribute_maximums,
+                essence_multiplier=cyberware_essence_multiplier(character),
             )
             create_bioware_selection(
                 bioware_requests,
@@ -544,6 +557,7 @@ def _cyberware_context(
                 nuyen_available - cyberware_selection.nuyen_spent,
                 other_essence_spent=cyberware_selection.essence_spent,
                 skills=SKILLS,
+                bioware_disabled=bioware_disabled(character),
             )
         except ValueError as exc:
             budget_warning = Message.of("Web_Stale_Cyberware", error=str(exc))
@@ -603,6 +617,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 CYBERWARE_ENTRIES,
                 nuyen_available,
                 attribute_maximums=attribute_maximums,
+                essence_multiplier=cyberware_essence_multiplier(session.character),
             )
             bioware_selection = create_bioware_selection(
                 bioware_requests,
@@ -610,6 +625,7 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 nuyen_available - selection.nuyen_spent,
                 other_essence_spent=selection.essence_spent,
                 skills=SKILLS,
+                bioware_disabled=bioware_disabled(session.character),
             )
             new_resources_selection = create_resources_selection(
                 session.resources_letter,

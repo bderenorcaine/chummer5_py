@@ -80,7 +80,7 @@ from chummer5.data.knowledge import (
 )
 from chummer5.engine.character import Character, karma_advancement_cost
 from chummer5.engine.improvements import ImprovementType
-from chummer5.engine.skills import MAX_SKILL_RATING_CREATE
+from chummer5.engine.skills import MAX_SKILL_RATING_CREATE, skill_purchase_rules
 
 # Core rulebook p. 89: "Characters receive free Knowledge and Language skills points equal to
 # (Intuition rating + Logic rating) x 2."
@@ -285,15 +285,23 @@ def create_karma_knowledge_selection(
     caller's responsibility to derive -- typically `character.karma_remaining + <this selection's
     own currently-committed karma_cost>`, mirroring every other Karma-spending `create_*`
     function's `karma_budget` parameter).
+
+    **WP117**: a knowledge skill's cost is raised by its category's Karma cost percent -- Uneducated
+    doubles Academic and Professional knowledge (p. 87). Languages have no category.
     """
     knowledge_selection = character.knowledge_selection
+    cost_percent = skill_purchase_rules(character).karma_cost_percent
 
-    def _current_rating(name: str) -> int:
+    def _current_rating(name: str) -> tuple[int, str | None]:
         if knowledge_selection is None:
             raise ValueError(f"{name!r} is not a committed knowledge/language skill")
-        matches = [p.rating for p in knowledge_selection.knowledge_skills if p.name == name]
+        matches: list[tuple[int, str | None]] = [
+            (p.rating, p.category) for p in knowledge_selection.knowledge_skills if p.name == name
+        ]
         matches += [
-            p.rating for p in knowledge_selection.languages if p.name == name and not p.native
+            (p.rating, None)
+            for p in knowledge_selection.languages
+            if p.name == name and not p.native
         ]
         if not matches:
             raise ValueError(f"{name!r} is not a committed, non-native knowledge/language skill")
@@ -308,14 +316,16 @@ def create_karma_knowledge_selection(
     for name, points in nonzero_points.items():
         if points < 0:
             raise ValueError(f"{name!r}: Karma-funded points must not be negative, got {points}")
-        start_rating = _current_rating(name)
+        start_rating, category = _current_rating(name)
         total = start_rating + points
         if total > MAX_SKILL_RATING_CREATE:
             raise ValueError(
                 f"{name!r}: {total} exceeds the chargen skill rating maximum of "
                 f"{MAX_SKILL_RATING_CREATE}"
             )
-        cost += karma_advancement_cost(start_rating, points, KARMA_KNOWLEDGE_PER_RATING)
+        step_cost = karma_advancement_cost(start_rating, points, KARMA_KNOWLEDGE_PER_RATING)
+        percent = cost_percent.get(category, 0) if category is not None else 0
+        cost += (step_cost * (100 + percent) + 50) // 100
 
     if cost > karma_budget:
         raise ValueError(

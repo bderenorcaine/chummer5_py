@@ -266,6 +266,7 @@ from chummer5.data.vehicles import Vehicle
 from chummer5.engine.bioware import (
     BiowarePurchaseRequest,
     apply_bioware_improvements,
+    bioware_disabled,
     create_bioware_selection,
 )
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
@@ -280,6 +281,7 @@ from chummer5.engine.cyberware_subsystems import (
     apply_cyberware_tree_improvements,
     create_cyberware_tree_selection,
     cyberlimb_attribute_maximums,
+    cyberware_essence_multiplier,
 )
 from chummer5.engine.foci import apply_foci_improvements, create_foci_selection
 from chummer5.engine.improvements import ImprovementSource
@@ -316,7 +318,7 @@ from chummer5.engine.resources import (
 from chummer5.engine.skills import (
     create_karma_skill_selection,
     create_skill_allocation,
-    skill_maximum_bonuses,
+    skill_purchase_rules,
 )
 from chummer5.engine.spirits import create_bound_spirit_selection
 from chummer5.engine.vehicles import VEHICLE_CATALOG, create_vehicle_selection
@@ -959,8 +961,9 @@ def build_character(
         skill_points=save.skill_points,
         group_points=save.group_points,
         specializations=save.specializations,
-        # WP116: Aptitude's +1, applied with the qualities above.
-        maximum_bonus=skill_maximum_bonuses(character),
+        # WP116/WP117: Aptitude's +1 and the purchase-rule qualities, applied with the qualities
+        # above.
+        rules=skill_purchase_rules(character),
     )
 
     contact_selection = create_contact_selection(character, save.contacts)
@@ -993,6 +996,7 @@ def build_character(
         cyberware,
         resources_selection.nuyen_remaining,
         attribute_maximums=cyberlimb_attribute_maximums(character),
+        essence_multiplier=cyberware_essence_multiplier(character),  # WP117: Sensitive System
     )
     apply_cyberware_tree_improvements(character, cyberware_selection)
 
@@ -1006,6 +1010,7 @@ def build_character(
         other_essence_spent=cyberware_selection.essence_spent,
         # WP80: re-validates a persisted skill pick against the same filter the purchase did.
         skills=skills,
+        bioware_disabled=bioware_disabled(character),  # WP117: Sensitive System
     )
     apply_bioware_improvements(character, bioware_selection)
 

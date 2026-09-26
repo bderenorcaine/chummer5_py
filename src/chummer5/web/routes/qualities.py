@@ -16,6 +16,11 @@ from fastapi.responses import HTMLResponse
 from chummer5.data.mentors import MentorSpiritArchetype
 from chummer5.data.qualities import BonusSupport, Quality
 from chummer5.engine.character import Character
+from chummer5.engine.cyberware_subsystems import (
+    create_cyberware_tree_selection,
+    cyberlimb_attribute_maximums,
+    cyberware_essence_multiplier,
+)
 from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.lifestyle import lifestyle_cost_percent, surcharged_monthly_cost
 from chummer5.engine.qualities import (
@@ -32,7 +37,15 @@ from chummer5.engine.qualities import (
     offerable_quality_catalog,
     resolve_metatype_qualities,
 )
-from chummer5.web.catalogs import MENTOR_SPIRIT_QUALITY, MENTORS, QUALITIES, SKILLS, templates
+from chummer5.web.catalogs import (
+    CYBERWARE_ENTRIES,
+    MENTOR_SPIRIT_QUALITY,
+    MENTORS,
+    QUALITIES,
+    SKILLS,
+    templates,
+)
+from chummer5.web.routes.cyberware import _replace_committed_cyberware
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -151,8 +164,35 @@ def _replace_committed_qualities(character: Character, selection: QualitySelecti
     apply_quality_improvements(character, selection.qualities)
     if selection.mentor_spirit is not None:
         apply_mentor_spirit_improvements(character, selection.mentor_spirit)
-    # WP115: Dependents change the Lifestyle surcharge.
-    return _reprice_lifestyle(replace(character, quality_selection=selection))
+    # WP115: Dependents change the Lifestyle surcharge. WP117: Sensitive System doubles cyberware
+    # Essence.
+    character = _reprice_lifestyle(replace(character, quality_selection=selection))
+    return _reprice_cyberware_essence(character)
+
+
+def _reprice_cyberware_essence(character: Character) -> Character:
+    """Re-cost a committed cyberware tree at the character's current Essence multiplier (WP117).
+
+    A committed tree carries its Essence costs, so taking or dropping Sensitive System after the
+    implants were bought has to re-derive it. If the doubled cost no longer fits the Essence floor,
+    the tree is left as it was: the cyberware page's own WP19 re-check then reports it as stale.
+    """
+    selection = character.cyberware_selection
+    if selection is None:
+        return character
+    try:
+        repriced = create_cyberware_tree_selection(
+            selection.to_requests(),
+            CYBERWARE_ENTRIES,
+            selection.nuyen_budget,
+            attribute_maximums=cyberlimb_attribute_maximums(character),
+            essence_multiplier=cyberware_essence_multiplier(character),
+        )
+    except ValueError:
+        return character
+    if repriced.essence_spent == selection.essence_spent:
+        return character
+    return _replace_committed_cyberware(character, repriced)
 
 
 def _row_key(quality_id: str, index: int) -> str:

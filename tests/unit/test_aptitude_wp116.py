@@ -23,7 +23,7 @@ from chummer5.engine.skills import (
     create_karma_skill_selection,
     create_skill_allocation,
     natural_skill_rating,
-    skill_maximum_bonuses,
+    skill_purchase_rules,
     skill_rating,
 )
 from chummer5.web.app import create_app
@@ -59,7 +59,7 @@ def _allocate(character: Character, points: dict[str, int]):  # type: ignore[no-
         SKILLS,
         {SKILL[name].id: rating for name, rating in points.items()},
         {},
-        maximum_bonus=skill_maximum_bonuses(character),
+        rules=skill_purchase_rules(character),
     )
 
 

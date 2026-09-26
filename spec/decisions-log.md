@@ -1651,3 +1651,26 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   Before this, an imported choice quality reached `create_quality_selection` with no choice and
   would have raised. No curated fixture hit that path. An `<extra>` that doesn't resolve to an
   offered option now drops the quality, reported like any other.
+
+## 2026-09-26 — WP117: how the purchase-rule qualities read, and the skill-purchase rules object
+
+- **Uneducated doubles Karma, not priority points.** p. 87 says "the Karma cost", and the data has
+  only Karma multipliers. The phase plan's "the same double cost" as Uncouth was loose. Uncouth's
+  p. 85 wording says "the cost", and the data doubles both.
+- **Uncouth makes unknown Social skills unaware, rulebook wins.** The data blocks defaulting only
+  for Uneducated's categories. p. 85 says Uncouth characters are "unaware" in Social skills below
+  rating 1.
+- **Incompetent bans the group's member skills too, not just the group.** Otherwise "may not
+  possess that skill group" is sidestepped one skill at a time.
+- **`SkillPurchaseRules`** (`chummer5.engine.skills`) carries everything qualities change about
+  buying skills: Aptitude's cap, cost percentages, and banned groups. `create_skill_allocation`
+  takes it instead of a `Character`, as it did WP116's `maximum_bonus` map, which it replaces.
+  `skill_purchase_rules(character)` builds it. A new quality that changes skill purchases should
+  add a field here rather than a new parameter.
+- **Sensitive System's ×2 is applied to each cyberware node's stored Essence cost.** Taking or
+  dropping the quality re-costs a committed tree from the qualities page. If the doubled cost no
+  longer fits the Essence floor, the tree is left alone and the cyberware page reports it stale.
+  WP127's grade multipliers should compose with `essence_multiplier`, not replace it.
+- **The pickers still list what a quality bans** (a Social group for an Uncouth character,
+  Incompetent's group). Submitting one is rejected with the reason. Hiding the rows is a possible
+  later UI improvement; it's not needed for correctness.

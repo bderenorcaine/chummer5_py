@@ -610,6 +610,7 @@ def create_cyberware_tree_selection(
     *,
     attribute_maximums: Mapping[str, int] | None = None,
     other_essence_spent: Decimal = Decimal(0),
+    essence_multiplier: Decimal = Decimal(1),
 ) -> CyberwareTreeSelection:
     """Build a validated `CyberwareTreeSelection` from nested purchase requests.
 
@@ -631,13 +632,23 @@ def create_cyberware_tree_selection(
     Missing bundled subsystems are auto-attached, free. Duplicate purchases of the same item are
     allowed, exactly as in `create_cyberware_selection` -- a matched pair of cyberlimbs is an
     ordinary build.
+
+    **WP117**: `essence_multiplier` scales every node's Essence cost -- Sensitive System's "Double
+    all Essence losses caused by cyberware" (p. 83); see `cyberware_essence_multiplier`. Applied to
+    the stored `essence_cost`, so the floor check, the totals, the Improvements and the sheet all
+    read the doubled number.
     """
     entries = tuple(catalog)
     by_id = {entry.id: entry for entry in entries}
     by_name = {entry.name: entry for entry in entries}
 
     purchases = tuple(
-        _build_purchase(request, by_id, by_name, parent=None, attribute_maximums=attribute_maximums)
+        _scale_essence(
+            _build_purchase(
+                request, by_id, by_name, parent=None, attribute_maximums=attribute_maximums
+            ),
+            essence_multiplier,
+        )
         for request in requests
     )
 
@@ -661,6 +672,22 @@ def create_cyberware_tree_selection(
         nuyen_spent=nuyen_spent,
         essence_spent=essence_spent,
     )
+
+
+def _scale_essence(node: PurchasedCyberware, multiplier: Decimal) -> PurchasedCyberware:
+    if multiplier == 1:
+        return node
+    return replace(
+        node,
+        essence_cost=node.essence_cost * multiplier,
+        plugins=tuple(_scale_essence(plugin, multiplier) for plugin in node.plugins),
+    )
+
+
+def cyberware_essence_multiplier(character: Character) -> Decimal:
+    """What cyberware Essence is multiplied by (WP117): 1, or 2 with Sensitive System."""
+    percent = character.improvements.resolve(ImprovementType.CYBERWARE_ESSENCE_PERCENT, "")
+    return Decimal(100 + percent) / 100
 
 
 def _paired_bonus_nodes(

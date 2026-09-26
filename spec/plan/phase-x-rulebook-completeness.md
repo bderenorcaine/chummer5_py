@@ -276,7 +276,7 @@ the rules it checks.
   Depends on: WP107.
   Acceptance: Aptitude (Pistols) allows Pistols 7 and still rejects Blades 7.
 
-- [ ] **WP117 — Qualities that change purchase rules: Uncouth, Uneducated, Incompetent, Sensitive
+- [x] **WP117 — Qualities that change purchase rules: Uncouth, Uneducated, Incompetent, Sensitive
   System.**
   Goal: the four qualities that alter what other steps cost or allow.
   Deliverables:

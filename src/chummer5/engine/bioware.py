@@ -212,6 +212,11 @@ def _resolve_chosen_skill(
     return name
 
 
+def bioware_disabled(character: Character) -> bool:
+    """Whether the character may hold no bioware (WP117): Sensitive System."""
+    return character.improvements.resolve(ImprovementType.BIOWARE_DISABLED, "") > 0
+
+
 def create_bioware_selection(
     purchases: Iterable[str | BiowarePurchaseRequest],
     catalog: Iterable[Bioware],
@@ -219,6 +224,7 @@ def create_bioware_selection(
     *,
     other_essence_spent: Decimal = Decimal(0),
     skills: Iterable[Skill] = (),
+    bioware_disabled: bool = False,
 ) -> BiowareSelection:
     """Build a `BiowareSelection`, validating nuyen spend and the (shared) Essence floor together.
 
@@ -238,9 +244,14 @@ def create_bioware_selection(
     nothing" shape `build_character`'s own optional catalogs use -- so buying a row that needs a
     pick without supplying a skill catalog fails as an unresolvable pick rather than silently
     skipping the check.
+
+    **WP117**: `bioware_disabled` (Sensitive System, see `bioware_disabled()`) rejects any purchase.
     """
     by_id = {item.id: item for item in catalog}
     requests = [_as_request(purchase) for purchase in purchases]
+    if requests and bioware_disabled:
+        # WP117, p. 83: "Bioware implants [...] are rejected by the character's body."
+        raise ValueError("Sensitive System: the character's body rejects every bioware implant")
 
     unknown = sorted({r.item_id for r in requests if r.item_id not in by_id})
     if unknown:

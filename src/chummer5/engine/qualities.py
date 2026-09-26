@@ -108,6 +108,20 @@ _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "specialization_disabled": ImprovementType.SPECIALIZATION_DISABLED,
     # WP116: Aptitude.
     "skill_maximum": ImprovementType.SKILL_MAXIMUM,
+    # WP117: Uncouth, Uneducated, Incompetent, Sensitive System.
+    "skill_category_point_cost_percent": ImprovementType.SKILL_CATEGORY_POINT_COST_PERCENT,
+    "skill_category_karma_cost_percent": ImprovementType.SKILL_CATEGORY_KARMA_COST_PERCENT,
+    "skill_category_specialization_karma_cost_percent": (
+        ImprovementType.SKILL_CATEGORY_SPECIALIZATION_KARMA_COST_PERCENT
+    ),
+    "skill_group_category_karma_cost_percent": (
+        ImprovementType.SKILL_GROUP_CATEGORY_KARMA_COST_PERCENT
+    ),
+    "skill_group_category_disabled": ImprovementType.SKILL_GROUP_CATEGORY_DISABLED,
+    "skill_group_disabled": ImprovementType.SKILL_GROUP_DISABLED,
+    "skill_category_defaulting_blocked": ImprovementType.SKILL_CATEGORY_DEFAULTING_BLOCKED,
+    "cyberware_essence_percent": ImprovementType.CYBERWARE_ESSENCE_PERCENT,
+    "bioware_disabled": ImprovementType.BIOWARE_DISABLED,
 }
 
 # WP114: Home Ground's five bonuses (p. 74), as stable ids -- the page translates each through
@@ -135,6 +149,21 @@ SCORCHED_EFFECT_CHOICES = (
 # by name, Resonance skills left out with Resonance itself. The skill's own rating is checked
 # separately, against `LaterStepFacts`.
 SKILL_CHOICES = tuple(sorted(s.name for s in load_skills() if s.category != "Resonance Active"))
+# WP117: what an Incompetent pick may name -- every active skill group but Resonance's. The magic
+# groups are narrowed per character in `choice_options`.
+_SKILL_GROUP_CATEGORIES: dict[str, set[str]] = {}
+for _skill in load_skills():
+    if _skill.skill_group is not None:
+        _SKILL_GROUP_CATEGORIES.setdefault(_skill.skill_group, set()).add(_skill.category)
+SKILL_GROUP_CHOICES = tuple(
+    sorted(g for g, cats in _SKILL_GROUP_CATEGORIES.items() if "Resonance Active" not in cats)
+)
+_MAGIC_SKILL_GROUPS = frozenset(
+    g for g, cats in _SKILL_GROUP_CATEGORIES.items() if "Magical Active" in cats
+)
+# p. 81: "A non-magician cannot take Incompetent in Sorcery, Conjuring, or Enchanting". An Adept
+# can't learn them at all (p. 69), so only these Talents may name one.
+_MAGIC_GROUP_TALENTS = frozenset({"Magician", "Aspected Magician"})
 SCORCHED_QUALITY_NAME = "Scorched"
 # WP115: an Addiction pick's detail naming one of these makes it a BTL addiction, the first of
 # Scorched's two prerequisites (p. 83). Matched case-insensitively.
@@ -393,6 +422,12 @@ def choice_options(quality: Quality, magic_type: str | None) -> tuple[str, ...]:
         return SCORCHED_EFFECT_CHOICES
     if quality.choice_kind == "skill":
         return SKILL_CHOICES
+    if quality.choice_kind == "skill_group":
+        return tuple(
+            g
+            for g in SKILL_GROUP_CHOICES
+            if g not in _MAGIC_SKILL_GROUPS or magic_type in _MAGIC_GROUP_TALENTS
+        )
     if quality.choice_kind is None:
         return ()
     raise ValueError(f"{quality.name}: unsupported choice kind {quality.choice_kind!r}")

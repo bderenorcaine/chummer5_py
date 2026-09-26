@@ -6,6 +6,6 @@
 {%- elif kind == "spirit_type" -%}{{ code | dterm("traditions.xml") }}
 {%- elif kind == "matrix_action" -%}{{ code | dterm("actions.xml") }}
 {%- elif kind == "scorched_effect" -%}{{ _("Web_Scorched_" ~ code) }}
-{%- elif kind == "skill" -%}{{ code | dterm("skills.xml") }}
+{%- elif kind in ("skill", "skill_group") -%}{{ code | dterm("skills.xml") }}
 {%- else -%}{{ code }}
 {%- endif -%}

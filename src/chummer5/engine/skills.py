@@ -89,7 +89,7 @@ the way a single shared selection object would if each route naively replaced it
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
@@ -151,19 +151,119 @@ KARMA_SKILL_GROUP_PER_RATING = 5
 KARMA_SPECIALIZATION_COST = 7
 
 
-def skill_maximum_bonuses(character: Character) -> dict[str, int]:
-    """Σ `SKILL_MAXIMUM` per skill name (WP116) -- what `create_skill_allocation` needs before the
-    character carries an allocation to read them through."""
-    bonuses: dict[str, int] = {}
+def _sum_by_target(character: Character, improvement_type: ImprovementType) -> dict[str, int]:
+    totals: dict[str, int] = {}
     for imp in character.improvements.improvements:
-        if imp.improvement_type is ImprovementType.SKILL_MAXIMUM:
-            bonuses[imp.target] = bonuses.get(imp.target, 0) + imp.value
-    return bonuses
+        if imp.improvement_type is improvement_type:
+            totals[imp.target] = totals.get(imp.target, 0) + imp.value
+    return totals
+
+
+def skill_maximum_bonuses(character: Character) -> dict[str, int]:
+    """Σ `SKILL_MAXIMUM` per skill name (WP116)."""
+    return _sum_by_target(character, ImprovementType.SKILL_MAXIMUM)
+
+
+@dataclass(frozen=True)
+class SkillPurchaseRules:
+    """What the character's qualities change about buying skills (WP116, WP117).
+
+    `create_skill_allocation` takes this rather than a `Character`, because it validates the
+    priority spend on its own; `skill_purchase_rules(character)` builds it. The default is "no
+    quality changes anything".
+
+    - `maximum_bonus`: skill name -> extra levels of purchase cap (Aptitude).
+    - `*_cost_percent`: skill category -> extra percent on a cost. Priority points for a skill and
+      its specialization (Uncouth's Social skills, p. 85), Karma for a skill, a specialization, or a
+      group with a member in the category (Uneducated, p. 87).
+    - `disabled_group_categories`: no group with a member in these categories may be bought
+      (Uncouth: "may never learn any Social skill groups").
+    - `disabled_groups`: these groups, *and each of their skills*, may not be bought (Incompetent,
+      p. 81: "Characters may not possess that skill group").
+    """
+
+    maximum_bonus: Mapping[str, int] = MappingProxyType({})
+    point_cost_percent: Mapping[str, int] = MappingProxyType({})
+    karma_cost_percent: Mapping[str, int] = MappingProxyType({})
+    specialization_karma_cost_percent: Mapping[str, int] = MappingProxyType({})
+    group_karma_cost_percent: Mapping[str, int] = MappingProxyType({})
+    disabled_group_categories: frozenset[str] = frozenset()
+    disabled_groups: frozenset[str] = frozenset()
+
+    def group_blocked(self, group: str, skills: tuple[Skill, ...]) -> str | None:
+        """Why `group` may not be bought, or `None`."""
+        if group in self.disabled_groups:
+            return f"{group}: the character is Incompetent in this skill group"
+        categories = _group_categories(group, skills) & self.disabled_group_categories
+        if categories:
+            return (
+                f"{group}: an Uncouth character may never learn {sorted(categories)} skill groups"
+            )
+        return None
+
+
+# The rules for a character none of whose qualities change skill purchases.
+NO_PURCHASE_RULES = SkillPurchaseRules()
+
+
+def skill_purchase_rules(character: Character) -> SkillPurchaseRules:
+    """The character's `SkillPurchaseRules`, from its Improvements (WP117)."""
+
+    def flags(improvement_type: ImprovementType) -> frozenset[str]:
+        return frozenset(k for k, v in _sum_by_target(character, improvement_type).items() if v)
+
+    return SkillPurchaseRules(
+        maximum_bonus=skill_maximum_bonuses(character),
+        point_cost_percent=_sum_by_target(
+            character, ImprovementType.SKILL_CATEGORY_POINT_COST_PERCENT
+        ),
+        karma_cost_percent=_sum_by_target(
+            character, ImprovementType.SKILL_CATEGORY_KARMA_COST_PERCENT
+        ),
+        specialization_karma_cost_percent=_sum_by_target(
+            character, ImprovementType.SKILL_CATEGORY_SPECIALIZATION_KARMA_COST_PERCENT
+        ),
+        group_karma_cost_percent=_sum_by_target(
+            character, ImprovementType.SKILL_GROUP_CATEGORY_KARMA_COST_PERCENT
+        ),
+        disabled_group_categories=flags(ImprovementType.SKILL_GROUP_CATEGORY_DISABLED),
+        disabled_groups=flags(ImprovementType.SKILL_GROUP_DISABLED),
+    )
+
+
+def _group_categories(group: str, skills: Iterable[Skill]) -> frozenset[str]:
+    """Every category a member of `group` has -- Outdoors is both Physical and Technical, and
+    legacy counts a group under each of its members' categories."""
+    return frozenset(s.category for s in skills if s.skill_group == group)
+
+
+def _with_percent(cost: int, percent: int) -> int:
+    """`cost` raised by `percent` extra percent, rounded half up (legacy `StandardRound`)."""
+    return (cost * (100 + percent) + 50) // 100
 
 
 def purchase_maximum(skill: Skill, maximum_bonus: Mapping[str, int]) -> int:
     """The highest rating `skill` may be bought to at creation (WP116): 6, or 7 with Aptitude."""
     return MAX_SKILL_RATING_CREATE + maximum_bonus.get(skill.name, 0)
+
+
+def skill_points_spent(
+    skill_points: Mapping[str, int],
+    specializations: Mapping[str, str],
+    skills: Iterable[Skill],
+    rules: SkillPurchaseRules = NO_PURCHASE_RULES,
+) -> int:
+    """Priority skill points a spend costs (WP117): a point per rating and per specialization,
+    raised by the skill category's `point_cost_percent` -- an Etiquette 3 costs 6 with Uncouth.
+    Legacy applies the multiplier to rating and specialization together."""
+    by_id = {s.id: s for s in skills}
+    total = 0
+    for skill_id in set(skill_points) | set(specializations):
+        points = skill_points.get(skill_id, 0) + (1 if skill_id in specializations else 0)
+        skill = by_id.get(skill_id)
+        percent = rules.point_cost_percent.get(skill.category, 0) if skill is not None else 0
+        total += _with_percent(points, percent)
+    return total
 
 
 @dataclass(frozen=True)
@@ -204,7 +304,7 @@ def create_skill_allocation(
     skill_points: Mapping[str, int],
     group_points: Mapping[str, int],
     specializations: Mapping[str, str] = MappingProxyType({}),
-    maximum_bonus: Mapping[str, int] = MappingProxyType({}),
+    rules: SkillPurchaseRules = NO_PURCHASE_RULES,
 ) -> SkillAllocation:
     """Build a `SkillAllocation`, validating the spend against the Skills-priority-letter budget.
 
@@ -220,8 +320,11 @@ def create_skill_allocation(
     specializations in Step Five" and "you have to have the skill first"). Each specialization costs
     1 additional skill point, counted against the same `skill_points` budget.
 
-    WP116: `maximum_bonus` (skill name -> levels, see `skill_maximum_bonuses`) raises one skill's
-    cap -- Aptitude's 7. A skill *group*'s cap stays 6: Aptitude names one skill.
+    WP116: `rules.maximum_bonus` raises one skill's cap -- Aptitude's 7. A skill *group*'s cap
+    stays 6: Aptitude names one skill.
+
+    WP117: `rules` also doubles a Social skill's point cost for Uncouth (`skill_points_spent`),
+    rejects a Social group for Uncouth, and rejects Incompetent's group and each of its skills.
     """
     skills_by_id = {s.id: s for s in skills}
     unknown_skills = set(skill_points) - set(skills_by_id)
@@ -236,12 +339,17 @@ def create_skill_allocation(
     for skill_id, points in skill_points.items():
         if points < 0:
             raise ValueError(f"{skill_id}: points spent must not be negative, got {points}")
-        maximum = purchase_maximum(skills_by_id[skill_id], maximum_bonus)
+        maximum = purchase_maximum(skills_by_id[skill_id], rules.maximum_bonus)
         if points > maximum:
             raise ValueError(
                 f"{skill_id}: {points} exceeds the chargen skill rating maximum of {maximum}"
             )
         group = skills_by_id[skill_id].skill_group
+        if points > 0 and group is not None and group in rules.disabled_groups:
+            raise ValueError(
+                f"{skills_by_id[skill_id].name}: the character is Incompetent in its skill group "
+                f"{group!r}"
+            )
         if group is not None and group_points.get(group, 0) > 0:
             raise ValueError(
                 f"{skill_id}: cannot spend points directly while its group {group!r} also has "
@@ -251,6 +359,9 @@ def create_skill_allocation(
     for group, points in group_points.items():
         if points < 0:
             raise ValueError(f"{group}: points spent must not be negative, got {points}")
+        blocked = rules.group_blocked(group, skills) if points > 0 else None
+        if blocked is not None:
+            raise ValueError(blocked)
         if points > MAX_SKILL_RATING_CREATE:
             raise ValueError(
                 f"{group}: {points} exceeds the chargen skill rating maximum of "
@@ -272,7 +383,7 @@ def create_skill_allocation(
             )
 
     budget = skill_point_budget(letter, priorities)
-    skills_spent = sum(skill_points.values()) + len(specializations)
+    skills_spent = skill_points_spent(skill_points, specializations, skills, rules)
     if skills_spent > budget.skills:
         raise ValueError(
             f"skill point spend {skills_spent} (including {len(specializations)} "
@@ -375,7 +486,9 @@ def create_karma_skill_selection(
 
     skills_by_id = {s.id: s for s in skills}
     group_names = {s.skill_group for s in skills if s.skill_group is not None}
-    maximum_bonus = skill_maximum_bonuses(character)  # WP116: Aptitude
+    # WP116/WP117: Aptitude's cap, and Uncouth/Uneducated/Incompetent's costs and bans.
+    rules = skill_purchase_rules(character)
+    maximum_bonus = rules.maximum_bonus
 
     unknown_skills = set(karma_skill_points) - set(skills_by_id)
     if unknown_skills:
@@ -413,6 +526,10 @@ def create_karma_skill_selection(
             continue
         skill = skills_by_id[skill_id]
         group = skill.skill_group
+        if group is not None and group in rules.disabled_groups:
+            raise ValueError(
+                f"{skill.name}: the character is Incompetent in its skill group {group!r}"
+            )
         if group is not None and group in broken_groups:
             start_rating = existing_group_points.get(group, 0)
         else:
@@ -423,13 +540,19 @@ def create_karma_skill_selection(
             raise ValueError(
                 f"{skill_id}: {total} exceeds the chargen skill rating maximum of {maximum}"
             )
-        cost += karma_advancement_cost(start_rating, points, KARMA_SKILL_PER_RATING)
+        cost += _with_percent(
+            karma_advancement_cost(start_rating, points, KARMA_SKILL_PER_RATING),
+            rules.karma_cost_percent.get(skill.category, 0),
+        )
 
     for group, points in karma_group_points.items():
         if points < 0:
             raise ValueError(f"{group}: Karma-funded points must not be negative, got {points}")
         if points == 0:
             continue
+        blocked = rules.group_blocked(group, skills)
+        if blocked is not None:
+            raise ValueError(blocked)
         start_rating = existing_group_points.get(group, 0)
         if start_rating == 0:
             members_with_points = sorted(
@@ -450,7 +573,17 @@ def create_karma_skill_selection(
                 f"{group}: {total} exceeds the chargen skill rating maximum of "
                 f"{MAX_SKILL_RATING_CREATE}"
             )
-        cost += karma_advancement_cost(start_rating, points, KARMA_SKILL_GROUP_PER_RATING)
+        group_percent = max(
+            (
+                rules.group_karma_cost_percent.get(category, 0)
+                for category in _group_categories(group, skills)
+            ),
+            default=0,
+        )
+        cost += _with_percent(
+            karma_advancement_cost(start_rating, points, KARMA_SKILL_GROUP_PER_RATING),
+            group_percent,
+        )
 
     for skill_id, name in karma_specializations.items():
         if not name.strip():
@@ -471,7 +604,10 @@ def create_karma_skill_selection(
             raise ValueError(
                 f"{skill_id}: cannot add a specialization without at least 1 point in the skill"
             )
-        cost += KARMA_SPECIALIZATION_COST
+        cost += _with_percent(
+            KARMA_SPECIALIZATION_COST,
+            rules.specialization_karma_cost_percent.get(skill.category, 0),
+        )
 
     if cost > karma_budget:
         raise ValueError(
@@ -578,6 +714,8 @@ def dice_pool(
     WP53: also true when `skill.id` has a Karma-funded specialization in
     `character.karma_skill_selection.specializations`.
 
+    WP117: an unaware skill (`is_unaware`) can't be defaulted on, so its pool at rating 0 is 0.
+
     WP115: `SKILL_POOL` (by skill name) and `SKILL_CATEGORY_POOL` (by category) modifiers are added
     to the pool, defaulting included -- Addiction's "-2 to all Social Tests" applies whether or not
     the skill is known. `SPECIALIZATION_DISABLED` (Loss of Confidence) drops the specialization's
@@ -599,6 +737,19 @@ def dice_pool(
     if rating > 0:
         spec_bonus = SPECIALIZATION_BONUS if specialized and not skill.exotic else 0
         return max(0, rating + attribute_value + spec_bonus + modifier)
-    if skill.can_default:
+    if skill.can_default and not is_unaware(character, skill):
         return max(0, attribute_value + DEFAULT_MODIFIER + modifier)
     return 0
+
+
+def is_unaware(character: Character, skill: Skill) -> bool:
+    """Whether the character is "unaware" in `skill` when it has no rating, and so may not default
+    on it (WP117, p. 131's Skill Rating Table). Uncouth blocks defaulting in Social skills,
+    Uneducated in Technical ones, and Incompetent in every skill of its group."""
+    index = character.improvements
+    if index.resolve(ImprovementType.SKILL_CATEGORY_DEFAULTING_BLOCKED, skill.category) > 0:
+        return True
+    return (
+        skill.skill_group is not None
+        and index.resolve(ImprovementType.SKILL_GROUP_DISABLED, skill.skill_group) > 0
+    )
