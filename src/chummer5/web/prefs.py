@@ -25,13 +25,15 @@ class Theme:
 
 
 THEMES: tuple[Theme, ...] = (
+    Theme("shadowrun", "Web_Theme_Shadowrun"),
     Theme("classic", "Web_Theme_Classic"),
     Theme("sketch", "Web_Theme_Sketch"),
 )
 
 THEMES_BY_SLUG: dict[str, Theme] = {theme.slug: theme for theme in THEMES}
 
-DEFAULT_THEME = "classic"
+# WP104: the SR5-rulebook look is what a new session opens in.
+DEFAULT_THEME = "shadowrun"
 
 
 @dataclass(frozen=True)

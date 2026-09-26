@@ -27,6 +27,13 @@
   --panel-rule-width: 2px;
   --panel-accent-width: 2px;
   --radius: 0px;
+  --panel-clip: none;
+  --page-heading-clip: none;
+  --page-heading-padding: 0;
+
+  /* Display type (plain here; SR5 sets its headings and nav in spaced capitals) */
+  --display-transform: none;
+  --display-letter-spacing: normal;
 
   /* Colours (light) */
   --page-fg: #000000;
@@ -62,6 +69,13 @@
   --tab-disabled-fg: #5e5e5e;
   --panel-muted-fg: #4a4a4a;
   --panel-over-fg: #a00000;
+  /* Derived: this theme's sidebar, page heading and table heads use the ordinary text colours. */
+  --sidebar-fg: var(--page-fg);
+  --sidebar-heading-fg: var(--summary-fg);
+  --page-heading-fg: var(--summary-fg);
+  --page-heading-bg: transparent;
+  --table-head-fg: currentcolor;
+  --table-head-bg: transparent;
 }
 
 @media (prefers-color-scheme: dark) {

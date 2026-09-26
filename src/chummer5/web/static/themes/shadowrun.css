@@ -1,0 +1,135 @@
+/* Shadowrun (WP104): the look of the SR5 core rulebook's pages -- a blood-red title band, a
+   near-black sidebar with gold capitals and a red current step (the book's dark sidebar tables),
+   step headings as red chamfered banners with gold lettering ("A NOTE ON ROUNDING"), and the step
+   panels as white chamfered boxes with heavy black rules ("EXAMPLE") sitting on the book's grey,
+   faintly scan-lined page. Table heads are gold on black, like the book's own tables. In dark mode
+   the page and panels go charcoal and panel headings turn gold; the red and gold stay.
+
+   The book's own faces are commercial, so the stacks name them first for players who have them,
+   then free look-alikes (Michroma/Orbitron for the squared techno heads, Bebas Neue/Oswald for
+   the condensed gold labels), then what every system has.
+
+   Tokens only -- see classic.css's header for the contract. */
+
+:root {
+  /* Type */
+  --font-body: "Myriad Pro", "Segoe UI", "Liberation Sans", system-ui, sans-serif;
+  --font-title: "Eurostile", "Microgramma", "Michroma", "Orbitron", "DejaVu Sans", "Verdana", sans-serif;
+  --font-nav: "Bebas Neue", "Oswald", "Roboto Condensed", "Arial Narrow", "Liberation Sans Narrow", "DejaVu Sans Condensed", sans-serif;
+  --title-size: 1.35rem;
+  --title-weight: 700;
+  --title-align: left;
+
+  /* Geometry and rule weights */
+  --sidebar-width: 13rem;
+  --frame-width: 3px;
+  --nav-list-padding: 0.5rem;
+  --nav-item-align: left;
+  --nav-item-accent-width: 4px;
+  --nav-item-rule-width: 1px;
+  --nav-chevron-size: 0px;
+  --tab-rule-width: 3px;
+  --tab-accent-width: 4px;
+  --panel-rule-width: 3px;
+  --panel-accent-width: 3px;
+  --radius: 0px;
+  /* The book's box outline: top-left and bottom-right corners cut off. */
+  --panel-clip: polygon(1rem 0, 100% 0, 100% calc(100% - 1rem), calc(100% - 1rem) 100%, 0 100%, 0 1rem);
+  /* The red banner: top-right and bottom-left cut off. */
+  --page-heading-clip: polygon(0 0, calc(100% - 0.9rem) 0, 100% 0.9rem, 100% 100%, 0.9rem 100%, 0 calc(100% - 0.9rem));
+  --page-heading-padding: 0.45rem 1.5rem 0.4rem 1rem;
+
+  /* Display type */
+  --display-transform: uppercase;
+  --display-letter-spacing: 0.06em;
+
+  /* Colours (light) */
+  --page-fg: #141414;
+  --page-bg: #d9d9d9;
+  --main-bg: repeating-linear-gradient(0deg, rgb(0 0 0 / 4%) 0 1px, transparent 1px 4px), linear-gradient(180deg, #ececec, #d4d4d4);
+  --rule: #1a1a1a;
+  --frame-color: #0d0d0d;
+  /* A panel's fill, plus the diagonal rule along its cut top-left corner (--panel-clip), so the
+     heavy border follows the chamfer the way the book's box outlines do. */
+  --section-bg-a: linear-gradient(135deg, transparent calc(50% - 2px), #1a1a1a calc(50% - 2px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) 0 0 / 1rem 1rem no-repeat border-box, #ffffff;
+  --section-bg-b: linear-gradient(135deg, transparent calc(50% - 2px), #1a1a1a calc(50% - 2px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) 0 0 / 1rem 1rem no-repeat border-box, #f3f3f3;
+  --section-accent: #1a1a1a;
+  --summary-fg: #141414;
+  /* Status boxes follow the book's sidebars: errors are red banners, warnings black boxes with gold
+     type -- which also keeps the warning colour legible as a nav marker on the dark sidebar. */
+  --error-fg: #ffe3e3;
+  --error-bg: #6e0f14;
+  --warning-fg: #f2b21c;
+  --warning-bg: #1c1c1c;
+  --info-fg: #0d3048;
+  --info-bg: #dde8ef;
+  --titlebar-bg: linear-gradient(180deg, #1d0506 0%, #560c10 55%, #2a0607 100%);
+  --titlebar-fg: #f0f0f0;
+  --sidebar-bg: linear-gradient(180deg, #262626, #111111);
+  --nav-item-fg: #e2e2e2;
+  --nav-item-hover-bg: #3a3a3a;
+  --nav-item-current-fg: #f2b21c;
+  --nav-item-current-bg: linear-gradient(90deg, #7e1419, #4a0a0d);
+  --nav-item-current-accent: #f2b21c;
+  --nav-item-disabled-fg: #6e6e6e;
+  --nav-rule-color: #333333;
+  --nav-chevron-color: transparent;
+  --tab-fg: #1a1a1a;
+  --tab-hover-bg: #c9c9c9;
+  --tab-current-bg: #ffffff;
+  --tab-current-accent: #8e1a20;
+  --tab-disabled-fg: #5e5e5e;
+  /* The resource panel's muted and over-budget figures -- they sit on the dark sidebar. */
+  --panel-muted-fg: #a0a0a0;
+  --panel-over-fg: #ff7070;
+  --sidebar-fg: #e8e8e8;
+  --sidebar-heading-fg: #f2b21c;
+  --page-heading-fg: #f2b21c;
+  --page-heading-bg: linear-gradient(180deg, #8e1a20 0%, #5c0c10 60%, #3e070a 100%);
+  --table-head-fg: #f2b21c;
+  --table-head-bg: #141414;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-fg: #e4e4e4;
+    --page-bg: #0c0c0c;
+    --main-bg: repeating-linear-gradient(0deg, rgb(255 255 255 / 2.5%) 0 1px, transparent 1px 4px), linear-gradient(180deg, #1c1c1c, #111111);
+    --rule: #505050;
+    --frame-color: #000000;
+    --section-bg-a: linear-gradient(135deg, transparent calc(50% - 2px), #505050 calc(50% - 2px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) 0 0 / 1rem 1rem no-repeat border-box, #1f1f1f;
+    --section-bg-b: linear-gradient(135deg, transparent calc(50% - 2px), #505050 calc(50% - 2px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) 0 0 / 1rem 1rem no-repeat border-box, #242424;
+    --section-accent: #505050;
+    --summary-fg: #f2b21c;
+    --error-fg: #ffe3e3;
+    --error-bg: #6e0f14;
+    --warning-fg: #f2b21c;
+    --warning-bg: #0e0e0e;
+    --info-fg: #a8d8f0;
+    --info-bg: #10293a;
+    --titlebar-bg: linear-gradient(180deg, #160405 0%, #4a0a0d 55%, #200506 100%);
+    --titlebar-fg: #f0f0f0;
+    --sidebar-bg: linear-gradient(180deg, #1a1a1a, #080808);
+    --nav-item-fg: #dcdcdc;
+    --nav-item-hover-bg: #2e2e2e;
+    --nav-item-current-fg: #f2b21c;
+    --nav-item-current-bg: linear-gradient(90deg, #7e1419, #4a0a0d);
+    --nav-item-current-accent: #f2b21c;
+    --nav-item-disabled-fg: #666666;
+    --nav-rule-color: #2a2a2a;
+    --nav-chevron-color: transparent;
+    --tab-fg: #e0e0e0;
+    --tab-hover-bg: #2e2e2e;
+    --tab-current-bg: #1f1f1f;
+    --tab-current-accent: #c0262e;
+    --tab-disabled-fg: #8a8a8a;
+    --panel-muted-fg: #9a9a9a;
+    --panel-over-fg: #ff7b7b;
+    --sidebar-fg: #e4e4e4;
+    --sidebar-heading-fg: #f2b21c;
+    --page-heading-fg: #f2b21c;
+    --page-heading-bg: linear-gradient(180deg, #8e1a20 0%, #5c0c10 60%, #3e070a 100%);
+    --table-head-fg: #f2b21c;
+    --table-head-bg: #0a0a0a;
+  }
+}

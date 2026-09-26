@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n (done, WP97-103)
+### Phase W — Post-MVP: application shell, theming, and i18n (done, WP97-104)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -367,3 +367,28 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
     shows a German session's save equals the English one's. The filter scripts now match on
     display names.
   See `spec/worklogs/WP103.md`.
+
+- [x] **WP104 — A Shadowrun theme, made the default.** *(Added 2026-09-26.)*
+  Goal: a third theme that imitates the look and feel of the SR5 core rulebook's pages
+  (reference: a scan of p. 48, "Extended Tests"), and make it what a new session opens in.
+  Deliverables: `static/themes/shadowrun.css`, listed first in `prefs.THEMES` and set as
+  `DEFAULT_THEME`; a `Web_Theme_Shadowrun` label.
+  Notes and traps: the WP100 contract holds, so a theme can only set tokens. The book's
+  furniture needs a few things the 51 tokens could not express: spaced capitals, a banner-shaped
+  page heading, chamfered panel outlines, a dark sidebar whose text is not the page's text colour,
+  and gold-on-black table heads. Each becomes a token in `app.css`, and Classic and Sketch get
+  values that reproduce their current rendering exactly.
+  Depends on: WP100.
+  Acceptance: `pytest`/`ruff`/`mypy` green; the WP100 theme tests pass for all three themes; a
+  test pins the default; Classic and Sketch render pixel-identical to before, in both schemes.
+  Landed. `app.css` reads 11 new tokens (62 in all):
+  - `--display-transform`/`--display-letter-spacing` for the title, nav, tabs and headings;
+  - `--page-heading-{fg,bg,padding,clip}`, which the SR5 theme renders as the book's red
+    chamfered banner with gold lettering;
+  - `--panel-clip` for the white "EXAMPLE"-box chamfer;
+  - `--sidebar-fg`/`--sidebar-heading-fg`;
+  - `--table-head-{fg,bg}`.
+
+  Classic and Sketch derive the new colours from their existing tokens (`var(--page-fg)`,
+  `currentcolor`, `transparent`), so they needed no dark-block additions. See
+  `spec/worklogs/WP104.md`.

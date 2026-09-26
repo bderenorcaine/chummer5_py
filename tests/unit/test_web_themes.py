@@ -71,6 +71,12 @@ def test_every_listed_theme_has_a_stylesheet_and_every_stylesheet_is_listed() ->
     assert len(THEMES) >= 2  # the mechanism has to actually be exercised
 
 
+def test_the_shadowrun_theme_is_the_default() -> None:
+    # WP104: a new session opens in the SR5-rulebook look, and the picker lists it first.
+    assert DEFAULT_THEME == "shadowrun"
+    assert THEMES[0].slug == "shadowrun"
+
+
 def test_app_css_is_structure_only() -> None:
     css = _strip_comments(APP_CSS.read_text())
     assert not re.search(r"(^|[;{\s])--[a-z0-9-]+\s*:", css), "app.css must not define tokens"

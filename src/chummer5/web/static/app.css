@@ -55,6 +55,8 @@ body {
   font-size: var(--title-size);
   font-weight: var(--title-weight);
   text-align: var(--title-align);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
 }
 
 /* The display-preference pickers (theme; WP101 adds the language). */
@@ -74,6 +76,7 @@ body {
   border-top: var(--frame-width) solid var(--frame-color);
   border-left: var(--frame-width) solid var(--frame-color);
   border-right: var(--frame-width) solid var(--frame-color);
+  color: var(--sidebar-fg);
   background: var(--sidebar-bg);
 }
 
@@ -127,6 +130,8 @@ body {
   border-left: var(--nav-item-accent-width) solid transparent;
   font-family: var(--font-nav);
   text-align: var(--nav-item-align);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
   color: var(--nav-item-fg);
   text-decoration: none;
 }
@@ -168,7 +173,9 @@ a.step-nav__item--current:hover {
   margin: 0 0 0.35rem;
   font-family: var(--font-nav);
   font-size: 0.95rem;
-  color: var(--summary-fg);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
+  color: var(--sidebar-heading-fg);
 }
 
 .resource-panel__list {
@@ -239,11 +246,18 @@ a.step-nav__item--current:hover {
 
 /* --- A page, its tabs, and its step panels ---------------------------------------------------- */
 
+/* `--page-heading-clip` lets a theme cut the heading's box into a banner shape (SR5's chamfered
+   corners); `none` leaves it a plain heading. */
 .page__heading {
   margin-top: 0;
+  padding: var(--page-heading-padding);
   font-family: var(--font-title);
   font-size: 1.3rem;
-  color: var(--summary-fg);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
+  color: var(--page-heading-fg);
+  background: var(--page-heading-bg);
+  clip-path: var(--page-heading-clip);
 }
 
 /* WP98: a composite page's tab strip (Skills, Magic, Equipment) -- one section showing at a time,
@@ -268,6 +282,8 @@ a.step-nav__item--current:hover {
   padding: 0.35rem 0.8rem;
   border-bottom: var(--tab-accent-width) solid transparent;
   font-family: var(--font-nav);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
   color: var(--tab-fg);
   text-decoration: none;
 }
@@ -298,12 +314,14 @@ a.page-tabs__item:hover {
 }
 
 /* One box per step fragment. A single-section page shows one; a composite page shows one per tab.
-   Neighbours (should a page ever stack several again) are told apart by alternating tint. */
+   Neighbours (should a page ever stack several again) are told apart by alternating tint.
+   `--panel-clip` is the panel's outline (a chamfer, say); `none` keeps the plain box. */
 .panel {
   padding: 0.75rem 1rem;
   border-top: var(--panel-rule-width) solid var(--rule);
   border-left: var(--panel-accent-width) solid var(--section-accent);
   background: var(--section-bg-a);
+  clip-path: var(--panel-clip);
 }
 
 .panel:nth-child(even of .panel) {
@@ -320,6 +338,8 @@ a.page-tabs__item:hover {
   font-family: var(--font-title);
   font-size: 1.05rem;
   font-weight: 600;
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
   color: var(--summary-fg);
   cursor: pointer;
 }
@@ -378,4 +398,6 @@ details[open] > .panel__heading {
 
 .page thead th {
   border-bottom: 1px solid var(--rule);
+  color: var(--table-head-fg);
+  background: var(--table-head-bg);
 }

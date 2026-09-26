@@ -1540,3 +1540,14 @@ the WP102 entry records. **No locale besides English is offered yet.** The machi
 five legacy locales, but German chrome would still be mostly English fallback: 327 `Web_*` keys
 exist only in English. Offering one is now a translation job plus one `prefs.LOCALES` line, not
 engineering.
+
+**2026-09-26 (WP104, Phase W) — the Shadowrun theme is the default, and the theme contract grew
+rather than bent.** A new session now opens in the SR5-rulebook look, and Classic moves to second
+in the picker. The theme needed shapes as well as colours: chamfered corners and a banner
+heading. These went in as tokens (`--panel-clip`, `--page-heading-clip`, which hold `clip-path`
+values), not as a theme-specific selector. So `app.css` stays the only structural CSS, and the
+WP100 parser test still covers all three themes unchanged. One knowing stretch: the SR5 panel
+colour tokens (`--section-bg-a`/`-b`) are full `background` values, a gradient layer that draws
+the diagonal rule along the cut corner, and then the fill. That is legal because `app.css` only
+ever uses those tokens in `background`. If a future rule reads them as a plain colour (`color:`,
+`border-color:`), the SR5 theme breaks there, so split a `--section-fill` token first.
