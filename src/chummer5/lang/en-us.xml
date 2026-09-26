@@ -576,6 +576,14 @@
     </string>
     <!-- Qualities -->
     <string>
+      <key>Web_Powers_AddAnother</key>
+      <text>(another)</text>
+    </string>
+    <string>
+      <key>Web_Powers_ColTarget</key>
+      <text>Attribute or skill</text>
+    </string>
+    <string>
       <key>Web_Qualities_AddAnother</key>
       <text>(another)</text>
     </string>

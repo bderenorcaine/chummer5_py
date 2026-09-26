@@ -3,6 +3,10 @@
   <details open>
   <summary class="panel__heading">{{ _("Tab_Adept") }}</summary>
 
+  {% if power_budget_warning %}
+  <p class="warning">{{ power_budget_warning | tr }}</p>
+  {% endif %}
+
   {% if power_error %}
   <p class="error">{{ power_error | tr }}</p>
   {% endif %}
@@ -23,33 +27,34 @@
           <th>{{ _("Web_Powers_ColPower") }}</th>
           <th>{{ _("Web_Powers_ColPointsPerLevel") }}</th>
           <th>{{ _("String_Rating") }}</th>
-          <th>{{ _("Web_Attributes_ColAttribute") }}</th>
+          <th>{{ _("Web_Powers_ColTarget") }}</th>
         </tr>
       </thead>
       <tbody>
         {% for row in power_rows %}
-        <tr>
-          <td>{{ row.power | dterm("powers.xml") }}</td>
+        <tr{% if row.another %} class="power-row--another"{% endif %}>
+          <td>{{ row.power | dterm("powers.xml") }}{% if row.another %} <small>{{ _("Web_Powers_AddAnother") }}</small>{% endif %}</td>
           <td>{{ row.power.points }}</td>
           <td>
             <input
               type="number"
-              name="power_rating_{{ row.power.id }}"
+              name="power_rating_{{ row.key }}"
               min="0"
-              max="{{ row.power.limit }}"
+              max="{{ row.max_rating }}"
               value="{{ row.rating }}"
             />
           </td>
           <td>
-            {% if row.attribute_options %}
-            <select name="power_attribute_{{ row.power.id }}">
+            {% if row.target_options %}
+            <select name="power_target_{{ row.key }}">
               <option value="">--</option>
-              {% for attribute in row.attribute_options %}
-              <option value="{{ attribute }}" {% if attribute == row.selected_attribute %}selected{% endif %}>
-                {{ _("String_Attribute" ~ attribute ~ "Short") }}
-              </option>
+              {% for code in row.target_options %}
+              {% set kind = row.target_kind %}
+              <option value="{{ code }}" {% if code == row.target %}selected{% endif %}>{% include "_power_target_label.html" %}</option>
               {% endfor %}
             </select>
+            {% elif row.target_kind == "text" %}
+            <input type="text" name="power_target_{{ row.key }}" value="{{ row.target or '' }}" />
             {% endif %}
           </td>
         </tr>

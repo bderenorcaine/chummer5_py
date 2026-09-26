@@ -370,7 +370,7 @@ def test_power_selection_within_budget() -> None:
     assert len(selection.picks) == 1
     assert selection.picks[0].power.name == "Enhanced Perception"
     assert selection.picks[0].rating == 1
-    assert selection.picks[0].selected_attribute is None
+    assert selection.picks[0].target is None
 
 
 def test_power_selection_allows_partial_spend() -> None:
@@ -442,21 +442,21 @@ def test_power_selection_rejects_nonlevels_power_with_rating_other_than_one() ->
 
 
 def test_power_selection_select_attribute_requires_selected_attribute() -> None:
-    with pytest.raises(ValueError, match="requires a selected attribute"):
+    with pytest.raises(ValueError, match="needs one of"):
         create_power_selection(
             [(IMPROVED_PHYSICAL_ATTRIBUTE_ID, 1, None)], POWERS, power_point_budget=4
         )
 
 
 def test_power_selection_select_attribute_rejects_ineligible_attribute() -> None:
-    with pytest.raises(ValueError, match="not eligible"):
+    with pytest.raises(ValueError, match="needs one of"):
         create_power_selection(
             [(IMPROVED_PHYSICAL_ATTRIBUTE_ID, 1, "LOG")], POWERS, power_point_budget=4
         )
 
 
 def test_power_selection_rejects_selected_attribute_when_not_needed() -> None:
-    with pytest.raises(ValueError, match="does not accept a selected attribute"):
+    with pytest.raises(ValueError, match="does not take a target"):
         create_power_selection([(ENHANCED_PERCEPTION_ID, 1, "BOD")], POWERS, power_point_budget=4)
 
 
@@ -465,7 +465,7 @@ def test_power_selection_select_attribute_success() -> None:
         [(IMPROVED_PHYSICAL_ATTRIBUTE_ID, 2, "AGI")], POWERS, power_point_budget=4
     )
     assert selection.power_points_spent == Decimal("2")
-    assert selection.picks[0].selected_attribute == "AGI"
+    assert selection.picks[0].target == "AGI"
     assert selection.picks[0].rating == 2
 
 

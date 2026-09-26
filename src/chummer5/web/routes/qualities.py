@@ -143,6 +143,11 @@ def _gate_kwargs(character: Character) -> dict[str, Any]:
         "metatype_name": character.metatype.name,
         "granted_quality_names": tuple(q.name for q in character.metatype_qualities),
         "later_steps": later_step_facts(character, SKILLS),
+        # WP119: High Pain Tolerance vs. the Pain Resistance power.
+        "power_names": tuple(
+            p.power.name
+            for p in (character.power_selection.picks if character.power_selection else ())
+        ),
     }
 
 

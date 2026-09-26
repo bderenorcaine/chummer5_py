@@ -1140,7 +1140,7 @@ def test_flat_bonus_power_is_imported_with_its_rating() -> None:
     assert result.save.power_picks == ((ipa.id, 2, "BOD"),)
     (pick,) = result.built.power_selection.picks
     assert pick.rating == 2
-    assert pick.selected_attribute == "BOD"
+    assert pick.target == "BOD"
 
 
 def test_knowledge_and_language_skills_resolve_by_category() -> None:

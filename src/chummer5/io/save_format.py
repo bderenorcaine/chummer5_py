@@ -336,7 +336,7 @@ READABLE_FORMAT_VERSIONS = (1, 2)
 DEFAULT_TALENT_LETTER = "E"
 DEFAULT_TALENT_CODENAME = "Mundane"
 
-# One `(power_id, rating, selected_attribute)` triple, as `create_power_selection` already takes --
+# One `(power_id, rating, target)` triple, as `create_power_selection` already takes --
 # see that function's own docstring. Named here so `CharacterSave.power_picks`'s element type has a
 # readable name instead of an inline tuple annotation repeated at every use site.
 PowerPickTriple = tuple[str, int, str | None]
@@ -686,8 +686,8 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "granted_skill_ids": list(save.granted_skill_ids),
         "spell_ids": list(save.spell_ids),
         "power_picks": [
-            {"power_id": power_id, "rating": rating, "selected_attribute": selected_attribute}
-            for power_id, rating, selected_attribute in save.power_picks
+            {"power_id": power_id, "rating": rating, "target": target}
+            for power_id, rating, target in save.power_picks
         ],
         "magic_attribute_points": save.magic_attribute_points,
         "cyberware_purchases": [
@@ -768,7 +768,8 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         granted_skill_ids=data.get("granted_skill_ids", ()),
         spell_ids=data.get("spell_ids", ()),
         power_picks=(
-            (p["power_id"], p["rating"], p["selected_attribute"])
+            # WP119: `target` replaced `selected_attribute`; an older save's key still reads.
+            (p["power_id"], p["rating"], p.get("target", p.get("selected_attribute")))
             for p in data.get("power_picks", ())
         ),
         magic_attribute_points=data.get("magic_attribute_points", 0),

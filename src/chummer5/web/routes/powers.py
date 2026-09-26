@@ -18,8 +18,15 @@ from starlette.datastructures import FormData
 from chummer5.data.powers import Power
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import ImprovementSource
-from chummer5.engine.magic import PowerSelection, apply_power_improvements, create_power_selection
-from chummer5.web.catalogs import MVP_POWERS, POWERS, templates
+from chummer5.engine.magic import (
+    PowerSelection,
+    apply_power_improvements,
+    create_power_selection,
+    learned_skill_ratings,
+    power_max_rating,
+    power_target_options,
+)
+from chummer5.web.catalogs import MVP_POWERS, POWERS, SKILLS, templates
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
 
 router = APIRouter()
@@ -51,29 +58,75 @@ def _replace_committed_powers(character: Character, selection: PowerSelection) -
     return replace(character, power_selection=selection)
 
 
+def _row_key(power_id: str, index: int) -> str:
+    """A form row's key (WP119): the bare id for a power's first instance, `id:n` after that --
+    the same convention the quality form uses (WP107), so a once-only power's field names are
+    unchanged."""
+    return power_id if index == 0 else f"{power_id}:{index}"
+
+
 def _parse_power_picks(
     form: FormData, catalog: Iterable[Power]
 ) -> tuple[tuple[str, int, str | None], ...]:
-    """Read `power_rating_{id}`/`power_attribute_{id}` fields off a submitted form into
-    `create_power_selection`'s own `(power_id, rating, selected_attribute)` triple shape (WP29).
+    """Read `power_rating_{key}`/`power_target_{key}` fields off a submitted form into
+    `create_power_selection`'s `(power_id, rating, target)` triples (WP29; per instance since
+    WP119, see `_row_key`). `power_attribute_{key}` is WP29's name for the target field and is
+    still read.
 
     A rating of 0 (the default for a power the player didn't touch) means "not purchased" -- the
     same "absence means 0" convention `chummer5.web.forms.parse_points` already established -- so
     it's simply omitted from the result rather than passed through as an invalid `rating < 1` pick.
     """
+    by_id = {power.id: power for power in catalog}
     picks: list[tuple[str, int, str | None]] = []
-    for power in catalog:
-        raw_rating = form.get(f"power_rating_{power.id}")
+    for raw_key in form.keys():
+        if not str(raw_key).startswith("power_rating_"):
+            continue
+        key = str(raw_key).removeprefix("power_rating_")
+        power_id = key.split(":", 1)[0]
+        if power_id not in by_id:
+            continue
+        raw_rating = form.get(raw_key)
         try:
             rating = int(str(raw_rating)) if raw_rating is not None else 0
         except ValueError:
             rating = 0
         if rating <= 0:
             continue
-        raw_attribute = form.get(f"power_attribute_{power.id}")
-        selected_attribute = str(raw_attribute) if raw_attribute else None
-        picks.append((power.id, rating, selected_attribute))
+        raw_target = form.get(f"power_target_{key}") or form.get(f"power_attribute_{key}")
+        picks.append((power_id, rating, str(raw_target) if raw_target else None))
     return tuple(picks)
+
+
+def _power_rows(
+    picks: Iterable[tuple[str, int, str | None]], magic_rating: int
+) -> list[dict[str, Any]]:
+    """One row per power instance (WP119). A repeatable power gets a row per bought instance plus
+    a blank "another" row, like a repeatable quality."""
+    requests = list(picks)
+    rows: list[dict[str, Any]] = []
+    for power in MVP_POWERS:
+        instances: list[tuple[str, int, str | None] | None] = [
+            r for r in requests if r[0] == power.id
+        ]
+        if power.repeatable or not instances:
+            instances.append(None)
+        if not power.repeatable:
+            instances = instances[:1]
+        for index, instance in enumerate(instances):
+            rows.append(
+                {
+                    "power": power,
+                    "key": _row_key(power.id, index),
+                    "rating": instance[1] if instance is not None else 0,
+                    "target": instance[2] if instance is not None else None,
+                    "target_kind": power.target_kind,
+                    "target_options": power_target_options(power),
+                    "max_rating": power_max_rating(power, magic_rating),
+                    "another": power.repeatable and index > 0 and instance is None,
+                }
+            )
+    return rows
 
 
 def _power_selection_context(
@@ -85,43 +138,58 @@ def _power_selection_context(
     """Context for `_power_selection.html` (WP29): WP27's `create_power_selection` reaching the
     browser, gated to Adept only. `picks` is whatever should be shown filled in -- the character's
     own committed `power_selection.picks` on a clean render, or the raw submitted `(power_id,
-    rating, selected_attribute)` triples on an error-echo render.
+    rating, target)` triples on an error-echo render.
     """
     if character is None:
         return {"character": None, "power_error": error}
     if character.magic_type != "Adept":
         return {"character": character, "power_error": error}
-    picked = {power_id: (rating, attribute) for power_id, rating, attribute in picks}
-    rows = []
-    spent = Decimal(0)
-    for power in MVP_POWERS:
-        rating, selected_attribute = picked.get(power.id, (0, None))
-        select_attribute_bonus = next(
-            (fb for fb in power.flat_bonuses if fb.target_kind == "select_attribute"), None
-        )
-        rows.append(
-            {
-                "power": power,
-                "rating": rating,
-                "selected_attribute": selected_attribute,
-                "attribute_options": (
-                    select_attribute_bonus.attribute_options
-                    if select_attribute_bonus is not None
-                    else ()
-                ),
-            }
-        )
-        if rating > 0:
-            spent += power.points * rating
+    requests = list(picks)
+    by_id = {power.id: power for power in MVP_POWERS}
+    spent = sum(
+        (
+            by_id[power_id].points * rating + by_id[power_id].extra_point_cost
+            for power_id, rating, _ in requests
+            if power_id in by_id and rating > 0
+        ),
+        Decimal(0),
+    )
     budget = character.power_points
     return {
         "character": character,
-        "power_rows": rows,
+        "power_rows": _power_rows(requests, budget),
         "power_point_budget": budget,
         "power_points_spent": spent,
         "power_points_remaining": budget - spent,
+        "power_budget_warning": _committed_power_warning(character) if error is None else None,
         "power_error": error,
     }
+
+
+def _quality_names(character: Character) -> tuple[str, ...]:
+    """WP119: every quality the character holds, for a power's `<forbidden>` check."""
+    picked = character.quality_selection.qualities if character.quality_selection else ()
+    return (*(p.quality.name for p in picked), *(q.name for q in character.metatype_qualities))
+
+
+def _committed_power_warning(character: Character) -> str | None:
+    """WP119: re-check the committed powers against the character as it is now -- Improved
+    Ability's skill must still be known, and its levels still fit (the WP19 "no longer fits"
+    path). Nothing raises; the reason is shown."""
+    selection = character.power_selection
+    if selection is None:
+        return None
+    try:
+        create_power_selection(
+            [(p.power.id, p.rating, p.target) for p in selection.picks],
+            POWERS,
+            character.power_points,
+            learned_skill_ratings=learned_skill_ratings(character, SKILLS),
+            quality_names=_quality_names(character),
+        )
+    except ValueError as exc:
+        return str(exc)
+    return None
 
 
 @router.post("/ui/powers", response_class=HTMLResponse)
@@ -134,7 +202,13 @@ async def submit_powers(request: Request) -> HTMLResponse:
         form = await request.form()
         picks = _parse_power_picks(form, MVP_POWERS)
         try:
-            selection = create_power_selection(picks, POWERS, session.character.power_points)
+            selection = create_power_selection(
+                picks,
+                POWERS,
+                session.character.power_points,
+                learned_skill_ratings=learned_skill_ratings(session.character, SKILLS),
+                quality_names=_quality_names(session.character),
+            )
         except ValueError as exc:
             context = _power_selection_context(session.character, picks, error=str(exc))
         else:

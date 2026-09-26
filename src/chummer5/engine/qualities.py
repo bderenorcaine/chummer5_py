@@ -252,6 +252,8 @@ class GateContext:
     metatype_name: str | None
     magic_type: str | None
     quality_names: frozenset[str] = frozenset()
+    # WP119: the adept powers held -- High Pain Tolerance forbids the Pain Resistance power.
+    power_names: frozenset[str] = frozenset()
 
 
 def _condition_met(kind: str, value: str, context: GateContext) -> bool:
@@ -267,6 +269,8 @@ def _condition_met(kind: str, value: str, context: GateContext) -> bool:
         return value in context.quality_names
     if kind == "magenabled":
         return context.magic_type is not None
+    if kind == "power":
+        return value in context.power_names
     return False
 
 
@@ -308,6 +312,11 @@ def requirement_failure(quality: Quality, context: GateContext) -> str | None:
             if kind == "quality"
             and value not in TALENT_QUALITY_NAMES
             and value in context.quality_names
+        )
+        conflicts += sorted(
+            value
+            for kind, value in requirement.conditions
+            if kind == "power" and value in context.power_names
         )
         if conflicts:
             return f"{quality.name} cannot be taken together with: {conflicts}"
@@ -565,6 +574,7 @@ def create_quality_selection(
     metatype_name: str | None = None,
     granted_quality_names: Iterable[str] = (),
     later_steps: LaterStepFacts | None = None,
+    power_names: Iterable[str] = (),
 ) -> QualitySelection:
     """Build a `QualitySelection`, validating against the MVP-offered catalog and the karma cap.
 
@@ -675,6 +685,7 @@ def create_quality_selection(
         metatype_name=metatype_name,
         magic_type=magic_type,
         quality_names=frozenset({q.name for q in selected} | set(granted_quality_names)),
+        power_names=frozenset(power_names),
     )
     for quality in dict.fromkeys(selected):
         failure = requirement_failure(quality, context)
@@ -909,6 +920,10 @@ def offerable_quality_catalog(
         metatype_name=character.metatype.name,
         magic_type=character.magic_type,
         quality_names=frozenset(q.name for q in character.metatype_qualities),
+        power_names=frozenset(
+            p.power.name
+            for p in (character.power_selection.picks if character.power_selection else ())
+        ),
     )
     offered = {
         q.id: q

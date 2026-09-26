@@ -1,0 +1,5 @@
+{#- WP119: one adept power instance's target, by kind. Expects `kind` and `code` in scope. -#}
+{%- if kind == "attribute" -%}{{ _("String_Attribute" ~ code ~ "Short") }}
+{%- elif kind == "skill" -%}{{ code | dterm("skills.xml") }}
+{%- else -%}{{ code }}
+{%- endif -%}

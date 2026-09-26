@@ -26,23 +26,19 @@ specifically, not just the `selectattribute` tag, so Attribute Boost correctly f
 including a second power (Voice Control) confirmed via the rulebook text to be a genuine
 `FLAT_BONUS` candidate the Implementation Plan's own WP27 entry didn't name.
 
-**No `NO_EFFECT` value exists in this module's `BonusSupport`, unlike `chummer5.data.qualities`'s**.
-Every SR5 power with an empty/absent `<bonus>` (Light Body, Missile Parry, Traceless Walk, Wall
-Running) was individually checked against the rulebook text (per this WP's own "don't assume an
-empty `<bonus>` means inert" caution) and turned out to have a real, in-play mechanical effect this
-engine's combat-free, test-free scope doesn't model -- none qualified as verified-inert the way
-WP22 found 8 qualities to be. Adding an always-zero-count enum member would just be unused
-scaffolding (see the Project Overview's own "add it when a WP actually needs one" principle), so it
-isn't added here; a future WP that finds a genuinely inert power should add it then, the same way
-WP22 added `NO_EFFECT` to `chummer5.data.qualities` only once it had a real member to put in it.
+**`NO_EFFECT` (WP119).** WP27 found no verified-inert power and so added no `NO_EFFECT` value. Phase
+X offers powers whose whole effect is in play anyway, with a registry note, following the
+2026-07-24 policy: WP119 added the value for Critical Strike, Enhanced Accuracy and Killing Hands,
+name-gated like the qualities' (`_VERIFIED_NO_EFFECT_NAMES`).
 
-Deliberately deferred, not defaulted into `FLAT_BONUS` or `NOT_YET_SUPPORTED` by a shape-matching
-accident: **Improved Ability (skill)** (rulebook p.309) is shape-recognizable as a flat skill bonus
-(`<selectskill minimumrating="1"><val>Rating</val>...`), but its real rule needs two things this
-loader doesn't check -- the target skill must already be known at rating >= 1, and the achievable
-improvement is capped at "your current skill level x 1.5, rounded up," a formula with no equivalent
-anywhere else in this engine. Classified `NOT_YET_SUPPORTED` here rather than half-implementing the
-cap; see `spec/worklogs/WP27.md` for the full reasoning.
+**Improved Ability (skill)** (rulebook p.309) was deferred by WP27, because its rule needs the
+target skill already known at rating >= 1 and caps the improvement ("current skill level x 1.5,
+rounded up"). WP119 offers it: `chummer5.engine.magic.power_max_rating` applies the cap, and
+`create_power_selection` checks the skill is known when the caller has the skill ratings.
+
+**`<limit>` is an instance count, not a level cap (WP119 correction).** Levels are capped by the
+Magic rating and `<maxlevels>` (p. 308); `<limit>` says how many times a repeatable power may be
+bought, each for a different target. See `Power.limit`.
 """
 
 from __future__ import annotations
@@ -81,6 +77,9 @@ class BonusSupport(Enum):
     """
 
     FLAT_BONUS = "flat_bonus"
+    # WP119: a power whose whole effect is in play (Critical Strike's +1 DV, ...), offered with an
+    # `unmodeled_effect_note`. Name-gated, as for qualities.
+    NO_EFFECT = "no_effect"
     NOT_YET_SUPPORTED = "not_yet_supported"
 
 
@@ -98,6 +97,9 @@ class PowerFlatBonus:
     target_kind: str
     target_name: str
     attribute_options: tuple[str, ...]  # only for "select_attribute"; () otherwise
+    # WP119: the dedup group, as for cyberware (`"precedence0"`: Improved Reflexes' Initiative
+    # dice and Reaction don't combine with wired reflexes, p. 310).
+    unique_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -106,7 +108,9 @@ class Power:
     name: str
     points: Decimal  # PP cost per level (levels=True) or the single flat PP cost (levels=False)
     levels: bool  # whether rating (and cost) scales past 1
-    limit: int  # max rating (levels=True) or max purchases (always 1 for every FLAT_BONUS power)
+    # WP119 correction: how many *instances* may be bought (Critical Strike 100, once per skill),
+    # not the level cap -- see `max_levels`. WP27 read it as the level cap.
+    limit: int
     source: str
     page: int
     bonus_support: BonusSupport
@@ -115,10 +119,52 @@ class Power:
     # WP118: the power's in-play effect this engine doesn't compute (the Project Overview registry),
     # mirroring `chummer5.data.qualities.Quality.unmodeled_effect_note`.
     unmodeled_effect_note: str | None = None
+    # WP119: `<maxlevels>` (0: none beyond the Magic rating, p. 308) and `<extrapointcost>` (a flat
+    # PP charge on top of `points x rating` -- Improved Reflexes' 1.5/2.5/3.5, p. 310).
+    max_levels: int = 0
+    extra_point_cost: Decimal = Decimal(0)
+    # WP119: what each instance names (`PowerPick.target`), or None: "attribute" (from
+    # `target_options`) or "skill" (from `target_options` if given, else any skill of
+    # `target_skill_categories` not in `target_excluded`). `target_minimum_rating` is the rating
+    # the named skill must already have (Improved Ability: "You need to know the skill").
+    target_kind: str | None = None
+    target_options: tuple[str, ...] = ()
+    target_skill_categories: tuple[str, ...] = ()
+    target_excluded: tuple[str, ...] = ()
+    target_minimum_rating: int = 0
+    # WP119: qualities this power can't be held with (`<forbidden><oneof><quality>`) -- Pain
+    # Resistance and High Pain Tolerance.
+    forbidden_qualities: tuple[str, ...] = ()
+
+    @property
+    def repeatable(self) -> bool:
+        """Several instances, each with its own target (WP119)."""
+        return self.limit > 1 and self.target_kind is not None
 
 
 # WP118: the registry text for offered powers with an in-play part. WP119/WP120 add the rest.
 _UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
+    # WP119
+    "Critical Strike": (
+        "+1 DV on attacks with the chosen melee skill (p. 309) -- no attack or damage resolution "
+        "exists. The chosen skill is recorded."
+    ),
+    "Enhanced Accuracy (skill)": (
+        "+1 Accuracy for weapons used with the chosen Combat skill (p. 309) -- no weapon or "
+        "Accuracy representation exists. The chosen skill is recorded."
+    ),
+    "Killing Hands": (
+        "Unarmed attacks may deal Physical instead of Stun damage, and count as magical against "
+        "critters' magical defenses (p. 310) -- no unarmed-combat or damage resolution exists."
+    ),
+    "Mystic Armor": (
+        "Its Armor also protects against damage in astral combat (p. 310) -- no astral combat "
+        "exists. (Its +1 Armor per level is applied.)"
+    ),
+    "Pain Resistance": (
+        "+2 dice per level on tests to withstand pain from torture, magic or illness (p. 311) -- "
+        "no such test exists. (Its wound-modifier offset is applied.)"
+    ),
     "Astral Perception": (
         "Seeing into the astral plane while dual-natured, and so able to attack astral forms "
         "(p. 309; astral perception, p. 312) -- no astral resolution exists. (Its unlocking of "
@@ -145,8 +191,23 @@ def _is_select_attribute_flat_bonus(elem: ET.Element) -> bool:
     return elem.findtext("val") == "Rating"
 
 
+# WP119: powers whose whole effect is in play, offered with a note (`BonusSupport.NO_EFFECT`).
+_VERIFIED_NO_EFFECT_NAMES = frozenset(
+    {"Critical Strike", "Enhanced Accuracy (skill)", "Killing Hands"}
+)
+
+# WP119: the rulebook's non-stacking rule for Improved Reflexes (p. 310: "the increase cannot be
+# combined with other technological or magical increases to Initiative") covers its Reaction too,
+# not just the Initiative dice the data marks `precedence="0"`.
+_RULEBOOK_UNIQUE_NAMES: Mapping[str, str] = {"Improved Reflexes": "precedence0"}
+
+# WP119: bare `Rating` leaves -> target kinds.
+_RATING_LEAF_TAGS = {"armor": "armor", "initiativepass": "initiative_dice"}
+
+
 def _classify_bonus(
     bonus_elem: ET.Element | None,
+    name: str = "",
 ) -> tuple[BonusSupport, tuple[PowerFlatBonus, ...]]:
     """Classify a `<bonus>` node, extracting flat bonuses when every child is a flat shape.
 
@@ -155,12 +216,57 @@ def _classify_bonus(
     `chummer5.data.qualities._classify_bonus`'s identical rule. Unlike that function, there's no
     name-gate for a verified-inert case -- see module docstring for why.
     """
+    if name in _VERIFIED_NO_EFFECT_NAMES:
+        return BonusSupport.NO_EFFECT, ()
     if bonus_elem is None or len(bonus_elem) == 0:
         return BonusSupport.NOT_YET_SUPPORTED, ()
 
+    unique = _RULEBOOK_UNIQUE_NAMES.get(name)
     flat_bonuses = []
     for child in bonus_elem:
-        if child.tag == "specificskill" and _is_flat_skill_bonus(child):
+        if child.tag == "disablequality":
+            # WP119: Improved Reflexes switches off Lightning Reflexes, a non-core quality.
+            continue
+        if child.tag in _RATING_LEAF_TAGS and len(child) == 0 and child.text == "Rating":
+            precedence = child.get("precedence")
+            flat_bonuses.append(
+                PowerFlatBonus(
+                    target_kind=_RATING_LEAF_TAGS[child.tag],
+                    target_name="",
+                    attribute_options=(),
+                    unique_name=unique or (f"precedence{precedence}" if precedence else None),
+                )
+            )
+        elif (
+            child.tag == "specificattribute"
+            and {c.tag for c in child} == {"name", "val"}
+            and child.findtext("val") == "Rating"
+        ):
+            flat_bonuses.append(
+                PowerFlatBonus(
+                    target_kind="attribute",
+                    target_name=child.findtext("name", ""),
+                    attribute_options=(),
+                    unique_name=unique,
+                )
+            )
+        elif (
+            child.tag == "conditionmonitor"
+            and [c.tag for c in child] == ["thresholdoffset"]
+            and child.findtext("thresholdoffset") == "Rating"
+        ):
+            # WP119: Pain Resistance -- one ignored wound box per level on both tracks (p. 311).
+            flat_bonuses.append(
+                PowerFlatBonus(
+                    target_kind="cm_threshold_offset", target_name="", attribute_options=()
+                )
+            )
+        elif child.tag == "selectskill" and child.findtext("val") == "Rating":
+            # WP119: Improved Ability -- +Rating to the chosen skill's rating (p. 309).
+            flat_bonuses.append(
+                PowerFlatBonus(target_kind="skill", target_name="", attribute_options=())
+            )
+        elif child.tag == "specificskill" and _is_flat_skill_bonus(child):
             flat_bonuses.append(
                 PowerFlatBonus(
                     target_kind="skill",
@@ -200,9 +306,43 @@ def _classify_bonus(
     return BonusSupport.FLAT_BONUS, tuple(flat_bonuses)
 
 
+def _parse_target(bonus_elem: ET.Element | None) -> dict[str, object]:
+    """WP119: what an instance of the power names, from its `<bonus>`'s select-a-thing node."""
+    if bonus_elem is None:
+        return {}
+    attributes = bonus_elem.find("selectattribute")
+    if attributes is not None:
+        return {
+            "target_kind": "attribute",
+            "target_options": tuple(a.text or "" for a in attributes.findall("attribute")),
+        }
+    categories = bonus_elem.find("weaponcategorydv/selectcategory")
+    if categories is not None:
+        # Critical Strike: "Unarmed Combat, Clubs, Blades, Astral Combat, or a particular Exotic
+        # Melee weapon skill" (p. 309) -- the categories are skill names.
+        return {
+            "target_kind": "skill",
+            "target_options": tuple(c.text or "" for c in categories.findall("category")),
+        }
+    select_skill = bonus_elem.find(".//selectskill")
+    if select_skill is not None:
+        listed = tuple(c.text or "" for c in select_skill.findall("skillcategories/category"))
+        category = select_skill.get("skillcategory")
+        excluded = select_skill.get("excludeskill")
+        return {
+            "target_kind": "skill",
+            "target_skill_categories": listed or ((category,) if category else ()),
+            "target_excluded": (excluded,) if excluded else (),
+            "target_minimum_rating": int(select_skill.get("minimumrating", "0")),
+        }
+    if bonus_elem.find("selecttext") is not None:
+        return {"target_kind": "text"}
+    return {}
+
+
 def _parse_power(elem: ET.Element) -> Power:
     bonus_elem = elem.find("bonus")
-    support, flat_bonuses = _classify_bonus(bonus_elem)
+    support, flat_bonuses = _classify_bonus(bonus_elem, elem.findtext("name", ""))
     raw_bonus = (
         ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
     )
@@ -218,6 +358,12 @@ def _parse_power(elem: ET.Element) -> Power:
         flat_bonuses=flat_bonuses,
         raw_bonus=raw_bonus,
         unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(elem.findtext("name", "")),
+        max_levels=int(elem.findtext("maxlevels", "0")),
+        extra_point_cost=Decimal(elem.findtext("extrapointcost", "0")),
+        forbidden_qualities=tuple(
+            q.text for q in elem.findall("forbidden/oneof/quality") if q.text
+        ),
+        **_parse_target(bonus_elem),  # type: ignore[arg-type]
     )
 
 

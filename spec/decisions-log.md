@@ -1689,3 +1689,22 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   between read the allocation, and the Adept rules need both.
 - **An Adept's Talent grant may still name Assensing.** Rejecting it at the Talent step would fire
   before powers exist. WP135's whole-character check is to report it (added to that WP's check list).
+
+## 2026-09-26 — WP119: power instances, and WP27's misreading of `<limit>`
+
+- **`<limit>` counts instances; `<maxlevels>` and the Magic rating cap levels** (p. 308). WP27 used
+  `<limit>` as the level cap, so every power with `<limit>1` (Enhanced Perception, Mystic Armor, ...)
+  was stuck at level 1. `power_max_rating` now follows the book. A power that names nothing is bought
+  once, whatever its `<limit>` (Voice Control's is 20).
+- **`PowerPick.target` replaces `selected_attribute`.** A repeatable power is bought once per target.
+  The save format writes `target` and still reads `selected_attribute`, so `FORMAT_VERSION` is
+  unchanged, as with WP41's key rename.
+- **Improved Ability's checks need the skill ratings**, which a save or import resolves *after*
+  powers. As with WP115's `LaterStepFacts`, the web route passes them and the loader doesn't. The
+  powers page re-checks the committed picks and warns when a skill edit breaks one. The learned
+  rating is the bought rating plus the Talent's free skill.
+- **Improved Reflexes' Reaction doesn't stack with implants either** (rulebook wins over the data,
+  which puts only the dice in `precedence0`).
+- **High Pain Tolerance ⟷ Pain Resistance is enforced from both sides.** `GateContext` gained
+  `power_names` and the `power` condition kind. `create_power_selection` checks a power's
+  `<forbidden>` qualities.

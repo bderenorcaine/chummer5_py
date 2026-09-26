@@ -452,10 +452,7 @@ def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> di
     )
     spell_ctx = _spell_selection_context(character, session.talent_letter, spell_ids)
     power_picks = (
-        tuple(
-            (pick.power.id, pick.rating, pick.selected_attribute)
-            for pick in character.power_selection.picks
-        )
+        tuple((pick.power.id, pick.rating, pick.target) for pick in character.power_selection.picks)
         if character is not None and character.power_selection is not None
         else ()
     )

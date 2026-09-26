@@ -578,7 +578,9 @@ def _character_sheet_context(
                 {
                     "name": pick.power.name,
                     "rating": pick.rating,
-                    "selected_attribute": pick.selected_attribute,
+                    # WP119: an attribute, a skill or free text, per the power's target kind.
+                    "target": pick.target,
+                    "target_kind": pick.power.target_kind,
                 }
                 for pick in character.power_selection.picks
             ]
@@ -760,10 +762,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         else ()
     )
     power_picks = (
-        tuple(
-            (pick.power.id, pick.rating, pick.selected_attribute)
-            for pick in character.power_selection.picks
-        )
+        tuple((pick.power.id, pick.rating, pick.target) for pick in character.power_selection.picks)
         if character.power_selection is not None
         else ()
     )

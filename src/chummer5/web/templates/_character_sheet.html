@@ -107,7 +107,7 @@
   <ul>
     {% for row in power_rows %}
     <li>
-      {% if row.selected_attribute %}{{ _("Web_Sheet_PowerWithAttribute", name=row.name | dterm("powers.xml"), rating=row.rating, attribute=_("String_Attribute" ~ row.selected_attribute ~ "Short")) }}{% else %}{{ _("Web_Sheet_Power", name=row.name | dterm("powers.xml"), rating=row.rating) }}{% endif %}
+      {% if row.target %}{% set kind = row.target_kind %}{% set code = row.target %}{% set target_label %}{% include "_power_target_label.html" %}{% endset %}{{ _("Web_Sheet_PowerWithAttribute", name=row.name | dterm("powers.xml"), rating=row.rating, attribute=target_label) }}{% else %}{{ _("Web_Sheet_Power", name=row.name | dterm("powers.xml"), rating=row.rating) }}{% endif %}
     </li>
     {% endfor %}
   </ul>

@@ -105,14 +105,13 @@ def test_voice_control_is_a_verified_flat_bonus_not_named_in_the_implementation_
     assert power.limit == 20
 
 
-def test_improved_ability_skill_is_deliberately_deferred() -> None:
-    # Shape-recognizable (<selectskill minimumrating="1"><val>Rating</val>...) but its real rule
-    # needs the target skill already known at rating >= 1 and caps the improvement at "current
-    # skill level x 1.5, rounded up" (rulebook p.309) -- neither check exists anywhere else in this
-    # engine. Deliberately classified NOT_YET_SUPPORTED rather than half-implementing the cap; see
-    # spec/worklogs/WP27.md.
+def test_improved_ability_skill_targets_a_known_skill() -> None:
+    # WP27 deferred it: its rule needs the target skill already known at rating >= 1 and caps the
+    # improvement (p. 309). WP119 built both checks (`chummer5.engine.magic.power_max_rating`).
     power = next(p for p in POWERS if p.name == "Improved Ability (skill)")
-    assert power.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    assert power.bonus_support == BonusSupport.FLAT_BONUS
+    assert power.target_kind == "skill"
+    assert power.target_minimum_rating == 1
 
 
 def test_empty_or_absent_bonus_powers_stay_not_yet_supported() -> None:
@@ -120,7 +119,7 @@ def test_empty_or_absent_bonus_powers_stay_not_yet_supported() -> None:
     # each individually confirmed via the rulebook text (this WP's own research pass) to have a
     # real, unmodeled in-play effect (jump distance, ranged-attack defense, stealth, wall-climbing),
     # not a verified-inert one. Unlike chummer5.data.qualities's NO_EFFECT tranche, none of these
-    # qualify -- see module docstring for why chummer5.data.powers has no NO_EFFECT value at all.
+    # qualify. (WP119 later added NO_EFFECT for three powers offered with a registry note.)
     for name in ("Light Body", "Missile Parry", "Traceless Walk", "Wall Running"):
         power = next(p for p in POWERS if p.name == name)
         assert power.bonus_support == BonusSupport.NOT_YET_SUPPORTED
@@ -130,11 +129,13 @@ def test_empty_or_absent_bonus_powers_stay_not_yet_supported() -> None:
 def test_supported_vs_unsupported_counts_are_visible() -> None:
     # FLAT_BONUS: Enhanced Perception, Improved Physical Attribute, Improved Potential x3, Voice
     # Control = 6. NOT_YET_SUPPORTED: 28 - 6 = 22. No NO_EFFECT value exists in this module. WP118
-    # adds Astral Perception (its Assensing unlock).
+    # adds Astral Perception (its Assensing unlock). WP119 adds Improved Ability, Improved Reflexes,
+    # Mystic Armor and Pain Resistance, and the NO_EFFECT value for Critical Strike, Enhanced
+    # Accuracy and Killing Hands.
     counts = count_by_support(POWERS)
-    assert counts[BonusSupport.FLAT_BONUS] == 7
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 21
-    assert set(counts) == {BonusSupport.FLAT_BONUS, BonusSupport.NOT_YET_SUPPORTED}
+    assert counts[BonusSupport.FLAT_BONUS] == 11
+    assert counts[BonusSupport.NO_EFFECT] == 3
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 14
 
 
 def test_power_fields_hand_checked_against_the_raw_xml() -> None:

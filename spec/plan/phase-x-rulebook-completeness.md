@@ -311,7 +311,7 @@ the rules it checks.
   Assensing; the Wesson fixture still imports (check whether his skills violate the rule — if they
   do, record it rather than weaken the rule).
 
-- [ ] **WP119 — Adept powers with computed effects, and power instances.**
+- [x] **WP119 — Adept powers with computed effects, and power instances.**
   Goal: power picks become instances with a typed target. Offer the powers whose effect this engine
   can compute.
   Deliverables:

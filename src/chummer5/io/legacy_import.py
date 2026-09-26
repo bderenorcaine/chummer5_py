@@ -279,7 +279,11 @@ from chummer5.engine.bioware import BiowarePurchaseRequest, select_skill_choices
 from chummer5.engine.build_method import SUPPORTED_BUILD_METHODS
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character, sr5_metatypes
 from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
-from chummer5.engine.magic import OFFERED_TALENT_CODENAMES, mvp_power_catalog
+from chummer5.engine.magic import (
+    OFFERED_TALENT_CODENAMES,
+    mvp_power_catalog,
+    power_target_options,
+)
 from chummer5.engine.qualities import QualityPickRequest, choice_options, mvp_quality_catalog
 from chummer5.engine.resources import Contact
 from chummer5.io.legacy_chum5 import LegacyCharacter, LegacyCyberware, load_chum5, priority_letter
@@ -858,16 +862,19 @@ def import_legacy_character(
         if power is None:
             dropped_powers.append(legacy_power.name)
             continue
-        select_attribute_bonus = next(
-            (fb for fb in power.flat_bonuses if fb.target_kind == "select_attribute"), None
-        )
-        selected_attribute: str | None = None
-        if select_attribute_bonus is not None:
-            if legacy_power.extra not in select_attribute_bonus.attribute_options:
-                dropped_powers.append(legacy_power.name)
-                continue
-            selected_attribute = legacy_power.extra
-        power_picks.append((power.id, legacy_power.rating, selected_attribute))
+        # WP119: any target-taking power (an attribute, a skill, free text), not just WP28's
+        # select-attribute one.
+        target: str | None = None
+        if power.target_kind == "text":
+            target = legacy_power.extra or None
+        elif power.target_kind is not None:
+            target = (
+                legacy_power.extra if legacy_power.extra in power_target_options(power) else None
+            )
+        if power.target_kind is not None and target is None:
+            dropped_powers.append(legacy_power.name)
+            continue
+        power_picks.append((power.id, legacy_power.rating, target))
 
     save = create_character_save(
         metatype_name=legacy.metatype,

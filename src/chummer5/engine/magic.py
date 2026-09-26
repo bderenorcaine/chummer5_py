@@ -21,18 +21,19 @@ records his grant as `Pistols`).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
 from chummer5.data.powers import BonusSupport as PowerBonusSupport
 from chummer5.data.powers import Power
 from chummer5.data.priorities import PriorityTable, TalentOption
-from chummer5.data.skills import Skill
+from chummer5.data.skills import Skill, load_skills
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
+from chummer5.engine.skills import natural_skill_rating
 
 # This phase's offered subset of each Talent letter's real option list (Implementation Plan's Phase
 # I intro): Mystic Adept (explicit product decision, not deferred) and Technomancer/A.I./Aspected
@@ -398,7 +399,18 @@ _POWER_TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "social_limit": ImprovementType.SOCIAL_LIMIT,
     # WP118: Astral Perception.
     "unlock_skill": ImprovementType.SKILL_UNLOCKED,
+    # WP119: Improved Reflexes, Mystic Armor, Pain Resistance.
+    "attribute": ImprovementType.ATTRIBUTE,
+    "initiative_dice": ImprovementType.INITIATIVE_DICE,
+    "armor": ImprovementType.ARMOR,
+    "cm_threshold_offset": ImprovementType.CM_THRESHOLD_OFFSET,
 }
+
+# WP119: NO_EFFECT powers (in play only, with a note) are offered too, like NO_EFFECT qualities.
+_OFFERABLE_POWER_SUPPORT = (PowerBonusSupport.FLAT_BONUS, PowerBonusSupport.NO_EFFECT)
+
+# WP119: what a skill-targeted power's categories resolve against.
+_SKILLS = load_skills()
 
 
 def mvp_power_catalog(powers: Iterable[Power]) -> tuple[Power, ...]:
@@ -406,21 +418,28 @@ def mvp_power_catalog(powers: Iterable[Power]) -> tuple[Power, ...]:
 
     Mirrors `chummer5.engine.qualities.mvp_quality_catalog`: `chummer5.data.powers.load_powers()`
     already restricts to `source == "SR5"`; this narrows further to `BonusSupport.FLAT_BONUS` (a
-    bonus shape this engine's Improvement mechanism can apply correctly). A `NOT_YET_SUPPORTED`
-    power is excluded entirely rather than offered with its mechanical effect silently dropped.
+    bonus shape this engine's Improvement mechanism can apply correctly) and, since WP119,
+    `NO_EFFECT` (an in-play power offered with its registry note). A `NOT_YET_SUPPORTED` power is
+    excluded entirely rather than offered with its mechanical effect silently dropped.
     """
-    return tuple(p for p in powers if p.bonus_support == PowerBonusSupport.FLAT_BONUS)
+    return tuple(p for p in powers if p.bonus_support in _OFFERABLE_POWER_SUPPORT)
 
 
 @dataclass(frozen=True)
 class PowerPick:
-    """One purchased Adept Power: which power, at what rating, and (only for a power whose
-    `<bonus>` targets `"select_attribute"`, i.e. Improved Physical Attribute) which attribute.
-    """
+    """One purchased Adept Power instance: which power, at what rating, and -- for a power that
+    names something (`Power.target_kind`) -- which attribute or skill (WP119; WP27's
+    `selected_attribute`, widened). Critical Strike bought for Blades and for Unarmed Combat is two
+    picks."""
 
     power: Power
     rating: int
-    selected_attribute: str | None = None
+    target: str | None = None
+
+    @property
+    def power_points(self) -> Decimal:
+        """`points x rating + extra_point_cost` (WP119: Improved Reflexes' +0.5)."""
+        return self.power.points * self.rating + self.power.extra_point_cost
 
 
 @dataclass(frozen=True)
@@ -442,74 +461,175 @@ class PowerSelection:
     power_point_budget: int
 
 
+def power_target_options(power: Power, skills: Iterable[Skill] = _SKILLS) -> tuple[str, ...]:
+    """Every value a pick of `power` may name in `target` (WP119), or `()` for a power that names
+    nothing or takes free text."""
+    if power.target_kind == "attribute":
+        return power.target_options
+    if power.target_kind == "skill":
+        if power.target_options:
+            return power.target_options
+        return tuple(
+            sorted(
+                s.name
+                for s in skills
+                if s.category in power.target_skill_categories
+                and s.name not in power.target_excluded
+            )
+        )
+    return ()
+
+
+def _boosts_target_rating(power: Power) -> bool:
+    """Improved Ability's shape: a `skill` bonus to the pick's own target."""
+    return any(b.target_kind == "skill" and not b.target_name for b in power.flat_bonuses)
+
+
+def power_max_rating(power: Power, magic_rating: int, learned_rating: int | None = None) -> int:
+    """The highest level of `power` a character may hold (WP119).
+
+    p. 308: "The maximum number of levels you can have of any one power is equal to your Magic
+    Rating, or up to a limit listed by the power, whichever is less" -- the power's limit is its
+    `<maxlevels>` (Improved Reflexes' 3). A power without levels is 1. Improved Ability is also
+    capped by its skill: "The maximum improvement possible is your current skill level x 1.5
+    (rounded up)" (p. 309), which legacy's default reads as at most half the learned rating,
+    rounded up, on top of it -- `learned_rating` is that rating, when known.
+    """
+    if not power.levels:
+        return 1
+    cap = magic_rating
+    if power.max_levels:
+        cap = min(cap, power.max_levels)
+    if learned_rating is not None and _boosts_target_rating(power):
+        cap = min(cap, -(-learned_rating // 2))
+    return cap
+
+
+def learned_skill_ratings(character: Character, skills: Iterable[Skill]) -> dict[str, int]:
+    """Each skill's learned rating, by name (WP119): what was bought for it, plus the Talent's free
+    skill grant -- which legacy counts as bought and this engine routes through a `TALENT`
+    Improvement (WP25). No other Improvement counts, Improved Ability's own included, so the power
+    can't lift its own cap."""
+    allocation = character.skill_allocation
+    granted: dict[str, int] = {}
+    for imp in character.improvements.improvements:
+        if imp.improvement_type is ImprovementType.SKILL and imp.source_type is (
+            ImprovementSource.TALENT
+        ):
+            granted[imp.target] = granted.get(imp.target, 0) + imp.value
+    return {
+        skill.name: (
+            natural_skill_rating(character, allocation, skill) if allocation is not None else 0
+        )
+        + granted.get(skill.name, 0)
+        for skill in skills
+    }
+
+
+def _as_power_request(pick: tuple[str, int, str | None]) -> tuple[str, int, str | None]:
+    power_id, rating, target = pick
+    return power_id, rating, target or None
+
+
 def create_power_selection(
     picks: Iterable[tuple[str, int, str | None]],
     catalog: Iterable[Power],
     power_point_budget: int,
+    *,
+    learned_skill_ratings: Mapping[str, int] | None = None,
+    quality_names: Iterable[str] = (),
 ) -> PowerSelection:
     """Build a `PowerSelection`, validating every pick and the total Power Point spend together.
 
-    `picks` is `(power_id, rating, selected_attribute)` triples -- `selected_attribute` is required
-    (and validated against the power's own eligible list) exactly when the power's bonus targets
-    `"select_attribute"`, and forbidden otherwise. Validates: every id resolves against `mvp_power_
-    catalog(catalog)`; no power is picked more than once (buying the same power twice for two
-    different targets, e.g. Improved Physical Attribute for both BOD and AGI, is a real SR5
-    possibility this WP deliberately doesn't support -- no real fixture exercises it, and nothing
-    else in this WP's scope needs the machinery a composite id would require; a future WP can widen
-    this if it's ever worth it); each rating is between 1 and `min(power.limit, power_point_budget)`
-    -- the rulebook's own cap (p.308: "The maximum number of levels you can have of any one power is
-    equal to your Magic Rating, or up to a limit listed by the power, whichever is less"), reusing
-    `power_point_budget` for both roles since Power Points equal the Magic rating 1:1 in this
-    project's scope (Mystic Adept's split is out of scope entirely -- see `chummer5.engine.character
-    .Character.power_points`); a power with `levels = False` only ever accepts `rating == 1` (it has
-    no levels to buy); and the summed `points * rating` cost across every pick doesn't exceed
-    `power_point_budget`. Does not require the full budget to be spent, mirroring every other
-    `create_*` function in this engine.
+    `picks` is `(power_id, rating, target)` triples -- `target` (WP119; WP27's
+    `selected_attribute`, widened) is required, and must be one of `power_target_options`, exactly
+    when the power has a `target_kind`, and forbidden otherwise. Validates: every id resolves
+    against `mvp_power_catalog(catalog)`; a power is bought at most `Power.limit` times, and a
+    repeatable one never twice for the same target (Critical Strike "may be selected multiple
+    times, each time for a different melee skill", p. 309); each rating is between 1 and
+    `power_max_rating` (the Magic rating -- `power_point_budget` stands in for it, since an Adept's
+    Power Points equal it -- and the power's `<maxlevels>`); and the summed cost (`points x rating
+    + extra_point_cost`) doesn't exceed `power_point_budget`. Does not require the full budget to
+    be spent, mirroring every other `create_*` function in this engine.
+
+    **WP119**: `learned_skill_ratings` (skill name -> the rating bought for it, no Improvements),
+    when given, checks Improved Ability: the skill must be known (p. 309, "You need to know the
+    skill in order to buy this power for it") and the levels fit its half-the-rating cap. A save
+    or import resolves powers before skills and passes none -- the same split WP115's
+    `LaterStepFacts` makes for qualities.
+
+    `quality_names` are the character's qualities: a power may not forbid one of them (Pain
+    Resistance and High Pain Tolerance, p. 74).
     """
     offered_by_id = {p.id: p for p in mvp_power_catalog(catalog)}
-    entries = list(picks)
+    entries = [_as_power_request(pick) for pick in picks]
     ids = [power_id for power_id, _, _ in entries]
 
     unknown = sorted({pid for pid in ids if pid not in offered_by_id})
     if unknown:
         raise ValueError(f"not an MVP-offered power id: {unknown}")
 
-    duplicates = sorted({pid for pid in ids if ids.count(pid) > 1})
-    if duplicates:
-        raise ValueError(f"power selected more than once: {duplicates}")
+    # A power that names nothing is bought once and levelled; `<limit>` caps a repeatable one's
+    # instances.
+    over_limit = sorted(
+        {
+            offered_by_id[pid].name
+            for pid in ids
+            if ids.count(pid) > (offered_by_id[pid].limit if offered_by_id[pid].repeatable else 1)
+        }
+    )
+    if over_limit:
+        raise ValueError(f"power selected more than once: {over_limit}")
+    instances = [(pid, target) for pid, _, target in entries if offered_by_id[pid].repeatable]
+    repeated = sorted(
+        {offered_by_id[pid].name for pid, t in instances if instances.count((pid, t)) > 1}
+    )
+    if repeated:
+        raise ValueError(f"the same power was bought twice for one target: {repeated}")
 
+    held = set(quality_names)
     resolved: list[PowerPick] = []
     total_cost = Decimal(0)
-    for power_id, rating, selected_attribute in entries:
+    for power_id, rating, target in entries:
         power = offered_by_id[power_id]
+        conflicts = sorted(held & set(power.forbidden_qualities))
+        if conflicts:
+            raise ValueError(f"{power.name!r} cannot be taken together with: {conflicts}")
+
+        if power.target_kind is None:
+            if target is not None:
+                raise ValueError(f"{power.name!r} does not take a target, got {target!r}")
+        elif power.target_kind == "text":
+            if target is None or not target.strip():
+                raise ValueError(f"{power.name!r} requires a detail")
+            target = target.strip()
+        else:
+            options = power_target_options(power)
+            if target not in options:
+                raise ValueError(f"{power.name!r} needs one of {list(options)}, got {target!r}")
+
+        learned = None
+        if learned_skill_ratings is not None and power.target_minimum_rating and target:
+            learned = learned_skill_ratings.get(target, 0)
+            if learned < power.target_minimum_rating:
+                raise ValueError(
+                    f"{power.name!r} needs {target} at rating {power.target_minimum_rating} or "
+                    f"higher; it is at {learned}"
+                )
 
         if not power.levels and rating != 1:
             raise ValueError(f"{power.name!r} has no levels; rating must be 1, got {rating}")
-        max_rating = min(power.limit, power_point_budget)
+        max_rating = power_max_rating(power, power_point_budget, learned)
         if rating < 1 or rating > max_rating:
             raise ValueError(
                 f"{power.name!r}: rating {rating} is out of range 1..{max_rating} "
-                f"(power's own limit {power.limit}, Power Point budget {power_point_budget})"
+                f"(the power's own maximum, the Magic rating {power_point_budget}, and for "
+                f"Improved Ability half the skill's rating)"
             )
 
-        select_attribute_bonus = next(
-            (fb for fb in power.flat_bonuses if fb.target_kind == "select_attribute"), None
-        )
-        if select_attribute_bonus is not None:
-            if selected_attribute is None:
-                raise ValueError(f"{power.name!r} requires a selected attribute")
-            if selected_attribute not in select_attribute_bonus.attribute_options:
-                raise ValueError(
-                    f"{power.name!r}: {selected_attribute!r} is not eligible, must be one of "
-                    f"{select_attribute_bonus.attribute_options}"
-                )
-        elif selected_attribute is not None:
-            raise ValueError(f"{power.name!r} does not accept a selected attribute")
-
-        resolved.append(
-            PowerPick(power=power, rating=rating, selected_attribute=selected_attribute)
-        )
-        total_cost += power.points * rating
+        pick = PowerPick(power=power, rating=rating, target=target)
+        resolved.append(pick)
+        total_cost += pick.power_points
 
     if total_cost > power_point_budget:
         raise ValueError(
@@ -534,12 +654,8 @@ def apply_power_improvements(character: Character, selection: PowerSelection) ->
     """
     for pick in selection.picks:
         for flat_bonus in pick.power.flat_bonuses:
-            target = (
-                pick.selected_attribute
-                if flat_bonus.target_kind == "select_attribute"
-                else flat_bonus.target_name
-            )
-            assert target is not None  # guaranteed by create_power_selection's validation
+            # An empty target on a target-taking power means "what this instance names" (WP119).
+            target = flat_bonus.target_name or pick.target or ""
             character.improvements.add(
                 Improvement(
                     improvement_type=_POWER_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
@@ -547,5 +663,6 @@ def apply_power_improvements(character: Character, selection: PowerSelection) ->
                     value=pick.rating,
                     source_type=ImprovementSource.ADEPT_POWER,
                     source_id=pick.power.id,
+                    unique_name=flat_bonus.unique_name,
                 )
             )

@@ -208,7 +208,8 @@ def test_wesson_adept_powers_hand_verified_against_the_raw_fixture_and_catalog()
     and Improved Ability (skill) (deliberately deferred). This is a stronger, more honest finding
     than the plan's own acceptance text anticipated ("two powers this WP cannot fully support") --
     it's actually all of them, asserted explicitly here rather than glossed over, mirroring WP8/
-    WP22's "excluded... rather than skipped quietly" acceptance pattern.
+    WP22's "excluded... rather than skipped quietly" acceptance pattern. (WP119 then offered
+    Enhanced Accuracy and Improved Ability; see the assertion below.)
 
     The Power Point *budget* math still checks out exactly, using every one of his 6 real powers'
     raw points/levels/rating (hand-read from the fixture, cross-checked against the source catalog
@@ -248,9 +249,15 @@ def test_wesson_adept_powers_hand_verified_against_the_raw_fixture_and_catalog()
     }
     assert non_sr5_names == {"Motion Sense", "Rapid Draw"}
 
-    for name in sr5_names:
-        power = next(p for p in POWERS if p.name == name)
-        assert power.bonus_support == PowerBonusSupport.NOT_YET_SUPPORTED
+    # WP119 offers Enhanced Accuracy (a registry row) and Improved Ability (a skill rating); the
+    # other two wait for WP120.
+    support = {name: next(p for p in POWERS if p.name == name).bonus_support for name in sr5_names}
+    assert support == {
+        "Attribute Boost": PowerBonusSupport.NOT_YET_SUPPORTED,
+        "Combat Sense": PowerBonusSupport.NOT_YET_SUPPORTED,
+        "Enhanced Accuracy (skill)": PowerBonusSupport.NO_EFFECT,
+        "Improved Ability (skill)": PowerBonusSupport.FLAT_BONUS,
+    }
 
     # Hand-verified PP-budget cross-check using every real power's raw points/levels/rating --
     # Motion Sense/Rapid Draw's own <points> (0.5 each, levels=False) are read directly from
