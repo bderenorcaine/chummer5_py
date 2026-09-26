@@ -88,6 +88,8 @@
   --page-heading-bg: linear-gradient(180deg, #8e1a20 0%, #5c0c10 60%, #3e070a 100%);
   --table-head-fg: #f2b21c;
   --table-head-bg: #141414;
+  --table-row-bg-a: transparent;
+  --table-row-bg-b: transparent;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -1551,3 +1551,9 @@ colour tokens (`--section-bg-a`/`-b`) are full `background` values, a gradient l
 the diagonal rule along the cut corner, and then the fill. That is legal because `app.css` only
 ever uses those tokens in `background`. If a future rule reads them as a plain colour (`color:`,
 `border-color:`), the SR5 theme breaks there, so split a `--section-fill` token first.
+
+**2026-09-26 (WP105, Phase W) — table-row banding is a token pair.** The SR4 theme's alternating
+green rows added `.page tbody tr:nth-child(odd|even) { background: var(--table-row-bg-a|b) }` to
+`app.css`. The other themes set both tokens to `transparent`, so they are visually unchanged. The
+known imperfection: striping counts filtered-out (`hidden`) rows. Fixing that would take either
+JavaScript or selectors that know about the filters, and neither belongs in a theme mechanism.

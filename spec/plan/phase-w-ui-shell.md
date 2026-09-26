@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n (done, WP97-104)
+### Phase W — Post-MVP: application shell, theming, and i18n (done, WP97-105)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -392,3 +392,24 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   Classic and Sketch derive the new colours from their existing tokens (`var(--page-fg)`,
   `currentcolor`, `transparent`), so they needed no dark-block additions. See
   `spec/worklogs/WP104.md`.
+
+- [x] **WP105 — A Shadowrun 4 theme.** *(Added 2026-09-26.)*
+  Goal: a companion to WP104's theme that imitates the SR4 core rulebook's pages (reference: a
+  scan of p. 62, "Game Concepts"). It is offered in the picker; the SR5 theme stays the default.
+  Deliverables: `static/themes/shadowrun4.css`, listed second in `prefs.THEMES`; a
+  `Web_Theme_Shadowrun4` label. WP104's label now reads "Shadowrun 5", so the two can be told apart.
+  Its key and slug (`shadowrun`) are unchanged.
+  Acceptance: `pytest`/`ruff`/`mypy` green; the WP100 theme tests pass for all four themes.
+  Landed. The book's alternating green table rows needed the one thing no token could express yet.
+  `app.css` now bands `tbody` rows with `--table-row-bg-a`/`-b`, and the other three themes set
+  both to `transparent`. That is background only, never `display` on a `tr`, so WP84's constraint
+  holds. A row hidden by a filter still counts toward `nth-child`, so a filtered table can show two
+  like-coloured rows together.
+  Everything else maps onto existing tokens:
+  - a cyan title strip;
+  - a pale-blue sidebar with a faint trace grid, and the current step as a white row with a blue
+    accent (the book's blue square);
+  - serif body text with condensed capitals for display type;
+  - panels framed only by green rules above and below, like the example boxes;
+  - page headings as black bars with white capitals;
+  - table column heads on green.

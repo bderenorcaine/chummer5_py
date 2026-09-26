@@ -401,3 +401,14 @@ details[open] > .panel__heading {
   color: var(--table-head-fg);
   background: var(--table-head-bg);
 }
+
+/* Body-row banding (SR4's alternating green rows); `transparent` in themes that don't band. Only a
+   background -- never `display` on a `tr` (WP84). A filtered-out (hidden) row still counts toward
+   `nth-child`, so banding under an active filter can show two like rows together. */
+.page tbody tr:nth-child(odd) {
+  background: var(--table-row-bg-a);
+}
+
+.page tbody tr:nth-child(even) {
+  background: var(--table-row-bg-b);
+}

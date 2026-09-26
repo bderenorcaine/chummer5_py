@@ -1243,7 +1243,7 @@
       <key>Web_Talent_TraditionOption</key>
       <text>{name} (Drain: {first} + {second})</text>
     </string>
-    <!-- Theme names (WP100, WP104) -->
+    <!-- Theme names (WP100, WP104, WP105) -->
     <string>
       <key>Web_Theme_Classic</key>
       <text>Classic</text>
@@ -1254,7 +1254,11 @@
     </string>
     <string>
       <key>Web_Theme_Shadowrun</key>
-      <text>Shadowrun</text>
+      <text>Shadowrun 5</text>
+    </string>
+    <string>
+      <key>Web_Theme_Shadowrun4</key>
+      <text>Shadowrun 4</text>
     </string>
     <!-- Vehicles -->
     <string>

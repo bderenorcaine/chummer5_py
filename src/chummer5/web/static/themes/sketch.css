@@ -76,6 +76,8 @@
   --page-heading-bg: transparent;
   --table-head-fg: currentcolor;
   --table-head-bg: transparent;
+  --table-row-bg-a: transparent;
+  --table-row-bg-b: transparent;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -1,0 +1,139 @@
+/* Shadowrun 4 (WP105): the look of the SR4 (20th Anniversary) core rulebook's pages -- a bright
+   white page with pale-blue circuit-board margins, a cyan running-header strip ("GAME CONCEPTS"),
+   bold condensed capitals for every heading, serif body text, table titles as black bars with
+   white capitals over a green column-head row and alternating green body rows ("BUYING HITS"),
+   and the "example" boxes' green rules above and below each panel. In dark mode the page goes
+   deep blue-black; the cyan, green and black-bar furniture stays.
+
+   The book's faces are commercial (Minion for body, an Agency-style condensed sans for heads);
+   the stacks name them, then free look-alikes, then what every system has.
+
+   Tokens only -- see classic.css's header for the contract. */
+
+:root {
+  /* Type */
+  --font-body: "Minion Pro", "Adobe Garamond Pro", "Garamond", "Liberation Serif", "DejaVu Serif", serif;
+  --font-title: "Agency FB", "Bebas Neue", "Oswald", "Roboto Condensed", "Arial Narrow", "Liberation Sans Narrow", "DejaVu Sans Condensed", sans-serif;
+  --font-nav: "Agency FB", "Bebas Neue", "Oswald", "Roboto Condensed", "Arial Narrow", "Liberation Sans Narrow", "DejaVu Sans Condensed", sans-serif;
+  --title-size: 1.3rem;
+  --title-weight: 700;
+  --title-align: left;
+
+  /* Geometry and rule weights */
+  --sidebar-width: 13rem;
+  --frame-width: 1px;
+  --nav-list-padding: 0.5rem;
+  --nav-item-align: left;
+  --nav-item-accent-width: 6px;
+  --nav-item-rule-width: 1px;
+  --nav-chevron-size: 0px;
+  --tab-rule-width: 2px;
+  --tab-accent-width: 4px;
+  /* The example boxes: a green rule above and below, nothing at the sides. */
+  --panel-rule-width: 3px;
+  --panel-accent-width: 0px;
+  --radius: 0px;
+  --panel-clip: none;
+  --page-heading-clip: none;
+  --page-heading-padding: 0.3rem 0.8rem 0.25rem;
+
+  /* Display type */
+  --display-transform: uppercase;
+  --display-letter-spacing: 0.02em;
+
+  /* Colours (light) */
+  --page-fg: #111111;
+  --page-bg: #ffffff;
+  /* White page fading to the pale blue of the book's outer margin. */
+  --main-bg: linear-gradient(90deg, #ffffff 0%, #ffffff 80%, #dcedf5 100%);
+  --rule: #2f9a4a;
+  --frame-color: #7fbfdc;
+  --section-bg-a: #ffffff;
+  --section-bg-b: #f5f9f4;
+  --section-accent: #2f9a4a;
+  --summary-fg: #111111;
+  --error-fg: #7a0000;
+  --error-bg: #fde3e3;
+  --warning-fg: #6a4300;
+  --warning-bg: #fff1c9;
+  --info-fg: #0b3a55;
+  --info-bg: #dcf0f9;
+  /* The running header: a cyan strip out of a deeper blue, like "GAME CONCEPTS" -- kept dark enough
+     at the right end for the white picker labels. */
+  --titlebar-bg: linear-gradient(100deg, #075f8e 0%, #1590c8 45%, #2596c9 100%);
+  --titlebar-fg: #ffffff;
+  /* The circuit-board margin: a faint white trace grid over pale blue. */
+  --sidebar-bg: repeating-linear-gradient(90deg, rgb(255 255 255 / 30%) 0 1px, transparent 1px 24px), repeating-linear-gradient(0deg, rgb(255 255 255 / 30%) 0 1px, transparent 1px 24px), linear-gradient(180deg, #8ccbe6, #cfeaf6);
+  --nav-item-fg: #0b2f45;
+  --nav-item-hover-bg: rgb(255 255 255 / 45%);
+  --nav-item-current-fg: #000000;
+  --nav-item-current-bg: #ffffff;
+  /* The blue square beside the running header. */
+  --nav-item-current-accent: #0a84c6;
+  --nav-item-disabled-fg: #5f8497;
+  --nav-rule-color: rgb(255 255 255 / 55%);
+  --nav-chevron-color: transparent;
+  --tab-fg: #111111;
+  --tab-hover-bg: #e3efe0;
+  --tab-current-bg: #eef6ec;
+  --tab-current-accent: #2f9a4a;
+  --tab-disabled-fg: #6a6a6a;
+  --panel-muted-fg: #35586b;
+  --panel-over-fg: #b00000;
+  --sidebar-fg: #0b2f45;
+  --sidebar-heading-fg: #0b2f45;
+  /* Table titles ("BUYING HITS"): white capitals on a black bar. */
+  --page-heading-fg: #ffffff;
+  --page-heading-bg: #0d0d0d;
+  /* Column heads on green, then alternating green body rows. */
+  --table-head-fg: #0d0d0d;
+  --table-head-bg: #3f9e4f;
+  --table-row-bg-a: #c3dbbd;
+  --table-row-bg-b: #e2eedf;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-fg: #e2e8ea;
+    --page-bg: #0c1418;
+    --main-bg: linear-gradient(90deg, #0e171c 0%, #0e171c 80%, #10293a 100%);
+    --rule: #3fb85c;
+    --frame-color: #1e5a78;
+    --section-bg-a: #141e24;
+    --section-bg-b: #172329;
+    --section-accent: #3fb85c;
+    --summary-fg: #f0f4f5;
+    --error-fg: #ffb4b4;
+    --error-bg: #3d1414;
+    --warning-fg: #ffd98a;
+    --warning-bg: #3a2e0e;
+    --info-fg: #a8d8f0;
+    --info-bg: #10293a;
+    --titlebar-bg: linear-gradient(100deg, #064e72 0%, #0d7fb0 40%, #0f4a66 100%);
+    --titlebar-fg: #ffffff;
+    --sidebar-bg: repeating-linear-gradient(90deg, rgb(120 200 240 / 10%) 0 1px, transparent 1px 24px), repeating-linear-gradient(0deg, rgb(120 200 240 / 10%) 0 1px, transparent 1px 24px), linear-gradient(180deg, #0d2a38, #123b4f);
+    --nav-item-fg: #cfe9f5;
+    --nav-item-hover-bg: rgb(255 255 255 / 8%);
+    --nav-item-current-fg: #ffffff;
+    --nav-item-current-bg: #0c1418;
+    --nav-item-current-accent: #29a8e0;
+    --nav-item-disabled-fg: #5d7f90;
+    --nav-rule-color: rgb(120 200 240 / 18%);
+    --nav-chevron-color: transparent;
+    --tab-fg: #e2e8ea;
+    --tab-hover-bg: #1c2d24;
+    --tab-current-bg: #16261b;
+    --tab-current-accent: #3fb85c;
+    --tab-disabled-fg: #8a9ba2;
+    --panel-muted-fg: #8fb3c6;
+    --panel-over-fg: #ff8a8a;
+    --sidebar-fg: #e2eef4;
+    --sidebar-heading-fg: #8fd0ec;
+    --page-heading-fg: #ffffff;
+    --page-heading-bg: #000000;
+    --table-head-fg: #0a0a0a;
+    --table-head-bg: #3f9e4f;
+    --table-row-bg-a: #1b2d1f;
+    --table-row-bg-b: #15221a;
+  }
+}

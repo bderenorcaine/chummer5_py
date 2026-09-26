@@ -26,6 +26,7 @@ class Theme:
 
 THEMES: tuple[Theme, ...] = (
     Theme("shadowrun", "Web_Theme_Shadowrun"),
+    Theme("shadowrun4", "Web_Theme_Shadowrun4"),
     Theme("classic", "Web_Theme_Classic"),
     Theme("sketch", "Web_Theme_Sketch"),
 )
