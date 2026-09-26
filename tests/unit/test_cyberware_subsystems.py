@@ -438,8 +438,9 @@ def test_wp78s_four_rows_carry_their_hand_checked_flat_bonuses() -> None:
 def test_the_not_yet_supported_count_drops_from_14_to_10() -> None:
     # WP77's audit found 14 NOT_YET_SUPPORTED cyberware rows: 10 genuinely out of scope (its
     # registry rows) and 4 computable today. This WP models the 4.
+    # WP109 then modeled 5 more (Bone Lacing x3, Dermal Plating, the cyberlimb Armor enhancement).
     unsupported = {e.name for e in ENTRIES if e.bonus_support is BonusSupport.NOT_YET_SUPPORTED}
-    assert len(unsupported) == 10
+    assert len(unsupported) == 5
     assert unsupported.isdisjoint(
         {"Reaction Enhancers", "Wired Reflexes", "Muscle Replacement", "Voice Modulator"}
     )
@@ -456,7 +457,8 @@ def test_wp31s_flat_catalog_classification_is_untouched() -> None:
         "Muscle Replacement",
         "Voice Modulator",
     } & set(flat_by_name)
-    assert sum(1 for c in flat_by_name.values() if c.bonus_support is BonusSupport.FLAT_BONUS) == 8
+    # WP109 does narrow it: the 3 Bone Lacing variants are flat-cost and now FLAT_BONUS.
+    assert sum(1 for c in flat_by_name.values() if c.bonus_support is BonusSupport.FLAT_BONUS) == 11
 
 
 def test_every_attribute_and_skill_target_resolves_against_real_catalog_content() -> None:

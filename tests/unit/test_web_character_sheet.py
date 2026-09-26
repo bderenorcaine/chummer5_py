@@ -295,9 +295,10 @@ def test_unmodeled_effects_section_shows_purchased_no_effect_quality_without_dup
 def test_unmodeled_effects_section_shows_purchased_cyberware() -> None:
     """WP79's acceptance criterion, mirroring WP56's quality-side test above.
 
-    Bone Lacing (Titanium) is one of the 5 registry rows a player can actually buy from the browser
-    today (30,000 nuyen, Essence 1.5 -- both inside Resources D's budget), and until this WP it was
-    purchasable, charged in full and mechanically silent with nothing on the sheet saying so.
+    Bone Lacing (Titanium) is one of the registry rows a player can actually buy from the browser
+    (30,000 nuyen, Essence 1.5 -- both inside Resources D's budget), and until this WP it was
+    purchasable, charged in full and mechanically silent with nothing on the sheet saying so. Since
+    WP109 its Armor and Body dice are modeled and the note is the unarmed-DV remainder.
     """
     from chummer5.web.app import CYBERWARE
 
@@ -310,7 +311,7 @@ def test_unmodeled_effects_section_shows_purchased_cyberware() -> None:
 
     assert "Unmodeled real effects (1)" in response.text
     assert "Bone Lacing (Titanium)" in response.text
-    assert "no character-level Armor total" in response.text
+    assert "unarmed Damage Value of (STR + 3)P" in response.text
 
 
 def test_unmodeled_effects_section_stays_empty_for_cyberware_with_nothing_unmodeled() -> None:
@@ -327,3 +328,42 @@ def test_unmodeled_effects_section_stays_empty_for_cyberware_with_nothing_unmode
     response = client.get("/character/sheet")
 
     assert "Unmodeled real effects" not in response.text
+
+
+# --- WP109: Armor, Damage Resistance, Overflow, wound modifiers -----------------------------------
+
+
+def test_the_sheet_shows_armor_damage_resistance_overflow_and_wound_modifiers() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post("/ui/resources", data={"gear_Armor Jacket": "1", "gear_Helmet": "1"})
+
+    sheet = client.get("/character/sheet").text
+    # A fresh Human has STR 1, so the Helmet's +2 counts as +1 (p. 169's Strength cap).
+    assert "13 (Armor Jacket 12, accessories +1)" in sheet
+    assert "Damage Resistance" in sheet
+    assert "Overflow" in sheet
+    assert "−1 per 3 boxes of damage" in sheet
+
+
+def test_unchecking_worn_takes_armor_out_of_the_total_and_survives_a_save() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    first = client.post("/ui/resources", data={"gear_Armor Jacket": "1", "gear_Helmet": "1"})
+    # A just-bought item had no checkbox yet, so it is worn; now both rows carry one.
+    assert first.text.count('name="armor_shown"') == 2
+
+    client.post(
+        "/ui/resources",
+        data={
+            "gear_Armor Jacket": "1",
+            "gear_Helmet": "1",
+            "armor_shown": ["Armor Jacket", "Helmet"],
+            "armor_worn": ["Helmet"],
+        },
+    )
+    sheet = client.get("/character/sheet").text
+    assert "1 (no body armor worn, accessories +1)" in sheet
+
+    saved = from_json(client.get("/character/save").text)
+    assert saved.unworn_armor == ("Armor Jacket",)

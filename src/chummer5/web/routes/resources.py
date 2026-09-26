@@ -16,10 +16,12 @@ from fastapi.responses import HTMLResponse
 from starlette.datastructures import FormData
 
 from chummer5.engine.character import Character
+from chummer5.engine.derived import ARMOR_CATEGORY
 from chummer5.engine.resources import (
     KARMA_TO_NUYEN_RATE,
     MAX_KARMA_TO_NUYEN,
     STARTER_GEAR_CATALOG,
+    ResourcesSelection,
     StarterGearItem,
     create_resources_selection,
     starting_nuyen,
@@ -79,6 +81,23 @@ def matrix_stat_block(item: StarterGearItem) -> MessageJoin | None:
     if item.attribute_array is not None and item.programs is not None:
         parts.append(Message.of("Web_Gear_Programs", value=item.programs))
     return MessageJoin(tuple(parts))
+
+
+def _submitted_unworn_armor(
+    form: FormData, character: Character, selection: ResourcesSelection
+) -> frozenset[str]:
+    """WP109: which owned armor is marked not worn after this submission.
+
+    Each armor row rendered with a "worn" checkbox also posts a hidden `armor_shown` marker, so an
+    unchecked box (absent from the form) can be told apart from a row that wasn't on the page -- an
+    item bought in this very submission had no checkbox yet and stays worn by default. Names no
+    longer owned drop out of the set.
+    """
+    shown = {str(v) for v in form.getlist("armor_shown")}
+    worn = {str(v) for v in form.getlist("armor_worn")}
+    unworn = (set(character.unworn_armor) - shown) | (shown - worn)
+    owned = {item.name for item in selection.gear if item.category == ARMOR_CATEGORY}
+    return frozenset(unworn & owned)
 
 
 def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str, ...]:
@@ -230,11 +249,15 @@ def _resources_context(
                 "unit_cost": unit,
                 "subtotal": quantity * rating * unit,
             }
+        quantity = counts.get(item.name, 0)
         return {
             "item": item,
-            "quantity": counts.get(item.name, 0),
+            "quantity": quantity,
             "is_rating": False,
-            "subtotal": item.cost * counts.get(item.name, 0),
+            "subtotal": item.cost * quantity,
+            # WP109: an owned armor row gets a "worn" checkbox (default: worn).
+            "is_armor": item.category == ARMOR_CATEGORY and quantity > 0,
+            "worn": item.name not in character.unworn_armor,
         }
 
     # WP21: ~380 items instead of 5 -- grouped by category (the catalog is already sorted by
@@ -348,7 +371,11 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 error=str(exc),
             )
         else:
-            session.character = replace(session.character, resources_selection=selection)
+            session.character = replace(
+                session.character,
+                resources_selection=selection,
+                unworn_armor=_submitted_unworn_armor(form, session.character, selection),
+            )
             context = _resources_context(
                 session.character,
                 session.resources_letter,

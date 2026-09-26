@@ -46,6 +46,9 @@ _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "attribute": ImprovementType.ATTRIBUTE,
     "skill": ImprovementType.SKILL,
     "initiative_dice": ImprovementType.INITIATIVE_DICE,
+    # WP109: Bone Lacing, Dermal Plating and the cyberlimb Armor enhancement.
+    "armor": ImprovementType.ARMOR,
+    "damage_resistance": ImprovementType.DAMAGE_RESISTANCE,
 }
 
 # The legacy <condition> key -> WP39's compiled predicate. One entry per member of

@@ -58,6 +58,27 @@ returns the exact, unrounded `Decimal` -- only `social_limit` rounds, and only b
 formula is documented to need it; a future WP35 (Essence-driven Magic-rating loss) needs to see
 *any* nonzero fractional loss, which a pre-rounded `essence()` would have silently thrown away.
 
+**WP109 (Phase X) adds the four character-level numbers the phase's Finding 6 lists** -- Overflow,
+the wound-modifier rule, Armor, and the Damage Resistance pool -- each with its own Improvement type
+so later WPs (Will to Live, High/Low Pain Tolerance, Troll dermal armor, Orthoskin, ...) have
+something to target:
+
+- **Overflow** (`overflow`) is `BOD + Σ CM_OVERFLOW` -- p. 101's "Body + Augmentation bonuses", read
+  against legacy `CMOverflow`, which uses `BOD.TotalValue` (the *augmented* Body). Legacy adds one
+  more box "to mark the character as dead"; that is a record-sheet convention, not a rule, and the
+  rulebook's own examples (James: Overflow 3 at Body 3) leave it out, so this does too.
+- **Wound modifiers** (`wound_modifier_rule`): -1 per `3 + Σ CM_THRESHOLD` boxes (p. 169), with
+  `Σ CM_THRESHOLD_OFFSET + Σ CM_SHARED_THRESHOLD_OFFSET` boxes ignored before the first one, on each
+  track. Legacy splits the shared offset between tracks by how much *damage* each has taken; with
+  no damage at creation both tracks get all of it, which is what this reports.
+- **Armor** (`armor_breakdown`): the highest-rated worn body armor, plus worn `+N` accessories
+  capped at Strength, plus `Σ ARMOR` (p. 169; legacy `GetArmorRatingWithImprovement`). Accessories
+  over Strength also cost -1 Agility and Reaction per 2 full points; that penalty applies only
+  *while* the pile is worn, so it is reported for the sheet rather than subtracted from the
+  attributes.
+- **Damage Resistance** (`damage_resistance`): `BOD + Armor + Σ DAMAGE_RESISTANCE` (legacy
+  `DamageResistancePool`).
+
 **`WoundModifier` (a damage-penalty term `Character.InitiativeValue` adds on top of REA+INT) is
 always 0 here** -- MVP chargen never tracks damage (no career mode, no condition monitor boxes
 filled in), so there is nothing for it to read.
@@ -66,10 +87,15 @@ filled in), so there is nothing for it to read.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import ImprovementType, ResolutionContext
+
+if TYPE_CHECKING:
+    from chummer5.engine.resources import StarterGearItem
 
 # Resolution target for the 7 character-wide ImprovementTypes this module reads -- see
 # ImprovementType's docstring for why a fixed sentinel, rather than a per-instance target, is
@@ -92,6 +118,13 @@ BASE_STUN_CM = 8
 # answer; WP31/WP32 (cyberware) are the first real producer. See module docstring for the full
 # reasoning and the Yeti ESS-attribute red herring this was checked against.
 BASE_ESSENCE = 6
+
+
+# p. 169: "a –1 modifier for every 3 boxes of damage", before any CM_THRESHOLD change.
+BASE_WOUND_BOXES_PER_MODIFIER = 3
+
+# The gear category whose items are body armor or `+N` accessories (armor.xml's own category name).
+ARMOR_CATEGORY = "Armor"
 
 
 def _ceil_div(numerator: int, denominator: int) -> int:
@@ -313,3 +346,102 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
             add(spirit.spirit_type, getattr(spirit.spirit_type, "unmodeled_effect_note", None))
 
     return tuple(notes.items())
+
+
+def overflow(character: Character) -> int:
+    """Overflow boxes (WP109): augmented `BOD + Σ CM_OVERFLOW` -- see module docstring."""
+    return character.attribute_value("BOD") + character.improvements.resolve(
+        ImprovementType.CM_OVERFLOW, _GLOBAL_TARGET
+    )
+
+
+@dataclass(frozen=True)
+class WoundModifierRule:
+    """How damage turns into wound modifiers (WP109): -1 per `boxes_per_modifier` boxes of damage,
+    after the first `*_boxes_ignored` boxes on that track. See module docstring."""
+
+    boxes_per_modifier: int
+    physical_boxes_ignored: int
+    stun_boxes_ignored: int
+
+
+def wound_modifier_rule(character: Character) -> WoundModifierRule:
+    index = character.improvements
+    boxes = BASE_WOUND_BOXES_PER_MODIFIER + index.resolve(
+        ImprovementType.CM_THRESHOLD, _GLOBAL_TARGET
+    )
+    ignored = index.resolve(ImprovementType.CM_THRESHOLD_OFFSET, _GLOBAL_TARGET) + index.resolve(
+        ImprovementType.CM_SHARED_THRESHOLD_OFFSET, _GLOBAL_TARGET
+    )
+    return WoundModifierRule(
+        boxes_per_modifier=max(boxes, 1),
+        physical_boxes_ignored=ignored,
+        stun_boxes_ignored=ignored,
+    )
+
+
+@dataclass(frozen=True)
+class ArmorBreakdown:
+    """The parts of a character's Armor (WP109), so the sheet can say where the number comes from.
+
+    `body_armor` is the worn body armor that counts (the highest-rated one, p. 169), or `None`.
+    `accessory_total` is every worn `+N` accessory summed; `accessory_bonus` is that capped at
+    Strength. `encumbrance_penalty` is the -N to Agility and Reaction the excess costs *while*
+    worn -- 0 when within Strength. `improvements` is `Σ ARMOR` (cyberware, racial, powers).
+    """
+
+    body_armor: StarterGearItem | None
+    accessory_total: int
+    accessory_bonus: int
+    improvements: int
+    encumbrance_penalty: int
+
+    @property
+    def total(self) -> int:
+        body = 0
+        if self.body_armor is not None and self.body_armor.armor_rating is not None:
+            body = self.body_armor.armor_rating
+        return body + self.accessory_bonus + self.improvements
+
+
+def worn_armor(character: Character) -> tuple[StarterGearItem, ...]:
+    """Every purchased Armor-category item not marked unworn (WP109)."""
+    if character.resources_selection is None:
+        return ()
+    return tuple(
+        item
+        for item in character.resources_selection.gear
+        if item.category == ARMOR_CATEGORY
+        and item.armor_rating is not None
+        and item.name not in character.unworn_armor
+    )
+
+
+def armor_breakdown(character: Character) -> ArmorBreakdown:
+    worn = worn_armor(character)
+    body = [item for item in worn if not item.armor_stacks]
+    body_armor = max(body, key=lambda item: item.armor_rating or 0, default=None)
+    accessory_total = sum(item.armor_rating or 0 for item in worn if item.armor_stacks)
+    strength = character.attribute_value("STR")
+    excess = max(accessory_total - strength, 0)
+    return ArmorBreakdown(
+        body_armor=body_armor,
+        accessory_total=accessory_total,
+        accessory_bonus=min(accessory_total, strength),
+        improvements=character.improvements.resolve(ImprovementType.ARMOR, _GLOBAL_TARGET),
+        encumbrance_penalty=excess // 2,
+    )
+
+
+def armor(character: Character) -> int:
+    """The character's Armor (WP109) -- see `armor_breakdown`."""
+    return armor_breakdown(character).total
+
+
+def damage_resistance(character: Character) -> int:
+    """The Damage Resistance pool (WP109): augmented `BOD + Armor + Σ DAMAGE_RESISTANCE`."""
+    return (
+        character.attribute_value("BOD")
+        + armor(character)
+        + character.improvements.resolve(ImprovementType.DAMAGE_RESISTANCE, _GLOBAL_TARGET)
+    )

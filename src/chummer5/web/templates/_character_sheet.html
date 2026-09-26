@@ -306,6 +306,17 @@
       {% endfor %}
       <tr><th>{{ _("Web_Sheet_PhysicalCM") }}</th><td>{{ _n("Web_Sheet_Boxes", physical_cm) }}</td></tr>
       <tr><th>{{ _("Web_Sheet_StunCM") }}</th><td>{{ _n("Web_Sheet_Boxes", stun_cm) }}</td></tr>
+      {# WP109: Overflow, the wound-modifier rule, Armor and Damage Resistance. #}
+      <tr><th>{{ _("Web_Sheet_OverflowCM") }}</th><td>{{ _n("Web_Sheet_Boxes", overflow_cm) }}</td></tr>
+      <tr><th>{{ _("Web_Sheet_WoundModifiers") }}</th><td>{{ _n("Web_Sheet_WoundModifierRule", wound_rule.boxes_per_modifier) }}{% if wound_rule.physical_boxes_ignored %} {{ _n("Web_Sheet_WoundBoxesIgnored", wound_rule.physical_boxes_ignored) }}{% endif %}</td></tr>
+      <tr>
+        <th>{{ _("String_Armor") }}</th>
+        <td>{{ armor.total }}
+          {%- if armor.body_armor or armor.accessory_total or armor.improvements %} ({% if armor.body_armor %}{{ armor.body_armor | dterm("armor.xml") }} {{ armor.body_armor.armor_rating }}{% else %}{{ _("Web_Sheet_ArmorNoBodyArmor") }}{% endif %}{% if armor.accessory_total %}, {{ _("Web_Sheet_ArmorAccessories", bonus=armor.accessory_bonus) }}{% endif %}{% if armor.improvements %}, {{ _("Web_Sheet_ArmorOther", bonus=armor.improvements) }}{% endif %}){% endif %}
+          {%- if armor.encumbrance_penalty %}<br />{{ _("Web_Sheet_ArmorEncumbrance", penalty=armor.encumbrance_penalty) }}{% endif %}
+        </td>
+      </tr>
+      <tr><th>{{ _("String_DamageResistance") }}</th><td>{{ damage_resistance }}</td></tr>
     </tbody>
   </table>
 

@@ -902,6 +902,46 @@
       <text>(granted once for a matched pair, not per implant)</text>
     </string>
     <string>
+      <key>Web_Sheet_OverflowCM</key>
+      <text>Overflow</text>
+    </string>
+    <string>
+      <key>Web_Sheet_WoundModifiers</key>
+      <text>Wound modifiers</text>
+    </string>
+    <string>
+      <key>Web_Sheet_WoundModifierRule_One</key>
+      <text>−1 per box of damage</text>
+    </string>
+    <string>
+      <key>Web_Sheet_WoundModifierRule_Other</key>
+      <text>−1 per {count} boxes of damage</text>
+    </string>
+    <string>
+      <key>Web_Sheet_WoundBoxesIgnored_One</key>
+      <text>(the first box is ignored)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_WoundBoxesIgnored_Other</key>
+      <text>(the first {count} boxes are ignored)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ArmorNoBodyArmor</key>
+      <text>no body armor worn</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ArmorAccessories</key>
+      <text>accessories +{bonus}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ArmorOther</key>
+      <text>augmentations +{bonus}</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ArmorEncumbrance</key>
+      <text>Armor accessories over Strength: −{penalty} Agility and Reaction while worn.</text>
+    </string>
+    <string>
       <key>Web_Sheet_PhysicalCM</key>
       <text>Physical condition monitor</text>
     </string>

@@ -110,17 +110,18 @@ def test_marks_hidden_weapon_profiles() -> None:
 # --- Catalog builder -----------------------------------------------------------------------------
 
 
-def test_catalog_excludes_additive_stacking_armor() -> None:
-    catalog_names = {item.name for item in build_starter_gear_catalog(GEAR, ARMOR, WEAPONS)}
-    assert "Helmet" not in catalog_names
-    assert "Ballistic Shield" not in catalog_names
-    assert "Riot Shield" not in catalog_names
+def test_catalog_offers_additive_stacking_armor_since_wp109() -> None:
+    by_name = {item.name: item for item in build_starter_gear_catalog(GEAR, ARMOR, WEAPONS)}
+    for name, rating in (("Helmet", 2), ("Ballistic Shield", 6), ("Riot Shield", 6)):
+        assert by_name[name].armor_stacks, name
+        assert by_name[name].armor_rating == rating, name
+    assert not by_name["Armor Jacket"].armor_stacks
 
 
 def test_catalog_resolves_hidden_weapon_profile_collisions_by_keeping_the_real_price() -> None:
     catalog = build_starter_gear_catalog(GEAR, ARMOR, WEAPONS)
     by_name = {item.name: item for item in catalog}
-    # Ballistic Shield/Riot Shield themselves are excluded (armor_stacks), but Grapple Gun and
+    # Ballistic Shield/Riot Shield keep their real armor price over the hidden weapon profile, and
     # Micro Flare Launcher are real, purchasable gear items that also have a 0-cost hidden weapon
     # profile in weapons.xml -- the catalog must keep the real price, not silently pick 0 or crash
     # on the collision.

@@ -49,7 +49,11 @@ rows that predate WP77 (WP38/WP40's partly-modeled ones) get notes here too; the
 from __future__ import annotations
 
 from chummer5.data.bioware import load_bioware
-from chummer5.data.cyberware import BonusSupport, load_cyberware
+from chummer5.data.cyberware import (
+    REGISTERED_UNMODELED_BONUS_TAGS,
+    BonusSupport,
+    load_cyberware,
+)
 from chummer5.data.cyberware_subsystems import load_cyberware_entries
 
 CYBERWARE_ENTRIES = load_cyberware_entries()  # all 87 SR5 rows (WP37) -- the engine's catalog
@@ -59,15 +63,15 @@ BIOWARE = load_bioware()  # the 6 offered bioware rows (WP45)
 # The 10 rows WP77 added to the Project Overview's "Unmodeled real effects" table, as 8 table rows
 # (Bone Lacing's 3 variants share one, differing only in magnitude -- the same grouping the registry
 # already uses for `Customized Agility / Customized Strength`).
+#
+# **WP109 moved five of them out**: it built the character-level Armor total and Damage Resistance
+# pool those rows were waiting for. Dermal Plating is now fully modeled and carries no note; Bone
+# Lacing's three variants and the cyberlimb "Armor" enhancement are partly modeled and moved to
+# `PARTLY_MODELED_WITH_NOTES` below.
 REGISTERED_UNMODELED = frozenset(
     {
-        "Bone Lacing (Plastic)",
-        "Bone Lacing (Aluminum)",
-        "Bone Lacing (Titanium)",
         "Smartlink",
         "Damper",
-        "Dermal Plating",
-        "Armor",  # the Cyberlimb Enhancement, not a gear/armor item
         "Internal Air Tank",
         "Skillwires",
         "Skilljack",
@@ -84,15 +88,7 @@ MODELED_BUT_UNCLASSIFIED: frozenset[str] = frozenset()
 # Of the registered rows, the ones a player can buy from the browser today. The rest are reachable
 # only by importing a legacy `.chum5` (WP41 widened import to all 87 rows) -- a distinction the
 # registry's `Kind` column now records, because the two are not the same severity.
-REGISTERED_AND_OFFERED_IN_UI = frozenset(
-    {
-        "Bone Lacing (Plastic)",
-        "Bone Lacing (Aluminum)",
-        "Bone Lacing (Titanium)",
-        "Smartlink",
-        "Damper",
-    }
-)
+REGISTERED_AND_OFFERED_IN_UI = frozenset({"Smartlink", "Damper"})
 
 
 def _not_yet_supported_names() -> frozenset[str]:
@@ -118,7 +114,7 @@ def test_the_two_buckets_are_disjoint() -> None:
     assert not REGISTERED_UNMODELED & MODELED_BUT_UNCLASSIFIED
 
 
-def test_the_audited_split_is_now_10_cyberware_and_no_bioware() -> None:
+def test_the_audited_split_is_now_5_cyberware_and_no_bioware() -> None:
     # WP77 re-ran WP41's audit rather than trusting its counts and got 14 + 1, split 10 registry /
     # 5 computable. WP78 modeled 4 of the 5 computable ones (all cyberware) and WP80 the 5th (the
     # one bioware row), so no bioware row is NOT_YET_SUPPORTED at all any more and the registry side
@@ -126,8 +122,9 @@ def test_the_audited_split_is_now_10_cyberware_and_no_bioware() -> None:
     # name-set diff above.
     cyberware = [e for e in CYBERWARE_ENTRIES if e.bonus_support is BonusSupport.NOT_YET_SUPPORTED]
     bioware = [b for b in BIOWARE if b.bonus_support is BonusSupport.NOT_YET_SUPPORTED]
-    assert (len(cyberware), len(bioware)) == (10, 0)
-    assert (len(REGISTERED_UNMODELED), len(MODELED_BUT_UNCLASSIFIED)) == (10, 0)
+    # WP109 then modeled the Armor/Body-dice rows, taking the registry side from 10 to 5.
+    assert (len(cyberware), len(bioware)) == (5, 0)
+    assert (len(REGISTERED_UNMODELED), len(MODELED_BUT_UNCLASSIFIED)) == (5, 0)
 
 
 def test_the_rows_wp78_modeled_are_gone_from_both_buckets_and_grant_real_improvements() -> None:
@@ -141,12 +138,12 @@ def test_the_rows_wp78_modeled_are_gone_from_both_buckets_and_grant_real_improve
         assert by_name[name].flat_bonuses != ()
 
 
-def test_registry_rows_split_5_offered_in_the_ui_and_5_import_only() -> None:
+def test_registry_rows_split_2_offered_in_the_ui_and_3_import_only() -> None:
     # The `Kind` column's reachability marker, checked against the catalog the picker actually
     # renders (WP31's flat 60) rather than asserted in prose.
     offered = {c.name for c in FLAT_CYBERWARE} | {b.name for b in BIOWARE}
     assert REGISTERED_UNMODELED & offered == REGISTERED_AND_OFFERED_IN_UI
-    assert len(REGISTERED_UNMODELED - offered) == 5
+    assert len(REGISTERED_UNMODELED - offered) == 3
 
 
 # --- WP79: the notes that make the registry visible to a player ----------------------------------
@@ -166,6 +163,11 @@ PARTLY_MODELED_WITH_NOTES = frozenset(
         "Audio Enhancement",
         "Spatial Recognizer",
         "Hydraulic Jacks",
+        # WP109: Armor and Body dice modeled; the unarmed DV and the per-limb cap are not.
+        "Bone Lacing (Plastic)",
+        "Bone Lacing (Aluminum)",
+        "Bone Lacing (Titanium)",
+        "Armor",  # the Cyberlimb Enhancement, not a gear/armor item
     }
 )
 
@@ -192,7 +194,7 @@ def test_every_registered_row_resolves_to_a_note_in_both_cyberware_catalogs() ->
     flat = {c.name: c for c in FLAT_CYBERWARE}
     for name in REGISTERED_UNMODELED:
         assert entries[name].unmodeled_effect_note, name
-        if name in flat:  # 5 of the 10 are import-only and absent from WP31's flat catalog
+        if name in flat:  # 3 of the 5 are import-only and absent from WP31's flat catalog
             assert flat[name].unmodeled_effect_note == entries[name].unmodeled_effect_note, name
 
 
@@ -254,3 +256,28 @@ def test_registered_rows_carry_no_partially_classified_bonus() -> None:
             assert entry.conditional_bonuses == ()
             # ... but the raw node is kept, so WP78-style work can still read what was skipped.
             assert entry.raw_bonus is not None
+
+
+def test_wp109_armor_rows_grant_armor_and_dermal_plating_needs_no_note() -> None:
+    entries = {e.name: e for e in CYBERWARE_ENTRIES}
+    titanium = entries["Bone Lacing (Titanium)"]
+    assert {(b.target_kind, b.value) for b in titanium.flat_bonuses} == {
+        ("armor", 3),
+        ("damage_resistance", 3),
+    }
+    plating = entries["Dermal Plating"]
+    assert plating.bonus_support is BonusSupport.FLAT_BONUS
+    assert [(b.target_kind, b.value, b.unique_name) for b in plating.flat_bonuses] == [
+        ("armor", None, "group0")
+    ]
+    assert plating.unmodeled_effect_note is None
+
+
+def test_every_row_with_a_stripped_unmodeled_bonus_tag_carries_a_note() -> None:
+    """`REGISTERED_UNMODELED_BONUS_TAGS` are skipped by the classifier only on the promise that each
+    row carrying one says so on the sheet."""
+    for entry in CYBERWARE_ENTRIES:
+        if entry.raw_bonus and any(
+            f"<{tag}" in entry.raw_bonus for tag in REGISTERED_UNMODELED_BONUS_TAGS
+        ):
+            assert entry.unmodeled_effect_note, entry.name

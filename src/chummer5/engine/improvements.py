@@ -143,6 +143,20 @@ class ImprovementType(Enum):
     DRAIN_RESISTANCE = auto()
     ESSENCE = auto()
     NATIVE_LANGUAGE_LIMIT = auto()
+    # WP109 (Phase X): the four character-level numbers Finding 6 of the phase file lists, each a
+    # character-wide total resolved against the `""` sentinel like the Limits. `CM_OVERFLOW` adds
+    # Overflow boxes; `CM_THRESHOLD` changes how many boxes make one -1 wound modifier (Low Pain
+    # Tolerance); `CM_THRESHOLD_OFFSET` ignores boxes on both tracks before the first modifier (High
+    # Pain Tolerance); `CM_SHARED_THRESHOLD_OFFSET` does the same from one shared pool (Damage
+    # Compensators). `ARMOR` adds to the worn armor rating, `DAMAGE_RESISTANCE` adds dice to the
+    # Body + Armor pool. Names mirror legacy `CMOverflow`/`CMThreshold`/`CMThresholdOffset`/
+    # `CMSharedThresholdOffset`/`Armor`/`DamageResistance`.
+    CM_OVERFLOW = auto()
+    CM_THRESHOLD = auto()
+    CM_THRESHOLD_OFFSET = auto()
+    CM_SHARED_THRESHOLD_OFFSET = auto()
+    ARMOR = auto()
+    DAMAGE_RESISTANCE = auto()
 
 
 class ImprovementSource(Enum):

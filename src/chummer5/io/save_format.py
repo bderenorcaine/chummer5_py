@@ -230,6 +230,9 @@ round-trips unchanged. `build_character` resolves it third among the shared-nuye
 (cyberware, then bioware, then vehicles) and folds `vehicle_selection.nuyen_spent` back into
 `resources_selection` in the same re-call that already folds cyberware's and bioware's.
 
+**WP109** adds `unworn_armor` -- the names of purchased armor the player marked as not worn.
+Additive with a `()` default ("everything bought is worn"), so no version bump.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -450,6 +453,9 @@ class CharacterSave:
     # to () -- "predates this field", the identical shape every other optional selection field
     # defaults to.
     vehicle_ids: tuple[str, ...] = ()
+    # WP109: names of purchased armor marked *not* worn (`Character.unworn_armor`). Defaults to ()
+    # -- "predates this field", which is also "everything bought is worn".
+    unworn_armor: tuple[str, ...] = ()
 
 
 def create_character_save(
@@ -492,6 +498,7 @@ def create_character_save(
     karma_knowledge_points: Mapping[str, int] = MappingProxyType({}),
     rating_gear_picks: Iterable[RatingGearPick] = (),
     vehicle_ids: Iterable[str] = (),
+    unworn_armor: Iterable[str] = (),
 ) -> CharacterSave:
     """Build a `CharacterSave` from plain selections, wrapping mappings/iterables the same
     immutable-field way `create_character`/`create_skill_allocation` already do.
@@ -542,6 +549,7 @@ def create_character_save(
         karma_knowledge_points=MappingProxyType(dict(karma_knowledge_points)),
         rating_gear_picks=tuple(rating_gear_picks),
         vehicle_ids=tuple(vehicle_ids),
+        unworn_armor=tuple(sorted(set(unworn_armor))),
     )
 
 
@@ -709,6 +717,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
             {"name": name, "rating": rating} for name, rating in save.rating_gear_picks
         ],
         "vehicle_ids": list(save.vehicle_ids),
+        "unworn_armor": list(save.unworn_armor),
     }
 
 
@@ -780,6 +789,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         karma_knowledge_points=data.get("karma_knowledge_points", {}),
         rating_gear_picks=((p["name"], p["rating"]) for p in data.get("rating_gear_picks", ())),
         vehicle_ids=data.get("vehicle_ids", ()),
+        unworn_armor=data.get("unworn_armor", ()),
     )
 
 
@@ -1191,4 +1201,5 @@ def build_character(
         foci_selection=foci_selection,
         vehicle_selection=vehicle_selection,
         resources_selection=resources_selection,
+        unworn_armor=frozenset(save.unworn_armor),
     )

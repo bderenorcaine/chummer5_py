@@ -68,20 +68,26 @@ def test_hand_checked_fields_match_the_raw_xml() -> None:
     assert smartlink.essence_cost == Decimal("0.2")
 
 
-def test_smartlink_and_bone_lacing_are_not_yet_supported() -> None:
-    # Smartlink's <smartlink>2</smartlink> and the 3 Bone Lacing variants' armor/unarmed-combat
-    # bundle are real, unmodeled effects -- not shape-matched to FLAT_BONUS by accident.
+def test_smartlink_is_not_yet_supported_and_bone_lacing_is_flat_since_wp109() -> None:
+    # Smartlink's <smartlink>2</smartlink> is a real, unmodeled effect -- not shape-matched to
+    # FLAT_BONUS by accident. WP109 built the Armor total and Damage Resistance pool Bone Lacing's
+    # <armor>/<damageresistance> needed; its unarmed-DV part is registered, not classified.
     by_name = {c.name: c for c in CYBERWARE}
-    for name in (
-        "Smartlink",
-        "Bone Lacing (Aluminum)",
-        "Bone Lacing (Plastic)",
-        "Bone Lacing (Titanium)",
+    smartlink = by_name["Smartlink"]
+    assert smartlink.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    assert smartlink.flat_bonuses == ()
+    assert smartlink.raw_bonus is not None
+    for name, value in (
+        ("Bone Lacing (Plastic)", 1),
+        ("Bone Lacing (Aluminum)", 2),
+        ("Bone Lacing (Titanium)", 3),
     ):
         item = by_name[name]
-        assert item.bonus_support == BonusSupport.NOT_YET_SUPPORTED
-        assert item.flat_bonuses == ()
-        assert item.raw_bonus is not None
+        assert item.bonus_support == BonusSupport.FLAT_BONUS
+        assert {(b.target_kind, b.value) for b in item.flat_bonuses} == {
+            ("armor", value),
+            ("damage_resistance", value),
+        }
 
 
 def test_damper_is_not_yet_supported() -> None:
@@ -282,17 +288,17 @@ def test_an_arithmetic_bonus_value_is_not_guessed_at() -> None:
 
 
 def test_supported_vs_unsupported_counts_are_visible() -> None:
-    # FLAT_BONUS: 8 Cyberlimb condition-monitor items. CONDITIONAL_BONUS: Spatial Recognizer (WP40).
-    # NOT_YET_SUPPORTED: Smartlink, Damper, 3 Bone Lacing variants = 5. NO_EFFECT: 60 - 8 - 1 - 5 =
-    # 46 (42 genuinely empty/absent <bonus> + 4 disablequality-only).
+    # FLAT_BONUS: 8 Cyberlimb condition-monitor items + (WP109) 3 Bone Lacing variants = 11.
+    # CONDITIONAL_BONUS: Spatial Recognizer (WP40). NOT_YET_SUPPORTED: Smartlink, Damper = 2.
+    # NO_EFFECT: 60 - 11 - 1 - 2 = 46 (42 genuinely empty/absent <bonus> + 4 disablequality-only).
     #
     # WP78 widened `classify_bonus`'s whitelist but left every one of these numbers untouched: all
     # four rows it reclassifies are rating-scaled in <cost> and/or <ess>, so none of them is in this
     # 60-row catalog to begin with. Asserted, not assumed -- this is the pin that says so.
     counts = count_by_support(CYBERWARE)
-    assert counts[BonusSupport.FLAT_BONUS] == 8
+    assert counts[BonusSupport.FLAT_BONUS] == 11
     assert counts[BonusSupport.CONDITIONAL_BONUS] == 1
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 5
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 2
     assert counts[BonusSupport.NO_EFFECT] == 46
     assert sum(counts.values()) == 60
 

@@ -30,16 +30,20 @@ from chummer5.engine.cyberware_subsystems import (
     PurchasedCyberware,
 )
 from chummer5.engine.derived import (
+    armor_breakdown,
+    damage_resistance,
     drain_resistance,
     essence,
     initiative_dice,
     initiative_value,
     mental_limit,
+    overflow,
     physical_condition_monitor,
     physical_limit,
     social_limit,
     stun_condition_monitor,
     unmodeled_effect_notes,
+    wound_modifier_rule,
 )
 from chummer5.engine.improvements import ResolutionContext
 from chummer5.engine.resources import (
@@ -509,6 +513,11 @@ def _character_sheet_context(
         "conditional_limit_rows": _conditional_limit_rows(character),
         "physical_cm": physical_condition_monitor(character),
         "stun_cm": stun_condition_monitor(character),
+        # WP109: the four Finding-6 numbers.
+        "overflow_cm": overflow(character),
+        "wound_rule": wound_modifier_rule(character),
+        "armor": armor_breakdown(character),
+        "damage_resistance": damage_resistance(character),
         # WP29: hidden entirely (not shown as zeroes) for Mundane -- `magic_type` gates the whole
         # block in `_character_sheet.html`, mirroring how `lifestyle_tier_name`/etc. already gate
         # their own "None until committed" sections.
@@ -790,6 +799,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         group_points=allocation.group_points if allocation is not None else {},
         specializations=allocation.specializations if allocation is not None else {},
         quality_picks=quality_picks,
+        unworn_armor=character.unworn_armor,
         contacts=contacts,
         resources_letter=session.resources_letter,
         gear_names=gear_names,

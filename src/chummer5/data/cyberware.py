@@ -221,6 +221,18 @@ _FLAT_DECIMAL_RE = re.compile(r"-?\d+(\.\d+)?")
 # treated as a real, unmodeled effect.
 _VERIFIED_INERT_BONUS_TAGS = frozenset({"disablequality"})
 
+# WP109: <bonus> children with a real effect this engine does not compute, stripped before
+# classification *only because* every SR5 row carrying one has an `UNMODELED_EFFECT_NOTES` entry
+# saying so (pinned by a test). Bone Lacing's unarmed Damage Value is the only one: its Armor and
+# Body-dice siblings are now computed, and this is what lets them be applied without the unarmed
+# part dragging the whole row back to NOT_YET_SUPPORTED.
+REGISTERED_UNMODELED_BONUS_TAGS = frozenset({"unarmeddv", "unarmeddvphysical"})
+
+# WP109: the character-wide bare-leaf bonuses, `<tag>N</tag>` or `<tag>Rating</tag>` ->
+# `CyberwareFlatBonus.target_kind`. `<armor>` may carry `group="0"` (Dermal Plating), which legacy
+# turns into the dedup group "group0" -- see `_unique_name`.
+_GLOBAL_LEAF_TARGET_KINDS = {"armor": "armor", "damageresistance": "damage_resistance"}
+
 # <limitmodifier><limit>X</limit> -> CyberwareConditionalBonus.target_kind. Only Mental and
 # Physical occur in the SR5 cyberware rows (verified by enumeration); a `Social` one would fall
 # through to NOT_YET_SUPPORTED rather than being mapped on the assumption it works the same way.
@@ -279,19 +291,22 @@ CONDITION_DESCRIPTIONS: Mapping[str, str] = {
 UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
     # --- WP77's registry rows: nothing of the printed effect is modeled ---------------------------
     "Bone Lacing (Plastic)": (
-        "+1 Body dice for resisting physical damage, +1 Armor, and an unarmed Damage Value of "
-        "(STR + 1)P (p. 454) -- no character-level Armor total exists for the bonus to add to, and "
-        "there is no damage-resistance test or unarmed-combat representation at all."
+        "Its +1 Armor and +1 Body dice are modeled (in Armor and the Damage Resistance pool). Its "
+        "unarmed Damage Value of (STR + 1)P (p. 454) is not -- no unarmed-combat representation "
+        "exists. The Body dice count only against Physical damage, which the sheet's single pool "
+        "doesn't separate."
     ),
     "Bone Lacing (Aluminum)": (
-        "+2 Body dice for resisting physical damage, +2 Armor, and an unarmed Damage Value of "
-        "(STR + 2)P (p. 454) -- no character-level Armor total exists for the bonus to add to, and "
-        "there is no damage-resistance test or unarmed-combat representation at all."
+        "Its +2 Armor and +2 Body dice are modeled (in Armor and the Damage Resistance pool). Its "
+        "unarmed Damage Value of (STR + 2)P (p. 454) is not -- no unarmed-combat representation "
+        "exists. The Body dice count only against Physical damage, which the sheet's single pool "
+        "doesn't separate."
     ),
     "Bone Lacing (Titanium)": (
-        "+3 Body dice for resisting physical damage, +3 Armor, and an unarmed Damage Value of "
-        "(STR + 3)P (p. 454) -- no character-level Armor total exists for the bonus to add to, and "
-        "there is no damage-resistance test or unarmed-combat representation at all."
+        "Its +3 Armor and +3 Body dice are modeled (in Armor and the Damage Resistance pool). Its "
+        "unarmed Damage Value of (STR + 3)P (p. 454) is not -- no unarmed-combat representation "
+        "exists. The Body dice count only against Physical damage, which the sheet's single pool "
+        "doesn't separate."
     ),
     "Smartlink": (
         "+2 to a smartgun's Accuracy while you fire it (p. 433, via the p. 444 accessory this "
@@ -303,15 +318,10 @@ UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
         "+2 dice resisting sonic attacks, including flashbangs (p. 454) -- no test-resolution or "
         "sonic/damage-resistance subsystem exists."
     ),
-    "Dermal Plating": (
-        "+Rating Armor, cumulative with other armor and without adding Encumbrance (p. 454) -- no "
-        "character-level Armor total exists for the bonus to add to."
-    ),
     "Armor": (  # the Cyberlimb Enhancement, not a gear/armor item
-        "+Rating Armor on the limb, cumulative and without adding Encumbrance (p. 456) -- no "
-        'character-level Armor total exists for the bonus to add to. Its "one enhancement of each '
-        'type per limb" cap belongs to the same unmodeled per-limb attribute system Customized/'
-        "Enhanced Agility and Strength are registered for."
+        "Its +Rating Armor is modeled, in the character's Armor (p. 456). Its \"one enhancement of "
+        'each type per limb" cap is not: it belongs to the same unmodeled per-limb attribute '
+        "system Customized/Enhanced Agility and Strength are registered for."
     ),
     "Internal Air Tank": (
         "Holding your breath for up to Rating hours, and complete protection from "
@@ -528,6 +538,12 @@ def _unique_name(bonus_elem: ET.Element, child: ET.Element) -> str | None:
     precedence = child.get("precedence")
     if precedence is not None:
         return f"precedence{precedence.strip()}"
+    # WP109: legacy's `armor` handler reads `group="N"` as the dedup group "groupN" (Dermal
+    # Plating's, and the Troll's racial dermal armor's, `<armor group="0">`), so two sources of the
+    # same group keep only the highest.
+    group = child.get("group")
+    if group is not None:
+        return f"group{group.strip()}"
     unique = bonus_elem.get("unique")
     return unique.strip() if unique else None
 
@@ -632,7 +648,12 @@ def classify_bonus(
     if bonus_elem is None or len(bonus_elem) == 0:
         return BonusSupport.NO_EFFECT, (), ()
 
-    children = [child for child in bonus_elem if child.tag not in _VERIFIED_INERT_BONUS_TAGS]
+    children = [
+        child
+        for child in bonus_elem
+        if child.tag not in _VERIFIED_INERT_BONUS_TAGS
+        and child.tag not in REGISTERED_UNMODELED_BONUS_TAGS
+    ]
     if not children:
         return BonusSupport.NO_EFFECT, (), ()
 
@@ -663,6 +684,17 @@ def classify_bonus(
             dice_bonus = _parse_initiative_dice_bonus(child, unique_name=unique_name)
             if dice_bonus is not None:
                 flat_bonuses.append(dice_bonus)
+                continue
+        if child.tag in _GLOBAL_LEAF_TARGET_KINDS and len(child) == 0:
+            recognized, value = _parse_rating_or_literal(child.text)
+            if recognized:
+                flat_bonuses.append(
+                    CyberwareFlatBonus(
+                        target_kind=_GLOBAL_LEAF_TARGET_KINDS[child.tag],
+                        value=value,
+                        unique_name=unique_name,
+                    )
+                )
                 continue
         if child.tag == "limitmodifier":
             conditional = _parse_conditional_limit_bonus(child)

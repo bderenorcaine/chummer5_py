@@ -57,7 +57,12 @@
         <tbody>
           {% for row in group.rows %}
           <tr data-gear-name="{{ (row.item | dterm("gear.xml", "armor.xml", "weapons.xml")) | lower }}" data-gear-category="{{ (group.category | dterm("gear.xml", "armor.xml", "weapons.xml")) | lower }}">
-            <td>{{ row.item | dterm("gear.xml", "armor.xml", "weapons.xml") }}</td>
+            <td>{{ row.item | dterm("gear.xml", "armor.xml", "weapons.xml") }}
+              {% if row.is_armor %}
+              <input type="hidden" name="armor_shown" value="{{ row.item.name }}" />
+              <label><input type="checkbox" name="armor_worn" value="{{ row.item.name }}" {% if row.worn %}checked{% endif %} /> {{ _("Checkbox_Equipped") }}</label>
+              {% endif %}
+            </td>
             <td>
               {% if row.is_rating %}{{ _("Web_Resources_PerRating", cost=row.unit_cost) }}{% else %}{{ row.item.cost }}{% endif %}
             </td>

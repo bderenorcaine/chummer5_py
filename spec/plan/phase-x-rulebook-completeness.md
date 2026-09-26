@@ -141,7 +141,7 @@ the rules it checks.
   Acceptance: an Elf is offered Human-Looking and a Human is not; a Magician is not offered Magic
   Resistance; a stale gated pick surfaces a diagnostic and doesn't raise.
 
-- [ ] **WP109 — Derived-stat foundations: Overflow, wound-modifier interval, Armor, Damage
+- [x] **WP109 — Derived-stat foundations: Overflow, wound-modifier interval, Armor, Damage
   Resistance.**
   Goal: the four character-level numbers Finding 6 lists, on the character sheet, each with an
   Improvement type later WPs can target.

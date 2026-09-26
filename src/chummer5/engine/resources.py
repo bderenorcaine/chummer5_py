@@ -297,6 +297,9 @@ class StarterGearItem:
     programs: int | None = None
     attribute_array: tuple[int, ...] | None = None
     unmodeled_effect_note: str | None = None
+    # WP109: a `+N` armor accessory (Helmet, Ballistic Shield, Riot Shield) whose rating adds to the
+    # worn body armor instead of replacing it (p. 169). `armor_rating` holds the N.
+    armor_stacks: bool = False
 
 
 def _availability_capped_max_rating(rating_gear: RatingGear) -> int:
@@ -352,8 +355,9 @@ def build_starter_gear_catalog(
       same-named, 0-cost `Exotic Melee Weapons` weapon purely so its melee-attack stats exist
       somewhere) -- never something the player picks directly, so it's excluded unconditionally
       rather than only when it happens to collide with another entry's name.
-    - **Drops `armor_stacks` items** (Helmet, Ballistic Shield, Riot Shield) -- their `+N` additive
-      armor bonus is different math from every other item's single rating, out of scope for this WP.
+    - ~~Drops `armor_stacks` items~~ **WP109 offers them**: Helmet, Ballistic Shield and Riot
+      Shield carry `armor_stacks=True`, and `chummer5.engine.derived.armor_breakdown` adds their
+      `+N` on top of the worn body armor, capped at Strength (p. 169).
 
     Even after both exclusions, one real name collision remains (`Vision Magnification`: a 250-cost
     standalone accessory vs. a 0-cost, `<required>`-gated sensor-housing component -- neither
@@ -427,11 +431,13 @@ def build_starter_gear_catalog(
             )
         )
     for a in armor:
-        if a.armor_stacks:
-            continue
         _consider(
             StarterGearItem(
-                name=a.name, cost=a.cost, category=a.category, armor_rating=a.armor_rating
+                name=a.name,
+                cost=a.cost,
+                category=a.category,
+                armor_rating=a.armor_rating,
+                armor_stacks=a.armor_stacks,
             )
         )
     for w in weapons:

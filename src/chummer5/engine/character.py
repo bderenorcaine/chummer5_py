@@ -388,6 +388,12 @@ class Character:
     karma_knowledge_selection: KarmaKnowledgeSelection | None = None
     # Purchased stock vehicles/drones (Phase P, WP92).
     vehicle_selection: VehicleSelection | None = None
+    # WP109: names of purchased armor the player has marked as *not* worn. Everything bought is
+    # worn by default, which for body armor means "the highest rating counts" (p. 169) -- see
+    # `chummer5.engine.derived.armor_breakdown`. A plain name set, not part of
+    # `resources_selection`, so none of the many sites that re-validate the nuyen budget has to
+    # carry it along.
+    unworn_armor: frozenset[str] = frozenset()
 
     @property
     def karma_spent(self) -> int:
