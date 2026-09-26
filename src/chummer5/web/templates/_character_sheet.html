@@ -334,6 +334,7 @@
         </td>
       </tr>
       <tr><th>{{ _("String_DamageResistance") }}</th><td>{{ damage_resistance }}</td></tr>
+      {% if reach %}<tr><th>{{ _("String_Reach") }}</th><td>+{{ reach }}</td></tr>{% endif %}
       {# WP110: Step Eight's Reputation row -- Street Cred and Public Awareness are 0 at creation. #}
       <tr><th>{{ _("String_StreetCred") }}</th><td>{{ street_cred }}</td></tr>
       <tr><th>{{ _("String_Notoriety") }}</th><td>{{ notoriety }}</td></tr>

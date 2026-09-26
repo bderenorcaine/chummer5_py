@@ -167,7 +167,7 @@ from chummer5.engine.knowledge import (
     knowledge_dice_pool,
     language_dice_pool,
 )
-from chummer5.engine.lifestyle import create_lifestyle_selection
+from chummer5.engine.lifestyle import create_lifestyle_selection, lifestyle_cost_percent
 from chummer5.engine.magic import (
     apply_magic_skill_grant_improvements,
     create_magic_selection,
@@ -177,6 +177,7 @@ from chummer5.engine.magic import (
 from chummer5.engine.qualities import (
     QualityPickRequest,
     apply_mentor_spirit_improvements,
+    apply_metatype_bonus_improvements,
     apply_quality_improvements,
     create_quality_selection,
     resolve_metatype_qualities,
@@ -552,6 +553,7 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
     apply_quality_improvements(
         character, metatype_qualities, source_type=ImprovementSource.METATYPE
     )
+    apply_metatype_bonus_improvements(character)  # WP113, as in `build_character`
     character = replace(character, metatype_qualities=metatype_qualities)
 
     # Magic (WP74): resolve the Talent selection before qualities (a Mentor Spirit pick needs
@@ -658,7 +660,12 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
     # conversion added. Cyberware/bioware/foci are folded in by the later re-calls below, exactly
     # the sequence `build_character` performs.
     lifestyle_selection = (
-        create_lifestyle_selection(fixture.lifestyle[0], fixture.lifestyle[1], _LIFESTYLES)
+        create_lifestyle_selection(
+            fixture.lifestyle[0],
+            fixture.lifestyle[1],
+            _LIFESTYLES,
+            cost_percent=lifestyle_cost_percent(character),
+        )
         if fixture.lifestyle is not None
         else None
     )

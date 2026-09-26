@@ -17,12 +17,14 @@ from chummer5.data.mentors import MentorSpiritArchetype
 from chummer5.data.qualities import BonusSupport, Quality
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import ImprovementSource
+from chummer5.engine.lifestyle import lifestyle_cost_percent, surcharged_monthly_cost
 from chummer5.engine.qualities import (
     MENTOR_SPIRIT_QUALITY_NAME,
     QUALITY_KARMA_LIMIT,
     QualityPickRequest,
     QualitySelection,
     apply_mentor_spirit_improvements,
+    apply_metatype_bonus_improvements,
     apply_quality_improvements,
     attribute_choices,
     create_quality_selection,
@@ -48,13 +50,33 @@ def _relink_metatype_qualities(character: Character) -> Character:
     since WP63, `submit_attributes` call it on every submission regardless of whether metatype
     could actually have changed on that route).
     """
-    for quality in character.metatype_qualities:
-        character.improvements.remove_source(ImprovementSource.METATYPE, quality.id)
+    # WP113: every METATYPE-sourced Improvement goes, not just the free qualities' -- the racial
+    # `<bonus>` ones are keyed by the *previous* metatype's id, which this function can't know.
+    for imp in character.improvements.improvements:
+        if imp.source_type is ImprovementSource.METATYPE:
+            character.improvements.remove_source(imp.source_type, imp.source_id)
     metatype_qualities = resolve_metatype_qualities(character.metatype, QUALITIES)
     apply_quality_improvements(
         character, metatype_qualities, source_type=ImprovementSource.METATYPE
     )
-    return replace(character, metatype_qualities=metatype_qualities)
+    apply_metatype_bonus_improvements(character)
+    character = replace(character, metatype_qualities=metatype_qualities)
+    # The Lifestyle surcharge may have just changed (Human -> Troll doubles it), and a committed
+    # selection carries its computed total -- re-price it at the new percent.
+    selection = character.lifestyle_selection
+    if selection is not None:
+        character = replace(
+            character,
+            lifestyle_selection=replace(
+                selection,
+                cost_percent=lifestyle_cost_percent(character),
+                total_cost=surcharged_monthly_cost(
+                    selection.tier.monthly_cost, lifestyle_cost_percent(character)
+                )
+                * selection.months,
+            ),
+        )
+    return character
 
 
 def _strip_mentor_spirit_selection(

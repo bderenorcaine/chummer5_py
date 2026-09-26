@@ -47,6 +47,7 @@ from chummer5.engine.derived import (
     physical_condition_monitor,
     physical_limit,
     public_awareness,
+    reach,
     social_limit,
     street_cred,
     stun_condition_monitor,
@@ -532,6 +533,7 @@ def _character_sheet_context(
         "wound_rule": wound_modifier_rule(character),
         "armor": armor_breakdown(character),
         "damage_resistance": damage_resistance(character),
+        "reach": reach(character),  # WP113: Troll +1
         # WP110: Step Eight's Reputation row.
         "street_cred": street_cred(character),
         "notoriety": notoriety(character),

@@ -162,6 +162,10 @@ class ImprovementType(Enum):
     # WP112: raises one attribute's natural *and* augmented maximum (target: the attribute code) --
     # Exceptional Attribute and Lucky. Legacy `MaximumModifier`.
     ATTRIBUTE_MAXIMUM = auto()
+    # WP113: a percent surcharge on Lifestyle costs (Dwarf +20, Troll +100; later Dependents), and
+    # extra melee Reach (Troll +1).
+    LIFESTYLE_COST = auto()
+    REACH = auto()
 
 
 class ImprovementSource(Enum):

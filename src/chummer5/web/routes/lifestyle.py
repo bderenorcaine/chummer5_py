@@ -20,6 +20,7 @@ from chummer5.engine.lifestyle import (
     MAX_LIFESTYLE_MONTHS,
     MIN_LIFESTYLE_MONTHS,
     create_lifestyle_selection,
+    lifestyle_cost_percent,
 )
 from chummer5.engine.resources import (
     create_resources_selection,
@@ -105,7 +106,9 @@ def _lifestyle_context(
     budget_warning: Message | str | None = None
     if error is None:
         try:
-            selection = create_lifestyle_selection(tier_name, months, LIFESTYLES)
+            selection = create_lifestyle_selection(
+                tier_name, months, LIFESTYLES, cost_percent=lifestyle_cost_percent(character)
+            )
         except ValueError as exc:
             budget_warning = str(exc)  # an engine message: stays as-is (WP102)
         else:
@@ -193,7 +196,12 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
         vehicle_selection = session.character.vehicle_selection
         vehicle_cost = vehicle_selection.nuyen_spent if vehicle_selection is not None else 0
         try:
-            lifestyle_selection = create_lifestyle_selection(tier_name, months, LIFESTYLES)
+            lifestyle_selection = create_lifestyle_selection(
+                tier_name,
+                months,
+                LIFESTYLES,
+                cost_percent=lifestyle_cost_percent(session.character),
+            )
             new_resources_selection = create_resources_selection(
                 session.resources_letter,
                 PRIORITIES,

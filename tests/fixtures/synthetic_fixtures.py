@@ -1762,7 +1762,8 @@ WETWORK_FIXTURE = SyntheticCharacter(
 #   Loadout (Resources A, 450,000¥ -- fully engine-modeled here, unlike WP72-76's prose loadouts):
 #     a GMC Bulldog Step-Van as home, office and hangar; a Northrup Wasp autogyro; two Steel Lynx
 #     gun platforms, a Lockheed Optic-X2, two Roto-drones, two Fly-Spies and a Kanmushi; a Proteus
-#     Poseidon RCC, a Transys Avalon, five autosofts and a Rating-4 fake SIN. Contacts: a
+#     Poseidon RCC, a Transys Avalon, four autosofts, a Rating-4 fake SIN and a Rating-2 one for
+#     the van's paperwork. Contacts: a
 #     chop-shop fixer (Connection 3 / Loyalty 2) and an ex-Ares drone tech (Connection 2 /
 #     Loyalty 3).
 #
@@ -1793,10 +1794,11 @@ WETWORK_FIXTURE = SyntheticCharacter(
 #   (Criminal) 10). Net karma **-1**, i.e. the qualities *fund* a point, so her Step Seven pool is
 #   26 rather than 25.
 #
-# Step Six -- gear ¥74,745 + Rating-priced gear ¥22,000 + Lifestyle (Medium x 9 months) ¥45,000 +
-#   cyberware ¥97,000 + vehicles ¥207,000 = ¥445,745 of ¥450,000, leaving ¥4,255 -- inside p. 94's
-#   "5,000 nuyen or less" carry-over allowance. No Karma-to-Nuyen conversion: every point of Karma
-#   is spoken for below.
+# Step Six -- gear ¥74,745 + Rating-priced gear ¥27,000 + Lifestyle (Medium x 4 months, doubled
+#   by the troll tax to ¥10,000 a month) ¥40,000 + cyberware ¥97,000 + vehicles ¥207,000 =
+#   ¥445,745 of ¥450,000, leaving ¥4,255 -- inside p. 94's "5,000 nuyen or less" carry-over
+#   allowance. (Until WP113 applied the troll tax this was Medium x 9 months at ¥5,000 and one
+#   Fake SIN.) No Karma-to-Nuyen conversion: every point of Karma is spoken for below.
 #
 # Step Seven -- 26 Karma, all 26 spent: contacts 7 (10 points against a CHA-1 budget of 3, the
 #   smallest free contact budget in the set), Gunnery 5 -> 6 for 12 (`new Rating x 2`, landing on
@@ -1856,8 +1858,9 @@ RIGGER_FIXTURE = SyntheticCharacter(
         ("[Model] Evasion Autosoft", 6),
         ("[Weapon] Targeting Autosoft", 6),
         ("Fake SIN", 4),
+        ("Fake SIN", 2),
     ),
-    lifestyle=("Medium", 9),
+    lifestyle=("Medium", 4),
     vehicles=(
         "GMC Bulldog Step-Van (Van)",
         "Northrup Wasp (Autogyro)",
@@ -1923,8 +1926,8 @@ RIGGER_FIXTURE = SyntheticCharacter(
         # The five-way Step Six ledger.
         "nuyen:budget": 450000,
         "nuyen:available": 450000,
-        "nuyen:gear_spent": 96745,
-        "nuyen:lifestyle_cost": 45000,
+        "nuyen:gear_spent": 101745,
+        "nuyen:lifestyle_cost": 40000,
         "vehicles:nuyen_spent": 207000,
         "nuyen:remaining": 4255,
         "vehicles:count": 10,
@@ -1984,6 +1987,7 @@ RIGGER_FIXTURE = SyntheticCharacter(
         # vehicle/drone rows and Gearhead are precisely Phase P's own registry surface (WP95).
         "unmodeled_notes:names": frozenset(
             {
+                "Troll",  # WP113: the metatype's own +1 Reach
                 "Thermographic Vision",
                 "Gearhead",
                 "Unsteady Hands",
@@ -2086,12 +2090,12 @@ RIGGER_FIXTURE = SyntheticCharacter(
         "nuyen:gear_spent": (
             "gear.xml <cost>: Proteus Poseidon 68000 + Transys Avalon 5000 + Armor Jacket 1000 + "
             "Ares Predator V 725 + Ammo: Regular Ammo 20 = 74745, + Rating-priced (WP66) four "
-            "autosofts at rating 6 x 500/rating = 12000 and a Fake SIN at rating 4 x 2500/rating = "
-            "10000 = 96745"
+            "autosofts at rating 6 x 500/rating = 12000 and two Fake SINs at rating 4 and 2 x "
+            "2500/rating = 15000 = 101745"
         ),
         "nuyen:lifestyle_cost": (
-            "lifestyles.xml Medium 5000/month x 9 months (engine/lifestyle.py total_cost; WP20's "
-            "1-100 month range) — she pays the garage's lease through the year"
+            "lifestyles.xml Medium 5000/month, doubled by the Troll's <lifestylecost>100 (WP113, "
+            "p. 420's troll tax) to 10000, x 4 months — she pays the garage's lease through spring"
         ),
         "vehicles:nuyen_spent": (
             "vehicles.xml <cost>, all cross-checked against the printed tables transcribed in "
@@ -2099,7 +2103,7 @@ RIGGER_FIXTURE = SyntheticCharacter(
             "+ Optic-X2 21000 + 2x Roto-drone 10000 + 2x Fly-Spy 4000 + Kanmushi 1000 = 207000"
         ),
         "nuyen:remaining": (
-            "450000 - 96745 gear - 45000 Lifestyle - 97000 cyberware - 207000 vehicles = 4255, "
+            "450000 - 101745 gear - 40000 Lifestyle - 97000 cyberware - 207000 vehicles = 4255, "
             "within p. 94's 'and any nuyen you have left over, up to a maximum of 5,000' allowance"
         ),
         "vehicles:count": (
@@ -2237,7 +2241,8 @@ RIGGER_FIXTURE = SyntheticCharacter(
             "derived.py unmodeled_effect_notes over this character's metatype qualities, "
             "qualities, cyberware, gear and vehicles — the hand-kept mirror of Project Overview's "
             "'Unmodeled real effects' table (WP56/WP79/WP95). Troll's Thermographic Vision is "
-            "metatype-granted (metatypes.xml <qualities><positive>), not purchased"
+            "metatype-granted (metatypes.xml <qualities><positive>), not purchased; 'Troll' itself "
+            "is the metatype's +1 Reach (WP113)"
         ),
     },
 )

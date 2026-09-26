@@ -204,7 +204,7 @@ the rules it checks.
   Acceptance: the rulebook's Rob example (troll STR 11 with Exceptional Attribute) builds; two
   attributes at maximum via one priority submission is rejected.
 
-- [ ] **WP113 — Racial traits: Lifestyle multiplier, Troll Reach and dermal armor.**
+- [x] **WP113 — Racial traits: Lifestyle multiplier, Troll Reach and dermal armor.**
   Goal: the Metatype Attribute Table's racial column, complete.
   Deliverables:
   - A `LIFESTYLE_COST` percent Improvement. Dwarf +20% and Troll +100% come from `metatypes.xml`

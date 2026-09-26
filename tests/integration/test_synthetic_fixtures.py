@@ -590,8 +590,8 @@ def test_rigger_fixtures_vehicle_ledger_agrees_with_the_save_path() -> None:
         resources_letter=RIGGER_FIXTURE.resources_letter,
         gear_names=RIGGER_FIXTURE.gear,
         rating_gear_picks=RIGGER_FIXTURE.rating_gear,
-        lifestyle_tier_name="Medium",
-        lifestyle_months=9,
+        lifestyle_tier_name=RIGGER_FIXTURE.lifestyle[0],
+        lifestyle_months=RIGGER_FIXTURE.lifestyle[1],
         cyberware_purchases=[cyberware_purchase_request(pick) for pick in RIGGER_FIXTURE.cyberware],
         vehicle_ids=from_fixture.vehicle_selection.vehicle_ids,
     )

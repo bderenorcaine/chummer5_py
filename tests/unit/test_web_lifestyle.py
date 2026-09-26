@@ -247,3 +247,44 @@ def test_lifestyle_endpoint_before_confirmation_does_not_crash() -> None:
 
     assert response.status_code == 200
     assert "Confirm a metatype and priorities" in response.text
+
+
+# --- WP113: the troll tax re-prices a committed Lifestyle when the metatype changes ---------------
+
+
+def test_becoming_a_troll_doubles_the_committed_lifestyle_and_shows_reach() -> None:
+    from chummer5.data.metatypes import load_metatypes
+    from chummer5.data.priorities import load_priorities
+    from chummer5.engine.character import metatype_choices
+
+    priorities = load_priorities()
+    metatypes = load_metatypes()
+    client = TestClient(create_app())
+    client.get("/")
+
+    def confirm(name: str) -> None:
+        choice = next(
+            c
+            for c in metatype_choices(priorities.heritage["A"], metatypes)
+            if c.metatype.name == name
+        )
+        client.post(
+            "/ui/priorities",
+            data={
+                "heritage_letter": "A",
+                "attributes_letter": "B",
+                "skills_letter": "C",
+                "resources_letter": "D",
+                "talent_letter": "E",
+                "metatype_id": choice.metatype.id,
+            },
+        )
+
+    confirm("Human")
+    client.post("/ui/lifestyle", data={"lifestyle_tier": "Low", "lifestyle_months": "3"})
+    confirm("Troll")
+    saved = client.get("/character/save").json()
+    assert saved["metatype_name"] == "Troll"
+    sheet = client.get("/character/sheet").text
+    assert "Low (3 months, 12000¥)" in sheet
+    assert "<th>Reach</th><td>+1</td>" in sheet

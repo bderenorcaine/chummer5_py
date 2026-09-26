@@ -179,8 +179,9 @@ _UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
         "stressful encounter (p. 87) -- no in-play test-resolution system exists."
     ),
     "Resistance to Pathogens/Toxins": (
-        "+1 dice pool to Resistance Tests vs. pathogens/toxins, or both at the 8-Karma level "
-        "(p. 79) -- no toxin/pathogen resistance subsystem exists."
+        "The Dwarf racial trait: +2 dice on Resistance Tests against pathogens and toxins "
+        "(Metatype Attribute Table, p. 66; the quality itself, p. 79) -- no toxin/pathogen "
+        "resistance subsystem exists."
     ),
     "SINner (National)": (
         "Background-check/arrest consequences described across a full page (p. 84) -- no "

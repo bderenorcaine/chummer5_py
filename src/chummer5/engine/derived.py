@@ -338,6 +338,8 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
         if isinstance(note, str) and name not in notes:
             notes[name] = note
 
+    # WP113: the metatype's own racial effect (Troll Reach) -- keyed by metatype name.
+    add(character.metatype.name, getattr(character.metatype, "unmodeled_effect_note", None))
     for quality in character.metatype_qualities:
         add(quality.name, getattr(quality, "unmodeled_effect_note", None))
     if character.quality_selection is not None:
@@ -582,3 +584,9 @@ def matrix_vr_initiative(character: Character) -> MatrixVRInitiative | None:
         hot_sim=hot_sim,
         intuition=character.attribute_value("INT"),
     )
+
+
+def reach(character: Character) -> int:
+    """Extra melee Reach (WP113): Σ `REACH` -- the Troll's racial +1 (p. 185). A sheet number only;
+    no melee resolution exists here to read it (Project Overview registry)."""
+    return character.improvements.resolve(ImprovementType.REACH, _GLOBAL_TARGET)

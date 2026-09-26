@@ -655,6 +655,30 @@ def apply_mentor_spirit_improvements(character: Character, pick: MentorSpiritPic
             )
 
 
+def apply_metatype_bonus_improvements(character: Character) -> None:
+    """WP113: the metatype's racial `<bonus>` as `METATYPE`-sourced Improvements, keyed by the
+    metatype's id: the Lifestyle surcharge (`LIFESTYLE_COST`), extra Reach (`REACH`), and racial
+    dermal armor (`ARMOR`, in its dedup group so Dermal Plating/Orthoskin replace rather than stack
+    with it -- WP129 confirms which wins)."""
+    metatype = character.metatype
+    for improvement_type, value, unique_name in (
+        (ImprovementType.LIFESTYLE_COST, metatype.lifestyle_cost_percent, None),
+        (ImprovementType.REACH, metatype.reach, None),
+        (ImprovementType.ARMOR, metatype.armor, metatype.armor_group),
+    ):
+        if value:
+            character.improvements.add(
+                Improvement(
+                    improvement_type=improvement_type,
+                    target="",
+                    value=value,
+                    source_type=ImprovementSource.METATYPE,
+                    source_id=metatype.id,
+                    unique_name=unique_name,
+                )
+            )
+
+
 def resolve_metatype_qualities(
     metatype: Metatype, catalog: Iterable[Quality]
 ) -> tuple[Quality, ...]:

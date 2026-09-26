@@ -17,6 +17,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from chummer5.data.lifestyle import LifestyleTier
+from chummer5.engine.character import Character
+from chummer5.engine.improvements import ImprovementType
 
 # Core rulebook, "Paying the Bills" (p. 370): "Prepayments can be made for any number of months."
 # The legacy C#'s character-creation screen (`CharacterCreate.Designer.cs`'s `nudLifestyleMonths`)
@@ -33,15 +35,36 @@ MAX_LIFESTYLE_MONTHS = 100
 class LifestyleSelection:
     """A validated primary-Lifestyle choice: which tier, for how many months, and the resulting
     total nuyen cost (`tier.monthly_cost * months` -- confirmed directly against `Lifestyle.
-    TotalCost` in the legacy C#, see module docstring)."""
+    TotalCost` in the legacy C#, see module docstring).
+
+    **WP113**: `cost_percent` is the character's Σ `LIFESTYLE_COST` surcharge (Dwarf +20%, Troll
+    +100% -- "the troll tax", p. 420), and `monthly_cost` is the tier's price with it applied.
+    `total_cost` is `monthly_cost * months`.
+    """
 
     tier: LifestyleTier
     months: int
     total_cost: int
+    cost_percent: int = 0
+
+    @property
+    def monthly_cost(self) -> int:
+        return surcharged_monthly_cost(self.tier.monthly_cost, self.cost_percent)
+
+
+def surcharged_monthly_cost(base: int, cost_percent: int) -> int:
+    """WP113: a monthly price with a percent surcharge, rounded up to the nuyen. Every core tier
+    and every core surcharge divide exactly (500 x 1.2 = 600), so the rounding never bites today."""
+    return -(-base * (100 + cost_percent) // 100)
+
+
+def lifestyle_cost_percent(character: Character) -> int:
+    """The character's Σ `LIFESTYLE_COST` surcharge, in percent (WP113)."""
+    return character.improvements.resolve(ImprovementType.LIFESTYLE_COST, "")
 
 
 def create_lifestyle_selection(
-    tier_name: str, months: int, catalog: Iterable[LifestyleTier]
+    tier_name: str, months: int, catalog: Iterable[LifestyleTier], *, cost_percent: int = 0
 ) -> LifestyleSelection:
     """Build a `LifestyleSelection`, validating the tier is a known catalog entry and `months` is
     within the legacy UI's own 1-100 range (see `MIN_LIFESTYLE_MONTHS`/`MAX_LIFESTYLE_MONTHS`).
@@ -59,4 +82,7 @@ def create_lifestyle_selection(
             f"months must be between {MIN_LIFESTYLE_MONTHS} and {MAX_LIFESTYLE_MONTHS}, "
             f"got {months}"
         )
-    return LifestyleSelection(tier=tier, months=months, total_cost=tier.monthly_cost * months)
+    monthly = surcharged_monthly_cost(tier.monthly_cost, cost_percent)
+    return LifestyleSelection(
+        tier=tier, months=months, total_cost=monthly * months, cost_percent=cost_percent
+    )

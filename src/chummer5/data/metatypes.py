@@ -1,6 +1,9 @@
 """Loader for `legacy/Chummer/data/metatypes.xml` into frozen dataclasses.
 
 Parses attribute min/max/augmented-max ranges and metavariants for every metatype in the file.
+**WP113** parses the three `<bonus>` children the SR5 base metatypes carry (`lifestylecost`,
+`reach`, `armor`) -- see `Metatype.lifestyle_cost_percent`. The rest of this paragraph predates it.
+
 Deliberately does not model `bonus`/`powers`/`addweapon`/`qualityrestriction`/
 `halveattributepoints`/`movement` — those describe mechanics (the general Improvement engine,
 critter powers, movement rates) that are out of MVP scope. See `spec/worklogs/WP2.md` for the
@@ -81,6 +84,24 @@ class Metatype:
     metavariants: tuple[Metavariant, ...]
     qualities_positive: tuple[str, ...] = ()
     qualities_negative: tuple[str, ...] = ()
+    # WP113: the racial column of the Metatype Attribute Table, from `<bonus>` -- the Lifestyle
+    # surcharge in percent (Dwarf 20, Troll 100), extra Reach (Troll 1), and racial dermal armor
+    # (Troll 1, in legacy's dedup group `armor_group` -- "group0", shared with Dermal Plating and
+    # Orthoskin, so they never stack).
+    lifestyle_cost_percent: int = 0
+    reach: int = 0
+    armor: int = 0
+    armor_group: str | None = None
+    # WP113: this metatype's own racial effect that this engine can't compute, for the sheet's
+    # "Unmodeled real effects" section (the Project Overview registry's matching row).
+    unmodeled_effect_note: str | None = None
+
+
+# WP113: the racial effects no engine number reads, keyed by metatype name. Troll's +1 Reach
+# lengthens its melee range (p. 185); there is no melee resolution here.
+_UNMODELED_EFFECT_NOTES = {
+    "Troll": "+1 Reach (p. 185) -- no melee-combat resolution exists for Reach to matter in.",
+}
 
 
 def _parse_attribute_ranges(elem: ET.Element) -> MappingProxyType[str, AttributeRange]:
@@ -125,6 +146,9 @@ def _parse_metatype(elem: ET.Element) -> Metatype:
         else ()
     )
     qualities = elem.find("qualities")
+    bonus = elem.find("bonus")
+    armor = bonus.find("armor") if bonus is not None else None
+    name = elem.findtext("name", "")
     return Metatype(
         id=elem.findtext("id", ""),
         name=elem.findtext("name", ""),
@@ -136,6 +160,15 @@ def _parse_metatype(elem: ET.Element) -> Metatype:
         metavariants=metavariants,
         qualities_positive=_parse_quality_names(qualities, "positive"),
         qualities_negative=_parse_quality_names(qualities, "negative"),
+        lifestyle_cost_percent=int(bonus.findtext("lifestylecost", "0"))
+        if bonus is not None
+        else 0,
+        reach=int(bonus.findtext("reach", "0")) if bonus is not None else 0,
+        armor=int(armor.text or "0") if armor is not None else 0,
+        armor_group=(
+            f"group{armor.get('group')}" if armor is not None and armor.get("group") else None
+        ),
+        unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(name),
     )
 
 

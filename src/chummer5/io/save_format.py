@@ -289,7 +289,7 @@ from chummer5.engine.knowledge import (
     create_karma_knowledge_selection,
     create_knowledge_selection,
 )
-from chummer5.engine.lifestyle import create_lifestyle_selection
+from chummer5.engine.lifestyle import create_lifestyle_selection, lifestyle_cost_percent
 from chummer5.engine.magic import (
     apply_magic_skill_grant_improvements,
     apply_power_improvements,
@@ -302,6 +302,7 @@ from chummer5.engine.magic import (
 from chummer5.engine.qualities import (
     QualityPickRequest,
     apply_mentor_spirit_improvements,
+    apply_metatype_bonus_improvements,
     apply_quality_improvements,
     create_quality_selection,
     requested_attribute_maximum_bonuses,
@@ -909,6 +910,7 @@ def build_character(
     apply_quality_improvements(
         character, metatype_qualities, source_type=ImprovementSource.METATYPE
     )
+    apply_metatype_bonus_improvements(character)  # WP113: Lifestyle surcharge, Reach, dermal armor
 
     # WP48: computed early (before the Magic-selection block further down) since
     # create_quality_selection needs it to resolve a Mentor Spirit archetype pick -- exactly what
@@ -958,7 +960,10 @@ def build_character(
     contact_selection = create_contact_selection(character, save.contacts)
 
     lifestyle_selection = create_lifestyle_selection(
-        save.lifestyle_tier_name, save.lifestyle_months, lifestyles
+        save.lifestyle_tier_name,
+        save.lifestyle_months,
+        lifestyles,
+        cost_percent=lifestyle_cost_percent(character),  # WP113: Dwarf/Troll surcharge
     )
 
     resources_selection = create_resources_selection(
