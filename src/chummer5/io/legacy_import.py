@@ -241,7 +241,7 @@ SINner (Corporate Limited) and 8 other previously-`NOT_YET_SUPPORTED` qualities 
 `BonusSupport.SELECT_TEXT` and offered (see `chummer5.data.qualities`'s module docstring), so the
 quality-resolution loop above picks them up like any other offered quality -- the only new step is
 resolving each one's own `<extra>` (the same free-text field `LegacyPower.extra` already threads
-through for select-attribute powers) into the `quality_text` dict `create_character_save` now takes.
+through for select-attribute powers) into the pick's text (WP107: `QualityPickRequest.text`).
 No itemized check was added for a SELECT_TEXT quality with a blank `<extra>` (none of the curated
 corpus's real instances have one) -- if one ever did, `build_character`'s own `create_quality_
 selection` call would reject it with a plain `ValueError`, the same "any create_* rejection surfaces
@@ -260,7 +260,7 @@ violation this module's own checks don't anticipate) surfaces as `build_characte
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from chummer5.data.bioware import Bioware
@@ -279,7 +279,7 @@ from chummer5.engine.build_method import SUPPORTED_BUILD_METHODS
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character, sr5_metatypes
 from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
 from chummer5.engine.magic import OFFERED_TALENT_CODENAMES, mvp_power_catalog
-from chummer5.engine.qualities import mvp_quality_catalog
+from chummer5.engine.qualities import QualityPickRequest, mvp_quality_catalog
 from chummer5.engine.resources import Contact
 from chummer5.io.legacy_chum5 import LegacyCharacter, LegacyCyberware, load_chum5, priority_letter
 from chummer5.io.save_format import (
@@ -722,9 +722,8 @@ def import_legacy_character(
     )
 
     offered_qualities = {q.id: q for q in mvp_quality_catalog(qualities)}
-    quality_ids: list[str] = []
+    quality_picks: list[QualityPickRequest] = []
     dropped_qualities: list[str] = []
-    quality_text: dict[str, str] = {}
     for legacy_quality in legacy.qualities:
         if (
             legacy_quality.quality_source == "Metatype"
@@ -735,12 +734,22 @@ def import_legacy_character(
         if offered is None:
             dropped_qualities.append(legacy_quality.name)
             continue
-        quality_ids.append(legacy_quality.id)
+        # WP107: the legacy format has no per-quality rating -- a rated quality is saved as one
+        # `<quality>` node *per level* (Glessner.chum5 carries three Focused Concentration nodes),
+        # so repeated nodes of a rated quality fold into one pick's rating.
+        if offered.max_rating > 1:
+            existing = next(
+                (i for i, p in enumerate(quality_picks) if p.quality_id == offered.id), None
+            )
+            if existing is not None:
+                previous = quality_picks[existing]
+                quality_picks[existing] = replace(previous, rating=previous.rating + 1)
+                continue
         # WP55: a SELECT_TEXT quality's own <extra> is exactly the free-text detail
-        # create_quality_selection now requires -- the same field LegacyPower.extra already
-        # threads through for select-attribute powers (see chummer5.io.legacy_chum5's docstring).
-        if offered.bonus_support == BonusSupport.SELECT_TEXT:
-            quality_text[legacy_quality.id] = legacy_quality.extra
+        # create_quality_selection requires -- the same field LegacyPower.extra already threads
+        # through for select-attribute powers (see chummer5.io.legacy_chum5's docstring).
+        text = legacy_quality.extra if offered.bonus_support == BonusSupport.SELECT_TEXT else None
+        quality_picks.append(QualityPickRequest(quality_id=offered.id, text=text))
 
     contacts = tuple(
         Contact(name=c.name, connection=c.connection, loyalty=c.loyalty, free=c.free)
@@ -843,8 +852,7 @@ def import_legacy_character(
         skill_points=skill_points,
         group_points=bought_groups,
         specializations=specializations,
-        quality_ids=quality_ids,
-        quality_text=quality_text,
+        quality_picks=quality_picks,
         contacts=contacts,
         resources_letter=priority_letter(legacy.priorities.resources),
         # No general gear-catalog import -- WP9's STARTER_GEAR_CATALOG is a deliberately minimal

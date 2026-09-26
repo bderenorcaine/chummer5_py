@@ -28,8 +28,9 @@ from chummer5.data.vehicles import load_vehicles
 from chummer5.engine.bioware import BiowarePurchaseRequest
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD, SUM_TO_TEN_BUILD_METHOD
 from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
-from chummer5.engine.derived import essence
+from chummer5.engine.derived import essence, mental_limit
 from chummer5.engine.improvements import ImprovementType
+from chummer5.engine.qualities import QualityPickRequest
 from chummer5.engine.resources import Contact
 from chummer5.engine.vehicles import VEHICLE_CATALOG
 from chummer5.io.save_format import (
@@ -65,7 +66,7 @@ def _sample_save() -> CharacterSave:
         skill_points={"skill-hacking": 2},
         group_points={"Firearms": 4},
         specializations={"skill-hacking": "Networks"},
-        quality_ids=("qual-catlike",),
+        quality_picks=("qual-catlike",),
         contacts=(
             Contact(name="Fixer", connection=3, loyalty=3),
             Contact(name="GM Plot", connection=1, loyalty=1, free=True),
@@ -92,7 +93,7 @@ def test_json_round_trip_empty_selections() -> None:
         skills_letter="E",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -155,7 +156,7 @@ def test_build_character_derives_metatype_qualities_not_from_the_save_file() -> 
         skills_letter="E",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -186,7 +187,7 @@ def test_json_round_trip_preserves_magic_attribute_points() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="D",
         gear_names=(),
@@ -215,7 +216,7 @@ def test_build_character_applies_magic_attribute_points_to_the_finished_mag_rati
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="D",
         gear_names=(),
@@ -251,7 +252,7 @@ def test_build_character_rejects_magic_attribute_points_exceeding_the_shared_bud
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="D",
         gear_names=(),
@@ -284,7 +285,7 @@ def test_json_round_trip_preserves_cyberware_purchases() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -326,7 +327,7 @@ def test_a_pre_wp41_save_falls_back_to_the_flat_cyberware_item_ids_key() -> None
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -360,7 +361,7 @@ def test_build_character_applies_cyberware_selection() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -398,7 +399,7 @@ def test_build_character_rebuilds_a_nested_cyberware_purchase_tree() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="A",
         gear_names=(),
@@ -450,7 +451,7 @@ def test_build_character_rejects_cyberware_exceeding_the_shared_nuyen_budget() -
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="E",  # smallest nuyen budget
         gear_names=(),
@@ -479,7 +480,7 @@ def test_json_round_trip_preserves_bioware_purchases() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -507,7 +508,7 @@ def test_json_round_trip_preserves_a_bioware_skill_pick() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="A",
         gear_names=(),
@@ -550,7 +551,7 @@ def test_a_pre_wp80_save_reads_its_flat_bioware_item_ids() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -578,7 +579,7 @@ def test_build_character_applies_bioware_selection() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -615,7 +616,7 @@ def test_build_character_shares_the_essence_pool_between_cyberware_and_bioware()
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -656,7 +657,7 @@ def test_build_character_rejects_bioware_exceeding_the_shared_nuyen_budget() -> 
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="E",  # smallest nuyen budget
         gear_names=(),
@@ -685,7 +686,7 @@ def test_json_round_trip_preserves_karma_converted() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -723,7 +724,7 @@ def test_build_character_applies_karma_converted_to_the_nuyen_budget() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="E",
         gear_names=("Meta Link",) * over_budget_item_count,
@@ -753,7 +754,7 @@ def test_build_character_rejects_karma_converted_above_the_cap() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="E",
         gear_names=(),
@@ -785,7 +786,7 @@ def test_json_round_trip_preserves_build_method() -> None:
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -825,7 +826,7 @@ def test_build_character_does_not_validate_build_method_against_the_letters() ->
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="B",
         gear_names=(),
@@ -853,7 +854,7 @@ def _magician_save(
     bound_spirit_picks: tuple[tuple[str, int | None, int], ...] = (),
     foci_picks: tuple[tuple[str, int], ...] = (),
     resources_letter: str = "C",
-    quality_ids: tuple[str, ...] = (),
+    quality_picks: tuple[str, ...] = (),
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
 ) -> CharacterSave:
@@ -867,7 +868,7 @@ def _magician_save(
         skills_letter="E",
         skill_points={},
         group_points={},
-        quality_ids=quality_ids,
+        quality_picks=quality_picks,
         contacts=(),
         resources_letter=resources_letter,
         gear_names=(),
@@ -1095,7 +1096,7 @@ def test_build_character_allows_an_adept_to_bond_a_focus() -> None:
         skills_letter="E",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -1127,7 +1128,7 @@ CAT_SNEAKING_CHOICE_ID = next(
 
 def test_json_round_trip_preserves_mentor_spirit_pick() -> None:
     save = _magician_save(
-        quality_ids=(MENTOR_SPIRIT_ID,),
+        quality_picks=(MENTOR_SPIRIT_ID,),
         mentor_spirit_archetype_id=CAT_ARCHETYPE_ID,
         mentor_spirit_general_choice_id=CAT_SNEAKING_CHOICE_ID,
     )
@@ -1147,7 +1148,7 @@ def test_from_json_defaults_mentor_spirit_fields_for_a_pre_wp48_save() -> None:
 
 
 def test_build_character_applies_mentor_spirit_pick() -> None:
-    save = _magician_save(quality_ids=(MENTOR_SPIRIT_ID,), mentor_spirit_archetype_id=DOG_ID)
+    save = _magician_save(quality_picks=(MENTOR_SPIRIT_ID,), mentor_spirit_archetype_id=DOG_ID)
     character = _build_magician(save)
     assert character.quality_selection is not None
     pick = character.quality_selection.mentor_spirit
@@ -1163,7 +1164,7 @@ def test_build_character_mentor_spirit_karma_shares_the_positive_quality_pool() 
     # Mentor Spirit (5) + Catlike (7) = 12, well under QUALITY_KARMA_LIMIT (25) -- the ordinary
     # positive_karma path, not a separate provisional budget (unlike Bound Spirits/Foci).
     save = _magician_save(
-        quality_ids=(MENTOR_SPIRIT_ID, CATLIKE_ID), mentor_spirit_archetype_id=DOG_ID
+        quality_picks=(MENTOR_SPIRIT_ID, CATLIKE_ID), mentor_spirit_archetype_id=DOG_ID
     )
     character = _build_magician(save)
     assert character.quality_selection is not None
@@ -1172,7 +1173,7 @@ def test_build_character_mentor_spirit_karma_shares_the_positive_quality_pool() 
 
 def test_build_character_two_option_general_choice_resolves() -> None:
     save = _magician_save(
-        quality_ids=(MENTOR_SPIRIT_ID,),
+        quality_picks=(MENTOR_SPIRIT_ID,),
         mentor_spirit_archetype_id=CAT_ARCHETYPE_ID,
         mentor_spirit_general_choice_id=CAT_SNEAKING_CHOICE_ID,
     )
@@ -1187,7 +1188,7 @@ def test_build_character_two_option_general_choice_resolves() -> None:
 
 
 def test_build_character_rejects_mentor_spirit_without_an_archetype() -> None:
-    save = _magician_save(quality_ids=(MENTOR_SPIRIT_ID,))
+    save = _magician_save(quality_picks=(MENTOR_SPIRIT_ID,))
     with pytest.raises(ValueError, match="requires an archetype"):
         _build_magician(save)
 
@@ -1201,7 +1202,7 @@ def test_build_character_allows_an_adept_to_pick_a_mentor_spirit() -> None:
         skills_letter="E",
         skill_points={},
         group_points={},
-        quality_ids=(MENTOR_SPIRIT_ID,),
+        quality_picks=(MENTOR_SPIRIT_ID,),
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -1226,7 +1227,7 @@ BILINGUAL_ID = next(q.id for q in QUALITIES if q.name == "Bilingual")
 def _mundane_save_with_knowledge(
     knowledge_skill_picks: tuple[tuple[str, str, int], ...] = (),
     language_skill_picks: tuple[tuple[str, int, bool], ...] = (),
-    quality_ids: tuple[str, ...] = (),
+    quality_picks: tuple[str, ...] = (),
     attribute_points: dict[str, int] | None = None,
 ) -> CharacterSave:
     return create_character_save(
@@ -1237,7 +1238,7 @@ def _mundane_save_with_knowledge(
         skills_letter="E",
         skill_points={},
         group_points={},
-        quality_ids=quality_ids,
+        quality_picks=quality_picks,
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -1312,7 +1313,7 @@ def test_build_character_bilingual_raises_the_native_language_limit() -> None:
     # spec/rulebooks/learnings.md's WP49 entry) -- this proves its ImprovementType
     # .NATIVE_LANGUAGE_LIMIT bonus is applied *before* create_knowledge_selection reads it.
     save = _mundane_save_with_knowledge(
-        quality_ids=(BILINGUAL_ID,),
+        quality_picks=(BILINGUAL_ID,),
         language_skill_picks=(("English", 0, True), ("Sperethiel", 0, True)),
     )
     character = _build_mundane(save)
@@ -1348,7 +1349,7 @@ def _mundane_save_with_skills(
         skill_points=skill_points or {},
         group_points=group_points or {},
         specializations=specializations or {},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -1402,7 +1403,7 @@ def _mundane_save_with_karma_attribute_points(
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -1450,7 +1451,7 @@ def test_build_character_rejects_karma_attribute_points_exceeding_the_karma_budg
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -1484,7 +1485,7 @@ def _mundane_save_with_karma_skills(
         skills_letter="A",
         skill_points=skill_points or {},
         group_points=group_points or {},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -1575,13 +1576,15 @@ def test_build_character_rejects_karma_skill_points_exceeding_the_karma_budget()
         _build_mundane(save)
 
 
-# -- WP55: quality_text (free-text quality detail, e.g. which SIN) --------------------------------
+# -- WP55/WP107: quality picks (free-text detail, rating) -----------------------------------------
 
 SINNER_NATIONAL_ID = next(q.id for q in QUALITIES if q.name == "SINner (National)")
+INDOMITABLE_MENTAL_ID = next(q.id for q in QUALITIES if q.name == "Indomitable (Mental)")
+CODEBLOCK_ID = next(q.id for q in QUALITIES if q.name == "Codeblock")
 
 
-def _mundane_save_with_quality_text(
-    quality_ids: tuple[str, ...], quality_text: dict[str, str]
+def _mundane_save_with_quality_picks(
+    quality_picks: tuple[str | QualityPickRequest, ...],
 ) -> CharacterSave:
     return create_character_save(
         metatype_name="Human",
@@ -1591,8 +1594,7 @@ def _mundane_save_with_quality_text(
         skills_letter="E",
         skill_points={},
         group_points={},
-        quality_ids=quality_ids,
-        quality_text=quality_text,
+        quality_picks=quality_picks,
         contacts=(),
         resources_letter="C",
         gear_names=(),
@@ -1601,31 +1603,75 @@ def _mundane_save_with_quality_text(
     )
 
 
-def test_json_round_trip_preserves_quality_text() -> None:
-    save = _mundane_save_with_quality_text((SINNER_NATIONAL_ID,), {SINNER_NATIONAL_ID: "UCAS"})
+def test_json_round_trip_preserves_quality_pick_text_and_rating() -> None:
+    save = _mundane_save_with_quality_picks(
+        (
+            QualityPickRequest(SINNER_NATIONAL_ID, text="UCAS"),
+            QualityPickRequest(INDOMITABLE_MENTAL_ID, rating=2),
+        )
+    )
     assert from_json(to_json(save)) == save
-    assert json.loads(to_json(save))["quality_text"] == {SINNER_NATIONAL_ID: "UCAS"}
+    assert json.loads(to_json(save))["quality_picks"] == [
+        {"quality_id": SINNER_NATIONAL_ID, "rating": 1, "text": "UCAS", "choice": None},
+        {"quality_id": INDOMITABLE_MENTAL_ID, "rating": 2, "text": None, "choice": None},
+    ]
 
 
-def test_from_json_defaults_quality_text_for_a_pre_wp55_save() -> None:
-    save = _sample_save()
+def test_from_json_migrates_a_version_1_save_s_quality_ids_and_text() -> None:
+    save = _mundane_save_with_quality_picks(
+        (QualityPickRequest(SINNER_NATIONAL_ID, text="UCAS"), CATLIKE_ID)
+    )
     data = json.loads(to_json(save))
-    assert "quality_text" not in data or data["quality_text"] == {}
-    assert from_json(to_json(save)).quality_text == {}
+    del data["quality_picks"]
+    data["format_version"] = 1
+    data["quality_ids"] = [SINNER_NATIONAL_ID, CATLIKE_ID]
+    data["quality_text"] = {SINNER_NATIONAL_ID: "UCAS"}
+    assert from_json(json.dumps(data)) == save
+
+
+def test_from_json_migrates_a_version_1_save_that_predates_quality_text() -> None:
+    save = _mundane_save_with_quality_picks((CATLIKE_ID,))
+    data = json.loads(to_json(save))
+    del data["quality_picks"]
+    data["format_version"] = 1
+    data["quality_ids"] = [CATLIKE_ID]
+    assert from_json(json.dumps(data)) == save
 
 
 def test_build_character_applies_quality_text() -> None:
-    save = _mundane_save_with_quality_text((SINNER_NATIONAL_ID,), {SINNER_NATIONAL_ID: "UCAS"})
+    save = _mundane_save_with_quality_picks((QualityPickRequest(SINNER_NATIONAL_ID, text="UCAS"),))
     character = _build_mundane(save)
     assert character.quality_selection is not None
-    assert character.quality_selection.quality_text == {SINNER_NATIONAL_ID: "UCAS"}
+    assert character.quality_selection.qualities[0].text == "UCAS"
     assert character.quality_selection.negative_karma == 5
 
 
 def test_build_character_rejects_select_text_quality_with_missing_text() -> None:
-    save = _mundane_save_with_quality_text((SINNER_NATIONAL_ID,), {})
+    save = _mundane_save_with_quality_picks((SINNER_NATIONAL_ID,))
     with pytest.raises(ValueError, match="requires a free-text detail"):
         _build_mundane(save)
+
+
+def test_build_character_applies_a_rated_quality_times_its_rating() -> None:
+    save = _mundane_save_with_quality_picks((QualityPickRequest(INDOMITABLE_MENTAL_ID, rating=2),))
+    character = _build_mundane(save)
+    assert character.quality_selection is not None
+    assert character.quality_selection.positive_karma == 16
+    baseline = _build_mundane(_mundane_save_with_quality_picks(()))
+    assert mental_limit(character) == mental_limit(baseline) + 2
+
+
+def test_build_character_round_trips_two_instances_of_a_repeatable_quality() -> None:
+    save = _mundane_save_with_quality_picks(
+        (
+            QualityPickRequest(CODEBLOCK_ID, text="Matrix Perception"),
+            QualityPickRequest(CODEBLOCK_ID, text="Hack on the Fly"),
+        )
+    )
+    reloaded = from_json(to_json(save))
+    character = _build_mundane(reloaded)
+    assert character.quality_selection is not None
+    assert character.quality_selection.negative_karma == 20
 
 
 # --- WP92: vehicles/drones ------------------------------------------------------------------------
@@ -1647,7 +1693,7 @@ def _mundane_save_with_vehicles(
         skills_letter="C",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter=resources_letter,
         gear_names=(),

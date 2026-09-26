@@ -46,6 +46,7 @@ from chummer5.engine.build_method import (
     sum_to_ten_total,
 )
 from chummer5.engine.knowledge import KnowledgeSkillPick, LanguageSkillPick
+from chummer5.engine.qualities import QualityPickRequest
 from chummer5.engine.resources import Contact
 from chummer5.engine.skills import MAX_SKILL_RATING_CREATE
 from chummer5.engine.vehicles import (
@@ -581,8 +582,10 @@ def test_rigger_fixtures_vehicle_ledger_agrees_with_the_save_path() -> None:
         specializations={
             by_skill_name[n]: text for n, text in RIGGER_FIXTURE.specializations.items()
         },
-        quality_ids=[by_quality_name[n] for n in RIGGER_FIXTURE.qualities],
-        quality_text={by_quality_name[n]: text for n, text in RIGGER_FIXTURE.quality_text.items()},
+        quality_picks=[
+            QualityPickRequest(by_quality_name[n], text=RIGGER_FIXTURE.quality_text.get(n))
+            for n in RIGGER_FIXTURE.qualities
+        ],
         contacts=RIGGER_FIXTURE.contacts,
         resources_letter=RIGGER_FIXTURE.resources_letter,
         gear_names=RIGGER_FIXTURE.gear,

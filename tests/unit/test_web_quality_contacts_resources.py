@@ -601,3 +601,87 @@ def test_qualities_contacts_resources_endpoints_before_confirmation_do_not_crash
     assert "Confirm a metatype and priorities" in contact_response.text
     assert resources_response.status_code == 200
     assert "Confirm a metatype and priorities" in resources_response.text
+
+
+# --- WP107: quality instances (rating stepper, repeatable rows) -----------------------------------
+
+_INDOMITABLE_MENTAL = next(q for q in MVP_QUALITIES if q.name == "Indomitable (Mental)")
+_CODEBLOCK = next(q for q in MVP_QUALITIES if q.name == "Codeblock")
+
+
+def test_a_rated_quality_gets_a_rating_stepper_and_costs_karma_times_rating() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/ui/qualities",
+        data={
+            "quality_id": _INDOMITABLE_MENTAL.id,
+            f"quality_rating_{_INDOMITABLE_MENTAL.id}": "2",
+        },
+    )
+
+    assert response.status_code == 200
+    assert f"16 / {QUALITY_KARMA_LIMIT}" in response.text  # Positive Quality karma
+    assert f'name="quality_rating_{_INDOMITABLE_MENTAL.id}"' in response.text
+    assert 'value="2"' in response.text
+    sheet = client.get("/character/sheet")
+    assert "Indomitable (Mental) 2" in sheet.text
+
+
+def test_a_rating_above_the_quality_s_maximum_is_rejected() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/ui/qualities",
+        data={
+            "quality_id": _INDOMITABLE_MENTAL.id,
+            f"quality_rating_{_INDOMITABLE_MENTAL.id}": "4",
+        },
+    )
+
+    assert "rating 4 is outside 1-3" in response.text
+
+
+def test_a_repeatable_quality_offers_another_row_and_takes_two_instances() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    first = client.post(
+        "/ui/qualities",
+        data={"quality_id": _CODEBLOCK.id, f"quality_text_{_CODEBLOCK.id}": "Matrix Perception"},
+    )
+    # The committed instance keeps the bare-id key; the blank "another" row is `id:1`.
+    assert f'value="{_CODEBLOCK.id}:1"' in first.text
+
+    second = client.post(
+        "/ui/qualities",
+        data={
+            "quality_id": [_CODEBLOCK.id, f"{_CODEBLOCK.id}:1"],
+            f"quality_text_{_CODEBLOCK.id}": "Matrix Perception",
+            f"quality_text_{_CODEBLOCK.id}:1": "Hack on the Fly",
+        },
+    )
+
+    assert f"20 / {QUALITY_KARMA_LIMIT}" in second.text  # Negative Quality karma
+    assert f'value="{_CODEBLOCK.id}:2"' in second.text
+    sheet = client.get("/character/sheet")
+    assert "Codeblock (Matrix Perception)" in sheet.text
+    assert "Codeblock (Hack on the Fly)" in sheet.text
+
+
+def test_two_instances_with_the_same_detail_are_rejected() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+
+    response = client.post(
+        "/ui/qualities",
+        data={
+            "quality_id": [_CODEBLOCK.id, f"{_CODEBLOCK.id}:1"],
+            f"quality_text_{_CODEBLOCK.id}": "Matrix Perception",
+            f"quality_text_{_CODEBLOCK.id}:1": "Matrix Perception",
+        },
+    )
+
+    assert "the same quality instance was selected twice" in response.text

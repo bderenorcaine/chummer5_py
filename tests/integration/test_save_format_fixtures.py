@@ -80,7 +80,7 @@ def _yeti_save() -> CharacterSave:
         skills_letter=skills_letter,
         skill_points=skill_points,
         group_points=bought_groups,
-        quality_ids=(),
+        quality_picks=(),
         contacts=contacts,
         resources_letter=resources_letter,
         gear_names=(),

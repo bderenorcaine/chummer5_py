@@ -32,7 +32,7 @@ def _spell_selection_context(
     """Context for `_spell_selection.html` (WP29): WP26's `create_spell_selection` reaching the
     browser, gated to Magician only (see `_chargen_body.html`'s own gating note). `spell_ids` is
     whatever should be shown checked, same echo-the-submission shape as `_quality_selection_
-    context`'s `quality_ids`.
+    context`'s `picks`.
 
     **WP54**: `spell_karma_budget` is `character.karma_remaining` with this section's own
     currently-committed cost added back in -- the same "exclude this section's own prior

@@ -216,6 +216,12 @@ both already-resolved.
 separate resolution step is needed, since `create_quality_selection` itself validates that every
 selected `SELECT_TEXT` quality has a non-blank entry and that no entry is orphaned.
 
+**WP107** replaces `quality_ids` and WP55's `quality_text` with `quality_picks`, one
+`{quality_id, rating, text, choice}` object per quality *instance* -- an id-keyed text map cannot
+represent two Addictions, and a flat id list cannot represent Focused Concentration 3. This is the
+first real schema break, so `FORMAT_VERSION` goes to 2; version-1 files are still read and migrated
+exactly by `_quality_picks_from_dict` (each id becomes one rating-1 pick carrying its text).
+
 **WP92** adds `vehicle_ids` -- purchased stock vehicles/drones as catalog ids, repeats meaning
 quantity. The simplest persistable selection in this file: no tree (unlike cyberware), no player
 choice (unlike bioware's `Reflex Recorder`), no Force (unlike foci), because a stock vehicle
@@ -228,8 +234,9 @@ round-trips unchanged. `build_character` resolves it third among the shared-nuye
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
 `.chum5` format itself carries an analogous `<appversion>` tag (confirmed by inspection of the
-corpus). `from_json`/`from_dict` reject anything other than the current `FORMAT_VERSION` outright
-rather than guessing at a migration, since MVP has exactly one schema version to support.
+corpus). `from_json`/`from_dict` reject any version not in `READABLE_FORMAT_VERSIONS` outright
+rather than guessing. Through WP106 there was exactly one version; WP107's is the first migration
+(see its paragraph above), and it is written per field, not as a generic upgrade pass.
 """
 
 from __future__ import annotations
@@ -290,6 +297,7 @@ from chummer5.engine.magic import (
     offered_talent_options,
 )
 from chummer5.engine.qualities import (
+    QualityPickRequest,
     apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
@@ -307,7 +315,10 @@ from chummer5.engine.vehicles import VEHICLE_CATALOG, create_vehicle_selection
 # Bumped only if a future WP changes this format's shape in a way older saves can't be read as.
 # MVP has exactly one version; there is no migration path yet because there is nothing to migrate
 # from.
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
+# WP107: version 1 (`quality_ids` + `quality_text`) is still read, and migrated on the way in -- see
+# `_quality_picks_from_dict`. Only FORMAT_VERSION is ever written.
+READABLE_FORMAT_VERSIONS = (1, 2)
 
 # See the module docstring's WP28 paragraph for why this duplicates (rather than imports)
 # `chummer5.web.session.DEFAULT_TALENT_LETTER`'s value.
@@ -361,7 +372,9 @@ class CharacterSave:
     skills_letter: str
     skill_points: MappingProxyType[str, int]
     group_points: MappingProxyType[str, int]
-    quality_ids: tuple[str, ...]
+    # WP107: one entry per quality *instance* (rating, free-text detail, choice), replacing WP8's
+    # `quality_ids` and WP55's `quality_text` -- see the module docstring's WP107 paragraph.
+    quality_picks: tuple[QualityPickRequest, ...]
     contacts: tuple[Contact, ...]
     resources_letter: str
     gear_names: tuple[str, ...]
@@ -426,11 +439,6 @@ class CharacterSave:
     # WP53: Karma-funded Knowledge/Language rating increases, keyed by pick name (see
     # chummer5.engine.knowledge.KarmaKnowledgeSelection). Defaults to {} -- "predates this field".
     karma_knowledge_points: MappingProxyType[str, int] = MappingProxyType({})
-    # WP55: quality id -> free-text detail, for exactly the SELECT_TEXT qualities among quality_ids
-    # (e.g. which SIN, which protected group -- see chummer5.engine.qualities.QualitySelection
-    # .quality_text). Defaults to {} -- "predates this field", the identical shape every other
-    # optional selection field defaults to.
-    quality_text: MappingProxyType[str, str] = MappingProxyType({})
     # WP66: Rating-priced starter-gear purchases, as (gear_name, rating) pairs (repeats = quantity)
     # -- kept separate from flat `gear_names` since a rating item's price depends on the chosen
     # rating. Defaults to () -- "predates this field", the identical shape every other optional
@@ -453,7 +461,7 @@ def create_character_save(
     skills_letter: str,
     skill_points: Mapping[str, int],
     group_points: Mapping[str, int],
-    quality_ids: Iterable[str],
+    quality_picks: Iterable[str | QualityPickRequest],
     contacts: Iterable[Contact],
     resources_letter: str,
     gear_names: Iterable[str],
@@ -482,7 +490,6 @@ def create_character_save(
     karma_group_points: Mapping[str, int] = MappingProxyType({}),
     karma_specializations: Mapping[str, str] = MappingProxyType({}),
     karma_knowledge_points: Mapping[str, int] = MappingProxyType({}),
-    quality_text: Mapping[str, str] = MappingProxyType({}),
     rating_gear_picks: Iterable[RatingGearPick] = (),
     vehicle_ids: Iterable[str] = (),
 ) -> CharacterSave:
@@ -502,7 +509,9 @@ def create_character_save(
         skills_letter=skills_letter,
         skill_points=MappingProxyType(dict(skill_points)),
         group_points=MappingProxyType(dict(group_points)),
-        quality_ids=tuple(quality_ids),
+        quality_picks=tuple(
+            QualityPickRequest(quality_id=p) if isinstance(p, str) else p for p in quality_picks
+        ),
         contacts=tuple(contacts),
         resources_letter=resources_letter,
         gear_names=tuple(gear_names),
@@ -531,7 +540,6 @@ def create_character_save(
         karma_group_points=MappingProxyType(dict(karma_group_points)),
         karma_specializations=MappingProxyType(dict(karma_specializations)),
         karma_knowledge_points=MappingProxyType(dict(karma_knowledge_points)),
-        quality_text=MappingProxyType(dict(quality_text)),
         rating_gear_picks=tuple(rating_gear_picks),
         vehicle_ids=tuple(vehicle_ids),
     )
@@ -593,6 +601,29 @@ def _bioware_purchases_from_dict(data: Mapping[str, Any]) -> tuple[BiowarePurcha
     )
 
 
+def _quality_picks_from_dict(data: Mapping[str, Any]) -> tuple[QualityPickRequest, ...]:
+    """Read WP107's `quality_picks`, migrating a version-1 save's `quality_ids` + `quality_text`.
+
+    The migration is exact: version 1 could only express "each id once, at rating 1", and its
+    `quality_text` was keyed by id, so each id's text lands on its one pick.
+    """
+    if "quality_picks" in data:
+        return tuple(
+            QualityPickRequest(
+                quality_id=p["quality_id"],
+                rating=p.get("rating", 1),
+                text=p.get("text"),
+                choice=p.get("choice"),
+            )
+            for p in data["quality_picks"]
+        )
+    quality_text: Mapping[str, str] = data.get("quality_text", {})
+    return tuple(
+        QualityPickRequest(quality_id=qid, text=quality_text.get(qid))
+        for qid in data.get("quality_ids", ())
+    )
+
+
 def _purchases_from_dict(data: Mapping[str, Any]) -> tuple[CyberwarePurchaseRequest, ...]:
     """Read WP41's `cyberware_purchases`, falling back to WP33's flat `cyberware_item_ids`.
 
@@ -616,7 +647,10 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "skills_letter": save.skills_letter,
         "skill_points": dict(save.skill_points),
         "group_points": dict(save.group_points),
-        "quality_ids": list(save.quality_ids),
+        "quality_picks": [
+            {"quality_id": p.quality_id, "rating": p.rating, "text": p.text, "choice": p.choice}
+            for p in save.quality_picks
+        ],
         "contacts": [
             {
                 "name": contact.name,
@@ -671,7 +705,6 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "karma_group_points": dict(save.karma_group_points),
         "karma_specializations": dict(save.karma_specializations),
         "karma_knowledge_points": dict(save.karma_knowledge_points),
-        "quality_text": dict(save.quality_text),
         "rating_gear_picks": [
             {"name": name, "rating": rating} for name, rating in save.rating_gear_picks
         ],
@@ -681,9 +714,10 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
 
 def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
     version = data.get("format_version")
-    if version != FORMAT_VERSION:
+    if version not in READABLE_FORMAT_VERSIONS:
         raise ValueError(
-            f"unsupported save format version {version!r}; this build only reads {FORMAT_VERSION!r}"
+            f"unsupported save format version {version!r}; this build reads "
+            f"{list(READABLE_FORMAT_VERSIONS)!r}"
         )
     return create_character_save(
         metatype_name=data["metatype_name"],
@@ -693,7 +727,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         skills_letter=data["skills_letter"],
         skill_points=data["skill_points"],
         group_points=data["group_points"],
-        quality_ids=data["quality_ids"],
+        quality_picks=_quality_picks_from_dict(data),
         contacts=(
             Contact(
                 name=c["name"],
@@ -744,7 +778,6 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         karma_group_points=data.get("karma_group_points", {}),
         karma_specializations=data.get("karma_specializations", {}),
         karma_knowledge_points=data.get("karma_knowledge_points", {}),
-        quality_text=data.get("quality_text", {}),
         rating_gear_picks=((p["name"], p["rating"]) for p in data.get("rating_gear_picks", ())),
         vehicle_ids=data.get("vehicle_ids", ()),
     )
@@ -871,13 +904,12 @@ def build_character(
     magic_type = None if save.talent_codename == "Mundane" else save.talent_codename
 
     quality_selection = create_quality_selection(
-        save.quality_ids,
+        save.quality_picks,
         qualities,
         magic_type=magic_type,
         mentor_catalog=mentors,
         mentor_spirit_archetype_id=save.mentor_spirit_archetype_id,
         mentor_spirit_general_choice_id=save.mentor_spirit_general_choice_id,
-        quality_text=save.quality_text,
     )
     apply_quality_improvements(character, quality_selection.qualities)
     if quality_selection.mentor_spirit is not None:

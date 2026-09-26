@@ -175,6 +175,7 @@ from chummer5.engine.magic import (
     offered_talent_options,
 )
 from chummer5.engine.qualities import (
+    QualityPickRequest,
     apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
@@ -593,19 +594,22 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
     character = replace(character, skill_allocation=allocation)
 
     if fixture.qualities:
-        quality_ids = []
+        quality_picks = []
         for quality_name in fixture.qualities:
             quality = _QUALITIES_BY_NAME.get(quality_name)
             if quality is None:
                 raise KeyError(f"synthetic fixture names an unknown quality: {quality_name!r}")
-            quality_ids.append(quality.id)
-        # quality_text is authored name-keyed for legibility; the engine keys it by quality id.
-        quality_text = {}
-        for quality_name, text in fixture.quality_text.items():
-            quality = _QUALITIES_BY_NAME.get(quality_name)
-            if quality is None:
-                raise KeyError(f"synthetic fixture names an unknown quality: {quality_name!r}")
-            quality_text[quality.id] = text
+            # quality_text is authored name-keyed for legibility; WP107 carries it on the pick.
+            quality_picks.append(
+                QualityPickRequest(
+                    quality_id=quality.id, text=fixture.quality_text.get(quality_name)
+                )
+            )
+        unknown_text = sorted(set(fixture.quality_text) - set(fixture.qualities))
+        if unknown_text:
+            raise KeyError(
+                f"synthetic fixture gives text for an unselected quality: {unknown_text}"
+            )
         # WP74: a Mentor Spirit archetype pick (name-keyed, resolved to its id) rides on the quality
         # selection. Its General slot auto-resolves (single-option archetypes only — see
         # SyntheticCharacter's docstring); the Magician/Adept slot is auto-resolved from magic_type.
@@ -615,12 +619,11 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
             else None
         )
         selection = create_quality_selection(
-            quality_ids,
+            quality_picks,
             _QUALITIES,
             magic_type=character.magic_type,
             mentor_catalog=_MENTORS,
             mentor_spirit_archetype_id=mentor_archetype_id,
-            quality_text=quality_text,
         )
         # apply_quality_improvements mutates the character's (already-linked) ImprovementIndex in
         # place — the same order test_character_fixtures.py uses (create_character, then apply).

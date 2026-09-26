@@ -43,13 +43,23 @@ a player pick, since Mystic Adept, the only SR5 archetype that would need one, i
 project's scope entirely, see Project Overview's 2026-07-19 ruling) whenever "Mentor Spirit" is
 among the selected quality ids. See `spec/rulebooks/learnings.md`'s WP48 entry for the full
 per-archetype research.
+
+**WP107 (Phase X): a selection is a tuple of `QualityPick` *instances*, not a set of unique ids.**
+`<limit>` gives three shapes (see `Quality.max_rating`/`Quality.repeatable`): a rated quality is
+one pick with a `rating` of 1..N and costs `karma x rating`; a repeatable quality may appear any
+number of times, each instance distinguished by its `text`/`choice` (Home Ground's "a different
+bonus each time", p. 74, generalized); everything else is taken at most once. `choice` is a typed
+slot for the select-a-thing bonus shapes later Phase X WPs offer -- this module round-trips it but
+never interprets it. **A rated quality's cap can span several catalog rows**
+(`Quality.include_in_limit`): the data splits Indomitable into Mental/Physical/Social, each
+`<limit>3`, and p. 74 caps the *total* at 3 levels, which the data expresses as each row's
+`<includeinlimit>` naming the other two (see `spec/rulebooks/learnings/phase-x.md`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
-from types import MappingProxyType
 
 from chummer5.data.mentors import MentorChoice, MentorSpiritArchetype, gated_choice
 from chummer5.data.metatypes import Metatype
@@ -140,6 +150,53 @@ class MentorSpiritPick:
 
 
 @dataclass(frozen=True)
+class QualityPickRequest:
+    """One quality instance as a player, a save file or a legacy import asks for it (WP107).
+
+    The unresolved twin of `QualityPick` -- an id instead of a catalog `Quality`, the same split
+    `chummer5.engine.cyberware_subsystems.CyberwarePurchaseRequest` makes for purchase trees.
+    """
+
+    quality_id: str
+    rating: int = 1
+    text: str | None = None
+    choice: str | None = None
+
+
+@dataclass(frozen=True)
+class QualityPick:
+    """One validated quality instance (WP107): which quality, at which level, with which detail.
+
+    `rating` is 1 for every unrated quality. `text` is the free-text detail a `SELECT_TEXT` quality
+    requires (which SIN, which substance) and `None` for every other. `choice` is the typed slot for
+    a select-a-thing bonus (a skill, an attribute, a Matrix action) -- carried, not interpreted, by
+    this module.
+    """
+
+    quality: Quality
+    rating: int = 1
+    text: str | None = None
+    choice: str | None = None
+
+    @property
+    def karma(self) -> int:
+        """Signed Karma for this instance (the source data's sign convention): `karma x rating`."""
+        return self.quality.karma * self.rating
+
+    def to_request(self) -> QualityPickRequest:
+        return QualityPickRequest(
+            quality_id=self.quality.id, rating=self.rating, text=self.text, choice=self.choice
+        )
+
+
+def _as_request(pick: str | QualityPickRequest) -> QualityPickRequest:
+    """A bare id means "this quality, once, at rating 1, with no detail" -- the shorthand every
+    caller with nothing to choose keeps using (the same convention `create_bioware_selection`
+    follows for its own requests)."""
+    return QualityPickRequest(quality_id=pick) if isinstance(pick, str) else pick
+
+
+@dataclass(frozen=True)
 class QualitySelection:
     """A validated set of selected qualities and their net karma effect.
 
@@ -151,29 +208,29 @@ class QualitySelection:
     `mentor_spirit` (WP48) is `None` unless "Mentor Spirit" is among `qualities` -- see
     `create_quality_selection`'s own docstring for how it's resolved and validated.
 
-    `quality_text` (WP55) is `{quality_id: free_text}`, populated for exactly the selected
-    `BonusSupport.SELECT_TEXT` qualities (e.g. which SIN, which protected group) -- never for any
-    other quality, and never missing an entry for a selected `SELECT_TEXT` one (both directions
-    enforced by `create_quality_selection`).
+    `qualities` (WP107) is a tuple of `QualityPick` instances in submission order. WP55's
+    `quality_text` map folded into `QualityPick.text`: an id-keyed map cannot tell two Addictions
+    apart.
     """
 
-    qualities: tuple[Quality, ...]
+    qualities: tuple[QualityPick, ...]
     positive_karma: int
     negative_karma: int
     karma_cost: int
     mentor_spirit: MentorSpiritPick | None = None
-    quality_text: MappingProxyType[str, str] = MappingProxyType({})
+
+    def to_requests(self) -> tuple[QualityPickRequest, ...]:
+        return tuple(pick.to_request() for pick in self.qualities)
 
 
 def create_quality_selection(
-    quality_ids: Iterable[str],
+    picks: Iterable[str | QualityPickRequest],
     catalog: Iterable[Quality],
     *,
     magic_type: str | None = None,
     mentor_catalog: Iterable[MentorSpiritArchetype] = (),
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
-    quality_text: Mapping[str, str] | None = None,
 ) -> QualitySelection:
     """Build a `QualitySelection`, validating against the MVP-offered catalog and the karma cap.
 
@@ -185,12 +242,15 @@ def create_quality_selection(
     Negative-category karma magnitude doesn't exceed it either, checked independently (see module
     docstring).
 
-    **WP55**: `quality_text` is `{quality_id: free_text}`, required for exactly the selected
-    `BonusSupport.SELECT_TEXT` qualities -- a missing or blank (whitespace-only) entry for a
-    selected one is rejected ("quality requires a free-text detail"), and an entry keyed to a
-    quality that either wasn't selected or doesn't need one is rejected too (the same "don't
-    silently ignore a stale/tampered field" rule `mentor_spirit_archetype_id` already follows).
-    Every value is stored stripped in the returned `QualitySelection.quality_text`.
+    **WP55, per instance since WP107**: a `SELECT_TEXT` pick needs a non-blank `text`, and a pick of
+    any other quality must carry none (the same "don't silently ignore a stale/tampered field" rule
+    `mentor_spirit_archetype_id` already follows). Text is stored stripped.
+
+    **WP107**: a bare `str` in `picks` means `QualityPickRequest(that_id)`. A quality that is
+    neither rated nor repeatable may appear once; a rated one once, at a `rating` within
+    `1..Quality.max_rating`; a repeatable one any number of times, but never twice with the same
+    `(text, choice)`. An unrated quality's `rating` must be 1. Both 25-Karma caps sum
+    `karma x rating` per pick, and rows linked by `include_in_limit` share one level cap.
 
     **WP48**: if `MENTOR_SPIRIT_QUALITY_NAME` is among `quality_ids`, `mentor_spirit_archetype_id`
     must resolve against `mentor_catalog`, `magic_type` must be `"Magician"` or `"Adept"` (Mentor
@@ -210,17 +270,66 @@ def create_quality_selection(
     offered_by_id = _add_mentor_spirit_if_eligible(
         {q.id: q for q in mvp_quality_catalog(catalog)}, catalog, magic_type
     )
-    ids = list(quality_ids)
+    requests = [_as_request(p) for p in picks]
 
-    unknown = sorted({qid for qid in ids if qid not in offered_by_id})
+    unknown = sorted({r.quality_id for r in requests if r.quality_id not in offered_by_id})
     if unknown:
         raise ValueError(f"not an MVP-offered quality id: {unknown}")
 
-    duplicates = sorted({qid for qid in ids if ids.count(qid) > 1})
+    resolved: list[QualityPick] = []
+    for request in requests:
+        quality = offered_by_id[request.quality_id]
+        if not 1 <= request.rating <= quality.max_rating:
+            raise ValueError(
+                f"{quality.name}: rating {request.rating} is outside 1-{quality.max_rating}"
+            )
+        text = request.text.strip() if request.text is not None else None
+        if quality.bonus_support == BonusSupport.SELECT_TEXT:
+            if not text:
+                raise ValueError(f"quality requires a free-text detail: {[quality.name]}")
+        elif text:
+            raise ValueError(
+                f"free-text detail supplied for a quality that doesn't use one: {[quality.name]}"
+            )
+        else:
+            text = None
+        resolved.append(
+            QualityPick(quality=quality, rating=request.rating, text=text, choice=request.choice)
+        )
+
+    ids = [pick.quality.id for pick in resolved]
+    duplicates = sorted(
+        {
+            pick.quality.id
+            for pick in resolved
+            if not pick.quality.repeatable and ids.count(pick.quality.id) > 1
+        }
+    )
     if duplicates:
         raise ValueError(f"quality selected more than once: {duplicates}")
+    instance_keys = [(p.quality.id, p.text, p.choice) for p in resolved if p.quality.repeatable]
+    repeated = sorted(
+        {
+            offered_by_id[qid].name
+            for qid, text, choice in instance_keys
+            if instance_keys.count((qid, text, choice)) > 1
+        }
+    )
+    if repeated:
+        raise ValueError(f"the same quality instance was selected twice: {repeated}")
 
-    selected = tuple(offered_by_id[qid] for qid in ids)
+    for pick in resolved:
+        if not pick.quality.include_in_limit:
+            continue
+        shared = {pick.quality.name, *pick.quality.include_in_limit}
+        levels = sum(p.rating for p in resolved if p.quality.name in shared)
+        if levels > pick.quality.max_rating:
+            raise ValueError(
+                f"{sorted(shared)} have {levels} levels between them, exceeding the shared "
+                f"{pick.quality.max_rating}-level maximum"
+            )
+
+    selected = tuple(pick.quality for pick in resolved)
 
     # WP55: mutual exclusion (Quality.forbidden_names, e.g. SINner's 4-way exclusivity, Natural
     # Immunity vs. the not-yet-offered Weak Immune System). Checked by name, not id, since a
@@ -231,8 +340,8 @@ def create_quality_selection(
         if conflicts:
             raise ValueError(f"{quality.name} cannot be taken together with: {conflicts}")
 
-    positive_karma = sum(q.karma for q in selected if q.category == "Positive")
-    negative_karma = -sum(q.karma for q in selected if q.category == "Negative")
+    positive_karma = sum(p.karma for p in resolved if p.quality.category == "Positive")
+    negative_karma = -sum(p.karma for p in resolved if p.quality.category == "Negative")
 
     if positive_karma > QUALITY_KARMA_LIMIT:
         raise ValueError(
@@ -244,26 +353,6 @@ def create_quality_selection(
             f"Negative Qualities grant {negative_karma} karma, exceeding the "
             f"{QUALITY_KARMA_LIMIT}-karma limit"
         )
-
-    # WP55: every selected SELECT_TEXT quality needs a non-blank free-text detail; no entry may be
-    # supplied for anything else (a stale/tampered field, the same discipline the Mentor Spirit
-    # orphan-pick check below already follows).
-    quality_text_map = dict(quality_text or {})
-    select_text_ids = {q.id for q in selected if q.bonus_support == BonusSupport.SELECT_TEXT}
-    missing_text = sorted(
-        offered_by_id[qid].name
-        for qid in select_text_ids
-        if not quality_text_map.get(qid, "").strip()
-    )
-    if missing_text:
-        raise ValueError(f"quality requires a free-text detail: {missing_text}")
-    orphaned_text = sorted(set(quality_text_map) - select_text_ids)
-    if orphaned_text:
-        raise ValueError(
-            f"free-text detail supplied for a quality that wasn't selected or doesn't use one: "
-            f"{orphaned_text}"
-        )
-    resolved_quality_text = {qid: quality_text_map[qid].strip() for qid in select_text_ids}
 
     mentor_spirit_selected = any(q.name == MENTOR_SPIRIT_QUALITY_NAME for q in selected)
     mentor_spirit_pick: MentorSpiritPick | None = None
@@ -299,18 +388,17 @@ def create_quality_selection(
         raise ValueError("a Mentor Spirit archetype was picked without the Mentor Spirit quality")
 
     return QualitySelection(
-        qualities=selected,
+        qualities=tuple(resolved),
         positive_karma=positive_karma,
         negative_karma=negative_karma,
         karma_cost=positive_karma - negative_karma,
         mentor_spirit=mentor_spirit_pick,
-        quality_text=MappingProxyType(resolved_quality_text),
     )
 
 
 def apply_quality_improvements(
     character: Character,
-    qualities: Iterable[Quality],
+    qualities: Iterable[Quality | QualityPick],
     *,
     source_type: ImprovementSource = ImprovementSource.QUALITY,
 ) -> None:
@@ -327,16 +415,21 @@ def apply_quality_improvements(
     exactly what one quality granted. `source_type` defaults to `ImprovementSource.QUALITY` (every
     pre-WP23 caller passes a player's chosen qualities); WP23 passes `ImprovementSource.METATYPE`
     for metatype-granted ones, so the two are independently retractable.
+
+    **WP107**: a `QualityPick` applies each flat bonus `x rating` (Indomitable (Mental) 2 is +2
+    Mental limit); a bare `Quality` counts as rating 1. Every instance of a repeatable quality
+    shares its `source_id`, which is fine: removal is always wholesale per quality.
     """
-    for quality in qualities:
-        for flat_bonus in quality.flat_bonuses:
+    for item in qualities:
+        pick = item if isinstance(item, QualityPick) else QualityPick(quality=item)
+        for flat_bonus in pick.quality.flat_bonuses:
             character.improvements.add(
                 Improvement(
                     improvement_type=_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
                     target=flat_bonus.target_name,
-                    value=flat_bonus.value,
+                    value=flat_bonus.value * pick.rating,
                     source_type=source_type,
-                    source_id=quality.id,
+                    source_id=pick.quality.id,
                 )
             )
 

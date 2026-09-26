@@ -1593,3 +1593,18 @@ WP107-135 are in `spec/plan/phase-x-rulebook-completeness.md`; what matters beyo
   creation (p. 451). The checklist's "dwarf/troll gear-cost modifiers" are the Lifestyle surcharge
   restated (p. 420), not a separate mechanic. Adepts have been offered magic-group skills since WP61,
   against p. 69. Details are in the phase file's Findings 1, 2 and 4.
+
+## 2026-09-26 — WP107: the first save-format migration, and how legacy stores quality levels
+
+- **`FORMAT_VERSION` is 2.** WP107 replaced `quality_ids` + `quality_text` with `quality_picks`.
+  Every earlier shape change was additive and kept version 1. This one can't: an id list can't say
+  "Focused Concentration 3" or "two Addictions". `from_json` reads versions 1 and 2
+  (`READABLE_FORMAT_VERSIONS`), and `_quality_picks_from_dict` migrates version 1 exactly. Only
+  version 2 is written. A later break should add its own per-field migration the same way, not a
+  generic upgrade pass.
+- **A `.chum5` quality has no rating field.** Legacy writes one `<quality>` node per level. Import
+  therefore folds repeats of a rated quality into a rating, and the phase plan's "map `<rating>`"
+  wording was wrong.
+- **`<includeinlimit>` is parsed.** It is how the data says Indomitable's three rows share one
+  3-level cap (p. 75). Any future catalog loader that offers rated items should check whether its
+  file uses the same block.

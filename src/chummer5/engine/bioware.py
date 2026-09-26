@@ -54,10 +54,11 @@ docstring): the catalog says a pick is required and what it may be, and the *pur
 pick. Two consequences worth stating once:
 
 - **Per purchase, not per catalog row.** The pick can't live in a `{item_id: skill}` mapping the
-  way WP55's `QualitySelection.quality_text` does, because a quality can only be taken once while
-  bioware can be bought repeatedly -- and p. 460 explicitly contemplates buying several recorders
-  for several skills (`cyberware.xml`'s own LCD-sourced implant packages bundle two, forced to
-  `Locksmith` and `Pistols`). Hence `BiowarePurchase`, one per bought unit.
+  way WP55's former `QualitySelection.quality_text` did, because bioware can be bought repeatedly
+  (WP107 later moved quality text onto per-instance `QualityPick`s for the same reason) -- and
+  p. 460 explicitly contemplates buying several recorders for several skills (`cyberware.xml`'s
+  own LCD-sourced implant packages bundle two, forced to `Locksmith` and `Pistols`).
+  Hence `BiowarePurchase`, one per bought unit.
 - **A bare id is still accepted** wherever no choice is involved: `create_bioware_selection` takes
   `Iterable[str | BiowarePurchaseRequest]` and reads a plain string as "this item, no player
   choice." That is a total, well-defined meaning rather than a placeholder (5 of the 6 offered rows
@@ -185,7 +186,7 @@ def _resolve_chosen_skill(
 
     Returns the pick to store (`None` for a row that needs none). Raises `ValueError` when a row
     that requires a pick has none, when a row that requires none has one (the "don't silently
-    ignore a stale/tampered field" rule `create_quality_selection` applies to `quality_text`), or
+    ignore a stale/tampered field" rule `create_quality_selection` applies to a pick's text), or
     when the pick isn't an active skill whose linked attribute passes the row's own
     `limittoattribute` filter.
     """

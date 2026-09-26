@@ -271,7 +271,7 @@ def test_wesson_adept_powers_hand_verified_against_the_raw_fixture_and_catalog()
 def test_wesson_imports_end_to_end() -> None:
     """WP55 closes the SINner gap WP52's own research found: `SINner (Corporate Limited)` is now
     one of the 9 newly-offered `BonusSupport.SELECT_TEXT` qualities (his real `<extra>` -- 'Lone
-    Star Security Services' -- resolves into `quality_selection.quality_text`), so his real +15
+    Star Security Services' -- resolves into its pick's `text`), so his real +15
     Karma credit is no longer silently dropped, and his real 20-Karma EDG Karma-buy (rating 3 -> 4,
     `(3 + 1) x 5`) now resolves against a real 30-Karma budget (`25 - 10` for Guts + `15` from
     SINner) instead of the 15 the previous, SINner-less reconstruction left him with. This replaces
@@ -303,8 +303,10 @@ def test_wesson_imports_end_to_end() -> None:
 
     quality_selection = character.quality_selection
     assert quality_selection is not None
-    sinner = next(q for q in quality_selection.qualities if q.name == "SINner (Corporate Limited)")
-    assert quality_selection.quality_text[sinner.id] == "Lone Star Security Services"
+    sinner = next(
+        p for p in quality_selection.qualities if p.quality.name == "SINner (Corporate Limited)"
+    )
+    assert sinner.text == "Lone Star Security Services"
     assert quality_selection.positive_karma == 10  # Guts
     assert quality_selection.negative_karma == 15  # SINner (Corporate Limited)
 
@@ -439,7 +441,7 @@ def test_wesson_adept_magic_and_drain_via_direct_engine_construction() -> None:
         skills_letter="B",
         skill_points={},
         group_points={},
-        quality_ids=(),
+        quality_picks=(),
         contacts=(),
         resources_letter="D",
         gear_names=(),

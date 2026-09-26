@@ -251,7 +251,9 @@ class Quality:
     name: str
     category: str  # "Positive" or "Negative"
     karma: int  # negative for Negative-category qualities, per the source data's sign convention
-    limit: str | None  # raw string: a count, "True"/"False", or a formula like "{arm} - 1"
+    # raw string: a count, "True"/"False", or a formula like "{arm} - 1" -- read it through
+    # `max_rating`/`repeatable` (WP107), not directly
+    limit: str | None
     source: str
     page: int
     bonus_support: BonusSupport
@@ -266,6 +268,28 @@ class Quality:
     # FLAT_BONUS quality, and every NOT_YET_SUPPORTED one not individually verified inert-but-for-
     # one-real-effect the way Resistance to Pathogens/Toxins is).
     unmodeled_effect_note: str | None = None
+    # WP107: sibling quality names whose levels count against this one's `max_rating` (parsed from
+    # `<includeinlimit>`). In the SR5 slice only the Indomitable trio carries one: p. 74 caps it at
+    # 3 levels *in total*, and the data splits it into three rows that each name the other two.
+    include_in_limit: tuple[str, ...] = ()
+
+    @property
+    def max_rating(self) -> int:
+        """The highest level this quality can be bought at (WP107): `<limit>`'s integer for a rated
+        quality (Focused Concentration 6, Gremlins 4, ...), 1 for everything else.
+
+        `{arm} - 1` (Ambidextrous, the one formula-valued `<limit>` in the SR5 slice) reads as 1:
+        no core metatype has more than two arms, so the formula always evaluates to 1 there.
+        """
+        if self.limit is not None and self.limit.isdigit():
+            return int(self.limit)
+        return 1
+
+    @property
+    def repeatable(self) -> bool:
+        """`<limit>False</limit>` (WP107): any number of instances, each with its own detail --
+        Addiction to several substances, Code of Honor towards several groups."""
+        return self.limit == "False"
 
 
 def _is_flat_skill_bonus(elem: ET.Element) -> bool:
@@ -357,6 +381,9 @@ def _parse_quality(elem: ET.Element) -> Quality:
         flat_bonuses=flat_bonuses,
         raw_bonus=raw_bonus,
         forbidden_names=_parse_forbidden_names(elem),
+        include_in_limit=tuple(
+            n.text for n in elem.findall("includeinlimit/name") if n.text is not None
+        ),
         unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(elem.findtext("name", "")),
     )
 

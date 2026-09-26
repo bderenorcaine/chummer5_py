@@ -25,6 +25,7 @@ from chummer5.data.traditions import load_traditions
 from chummer5.engine.bioware import BiowarePurchaseRequest
 from chummer5.engine.cyberware_subsystems import CyberwarePurchaseRequest
 from chummer5.engine.improvements import ImprovementType
+from chummer5.engine.qualities import QualityPickRequest
 from chummer5.io.legacy_chum5 import (
     LegacyAttribute,
     LegacyCharacter,
@@ -917,7 +918,7 @@ def test_unsupported_quality_is_dropped_and_reported_not_fatal() -> None:
         lifestyles=LIFESTYLES,
     )
     assert result.dropped_qualities == (unsupported.name,)
-    assert result.save.quality_ids == ()
+    assert result.save.quality_picks == ()
 
 
 def test_mvp_offered_quality_is_imported() -> None:
@@ -940,8 +941,8 @@ def test_mvp_offered_quality_is_imported() -> None:
         lifestyles=LIFESTYLES,
     )
     assert result.dropped_qualities == ()
-    assert result.save.quality_ids == (catlike.id,)
-    assert catlike.id in {q.id for q in result.built.quality_selection.qualities}
+    assert result.save.quality_picks == (QualityPickRequest(catlike.id),)
+    assert catlike.id in {p.quality.id for p in result.built.quality_selection.qualities}
 
 
 def test_metatype_granted_quality_is_neither_imported_nor_dropped() -> None:
@@ -969,7 +970,7 @@ def test_metatype_granted_quality_is_neither_imported_nor_dropped() -> None:
         lifestyles=LIFESTYLES,
     )
     assert result.dropped_qualities == ()
-    assert result.save.quality_ids == ()
+    assert result.save.quality_picks == ()
     assert "Low-Light Vision" in {q.name for q in result.built.metatype_qualities}
     # Not double-counted as a player pick either.
     assert result.built.quality_selection is not None
@@ -1194,3 +1195,31 @@ def test_native_language_flag_reaches_the_built_character() -> None:
     (language,) = result.built.knowledge_selection.languages
     assert language.native is True
     assert result.built.knowledge_selection.points_spent == 0
+
+
+def test_repeated_nodes_of_a_rated_quality_fold_into_one_pick_s_rating() -> None:
+    """WP107: the legacy format saves a rated quality as one `<quality>` node per level (e.g.
+    Glessner.chum5's three Focused Concentration nodes), so two Indomitable (Mental) nodes are one
+    pick at rating 2 -- not two picks, which `create_quality_selection` would reject as a duplicate.
+    """
+    indomitable = next(q for q in QUALITIES if q.name == "Indomitable (Mental)")
+    legacy_quality = LegacyQuality(
+        id=indomitable.id,
+        name=indomitable.name,
+        extra="",
+        karma=indomitable.karma,
+        quality_type=indomitable.category,
+        source=indomitable.source,
+        quality_source="Selected",
+    )
+    result = import_legacy_character(
+        _legacy_character(qualities=(legacy_quality, legacy_quality)),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+    assert result.save.quality_picks == (QualityPickRequest(indomitable.id, rating=2),)
+    assert result.built.quality_selection is not None
+    assert result.built.quality_selection.positive_karma == 16

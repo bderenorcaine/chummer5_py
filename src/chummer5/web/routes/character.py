@@ -353,19 +353,14 @@ def _character_sheet_context(
         if allocation is not None
         else []
     )
-    # WP55: a SELECT_TEXT quality's chosen free-text detail is shown alongside its name (e.g.
-    # "SINner (National) (UCAS)") rather than needing its own context key/template branch.
-    quality_names = (
-        [
-            f"{q.name} ({character.quality_selection.quality_text[q.id]})"
-            if q.id in character.quality_selection.quality_text
-            else q.name
-            for q in character.quality_selection.qualities
-        ]
+    # WP55/WP107: each pick instance, so the template can show its level ("Focused Concentration
+    # 3") and its free-text detail ("SINner (National) (UCAS)") after the translated name.
+    quality_picks = (
+        list(character.quality_selection.qualities)
         if character.quality_selection is not None
         else []
     )
-    # WP23: shown separately from quality_names -- these were never a karma spend (excluded from
+    # WP23: shown separately from quality_picks -- these were never a karma spend (excluded from
     # quality_karma_cost below, which stays quality_selection-only), so conflating the two lists
     # would misrepresent what the player actually chose to buy.
     metatype_quality_names = [q.name for q in character.metatype_qualities]
@@ -464,7 +459,7 @@ def _character_sheet_context(
             for code in ALLOCATABLE_ATTRIBUTES
         ],
         "sheet_skill_rows": skill_rows,
-        "quality_names": quality_names,
+        "quality_picks": quality_picks,
         "metatype_quality_names": metatype_quality_names,
         "contacts": contact_selection.contacts,
         # WP94: `matrix_stat_block` is None for all but the three Matrix-device categories, so the
@@ -715,10 +710,8 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     character = session.character
     assert character is not None
     allocation = character.skill_allocation
-    quality_ids = (
-        tuple(q.id for q in character.quality_selection.qualities)
-        if character.quality_selection is not None
-        else ()
+    quality_picks = (
+        character.quality_selection.to_requests() if character.quality_selection is not None else ()
     )
     contacts = (
         character.contact_selection.contacts if character.contact_selection is not None else ()
@@ -774,9 +767,6 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         if character.quality_selection is not None
         else None
     )
-    quality_text = (
-        character.quality_selection.quality_text if character.quality_selection is not None else {}
-    )
     knowledge_selection = character.knowledge_selection
     knowledge_skill_picks = (
         tuple(
@@ -799,8 +789,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         skill_points=allocation.skill_points if allocation is not None else {},
         group_points=allocation.group_points if allocation is not None else {},
         specializations=allocation.specializations if allocation is not None else {},
-        quality_ids=quality_ids,
-        quality_text=quality_text,
+        quality_picks=quality_picks,
         contacts=contacts,
         resources_letter=session.resources_letter,
         gear_names=gear_names,

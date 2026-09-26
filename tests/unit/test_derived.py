@@ -45,6 +45,7 @@ from chummer5.engine.improvements import Improvement, ImprovementSource, Improve
 from chummer5.engine.lifestyle import LifestyleSelection
 from chummer5.engine.magic import PowerPick, PowerSelection, SpellSelection
 from chummer5.engine.qualities import (
+    QualityPick,
     QualitySelection,
     create_quality_selection,
     resolve_metatype_qualities,
@@ -326,7 +327,7 @@ def test_unmodeled_effect_notes_dedups_metatype_grant_against_matching_purchase(
         character,
         metatype_qualities=(low_light,),
         quality_selection=QualitySelection(
-            qualities=(low_light,), positive_karma=0, negative_karma=0, karma_cost=0
+            qualities=(QualityPick(low_light),), positive_karma=0, negative_karma=0, karma_cost=0
         ),
     )
     rows = unmodeled_effect_notes(character)

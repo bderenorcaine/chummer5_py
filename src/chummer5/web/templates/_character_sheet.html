@@ -145,10 +145,10 @@
   {% endif %}
 
   <h3>{{ _("String_Qualities") }}</h3>
-  {% if quality_names %}
+  {% if quality_picks %}
   <ul>
-    {% for name in quality_names %}
-    <li>{{ name | dterm("qualities.xml") }}</li>
+    {% for pick in quality_picks %}
+    <li>{{ pick.quality | dterm("qualities.xml") }}{% if pick.quality.max_rating > 1 %} {{ pick.rating }}{% endif %}{% if pick.text %} ({{ pick.text }}){% endif %}</li>
     {% endfor %}
   </ul>
   {% else %}

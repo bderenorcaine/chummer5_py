@@ -520,12 +520,7 @@ def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> di
     knowledge_ctx = _knowledge_selection_context(
         character, knowledge_skills, languages, karma_knowledge_points
     )
-    quality_ids = (
-        tuple(q.id for q in character.quality_selection.qualities)
-        if character is not None and character.quality_selection is not None
-        else ()
-    )
-    quality_ctx = _quality_selection_context(character, quality_ids)
+    quality_ctx = _quality_selection_context(character)
     contacts = (
         character.contact_selection.contacts
         if character is not None and character.contact_selection is not None

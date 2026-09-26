@@ -25,6 +25,8 @@ from chummer5.engine.qualities import (
     MENTOR_SPIRIT_QUALITY_NAME,
     QUALITY_KARMA_LIMIT,
     MentorSpiritPick,
+    QualityPick,
+    QualityPickRequest,
     apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
@@ -180,7 +182,7 @@ def test_mvp_quality_catalog_excludes_not_yet_supported_quality() -> None:
 def test_create_quality_selection_single_positive_quality() -> None:
     catlike = _by_name("Catlike")
     selection = create_quality_selection([catlike.id], QUALITIES)
-    assert selection.qualities == (catlike,)
+    assert selection.qualities == (QualityPick(catlike),)
     assert selection.positive_karma == 7
     assert selection.negative_karma == 0
     assert selection.karma_cost == 7
@@ -760,30 +762,22 @@ def test_create_quality_selection_requires_text_for_select_text_quality() -> Non
 def test_create_quality_selection_rejects_blank_text_for_select_text_quality() -> None:
     sinner = _by_name("SINner (National)")
     with pytest.raises(ValueError, match="requires a free-text detail"):
-        create_quality_selection([sinner.id], QUALITIES, quality_text={sinner.id: "   "})
+        create_quality_selection([QualityPickRequest(sinner.id, text="   ")], QUALITIES)
 
 
 def test_create_quality_selection_accepts_and_strips_text_for_select_text_quality() -> None:
     sinner = _by_name("SINner (National)")
     selection = create_quality_selection(
-        [sinner.id], QUALITIES, quality_text={sinner.id: "  UCAS  "}
+        [QualityPickRequest(sinner.id, text="  UCAS  ")], QUALITIES
     )
-    assert selection.quality_text == {sinner.id: "UCAS"}
+    assert selection.qualities[0].text == "UCAS"
     assert selection.negative_karma == 5
-
-
-def test_create_quality_selection_rejects_orphaned_select_text() -> None:
-    catlike = _by_name("Catlike")
-    with pytest.raises(ValueError, match="wasn't selected or doesn't use one"):
-        create_quality_selection(
-            [catlike.id], QUALITIES, quality_text={"not-a-selected-select-text-id": "whatever"}
-        )
 
 
 def test_create_quality_selection_rejects_text_for_a_non_select_text_quality() -> None:
     catlike = _by_name("Catlike")
-    with pytest.raises(ValueError, match="wasn't selected or doesn't use one"):
-        create_quality_selection([catlike.id], QUALITIES, quality_text={catlike.id: "whatever"})
+    with pytest.raises(ValueError, match="doesn't use one"):
+        create_quality_selection([QualityPickRequest(catlike.id, text="whatever")], QUALITIES)
 
 
 def test_create_quality_selection_rejects_sinner_mutual_exclusion() -> None:
@@ -791,9 +785,11 @@ def test_create_quality_selection_rejects_sinner_mutual_exclusion() -> None:
     corporate = _by_name("SINner (Corporate)")
     with pytest.raises(ValueError, match="cannot be taken together with"):
         create_quality_selection(
-            [national.id, corporate.id],
+            [
+                QualityPickRequest(national.id, text="UCAS"),
+                QualityPickRequest(corporate.id, text="Ares"),
+            ],
             QUALITIES,
-            quality_text={national.id: "UCAS", corporate.id: "Ares"},
         )
 
 
@@ -810,7 +806,8 @@ def test_create_quality_selection_all_four_sinner_variants_are_pairwise_exclusiv
             b = _by_name(name_b)
             with pytest.raises(ValueError, match="cannot be taken together with"):
                 create_quality_selection(
-                    [a.id, b.id], QUALITIES, quality_text={a.id: "x", b.id: "y"}
+                    [QualityPickRequest(a.id, text="x"), QualityPickRequest(b.id, text="y")],
+                    QUALITIES,
                 )
 
 
@@ -837,9 +834,11 @@ def test_create_quality_selection_natural_immunity_mutual_exclusion_via_syntheti
     catalog = (*QUALITIES, synthetic_weak_immune_system)
     with pytest.raises(ValueError, match="cannot be taken together with"):
         create_quality_selection(
-            [natural_immunity.id, synthetic_weak_immune_system.id],
+            [
+                QualityPickRequest(natural_immunity.id, text="Ebola"),
+                synthetic_weak_immune_system.id,
+            ],
             catalog,
-            quality_text={natural_immunity.id: "Ebola"},
         )
 
 
@@ -847,14 +846,13 @@ def test_create_quality_selection_multiple_select_text_qualities_independent_tex
     code_of_honor = _by_name("Code of Honor")
     codeblock = _by_name("Codeblock")
     selection = create_quality_selection(
-        [code_of_honor.id, codeblock.id],
+        [
+            QualityPickRequest(code_of_honor.id, text="Never harm children"),
+            QualityPickRequest(codeblock.id, text="Matrix Perception"),
+        ],
         QUALITIES,
-        quality_text={code_of_honor.id: "Never harm children", codeblock.id: "Matrix Perception"},
     )
-    assert selection.quality_text == {
-        code_of_honor.id: "Never harm children",
-        codeblock.id: "Matrix Perception",
-    }
+    assert [p.text for p in selection.qualities] == ["Never harm children", "Matrix Perception"]
     assert selection.negative_karma == 25  # 15 + 10
 
 
@@ -863,6 +861,109 @@ def test_apply_quality_improvements_select_text_quality_adds_no_improvements() -
     # construction, mirroring NO_EFFECT's identical shape.
     character = _mundane_human_character()
     sinner = _by_name("SINner (National)")
-    selection = create_quality_selection([sinner.id], QUALITIES, quality_text={sinner.id: "UCAS"})
+    selection = create_quality_selection([QualityPickRequest(sinner.id, text="UCAS")], QUALITIES)
     apply_quality_improvements(character, selection.qualities)
     assert character.improvements.improvements == ()
+
+
+# --- WP107: quality instances ---------------------------------------------------------------------
+
+
+def test_limit_parses_into_max_rating_and_repeatable() -> None:
+    assert _by_name("Focused Concentration").max_rating == 6
+    assert _by_name("Gremlins").max_rating == 4
+    assert _by_name("Catlike").max_rating == 1
+    assert _by_name("Ambidextrous").max_rating == 1  # "{arm} - 1": two arms on every core metatype
+    assert _by_name("Addiction (Mild)").repeatable
+    assert not _by_name("Addiction (Mild)").max_rating > 1
+    assert not _by_name("Catlike").repeatable
+    assert not _by_name("Indomitable (Mental)").repeatable
+    assert set(_by_name("Indomitable (Mental)").include_in_limit) == {
+        "Indomitable (Physical)",
+        "Indomitable (Social)",
+    }
+
+
+def test_a_rated_pick_costs_karma_times_rating_and_applies_its_bonus_times_rating() -> None:
+    indomitable = _by_name("Indomitable (Mental)")
+    selection = create_quality_selection([QualityPickRequest(indomitable.id, rating=3)], QUALITIES)
+    assert selection.positive_karma == 24
+    character = _mundane_human_character()
+    baseline = mental_limit(character)
+    apply_quality_improvements(character, selection.qualities)
+    assert mental_limit(character) == baseline + 3
+
+
+def test_a_rating_outside_the_quality_s_range_is_rejected() -> None:
+    indomitable = _by_name("Indomitable (Mental)")
+    catlike = _by_name("Catlike")
+    with pytest.raises(ValueError, match="rating 4 is outside 1-3"):
+        create_quality_selection([QualityPickRequest(indomitable.id, rating=4)], QUALITIES)
+    with pytest.raises(ValueError, match="rating 0 is outside 1-3"):
+        create_quality_selection([QualityPickRequest(indomitable.id, rating=0)], QUALITIES)
+    with pytest.raises(ValueError, match="rating 2 is outside 1-1"):
+        create_quality_selection([QualityPickRequest(catlike.id, rating=2)], QUALITIES)
+
+
+def test_a_rated_quality_is_one_pick_not_several() -> None:
+    indomitable = _by_name("Indomitable (Mental)")
+    with pytest.raises(ValueError, match="selected more than once"):
+        create_quality_selection([indomitable.id, indomitable.id], QUALITIES)
+
+
+def test_indomitable_s_three_rows_share_one_three_level_cap() -> None:
+    """p. 74: "can be split across the three in any combination up to 3 total levels"."""
+    mental = _by_name("Indomitable (Mental)")
+    physical = _by_name("Indomitable (Physical)")
+    create_quality_selection(
+        [QualityPickRequest(mental.id, rating=2), QualityPickRequest(physical.id, rating=1)],
+        QUALITIES,
+    )
+    with pytest.raises(ValueError, match="exceeding the shared 3-level maximum"):
+        create_quality_selection(
+            [QualityPickRequest(mental.id, rating=2), QualityPickRequest(physical.id, rating=2)],
+            QUALITIES,
+        )
+
+
+def test_the_karma_caps_sum_karma_times_rating() -> None:
+    indomitable = _by_name("Indomitable (Mental)")
+    catlike = _by_name("Catlike")
+    with pytest.raises(ValueError, match="Positive Qualities cost 31 karma"):
+        create_quality_selection(
+            [QualityPickRequest(indomitable.id, rating=3), catlike.id], QUALITIES
+        )
+
+
+def test_a_repeatable_quality_takes_several_instances_with_distinct_details() -> None:
+    codeblock = _by_name("Codeblock")
+    selection = create_quality_selection(
+        [
+            QualityPickRequest(codeblock.id, text="Matrix Perception"),
+            QualityPickRequest(codeblock.id, text="Hack on the Fly"),
+        ],
+        QUALITIES,
+    )
+    assert selection.negative_karma == 20
+    assert [p.text for p in selection.qualities] == ["Matrix Perception", "Hack on the Fly"]
+
+
+def test_a_repeatable_quality_rejects_two_identical_instances() -> None:
+    codeblock = _by_name("Codeblock")
+    with pytest.raises(ValueError, match="same quality instance was selected twice"):
+        create_quality_selection(
+            [
+                QualityPickRequest(codeblock.id, text="Matrix Perception"),
+                QualityPickRequest(codeblock.id, text=" Matrix Perception "),
+            ],
+            QUALITIES,
+        )
+
+
+def test_the_choice_slot_round_trips_uninterpreted() -> None:
+    catlike = _by_name("Catlike")
+    selection = create_quality_selection(
+        [QualityPickRequest(catlike.id, choice="anything")], QUALITIES
+    )
+    assert selection.qualities[0].choice == "anything"
+    assert selection.to_requests() == (QualityPickRequest(catlike.id, choice="anything"),)

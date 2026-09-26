@@ -271,8 +271,8 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
     for quality in character.metatype_qualities:
         add(quality.name, getattr(quality, "unmodeled_effect_note", None))
     if character.quality_selection is not None:
-        for quality in character.quality_selection.qualities:
-            add(quality.name, getattr(quality, "unmodeled_effect_note", None))
+        for pick in character.quality_selection.qualities:
+            add(pick.quality.name, getattr(pick.quality, "unmodeled_effect_note", None))
         mentor_spirit = character.quality_selection.mentor_spirit
         if mentor_spirit is not None:
             add(

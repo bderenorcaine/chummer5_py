@@ -99,7 +99,7 @@ the rules it checks.
 
 #### Foundations
 
-- [ ] **WP107 — Quality instances: levels, repeats, and per-instance choices.**
+- [x] **WP107 — Quality instances: levels, repeats, and per-instance choices.**
   Goal: make a quality selection a list of *instances* rather than a set of unique ids. Offer nothing
   new yet.
   Deliverables:

@@ -58,7 +58,7 @@ def _talent_selection_context(
     `talent_codename`/`tradition_id`/`granted_skill_ids` are whatever should be shown selected --
     the character's own committed values on a clean render, or the raw submitted form values on an
     error-echo render, mirroring `chummer5.web.routes.qualities._quality_selection_context`'s
-    identical `quality_ids` parameter.
+    identical `picks` parameter.
 
     **WP19-style staleness re-validation**: when `error` is unset and a Talent selection is already
     committed (`character.magic_type is not None`), re-runs `create_magic_selection` against the

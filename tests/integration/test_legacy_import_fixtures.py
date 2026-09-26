@@ -86,7 +86,7 @@ def test_imports_yeti_end_to_end() -> None:
         "Faceless",
         "Data Anomaly",
     }
-    assert result.save.quality_ids == ()
+    assert result.save.quality_picks == ()
 
     # Skills: the Firearms group was bought, so Automatics (a Firearms-group skill) picks up the
     # group rating -- same cross-check WP7's fixture test makes directly against `SkillAllocation`.

@@ -29,28 +29,40 @@
           <th>{{ _("Web_Qualities_ColQuality") }}</th>
           <th>{{ _("Web_Qualities_ColCategory") }}</th>
           <th>{{ _("String_Karma") }}</th>
+          <th>{{ _("String_Rating") }}</th>
           <th>{{ _("Web_Qualities_ColDetail") }}</th>
         </tr>
       </thead>
       <tbody>
         {% for row in quality_rows %}
-        <tr>
+        <tr{% if row.another %} class="quality-row--another"{% endif %}>
           <td>
             <input
               type="checkbox"
               name="quality_id"
-              value="{{ row.quality.id }}"
+              value="{{ row.key }}"
               {% if row.selected %}checked{% endif %}
             />
           </td>
-          <td>{{ row.quality | dterm("qualities.xml") }}</td>
+          <td>{{ row.quality | dterm("qualities.xml") }}{% if row.another %} <small>{{ _("Web_Qualities_AddAnother") }}</small>{% endif %}</td>
           <td>{{ row.quality.category | dterm("qualities.xml") }}</td>
           <td>{{ row.quality.karma }}</td>
+          <td>
+            {% if row.max_rating > 1 %}
+            <input
+              type="number"
+              name="quality_rating_{{ row.key }}"
+              value="{{ row.rating }}"
+              min="1"
+              max="{{ row.max_rating }}"
+            />
+            {% endif %}
+          </td>
           <td>
             {% if row.needs_text %}
             <input
               type="text"
-              name="quality_text_{{ row.quality.id }}"
+              name="quality_text_{{ row.key }}"
               value="{{ row.text_value }}"
               placeholder="{{ _('Web_Qualities_DetailPlaceholder') }}"
             />

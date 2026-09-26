@@ -6,7 +6,7 @@ cleanup.md`'s WP58 audit for the target shape this module is part of.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -14,12 +14,13 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from chummer5.data.mentors import MentorSpiritArchetype
-from chummer5.data.qualities import BonusSupport
+from chummer5.data.qualities import BonusSupport, Quality
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.qualities import (
     MENTOR_SPIRIT_QUALITY_NAME,
     QUALITY_KARMA_LIMIT,
+    QualityPickRequest,
     QualitySelection,
     apply_mentor_spirit_improvements,
     apply_quality_improvements,
@@ -80,15 +81,13 @@ def _strip_mentor_spirit_selection(
     character.improvements.remove_source(
         ImprovementSource.MENTOR_SPIRIT, quality_selection.mentor_spirit.archetype.id
     )
-    remaining_ids = [
-        q.id for q in quality_selection.qualities if q.name != MENTOR_SPIRIT_QUALITY_NAME
+    remaining = [
+        pick.to_request()
+        for pick in quality_selection.qualities
+        if pick.quality.name != MENTOR_SPIRIT_QUALITY_NAME
     ]
     offered = offerable_quality_catalog(character, QUALITIES)
-    # WP55: Mentor Spirit itself is never a SELECT_TEXT quality, so quality_selection.quality_text
-    # already has exactly the right entries for remaining_ids with nothing orphaned by its removal.
-    return create_quality_selection(
-        remaining_ids, offered, quality_text=quality_selection.quality_text
-    )
+    return create_quality_selection(remaining, offered)
 
 
 def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
@@ -112,18 +111,60 @@ def _replace_committed_qualities(character: Character, selection: QualitySelecti
     return replace(character, quality_selection=selection)
 
 
+def _row_key(quality_id: str, index: int) -> str:
+    """A form row's key (WP107): the bare id for a quality's first instance, `id:n` after that.
+
+    The first instance keeps the pre-WP107 field names (`quality_id=<id>`,
+    `quality_text_<id>`), so a once-only quality's form fields are unchanged.
+    """
+    return quality_id if index == 0 else f"{quality_id}:{index}"
+
+
+def _quality_rows(
+    offered: Iterable[Quality], requests: Sequence[QualityPickRequest]
+) -> list[dict[str, Any]]:
+    """One row per quality instance to render (WP107).
+
+    A once-only or rated quality gets exactly one row, checked when requested. A repeatable one
+    gets a row per requested instance plus one blank "add another" row, so a player adds a second
+    Addiction by filling in the blank row -- the row is there before they need it, and there is no
+    separate add button to wire up.
+    """
+    rows: list[dict[str, Any]] = []
+    for quality in offered:
+        instances = [r for r in requests if r.quality_id == quality.id]
+        shown: list[QualityPickRequest | None] = list(instances)
+        if quality.repeatable or not shown:
+            shown.append(None)
+        if not quality.repeatable:
+            shown = shown[:1]
+        for index, request in enumerate(shown):
+            rows.append(
+                {
+                    "quality": quality,
+                    "key": _row_key(quality.id, index),
+                    "selected": request is not None,
+                    "needs_text": quality.bonus_support == BonusSupport.SELECT_TEXT,
+                    "text_value": (request.text or "") if request is not None else "",
+                    "rating": request.rating if request is not None else 1,
+                    "max_rating": quality.max_rating,
+                    "another": quality.repeatable and index > 0 and request is None,
+                }
+            )
+    return rows
+
+
 def _quality_selection_context(
     character: Character | None,
-    quality_ids: Iterable[str],
+    picks: Iterable[str | QualityPickRequest] | None = None,
     *,
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
-    quality_text: Mapping[str, str] | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
-    """Context for `_quality_selection.html`. `quality_ids` is whatever should be shown checked --
-    the session's committed selection on a clean render, or the raw submitted checkbox values on
-    an error-echo render, same shape as the attribute/skill contexts above.
+    """Context for `_quality_selection.html`. `picks` is whatever should be shown selected -- the
+    session's committed selection on a clean render (the default, `None`), or the raw submitted
+    rows on an error-echo render, same shape as the attribute/skill contexts above.
 
     **WP23**: the pickable rows come from `offerable_quality_catalog(character, QUALITIES)`, not
     the module-level `MVP_QUALITIES`, so a quality this character's metatype already grants for
@@ -140,34 +181,32 @@ def _quality_selection_context(
     not None` gate for Mentor Spirit itself, so the picker never appears for a build where the
     quality isn't even offered.
 
-    **WP55**: `quality_text` follows the identical "explicit override on echo/submit, fall back to
-    the committed selection otherwise" shape as the Mentor Spirit fields -- `None` (the default)
-    falls back to `character.quality_selection.quality_text`; `submit_qualities` always passes an
-    explicit (possibly empty) mapping. Each row gets a `needs_text`/`text_value` pair so the
-    template can render a free-text input next to exactly the `SELECT_TEXT` qualities, pre-filled
-    with whatever's already committed or was just submitted.
+    **WP55/WP107**: each row carries its instance's text and rating, so a `SELECT_TEXT` quality's
+    detail box and a rated quality's level stepper are pre-filled with whatever's committed or was
+    just submitted. See `_quality_rows` for how repeatable qualities get their extra rows.
     """
     if character is None:
         return {"character": None, "quality_error": error}
     offered = offerable_quality_catalog(character, QUALITIES)
-    ids = set(quality_ids)
-    if quality_text is None:
-        quality_text = (
-            character.quality_selection.quality_text
+    if picks is None:
+        requests: list[QualityPickRequest] = (
+            list(character.quality_selection.to_requests())
             if character.quality_selection is not None
-            else {}
+            else []
         )
-    rows = [
-        {
-            "quality": q,
-            "selected": q.id in ids,
-            "needs_text": q.bonus_support == BonusSupport.SELECT_TEXT,
-            "text_value": quality_text.get(q.id, ""),
-        }
-        for q in offered
-    ]
-    positive_karma = sum(q.karma for q in offered if q.id in ids and q.category == "Positive")
-    negative_karma = -sum(q.karma for q in offered if q.id in ids and q.category == "Negative")
+    else:
+        requests = [QualityPickRequest(quality_id=p) if isinstance(p, str) else p for p in picks]
+    by_id = {q.id: q for q in offered}
+    positive_karma = sum(
+        by_id[r.quality_id].karma * r.rating
+        for r in requests
+        if r.quality_id in by_id and by_id[r.quality_id].category == "Positive"
+    )
+    negative_karma = -sum(
+        by_id[r.quality_id].karma * r.rating
+        for r in requests
+        if r.quality_id in by_id and by_id[r.quality_id].category == "Negative"
+    )
 
     committed_pick = (
         character.quality_selection.mentor_spirit
@@ -184,7 +223,7 @@ def _quality_selection_context(
 
     return {
         "character": character,
-        "quality_rows": rows,
+        "quality_rows": _quality_rows(offered, requests),
         "positive_karma": positive_karma,
         "negative_karma": negative_karma,
         "karma_limit": QUALITY_KARMA_LIMIT,
@@ -198,6 +237,39 @@ def _quality_selection_context(
     }
 
 
+def _submitted_picks(form: Any, offered: Iterable[Quality]) -> list[QualityPickRequest]:
+    """Read the checked rows back into pick requests (WP107).
+
+    A row's text is read only for a `SELECT_TEXT` quality, and its rating only for a rated one --
+    the same "only meaningful when it applies" discipline the Mentor Spirit fields follow, so a
+    stale box on an unchecked or text-less row never trips a validator. A rating box that isn't a
+    number becomes rating 0, which `create_quality_selection` rejects with its range message.
+    """
+    by_id = {q.id: q for q in offered}
+    picks: list[QualityPickRequest] = []
+    for raw_key in form.getlist("quality_id"):
+        key = str(raw_key)
+        quality_id = key.split(":", 1)[0]
+        quality = by_id.get(quality_id)
+        if quality is None:
+            # Unknown ids still reach create_quality_selection, which names them in its error.
+            picks.append(QualityPickRequest(quality_id=quality_id))
+            continue
+        text = (
+            str(form.get(f"quality_text_{key}") or "")
+            if quality.bonus_support == BonusSupport.SELECT_TEXT
+            else None
+        )
+        rating = 1
+        if quality.max_rating > 1:
+            try:
+                rating = int(str(form.get(f"quality_rating_{key}") or "1"))
+            except ValueError:
+                rating = 0
+        picks.append(QualityPickRequest(quality_id=quality_id, rating=rating, text=text))
+    return picks
+
+
 @router.post("/ui/qualities", response_class=HTMLResponse)
 async def submit_qualities(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
@@ -206,7 +278,12 @@ async def submit_qualities(request: Request) -> HTMLResponse:
         context = _quality_selection_context(None, ())
     else:
         form = await request.form()
-        quality_ids = [str(value) for value in form.getlist("quality_id")]
+        # WP23: validate against this character's own offerable catalog, not the raw QUALITIES
+        # catalog, so a tampered/stale submission can't buy an already metatype-granted quality
+        # either -- `create_quality_selection` already raises "not an MVP-offered quality id"
+        # for anything not in whatever catalog it's given, so this alone is sufficient.
+        offered = offerable_quality_catalog(session.character, QUALITIES)
+        picks = _submitted_picks(form, offered)
         # WP48: the archetype/general-choice fields are only meaningful when Mentor Spirit
         # itself is checked -- forced to None otherwise, so unchecking the quality never
         # requires also clearing a stale dropdown just to avoid "an archetype was picked
@@ -214,49 +291,31 @@ async def submit_qualities(request: Request) -> HTMLResponse:
         # orphaned pick, meant for a tampered/stale request, not this ordinary UI interaction).
         mentor_spirit_archetype_id: str | None = None
         mentor_spirit_general_choice_id: str | None = None
-        if MENTOR_SPIRIT_QUALITY.id in quality_ids:
+        if any(p.quality_id == MENTOR_SPIRIT_QUALITY.id for p in picks):
             raw_archetype_id = str(form.get("mentor_spirit_archetype_id") or "")
             mentor_spirit_archetype_id = raw_archetype_id or None
             raw_general_choice_id = str(form.get("mentor_spirit_general_choice_id") or "")
             mentor_spirit_general_choice_id = raw_general_choice_id or None
-        # WP23: validate against this character's own offerable catalog, not the raw QUALITIES
-        # catalog, so a tampered/stale submission can't buy an already metatype-granted quality
-        # either -- `create_quality_selection` already raises "not an MVP-offered quality id"
-        # for anything not in whatever catalog it's given, so this alone is sufficient.
-        offered = offerable_quality_catalog(session.character, QUALITIES)
-        # WP55: only read a quality_text_{id} field for a quality that's both checked and
-        # SELECT_TEXT -- mirrors the Mentor Spirit fields' "only meaningful when the quality
-        # itself is checked" precedent just above, so unchecking a SINner variant never requires
-        # also clearing its stale text box first.
-        quality_text = {
-            q.id: str(form.get(f"quality_text_{q.id}") or "")
-            for q in offered
-            if q.bonus_support == BonusSupport.SELECT_TEXT and q.id in quality_ids
-        }
         try:
             selection = create_quality_selection(
-                quality_ids,
+                picks,
                 offered,
                 magic_type=session.character.magic_type,
                 mentor_catalog=MENTORS,
                 mentor_spirit_archetype_id=mentor_spirit_archetype_id,
                 mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
-                quality_text=quality_text,
             )
         except ValueError as exc:
             context = _quality_selection_context(
                 session.character,
-                quality_ids,
+                picks,
                 mentor_spirit_archetype_id=mentor_spirit_archetype_id,
                 mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
-                quality_text=quality_text,
                 error=str(exc),
             )
         else:
             session.character = _replace_committed_qualities(session.character, selection)
-            context = _quality_selection_context(
-                session.character, quality_ids, quality_text=quality_text
-            )
+            context = _quality_selection_context(session.character)
     response = templates.TemplateResponse(request, "_quality_selection.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
