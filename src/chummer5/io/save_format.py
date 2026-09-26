@@ -910,6 +910,8 @@ def build_character(
         mentor_catalog=mentors,
         mentor_spirit_archetype_id=save.mentor_spirit_archetype_id,
         mentor_spirit_general_choice_id=save.mentor_spirit_general_choice_id,
+        metatype_name=character.metatype.name,
+        granted_quality_names=(q.name for q in metatype_qualities),
     )
     apply_quality_improvements(character, quality_selection.qualities)
     if quality_selection.mentor_spirit is not None:

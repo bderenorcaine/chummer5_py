@@ -147,7 +147,9 @@ STEP_PAGES: tuple[StepPage, ...] = (
     StepPage(
         "qualities",
         "String_Qualities",
-        _single("qualities", "String_Qualities", "_quality_selection.html"),
+        _single(
+            "qualities", "String_Qualities", "_quality_selection.html", "quality_budget_warning"
+        ),
     ),
     StepPage(
         "skills",
@@ -657,6 +659,7 @@ def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> di
     stale = bool(
         talent_ctx.get("talent_budget_warning")
         or attribute_ctx.get("attribute_budget_warning")
+        or quality_ctx.get("quality_budget_warning")
         or skill_ctx.get("skill_budget_warning")
         or knowledge_ctx.get("knowledge_budget_warning")
         or resources_ctx.get("resources_budget_warning")

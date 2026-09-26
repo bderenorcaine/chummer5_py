@@ -624,6 +624,8 @@ def build_synthetic(fixture: SyntheticCharacter) -> Character:
             magic_type=character.magic_type,
             mentor_catalog=_MENTORS,
             mentor_spirit_archetype_id=mentor_archetype_id,
+            metatype_name=character.metatype.name,
+            granted_quality_names=(q.name for q in character.metatype_qualities),
         )
         # apply_quality_improvements mutates the character's (already-linked) ImprovementIndex in
         # place — the same order test_character_fixtures.py uses (create_character, then apply).

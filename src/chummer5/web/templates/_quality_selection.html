@@ -6,6 +6,9 @@
   {% if quality_error %}
   <p class="error">{{ quality_error | tr }}</p>
   {% endif %}
+  {% if quality_budget_warning %}
+  <p class="warning">{{ quality_budget_warning | tr }}</p>
+  {% endif %}
 
   {% if metatype_qualities %}
   <p>{{ _("Web_Qualities_FreeFromMetatype", names=metatype_qualities | map("dterm", "qualities.xml") | join(_("Web_List_Separator"))) }}</p>

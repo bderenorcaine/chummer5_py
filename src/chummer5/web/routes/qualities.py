@@ -87,7 +87,15 @@ def _strip_mentor_spirit_selection(
         if pick.quality.name != MENTOR_SPIRIT_QUALITY_NAME
     ]
     offered = offerable_quality_catalog(character, QUALITIES)
-    return create_quality_selection(remaining, offered)
+    return create_quality_selection(remaining, offered, **_gate_kwargs(character))
+
+
+def _gate_kwargs(character: Character) -> dict[str, Any]:
+    """The metatype half of `create_quality_selection`'s WP108 prerequisite check."""
+    return {
+        "metatype_name": character.metatype.name,
+        "granted_quality_names": tuple(q.name for q in character.metatype_qualities),
+    }
 
 
 def _replace_committed_qualities(character: Character, selection: QualitySelection) -> Character:
@@ -223,6 +231,9 @@ def _quality_selection_context(
 
     return {
         "character": character,
+        "quality_budget_warning": (
+            _committed_quality_warning(character, offered) if error is None else None
+        ),
         "quality_rows": _quality_rows(offered, requests),
         "positive_karma": positive_karma,
         "negative_karma": negative_karma,
@@ -235,6 +246,30 @@ def _quality_selection_context(
         "selected_mentor_spirit_general_choice_id": mentor_spirit_general_choice_id,
         "quality_error": error,
     }
+
+
+def _committed_quality_warning(character: Character, offered: Iterable[Quality]) -> str | None:
+    """WP108: re-validate the committed picks against the character as it is *now* -- the WP19
+    "no longer fits" path. A priorities or Talent change can leave a pick behind that its gate no
+    longer allows (an Elf who becomes a Human keeps Human-Looking). The pick stays committed and
+    the reason is shown until the player fixes it; nothing raises."""
+    selection = character.quality_selection
+    if selection is None:
+        return None
+    mentor_pick = selection.mentor_spirit
+    try:
+        create_quality_selection(
+            selection.to_requests(),
+            offered,
+            magic_type=character.magic_type,
+            mentor_catalog=MENTORS,
+            mentor_spirit_archetype_id=mentor_pick.archetype.id if mentor_pick else None,
+            mentor_spirit_general_choice_id=mentor_pick.general_choice.id if mentor_pick else None,
+            **_gate_kwargs(character),
+        )
+    except ValueError as exc:
+        return str(exc)  # an engine message: stays as-is (WP102)
+    return None
 
 
 def _submitted_picks(form: Any, offered: Iterable[Quality]) -> list[QualityPickRequest]:
@@ -304,6 +339,7 @@ async def submit_qualities(request: Request) -> HTMLResponse:
                 mentor_catalog=MENTORS,
                 mentor_spirit_archetype_id=mentor_spirit_archetype_id,
                 mentor_spirit_general_choice_id=mentor_spirit_general_choice_id,
+                **_gate_kwargs(session.character),
             )
         except ValueError as exc:
             context = _quality_selection_context(

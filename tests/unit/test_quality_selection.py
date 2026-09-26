@@ -23,7 +23,9 @@ from chummer5.engine.improvements import ImprovementSource, ImprovementType
 from chummer5.engine.magic import create_magic_selection
 from chummer5.engine.qualities import (
     MENTOR_SPIRIT_QUALITY_NAME,
+    OUT_OF_SCOPE_QUALITY_NAMES,
     QUALITY_KARMA_LIMIT,
+    GateContext,
     MentorSpiritPick,
     QualityPick,
     QualityPickRequest,
@@ -32,6 +34,7 @@ from chummer5.engine.qualities import (
     create_quality_selection,
     mvp_quality_catalog,
     offerable_quality_catalog,
+    requirement_failure,
     resolve_metatype_qualities,
 )
 
@@ -967,3 +970,134 @@ def test_the_choice_slot_round_trips_uninterpreted() -> None:
     )
     assert selection.qualities[0].choice == "anything"
     assert selection.to_requests() == (QualityPickRequest(catlike.id, choice="anything"),)
+
+
+# --- WP108: prerequisites and catalog hygiene -----------------------------------------------------
+
+
+def _as_offerable(name: str) -> Quality:
+    """A real catalog row forced offerable, so a gate WP114/WP115 will depend on can be exercised
+    before those WPs make the row itself offerable."""
+    return replace(_by_name(name), bonus_support=BonusSupport.NO_EFFECT)
+
+
+def _character_of(metatype_name: str, heritage_letter: str = "A") -> Character:
+    heritage = PRIORITIES.heritage[heritage_letter]
+    choice = next(
+        c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == metatype_name
+    )
+    character = create_character(
+        metatype_choice=choice,
+        heritage_letter=heritage_letter,
+        attributes_letter="B",
+        priorities=PRIORITIES,
+        attribute_points={},
+    )
+    return replace(
+        character, metatype_qualities=resolve_metatype_qualities(choice.metatype, QUALITIES)
+    )
+
+
+def test_required_and_forbidden_blocks_are_parsed() -> None:
+    human_looking = _by_name("Human-Looking")
+    assert [r.mode for r in human_looking.required] == ["oneof"]
+    assert set(human_looking.required[0].conditions) == {
+        ("metatype", "Elf"),
+        ("metatype", "Dwarf"),
+        ("metatype", "Ork"),
+    }
+    assert ("quality", "Magician") in _by_name("Magic Resistance").forbidden[0].conditions
+
+
+def test_an_elf_is_offered_human_looking_and_a_human_is_not() -> None:
+    catalog = (*(q for q in QUALITIES if q.name != "Human-Looking"), _as_offerable("Human-Looking"))
+    elf_offered = {q.name for q in offerable_quality_catalog(_character_of("Elf"), catalog)}
+    human_offered = {q.name for q in offerable_quality_catalog(_character_of("Human"), catalog)}
+    assert "Human-Looking" in elf_offered
+    assert "Human-Looking" not in human_offered
+
+
+def test_a_metatype_gated_pick_is_rejected_for_the_wrong_metatype_and_when_it_is_unknown() -> None:
+    human_looking = _as_offerable("Human-Looking")
+    catalog = (*(q for q in QUALITIES if q.name != "Human-Looking"), human_looking)
+    create_quality_selection([human_looking.id], catalog, metatype_name="Ork")
+    with pytest.raises(ValueError, match="Human-Looking requires Elf or Dwarf or Ork"):
+        create_quality_selection([human_looking.id], catalog, metatype_name="Human")
+    # Fails closed: a caller that doesn't say which metatype gets no metatype-gated quality.
+    with pytest.raises(ValueError, match="requires"):
+        create_quality_selection([human_looking.id], catalog)
+
+
+def test_magic_resistance_is_unavailable_to_the_awakened() -> None:
+    """p. 76 -- expressed in the data as Magic Resistance's `forbidden` naming the talents, which
+    WP108 resolves against `magic_type` rather than against picked qualities."""
+    magic_resistance = _by_name("Magic Resistance")
+    mundane = GateContext(metatype_name="Human", magic_type=None)
+    assert requirement_failure(magic_resistance, mundane) is None
+    for talent in ("Magician", "Adept"):
+        failure = requirement_failure(
+            magic_resistance, GateContext(metatype_name="Human", magic_type=talent)
+        )
+        assert failure == f"Magic Resistance is not available to a {talent} character"
+
+
+def test_a_magician_is_not_offered_magic_resistance() -> None:
+    catalog = (
+        *(q for q in QUALITIES if q.name != "Magic Resistance"),
+        _as_offerable("Magic Resistance"),
+    )
+    magician = replace(_character_of("Human"), magic_type="Magician")
+    assert "Magic Resistance" not in {q.name for q in offerable_quality_catalog(magician, catalog)}
+    mundane = _character_of("Human")
+    assert "Magic Resistance" in {q.name for q in offerable_quality_catalog(mundane, catalog)}
+
+
+def test_spirit_affinity_follows_the_rulebook_s_magic_users_only_not_the_data_s_spellcasters() -> (
+    None
+):
+    """p. 77: "Available only to magic users". The data leaves Adept out; the rulebook wins."""
+    spirit_affinity = _by_name("Spirit Affinity")
+    for talent in ("Magician", "Adept"):
+        context = GateContext(metatype_name="Human", magic_type=talent)
+        assert requirement_failure(spirit_affinity, context) is None
+    mundane = GateContext(metatype_name="Human", magic_type=None)
+    assert requirement_failure(spirit_affinity, mundane) is not None
+
+
+def test_astral_beacon_s_magenabled_condition_means_any_magic_type() -> None:
+    astral_beacon = _by_name("Astral Beacon")
+    assert requirement_failure(astral_beacon, GateContext("Human", "Adept")) is None
+    assert requirement_failure(astral_beacon, GateContext("Human", None)) == (
+        "Astral Beacon requires Adept or Aspected Magician or Magician or a Magic rating"
+    )
+
+
+def test_a_gate_built_only_from_non_core_conditions_can_never_be_met() -> None:
+    astral_perception = _by_name("Astral Perception")  # metatype=Pixie
+    assert requirement_failure(astral_perception, GateContext("Elf", "Magician")) is not None
+
+
+def test_out_of_scope_rows_are_excluded_by_name_and_the_catalog_size_is_pinned() -> None:
+    """Loud on data drift: 96 SR5 rows, 8 out of scope, 24 offered today. WP114/WP115 move the
+    offered count towards 88 (every in-scope row) and must update this number when they do."""
+    names = {q.name for q in QUALITIES}
+    assert len(QUALITIES) == 96
+    assert OUT_OF_SCOPE_QUALITY_NAMES <= names
+    assert len(OUT_OF_SCOPE_QUALITY_NAMES) == 8
+    offered = {q.name for q in mvp_quality_catalog(QUALITIES)}
+    assert not offered & OUT_OF_SCOPE_QUALITY_NAMES
+    assert len(offered) == 24
+    forced = tuple(replace(q, bonus_support=BonusSupport.NO_EFFECT) for q in QUALITIES)
+    assert len(mvp_quality_catalog(forced)) == 88
+
+
+def test_mutual_exclusion_still_reports_its_wp55_wording() -> None:
+    national = _by_name("SINner (National)")
+    criminal = _by_name("SINner (Criminal)")
+    with pytest.raises(
+        ValueError, match=r"cannot be taken together with: \['SINner \(Criminal\)'\]"
+    ):
+        create_quality_selection(
+            [QualityPickRequest(national.id, text="a"), QualityPickRequest(criminal.id, text="b")],
+            QUALITIES,
+        )

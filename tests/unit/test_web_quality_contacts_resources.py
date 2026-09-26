@@ -685,3 +685,37 @@ def test_two_instances_with_the_same_detail_are_rejected() -> None:
     )
 
     assert "the same quality instance was selected twice" in response.text
+
+
+# --- WP108: a pick its gate no longer allows is flagged, not dropped ------------------------------
+
+_LOW_LIGHT_VISION = next(q for q in MVP_QUALITIES if q.name == "Low-Light Vision")
+
+
+def test_a_pick_that_stops_fitting_after_a_metatype_change_is_flagged_and_kept() -> None:
+    """A Human buys Low-Light Vision, then becomes an Elf, who gets it free: the bought copy no
+    longer fits. The page shows why and the nav marks the step, but nothing raises and the pick is
+    kept for the player to remove."""
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post("/ui/qualities", data={"quality_id": _LOW_LIGHT_VISION.id})
+
+    heritage = PRIORITIES.heritage["A"]
+    elf = next(c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Elf")
+    client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "C",
+            "resources_letter": "D",
+            "talent_letter": "E",
+            "metatype_id": elf.metatype.id,
+        },
+    )
+
+    page = client.get("/ui/page/qualities")
+    assert page.status_code == 200
+    assert 'class="warning"' in page.text
+    assert "not an MVP-offered quality id" in page.text
+    assert "step-nav__item--stale" in page.text

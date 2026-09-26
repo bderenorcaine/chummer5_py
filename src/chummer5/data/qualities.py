@@ -221,6 +221,16 @@ _UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
 }
 
 
+# WP108: where the rulebook's own gate is broader than the data's, the rulebook wins. Each entry
+# adds conditions to the named quality's first `<required><oneof>` group. See
+# spec/rulebooks/learnings/phase-x.md's WP108 entry for the citation behind each.
+_RULEBOOK_REQUIRED_ADDITIONS: Mapping[str, tuple[tuple[str, str], ...]] = {
+    # p. 77: "Available only to magic users" -- the data lists only spellcasting talents and so
+    # leaves out Adept, who is as much a magic user as anyone on the data's list.
+    "Spirit Affinity": (("quality", "Adept"),),
+}
+
+
 class BonusSupport(Enum):
     """Whether/how a quality's `<bonus>` node was parsed. See module docstring for the 4 values."""
 
@@ -243,6 +253,20 @@ class FlatBonus:
     target_kind: str  # "skill", "attribute", "mental_limit", "physical_limit", or "social_limit"
     target_name: str
     value: int
+
+
+@dataclass(frozen=True)
+class Requirement:
+    """One child group of a `<required>` or `<forbidden>` block (WP108).
+
+    `mode` is `"oneof"` or `"allof"`. Each condition is a `(kind, value)` pair taken verbatim from
+    the XML (`("metatype", "Elf")`, `("quality", "Magician")`, `("magenabled", "")`, ...). This
+    module only records them; `chummer5.engine.qualities.requirement_failure` decides what each kind
+    means for a character, and which kinds this project can never satisfy.
+    """
+
+    mode: str
+    conditions: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -272,6 +296,11 @@ class Quality:
     # `<includeinlimit>`). In the SR5 slice only the Indomitable trio carries one: p. 74 caps it at
     # 3 levels *in total*, and the data splits it into three rows that each name the other two.
     include_in_limit: tuple[str, ...] = ()
+    # WP108: the parsed `<required>` / `<forbidden>` blocks. A quality is available only when every
+    # `required` group is met, and unavailable when any `forbidden` group is. `forbidden_names`
+    # above stays as the quality-name-only view WP55 introduced.
+    required: tuple[Requirement, ...] = ()
+    forbidden: tuple[Requirement, ...] = ()
 
     @property
     def max_rating(self) -> int:
@@ -363,6 +392,31 @@ def _parse_forbidden_names(elem: ET.Element) -> tuple[str, ...]:
     return tuple(q.text for q in oneof_elem.findall("quality") if q.text)
 
 
+def _parse_requirements(elem: ET.Element | None) -> tuple[Requirement, ...]:
+    """Parse every `<oneof>` / `<allof>` child of a `<required>` or `<forbidden>` block."""
+    if elem is None:
+        return ()
+    return tuple(
+        Requirement(
+            mode=group.tag,
+            conditions=tuple((c.tag, (c.text or "").strip()) for c in group),
+        )
+        for group in elem
+        if group.tag in ("oneof", "allof")
+    )
+
+
+def _with_rulebook_additions(
+    name: str, required: tuple[Requirement, ...]
+) -> tuple[Requirement, ...]:
+    additions = _RULEBOOK_REQUIRED_ADDITIONS.get(name)
+    if not additions:
+        return required
+    first, *rest = required
+    widened = Requirement(mode=first.mode, conditions=(*first.conditions, *additions))
+    return (widened, *rest)
+
+
 def _parse_quality(elem: ET.Element) -> Quality:
     bonus_elem = elem.find("bonus")
     support, flat_bonuses = _classify_bonus(elem.findtext("name", ""), bonus_elem)
@@ -381,6 +435,10 @@ def _parse_quality(elem: ET.Element) -> Quality:
         flat_bonuses=flat_bonuses,
         raw_bonus=raw_bonus,
         forbidden_names=_parse_forbidden_names(elem),
+        required=_with_rulebook_additions(
+            elem.findtext("name", ""), _parse_requirements(elem.find("required"))
+        ),
+        forbidden=_parse_requirements(elem.find("forbidden")),
         include_in_limit=tuple(
             n.text for n in elem.findall("includeinlimit/name") if n.text is not None
         ),

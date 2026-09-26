@@ -63,7 +63,7 @@ from dataclasses import dataclass
 
 from chummer5.data.mentors import MentorChoice, MentorSpiritArchetype, gated_choice
 from chummer5.data.metatypes import Metatype
-from chummer5.data.qualities import BonusSupport, Quality
+from chummer5.data.qualities import BonusSupport, Quality, Requirement
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
 
@@ -124,6 +124,107 @@ def _add_mentor_spirit_if_eligible(
     return {**offered, mentor_spirit.id: mentor_spirit}
 
 
+# WP108: the talent qualities the legacy data names in `<required>`/`<forbidden>` blocks
+# ("quality=Magician") mean "this character's Talent is X". In this engine that is
+# `Character.magic_type`, whose values are the same strings, never a picked quality.
+TALENT_QUALITY_NAMES = frozenset(
+    {"Magician", "Adept", "Aspected Magician", "Mystic Adept", "Technomancer"}
+)
+
+# WP108: SR5-sourced catalog rows that are out of scope as catalog hygiene rather than as
+# unsupported bonuses (see spec/plan/phase-x-rulebook-completeness.md's intro): the five Karma-build
+# talent qualities (`CharacterBuildMethod.Karma` scaffolding, and not in the chapter's quality
+# lists), Astral Perception as a *quality* (Pixie-only), and the two Infected critter powers.
+# Excluded by name so a later WP widening `_OFFERABLE_SUPPORT` can never offer one by accident.
+OUT_OF_SCOPE_QUALITY_NAMES = frozenset(
+    {
+        *TALENT_QUALITY_NAMES,
+        "Astral Perception",
+        "Infected Advanced Optional Power: Mimicry",
+        "Infected Advanced Optional Power: Psychokinesis",
+    }
+)
+
+# Used only to word a prerequisite failure: which of a requirement's names a player could act on.
+_CORE_METATYPE_NAMES = frozenset({"Human", "Elf", "Dwarf", "Ork", "Troll"})
+_PLAYABLE_TALENT_NAMES = frozenset({"Magician", "Adept", "Aspected Magician"})
+
+
+@dataclass(frozen=True)
+class GateContext:
+    """What a quality's `<required>`/`<forbidden>` conditions are evaluated against (WP108).
+
+    `quality_names` is every quality the character holds: its picks and its metatype's free ones.
+    `metatype_name` is `None` when the caller doesn't know it, and then every `metatype=` condition
+    is unmet -- a metatype-gated quality fails closed rather than slipping through.
+    """
+
+    metatype_name: str | None
+    magic_type: str | None
+    quality_names: frozenset[str] = frozenset()
+
+
+def _condition_met(kind: str, value: str, context: GateContext) -> bool:
+    """One `(kind, value)` condition. Kinds this project never produces (`metatypecategory`,
+    `critterpower`, `resenabled`, `depenabled`, ...) are never met, so a gate built only from
+    them -- Astral Perception's `metatype=Pixie`, say -- can't be satisfied, which is correct: no
+    core character can take it."""
+    if kind == "metatype":
+        return value == context.metatype_name
+    if kind == "quality":
+        if value in TALENT_QUALITY_NAMES:
+            return value == context.magic_type
+        return value in context.quality_names
+    if kind == "magenabled":
+        return context.magic_type is not None
+    return False
+
+
+def _group_met(requirement: Requirement, context: GateContext) -> bool:
+    results = [_condition_met(kind, value, context) for kind, value in requirement.conditions]
+    return all(results) if requirement.mode == "allof" else any(results)
+
+
+def _describe_requirement(requirement: Requirement) -> str:
+    names: list[str] = []
+    for kind, value in requirement.conditions:
+        if kind == "metatype" and value in _CORE_METATYPE_NAMES:
+            names.append(value)
+        elif kind == "quality" and value in _PLAYABLE_TALENT_NAMES:
+            names.append(value)
+        elif kind == "magenabled":
+            names.append("a Magic rating")
+    joiner = " and " if requirement.mode == "allof" else " or "
+    return joiner.join(dict.fromkeys(names)) or "nothing a core character can have"
+
+
+def requirement_failure(quality: Quality, context: GateContext) -> str | None:
+    """Why `quality` can't be held in `context`, or `None` if it can (WP108).
+
+    Every `required` group must be met and no `forbidden` group may be. Talent names resolve against
+    `context.magic_type` (see `TALENT_QUALITY_NAMES`), so Magic Resistance's `forbidden` list makes
+    it unavailable to any Awakened character (p. 76) with no special case. A `forbidden` group that
+    names only other *qualities* is WP55's mutual exclusion, reported with its existing wording.
+    """
+    for requirement in quality.required:
+        if not _group_met(requirement, context):
+            return f"{quality.name} requires {_describe_requirement(requirement)}"
+    for requirement in quality.forbidden:
+        if not _group_met(requirement, context):
+            continue
+        conflicts = sorted(
+            value
+            for kind, value in requirement.conditions
+            if kind == "quality"
+            and value not in TALENT_QUALITY_NAMES
+            and value in context.quality_names
+        )
+        if conflicts:
+            return f"{quality.name} cannot be taken together with: {conflicts}"
+        return f"{quality.name} is not available to a {context.magic_type or 'mundane'} character"
+    return None
+
+
 def mvp_quality_catalog(qualities: Iterable[Quality]) -> tuple[Quality, ...]:
     """Restrict a quality catalog to the ones MVP can actually offer a player.
 
@@ -134,7 +235,11 @@ def mvp_quality_catalog(qualities: Iterable[Quality]) -> tuple[Quality, ...]:
     rather than offered with its mechanical effect silently dropped, mirroring WP3's own "never
     partially apply a quality's effects" rule.
     """
-    return tuple(q for q in qualities if q.bonus_support in _OFFERABLE_SUPPORT)
+    return tuple(
+        q
+        for q in qualities
+        if q.bonus_support in _OFFERABLE_SUPPORT and q.name not in OUT_OF_SCOPE_QUALITY_NAMES
+    )
 
 
 @dataclass(frozen=True)
@@ -231,6 +336,8 @@ def create_quality_selection(
     mentor_catalog: Iterable[MentorSpiritArchetype] = (),
     mentor_spirit_archetype_id: str | None = None,
     mentor_spirit_general_choice_id: str | None = None,
+    metatype_name: str | None = None,
+    granted_quality_names: Iterable[str] = (),
 ) -> QualitySelection:
     """Build a `QualitySelection`, validating against the MVP-offered catalog and the karma cap.
 
@@ -331,14 +438,17 @@ def create_quality_selection(
 
     selected = tuple(pick.quality for pick in resolved)
 
-    # WP55: mutual exclusion (Quality.forbidden_names, e.g. SINner's 4-way exclusivity, Natural
-    # Immunity vs. the not-yet-offered Weak Immune System). Checked by name, not id, since a
-    # forbidden name need not itself be offered for the check to matter.
-    selected_names = {q.name for q in selected}
-    for quality in selected:
-        conflicts = sorted(set(quality.forbidden_names) & selected_names)
-        if conflicts:
-            raise ValueError(f"{quality.name} cannot be taken together with: {conflicts}")
+    # WP55 mutual exclusion and WP108 prerequisites, both through `requirement_failure`: checked by
+    # name, not id, since a forbidden name need not itself be offered for the check to matter.
+    context = GateContext(
+        metatype_name=metatype_name,
+        magic_type=magic_type,
+        quality_names=frozenset({q.name for q in selected} | set(granted_quality_names)),
+    )
+    for quality in dict.fromkeys(selected):
+        failure = requirement_failure(quality, context)
+        if failure is not None:
+            raise ValueError(failure)
 
     positive_karma = sum(p.karma for p in resolved if p.quality.category == "Positive")
     negative_karma = -sum(p.karma for p in resolved if p.quality.category == "Negative")
@@ -493,6 +603,9 @@ def offerable_quality_catalog(
     """`mvp_quality_catalog` further restricted to what `character` can still choose to buy (WP23),
     widened by Mentor Spirit for a magic-active `character` (WP48).
 
+    **WP108**: also excludes every quality whose `<required>`/`<forbidden>` gate this character's
+    metatype or Talent fails (Human-Looking for a Human, Magic Resistance for a Magician).
+
     Excludes whatever `character.metatype_qualities` already grants for free, so a player can never
     spend karma re-buying an inherent racial quality (e.g. an Elf "buying" Low-Light Vision, which
     WP22 made purchasable). Passing this narrowed catalog straight into `create_quality_selection`
@@ -505,6 +618,23 @@ def offerable_quality_catalog(
     `create_quality_selection`'s caller aren't always the same code path.
     """
     already_granted = {q.id for q in character.metatype_qualities}
-    offered = {q.id: q for q in mvp_quality_catalog(catalog) if q.id not in already_granted}
+    context = GateContext(
+        metatype_name=character.metatype.name,
+        magic_type=character.magic_type,
+        quality_names=frozenset(q.name for q in character.metatype_qualities),
+    )
+    offered = {
+        q.id: q
+        for q in mvp_quality_catalog(catalog)
+        if q.id not in already_granted and _available_alone(q, context)
+    }
     offered = _add_mentor_spirit_if_eligible(offered, catalog, character.magic_type)
     return tuple(offered.values())
+
+
+def _available_alone(quality: Quality, context: GateContext) -> bool:
+    """`requirement_failure` with the picks themselves left out: a quality is still *offered* even
+    when it conflicts with another offered quality (the player picks one of the pair, and
+    `create_quality_selection` rejects taking both). Only the metatype/Talent side of a gate --
+    things the player can't fix on this page -- hides a row."""
+    return requirement_failure(quality, context) is None

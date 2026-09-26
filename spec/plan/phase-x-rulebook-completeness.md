@@ -121,7 +121,7 @@ the rules it checks.
   Acceptance: every existing quality test passes against the new shape; a v-previous save loads; a
   synthetic Indomitable ×3 build is unchanged.
 
-- [ ] **WP108 — Quality prerequisites and catalog hygiene.**
+- [x] **WP108 — Quality prerequisites and catalog hygiene.**
   Goal: parse `<required>` and enforce it, so metatype- and magic-gated qualities can be offered
   correctly.
   Deliverables:
