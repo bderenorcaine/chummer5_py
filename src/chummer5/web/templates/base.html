@@ -64,6 +64,7 @@
               {% endfor %}
             </select>
           </label>
+          {% include "_font_hint.html" %}
           <label class="app-shell__pref">
             {{ _("Web_Prefs_Language") }}
             <select name="locale" hx-post="/ui/prefs/locale" hx-trigger="change" hx-swap="none">

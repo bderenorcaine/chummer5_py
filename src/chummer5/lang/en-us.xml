@@ -216,6 +216,43 @@
       <key>Web_Foci_Update</key>
       <text>Update foci</text>
     </string>
+    <!-- Fonts: the title bar's font hint for the selected theme -->
+    <string>
+      <key>Web_Fonts_Commercial</key>
+      <text>Commercial</text>
+    </string>
+    <string>
+      <key>Web_Fonts_Free</key>
+      <text>Free</text>
+    </string>
+    <string>
+      <key>Web_Fonts_FreeSource</key>
+      <text>The free fonts are all available from Google Fonts (fonts.google.com).</text>
+    </string>
+    <string>
+      <key>Web_Fonts_Intro</key>
+      <text>This theme is designed around the fonts below. Install any of them on your system and reload the page; until then, your system's fonts stand in.</text>
+    </string>
+    <string>
+      <key>Web_Fonts_Link</key>
+      <text>Fonts?</text>
+    </string>
+    <string>
+      <key>Web_Fonts_Role_Body</key>
+      <text>Body text</text>
+    </string>
+    <string>
+      <key>Web_Fonts_Role_Headings</key>
+      <text>Headings</text>
+    </string>
+    <string>
+      <key>Web_Fonts_Role_HeadingsAndLabels</key>
+      <text>Headings and navigation</text>
+    </string>
+    <string>
+      <key>Web_Fonts_Role_Labels</key>
+      <text>Navigation and labels</text>
+    </string>
     <!-- Format -->
     <string>
       <key>Web_Format_Nuyen</key>

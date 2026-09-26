@@ -12,7 +12,7 @@
 
 :root {
   /* Type */
-  --font-body: "Minion Pro", "Adobe Garamond Pro", "Garamond", "Liberation Serif", "DejaVu Serif", serif;
+  --font-body: "Minion Pro", "Crimson Pro", "Crimson Text", "Adobe Garamond Pro", "Garamond", "Liberation Serif", "DejaVu Serif", serif;
   --font-title: "Agency FB", "Bebas Neue", "Oswald", "Roboto Condensed", "Arial Narrow", "Liberation Sans Narrow", "DejaVu Sans Condensed", sans-serif;
   --font-nav: "Agency FB", "Bebas Neue", "Oswald", "Roboto Condensed", "Arial Narrow", "Liberation Sans Narrow", "DejaVu Sans Condensed", sans-serif;
   --title-size: 1.3rem;

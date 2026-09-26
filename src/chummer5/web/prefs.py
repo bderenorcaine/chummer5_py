@@ -15,18 +15,56 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class FontSuggestion:
+    """The faces a theme's font stack names for one role (`role_key`, an i18n key), for the
+    title bar's "Fonts?" hint: the commercial originals the theme imitates, then free look-alikes
+    (all on Google Fonts). Font names are proper names and are not translated.
+    `tests/unit/test_web_themes.py` checks that every name here really is in the theme's stylesheet,
+    so the hint cannot recommend a font the theme would never pick up."""
+
+    role_key: str
+    commercial: tuple[str, ...]
+    free: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Theme:
     """One shipped theme: `static/themes/<slug>.css`, a stylesheet of custom-property
     declarations only (`tests/unit/test_web_themes.py` enforces that) that `base.html` links ahead
-    of the structural `app.css`. `label_key` is its name's i18n key (WP101)."""
+    of the structural `app.css`. `label_key` is its name's i18n key (WP101). `fonts` feeds the
+    "Fonts?" hint; a theme built only on system fonts leaves it empty and shows no hint."""
 
     slug: str
     label_key: str
+    fonts: tuple[FontSuggestion, ...] = ()
 
 
 THEMES: tuple[Theme, ...] = (
-    Theme("shadowrun", "Web_Theme_Shadowrun"),
-    Theme("shadowrun4", "Web_Theme_Shadowrun4"),
+    Theme(
+        "shadowrun",
+        "Web_Theme_Shadowrun",
+        (
+            FontSuggestion(
+                "Web_Fonts_Role_Headings", ("Eurostile", "Microgramma"), ("Michroma", "Orbitron")
+            ),
+            FontSuggestion(
+                "Web_Fonts_Role_Labels", (), ("Bebas Neue", "Oswald", "Roboto Condensed")
+            ),
+            FontSuggestion("Web_Fonts_Role_Body", ("Myriad Pro",), ("Source Sans 3",)),
+        ),
+    ),
+    Theme(
+        "shadowrun4",
+        "Web_Theme_Shadowrun4",
+        (
+            FontSuggestion(
+                "Web_Fonts_Role_HeadingsAndLabels",
+                ("Agency FB",),
+                ("Bebas Neue", "Oswald", "Roboto Condensed"),
+            ),
+            FontSuggestion("Web_Fonts_Role_Body", ("Minion Pro",), ("Crimson Pro", "Crimson Text")),
+        ),
+    ),
     Theme("classic", "Web_Theme_Classic"),
     Theme("sketch", "Web_Theme_Sketch"),
 )

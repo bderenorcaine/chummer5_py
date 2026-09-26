@@ -15,9 +15,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from chummer5.data.lang import load_locale_strings
 from chummer5.web.app import create_app
 from chummer5.web.catalogs import STATIC_DIR
-from chummer5.web.prefs import DEFAULT_THEME, THEMES
+from chummer5.web.prefs import DEFAULT_THEME, THEMES, Theme
 
 APP_CSS = Path(STATIC_DIR) / "app.css"
 THEMES_DIR = Path(STATIC_DIR) / "themes"
@@ -160,3 +161,49 @@ def test_the_picker_offers_every_theme_and_posts_on_change() -> None:
     assert 'hx-trigger="change"' in select.group(0)
     for theme in THEMES:
         assert f'<option value="{theme.slug}"' in html
+
+
+# --- The "Fonts?" hint ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("theme", [t for t in THEMES if t.fonts], ids=lambda t: t.slug)
+def test_every_font_a_hint_suggests_is_in_that_themes_stacks(theme: Theme) -> None:
+    # Otherwise the hint could send a player to install a font the theme never asks for.
+    css = (THEMES_DIR / f"{theme.slug}.css").read_text()
+    stacks = " ".join(re.findall(r"--font-[a-z]+:([^;]*);", css))
+    for suggestion in theme.fonts:
+        assert suggestion.free, f"{theme.slug}: every role needs at least one free font"
+        for font in (*suggestion.commercial, *suggestion.free):
+            assert f'"{font}"' in stacks, f"{theme.slug}: {font!r} is not in any --font-* stack"
+
+
+def test_every_hint_role_has_a_key() -> None:
+    english = load_locale_strings("en-us")
+    for theme in THEMES:
+        for suggestion in theme.fonts:
+            assert suggestion.role_key in english
+
+
+def test_the_shell_shows_the_default_themes_font_hint() -> None:
+    html = TestClient(create_app()).get("/").text
+
+    assert 'id="font-hint"' in html
+    assert "Fonts?" in html
+    assert 'aria-describedby="font-hint-tip"' in html
+    for font in ("Michroma", "Eurostile", "Source Sans 3"):
+        assert font in html
+
+
+def test_switching_theme_swaps_the_font_hint_out_of_band() -> None:
+    client = TestClient(create_app())
+    client.get("/")
+
+    to_sr4 = client.post("/ui/prefs/theme", data={"theme": "shadowrun4"}).text
+    assert re.search(r'<div id="font-hint"[^>]*hx-swap-oob="true"', to_sr4)
+    assert "Crimson Pro" in to_sr4 and "Michroma" not in to_sr4
+
+    # A theme with no suggestions still answers with the (now empty) wrapper, so the old hint goes.
+    to_classic = client.post("/ui/prefs/theme", data={"theme": "classic"}).text
+    assert re.search(r'<div id="font-hint"[^>]*hx-swap-oob="true"', to_classic)
+    assert "Fonts?" not in to_classic
+    assert "Fonts?" not in client.get("/").text

@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase W — Post-MVP: application shell, theming, and i18n (done, WP97-105)
+### Phase W — Post-MVP: application shell, theming, and i18n (done, WP97-106)
 
 **Why now.** Raised 2026-09-24 with a hand-drawn target layout
 (`examples/ui/main_ui.png` / `.svg`, committed alongside this file): a title bar, a left sidebar
@@ -413,3 +413,26 @@ edits than run afterwards, so prefer WP101 *before* WP97 if the context budget a
   - panels framed only by green rules above and below, like the example boxes;
   - page headings as black bars with white capitals;
   - table column heads on green.
+
+- [x] **WP106 — A "Fonts?" hint beside the theme picker.** *(Added 2026-09-26.)*
+  Goal: tell players which fonts to install (commercial originals or free look-alikes) so that the
+  two Shadowrun themes look as designed rather than in their system fallbacks.
+  Deliverables and landing:
+  - **Data:** `prefs.FontSuggestion(role_key, commercial, free)`, and `Theme.fonts` holding a
+    theme's suggestions. The SR5 theme suggests Eurostile/Microgramma → Michroma/Orbitron for
+    headings, Bebas Neue/Oswald/Roboto Condensed for labels, and Myriad Pro → Source Sans 3 for body
+    text. The SR4 theme suggests Agency FB → Bebas Neue/Oswald/Roboto Condensed, and Minion Pro →
+    Crimson Pro/Crimson Text. The two free body fonts were added to their themes' stacks. Classic
+    and Sketch have no suggestions and show no hint.
+  - **Markup:** `_font_hint.html` sits in `.app-shell__prefs`, next to the theme picker. It is a
+    "Fonts?" button whose `role="tooltip"` panel shows on `:hover`/`:focus-within`; a tap focuses
+    it on touch screens. The panel is hidden with `visibility`, so `aria-describedby` still reaches
+    its text.
+  - **Route:** `POST /ui/prefs/theme` now answers with `_theme_swap.html`, which sends the theme
+    `<link>` *and* the `#font-hint` wrapper out of band, so the hint follows a live theme change. A
+    theme without suggestions sends back an empty wrapper, which removes the previous theme's hint.
+  - **Tests:** every suggested font must appear in that theme's `--font-*` stacks, so the hint
+    cannot recommend a font the theme never asks for; every role has a key; the default shell shows
+    the hint; and switching themes swaps it out of band, including removing it. The WP102 bare-text
+    guard now skips `FontSuggestion(...)` calls, because font family names are identifiers
+    (decisions log).

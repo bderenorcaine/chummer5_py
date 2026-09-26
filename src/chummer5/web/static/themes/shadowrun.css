@@ -7,13 +7,13 @@
 
    The book's own faces are commercial, so the stacks name them first for players who have them,
    then free look-alikes (Michroma/Orbitron for the squared techno heads, Bebas Neue/Oswald for
-   the condensed gold labels), then what every system has.
+   the condensed gold labels, Source Sans 3 for body text), then what every system has.
 
    Tokens only -- see classic.css's header for the contract. */
 
 :root {
   /* Type */
-  --font-body: "Myriad Pro", "Segoe UI", "Liberation Sans", system-ui, sans-serif;
+  --font-body: "Myriad Pro", "Source Sans 3", "Segoe UI", "Liberation Sans", system-ui, sans-serif;
   --font-title: "Eurostile", "Microgramma", "Michroma", "Orbitron", "DejaVu Sans", "Verdana", sans-serif;
   --font-nav: "Bebas Neue", "Oswald", "Roboto Condensed", "Arial Narrow", "Liberation Sans Narrow", "DejaVu Sans Condensed", sans-serif;
   --title-size: 1.35rem;

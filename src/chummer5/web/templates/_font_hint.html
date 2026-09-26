@@ -1,0 +1,22 @@
+{# The selected theme's font hint: which fonts to install (commercial originals, free look-alikes)
+   for the theme to look as designed -- see chummer5.web.prefs.FontSuggestion. A tooltip shown on
+   hover or keyboard focus of its button. The wrapper is always rendered, empty for a theme with no
+   suggestions, so POST /ui/prefs/theme can replace it out of band alongside the theme <link>. #}
+<div id="font-hint" class="font-hint" {% if oob_theme %}hx-swap-oob="true"{% endif %}>
+  {% if theme_fonts %}
+  <button type="button" class="font-hint__toggle" aria-describedby="font-hint-tip">{{ _("Web_Fonts_Link") }}</button>
+  <div id="font-hint-tip" class="font-hint__tip" role="tooltip">
+    <p class="font-hint__intro">{{ _("Web_Fonts_Intro") }}</p>
+    <dl class="font-hint__list">
+      {% for suggestion in theme_fonts %}
+      <dt>{{ _(suggestion.role_key) }}</dt>
+      {% if suggestion.commercial %}
+      <dd>{{ _("Web_Fonts_Commercial") }}: {{ suggestion.commercial | join(", ") }}</dd>
+      {% endif %}
+      <dd>{{ _("Web_Fonts_Free") }}: {{ suggestion.free | join(", ") }}</dd>
+      {% endfor %}
+    </dl>
+    <p class="font-hint__source">{{ _("Web_Fonts_FreeSource") }}</p>
+  </div>
+  {% endif %}
+</div>

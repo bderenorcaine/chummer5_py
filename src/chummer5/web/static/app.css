@@ -92,6 +92,64 @@ body {
   max-width: 72rem;
 }
 
+/* The theme's "Fonts?" hint: a tooltip opened by hovering or focusing its button (a tap focuses
+   it on touch screens). Hidden with `visibility`, so `aria-describedby` still reaches its text. */
+.font-hint {
+  position: relative;
+}
+
+.font-hint__toggle {
+  padding: 0;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline dotted;
+  background: none;
+  cursor: help;
+}
+
+.font-hint__tip {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  width: min(24rem, 90vw);
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--frame-color);
+  font-family: var(--font-body);
+  text-align: left;
+  color: var(--page-fg);
+  background: var(--page-bg);
+  box-shadow: 0 0.2rem 0.6rem rgb(0 0 0 / 30%);
+  visibility: hidden;
+}
+
+.font-hint:hover .font-hint__tip,
+.font-hint:focus-within .font-hint__tip {
+  visibility: visible;
+}
+
+.font-hint__intro {
+  margin: 0 0 0.4rem;
+}
+
+.font-hint__source {
+  margin: 0.4rem 0 0;
+}
+
+.font-hint__list {
+  margin: 0;
+}
+
+.font-hint__list dt {
+  margin-top: 0.3rem;
+  font-weight: 600;
+}
+
+.font-hint__list dd {
+  margin-left: 0.8rem;
+}
+
 /* --- The step nav ----------------------------------------------------------------------------- */
 
 .step-nav__list {

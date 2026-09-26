@@ -85,6 +85,7 @@ def _shell_context(
         "page": page,
         "theme": session.theme,
         "themes": THEMES,
+        "theme_fonts": THEMES_BY_SLUG[session.theme].fonts,
         "locale": session.locale,
         "locales": prefs.LOCALES,
         "html_lang": prefs.LOCALES_BY_TAG.get(session.locale, _DEFAULT_LOCALE_ENTRY).html_lang,
@@ -194,15 +195,18 @@ def resource_panel(request: Request) -> HTMLResponse:
 
 @router.post("/ui/prefs/theme", response_class=HTMLResponse)
 def set_theme(request: Request, theme: str = Form(...)) -> HTMLResponse:
-    """Switch the session's theme (WP100) and answer with the new theme `<link>` out of band, so
-    the page restyles in place. An unknown slug is a 422, not a silent fallback: the picker only
-    offers `THEMES`, so anything else is a bad request."""
+    """Switch the session's theme (WP100) and answer with the new theme `<link>` -- and the
+    title bar's font hint, which is per theme -- out of band, so the page restyles in place. An
+    unknown slug is a 422, not a silent fallback: the picker only offers `THEMES`, so anything
+    else is a bad request."""
     if theme not in THEMES_BY_SLUG:
         raise HTTPException(status_code=422, detail=f"No such theme: {theme!r}.")
     session, new_cookie = resolve_session(request)
     session.theme = theme
     response = templates.TemplateResponse(
-        request, "_theme_link.html", {"theme": theme, "oob_theme": True}
+        request,
+        "_theme_swap.html",
+        {"theme": theme, "theme_fonts": THEMES_BY_SLUG[theme].fonts, "oob_theme": True},
     )
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

@@ -1557,3 +1557,12 @@ green rows added `.page tbody tr:nth-child(odd|even) { background: var(--table-r
 `app.css`. The other themes set both tokens to `transparent`, so they are visually unchanged. The
 known imperfection: striping counts filtered-out (`hidden`) rows. Fixing that would take either
 JavaScript or selectors that know about the filters, and neither belongs in a theme mechanism.
+
+**2026-09-26 (WP106, Phase W) — font family names are identifiers, not prose.** The WP102 guard
+(`test_no_web_python_module_builds_bare_user_facing_text`) flags multi-word literals in web-layer
+Python, and it flagged "Bebas Neue", "Source Sans 3" and the other suggested fonts. They are proper
+names that the browser matches against installed fonts, and translating one would break it. So the
+guard skips the arguments of `FontSuggestion(...)` calls, the same way it already skips
+`HTTPException(detail=...)`. That is narrower than adding ten names to `ALLOWED_PYTHON_STRINGS`,
+and it needs no upkeep when a theme's suggestions change. The role labels stay catalog keys
+(`Web_Fonts_Role_*`), so translatable text still cannot hide in that call.

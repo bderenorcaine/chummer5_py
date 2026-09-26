@@ -124,7 +124,8 @@ def _looks_like_prose(text: str) -> bool:
 
 def _prose_strings(path: Path) -> list[tuple[int, str]]:
     """Multi-word string literals and f-strings in `path`, skipping docstrings, dict keys, logging
-    calls, and `HTTPException(detail=...)` (a developer-facing 404/422 body, not page text)."""
+    calls, `HTTPException(detail=...)` (a developer-facing 404/422 body, not page text), and
+    `FontSuggestion(...)` (font family names)."""
     tree = ast.parse(path.read_text())
     skip: set[int] = set()
     for node in ast.walk(tree):
@@ -135,6 +136,11 @@ def _prose_strings(path: Path) -> list[tuple[int, str]]:
             skip.update(id(key) for key in node.keys if key is not None)
         if isinstance(node, ast.keyword) and node.arg == "detail":
             skip.update(id(sub) for sub in ast.walk(node.value))
+        # A theme's font suggestions (chummer5.web.prefs): font family names are identifiers the
+        # browser matches against installed fonts, never translated, and test_web_themes.py ties
+        # each one to the theme's own --font-* stack. The role label is still a catalog key.
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "FontSuggestion":
+            skip.update(id(sub) for sub in ast.walk(node))
         if isinstance(node, ast.Call) and getattr(node.func, "attr", None) in {
             "debug",
             "info",
