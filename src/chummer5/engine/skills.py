@@ -117,10 +117,9 @@ MAX_SKILL_RATING_CREATE = 6
 # comment here dismissed as inapplicable -- it is, as the *purchase* cap for a played character,
 # but 12 is also where the printed rating scale itself stops).
 #
-# Aptitude's 13 is deliberately not modeled: legacy implements it as a per-skill
-# `Improvement.Maximum` term folded into `Skill.RatingMaximum` (a *purchase* cap), this project has
-# no `Improvement.Maximum` field at all, and `Aptitude` classifies `NOT_YET_SUPPORTED` in the
-# quality catalog, so no character this engine builds can hold it.
+# **WP116**: Aptitude raises both caps by one for its chosen skill -- 7 to buy at creation, 13 as
+# the ceiling (p. 72) -- through `ImprovementType.SKILL_MAXIMUM`; see `purchase_maximum`. Legacy
+# does the same by folding a per-skill maximum term into `Skill.RatingMaximum`.
 #
 # **Legacy does not apply this bound where this engine does.** `Skill.TotalBaseRating` is
 # `LearnedRating + RatingModifiers(Attribute)`, unclamped -- legacy clamps only the *purchased*
@@ -150,6 +149,21 @@ KARMA_SKILL_GROUP_PER_RATING = 5
 # WP53: same page's "CHARACTER IMPROVEMENT TABLE" -- a flat, non-per-rating cost ("New
 # specialization (for Active, Knowledge, or Language)"), distinct from every formula above.
 KARMA_SPECIALIZATION_COST = 7
+
+
+def skill_maximum_bonuses(character: Character) -> dict[str, int]:
+    """Σ `SKILL_MAXIMUM` per skill name (WP116) -- what `create_skill_allocation` needs before the
+    character carries an allocation to read them through."""
+    bonuses: dict[str, int] = {}
+    for imp in character.improvements.improvements:
+        if imp.improvement_type is ImprovementType.SKILL_MAXIMUM:
+            bonuses[imp.target] = bonuses.get(imp.target, 0) + imp.value
+    return bonuses
+
+
+def purchase_maximum(skill: Skill, maximum_bonus: Mapping[str, int]) -> int:
+    """The highest rating `skill` may be bought to at creation (WP116): 6, or 7 with Aptitude."""
+    return MAX_SKILL_RATING_CREATE + maximum_bonus.get(skill.name, 0)
 
 
 @dataclass(frozen=True)
@@ -190,6 +204,7 @@ def create_skill_allocation(
     skill_points: Mapping[str, int],
     group_points: Mapping[str, int],
     specializations: Mapping[str, str] = MappingProxyType({}),
+    maximum_bonus: Mapping[str, int] = MappingProxyType({}),
 ) -> SkillAllocation:
     """Build a `SkillAllocation`, validating the spend against the Skills-priority-letter budget.
 
@@ -204,6 +219,9 @@ def create_skill_allocation(
     of its own `skill_points` (see module docstring for why this alone enforces both "no skill group
     specializations in Step Five" and "you have to have the skill first"). Each specialization costs
     1 additional skill point, counted against the same `skill_points` budget.
+
+    WP116: `maximum_bonus` (skill name -> levels, see `skill_maximum_bonuses`) raises one skill's
+    cap -- Aptitude's 7. A skill *group*'s cap stays 6: Aptitude names one skill.
     """
     skills_by_id = {s.id: s for s in skills}
     unknown_skills = set(skill_points) - set(skills_by_id)
@@ -218,10 +236,10 @@ def create_skill_allocation(
     for skill_id, points in skill_points.items():
         if points < 0:
             raise ValueError(f"{skill_id}: points spent must not be negative, got {points}")
-        if points > MAX_SKILL_RATING_CREATE:
+        maximum = purchase_maximum(skills_by_id[skill_id], maximum_bonus)
+        if points > maximum:
             raise ValueError(
-                f"{skill_id}: {points} exceeds the chargen skill rating maximum of "
-                f"{MAX_SKILL_RATING_CREATE}"
+                f"{skill_id}: {points} exceeds the chargen skill rating maximum of {maximum}"
             )
         group = skills_by_id[skill_id].skill_group
         if group is not None and group_points.get(group, 0) > 0:
@@ -357,6 +375,7 @@ def create_karma_skill_selection(
 
     skills_by_id = {s.id: s for s in skills}
     group_names = {s.skill_group for s in skills if s.skill_group is not None}
+    maximum_bonus = skill_maximum_bonuses(character)  # WP116: Aptitude
 
     unknown_skills = set(karma_skill_points) - set(skills_by_id)
     if unknown_skills:
@@ -399,10 +418,10 @@ def create_karma_skill_selection(
         else:
             start_rating = existing_skill_points.get(skill_id, 0)
         total = start_rating + points
-        if total > MAX_SKILL_RATING_CREATE:
+        maximum = purchase_maximum(skill, maximum_bonus)
+        if total > maximum:
             raise ValueError(
-                f"{skill_id}: {total} exceeds the chargen skill rating maximum of "
-                f"{MAX_SKILL_RATING_CREATE}"
+                f"{skill_id}: {total} exceeds the chargen skill rating maximum of {maximum}"
             )
         cost += karma_advancement_cost(start_rating, points, KARMA_SKILL_PER_RATING)
 
@@ -471,7 +490,8 @@ def create_karma_skill_selection(
 def natural_skill_rating(character: Character, allocation: SkillAllocation, skill: Skill) -> int:
     """WP82: the rating this skill was actually *bought* at -- its group's rating if its group has
     points spent, else its own points, priority-funded and Karma-funded summed, capped at
-    `MAX_SKILL_RATING_CREATE`. No Improvement contribution at all.
+    `MAX_SKILL_RATING_CREATE` (one higher for an Aptitude skill, WP116). No Improvement adds to
+    it; `SKILL_MAXIMUM` only moves the cap.
 
     This is `skill_rating` minus the `ImprovementType.SKILL` term, and it is the skill-side twin of
     `Character.natural_attribute_value` (WP81) -- with one deliberate asymmetry worth knowing
@@ -510,7 +530,11 @@ def natural_skill_rating(character: Character, allocation: SkillAllocation, skil
         points = allocation.skill_points.get(skill.id, 0)
         if karma is not None:
             points += karma.skill_points.get(skill.id, 0)
-    return min(points, MAX_SKILL_RATING_CREATE)
+    return min(points, MAX_SKILL_RATING_CREATE + _maximum_bonus(character, skill))
+
+
+def _maximum_bonus(character: Character, skill: Skill) -> int:
+    return character.improvements.resolve(ImprovementType.SKILL_MAXIMUM, skill.name)
 
 
 def skill_rating(character: Character, allocation: SkillAllocation, skill: Skill) -> int:
@@ -531,7 +555,8 @@ def skill_rating(character: Character, allocation: SkillAllocation, skill: Skill
     above 6.
     """
     bonus = character.improvements.resolve(ImprovementType.SKILL, skill.name)
-    return min(natural_skill_rating(character, allocation, skill) + bonus, MAX_SKILL_RATING)
+    ceiling = MAX_SKILL_RATING + _maximum_bonus(character, skill)  # WP116: 13 with Aptitude
+    return min(natural_skill_rating(character, allocation, skill) + bonus, ceiling)
 
 
 def dice_pool(

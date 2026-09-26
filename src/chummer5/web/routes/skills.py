@@ -24,6 +24,8 @@ from chummer5.engine.skills import (
     create_skill_allocation,
     dice_pool,
     natural_skill_rating,
+    purchase_maximum,
+    skill_maximum_bonuses,
     skill_point_budget,
     skill_rating,
 )
@@ -106,6 +108,7 @@ def _skill_allocation_context(
         else 0
     )
     budget = skill_point_budget(skills_letter, PRIORITIES)
+    maximum_bonus = skill_maximum_bonuses(character)  # WP116: Aptitude
     # WP61: sorted by (category, name), not just name, so `itertools.groupby` below needs no
     # re-sorting -- mirrors `chummer5.web.routes.resources._resources_context`'s own `gear_groups`
     # comment about `STARTER_GEAR_CATALOG` already being pre-sorted the same way.
@@ -131,6 +134,8 @@ def _skill_allocation_context(
             # "augmented" the way WP81 labels the attribute equivalent; see `natural_skill_rating`'s
             # own docstring for why this project can't yet claim the delta is an augmentation.
             "natural_rating": natural_skill_rating(display, allocation, skill),
+            # WP116: 7 for an Aptitude skill.
+            "max_rating": purchase_maximum(skill, maximum_bonus),
             "rating": skill_rating(display, allocation, skill),
             "pool": dice_pool(display, allocation, skill, specialized=False),
             "pool_specialized": (
@@ -166,7 +171,13 @@ def _skill_allocation_context(
     if error is None:
         try:
             create_skill_allocation(
-                skills_letter, PRIORITIES, SKILLS, skill_points, group_points, specializations
+                skills_letter,
+                PRIORITIES,
+                SKILLS,
+                skill_points,
+                group_points,
+                specializations,
+                maximum_bonus,
             )
             create_karma_skill_selection(
                 replace(character, skill_allocation=allocation),
@@ -240,6 +251,7 @@ async def submit_skills(request: Request) -> HTMLResponse:
                 skill_points,
                 group_points,
                 specializations,
+                skill_maximum_bonuses(previous),
             )
             # WP51: this section's own currently-committed Karma-skill cost is added back onto
             # `previous.karma_remaining` -- the same "exclude this section's own prior

@@ -175,6 +175,9 @@ class ImprovementType(Enum):
     SKILL_POOL = auto()
     SKILL_CATEGORY_POOL = auto()
     SPECIALIZATION_DISABLED = auto()
+    # WP116: raises one skill's purchase cap (6 at creation) and its rating ceiling (12) --
+    # Aptitude, target: the skill name. Legacy folds the same thing into `Skill.RatingMaximum`.
+    SKILL_MAXIMUM = auto()
 
 
 class ImprovementSource(Enum):

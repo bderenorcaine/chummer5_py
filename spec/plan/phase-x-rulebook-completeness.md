@@ -267,7 +267,7 @@ the rules it checks.
   Acceptance: the rulebook's James/Rob/Kyra Step Four examples each reproduce their stated net
   Karma.
 
-- [ ] **WP116 — Aptitude.**
+- [x] **WP116 — Aptitude.**
   Goal: one chosen skill may be bought to 7 at creation, with an augmented ceiling of 13 (p. 72).
   Deliverables: a per-skill purchase-cap override read by `create_skill_allocation` and
   `create_karma_skill_selection`. Keep the `MAX_SKILL_RATING_CREATE` constant as the default, and

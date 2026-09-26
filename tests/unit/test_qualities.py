@@ -202,13 +202,13 @@ def test_supported_vs_unsupported_counts_are_visible() -> None:
     # registry rows + 3 choice rows): 13 FLAT_BONUS, 23 NO_EFFECT, 51 NOT_YET_SUPPORTED. WP115
     # adds 5 FLAT_BONUS (Dependents x3, Low Pain Tolerance, Loss of Confidence), 13 NO_EFFECT (11
     # registry rows + Scorched and Spirit Bane) and 18 SELECT_TEXT (Addiction x4, Allergy x8,
-    # Prejudiced x6).
+    # Prejudiced x6). WP116 adds Aptitude's FLAT_BONUS skill maximum.
     qualities = load_qualities()
     counts = count_by_support(qualities)
-    assert counts[BonusSupport.FLAT_BONUS] == 18
+    assert counts[BonusSupport.FLAT_BONUS] == 19
     assert counts[BonusSupport.NO_EFFECT] == 36
     assert counts[BonusSupport.SELECT_TEXT] == 27
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 15
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 14
 
 
 def test_indomitable_mental_limit_bonus_is_supported() -> None:

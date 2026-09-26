@@ -108,7 +108,7 @@
                   name="skill_{{ row.skill.id }}"
                   value="{{ row.points }}"
                   min="0"
-                  max="{{ max_skill_rating }}"
+                  max="{{ row.max_rating }}"
                 />
               </td>
               <td>
@@ -117,7 +117,7 @@
                   name="karma_skill_{{ row.skill.id }}"
                   value="{{ row.karma_points }}"
                   min="0"
-                  max="{{ max_skill_rating }}"
+                  max="{{ row.max_rating }}"
                 />
               </td>
               <td>{{ row.natural_rating }}{% if row.rating != row.natural_rating %} ({{ row.rating }}){% endif %}</td>

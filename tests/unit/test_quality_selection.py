@@ -83,7 +83,7 @@ def _by_name(name: str) -> Quality:
     return next(q for q in QUALITIES if q.name == name)
 
 
-def test_mvp_quality_catalog_is_exactly_the_eighty_one_offerable_qualities() -> None:
+def test_mvp_quality_catalog_is_exactly_the_eighty_two_offerable_qualities() -> None:
     # WP8's 3 FLAT_BONUS qualities (Catlike, Double-Jointed, Natural Athlete) + WP22's 3 new
     # FLAT_BONUS Indomitable qualities + WP22's 8 verified-NO_EFFECT qualities = 14, +1 for WP49's
     # Bilingual (see spec/rulebooks/learnings.md's WP49 entry -- Bilingual was NOT_YET_SUPPORTED
@@ -95,8 +95,10 @@ def test_mvp_quality_catalog_is_exactly_the_eighty_one_offerable_qualities() -> 
     # Attribute and Lucky (Positive) = 26. WP114 adds the 19 remaining in-scope Positive qualities
     # (Aptitude is WP116's; Mentor Spirit is widened per-character, not here) = 45. WP115 adds 36
     # Negative qualities (Incompetent, Uncouth, Uneducated and Sensitive System are WP117's) = 81.
+    # WP116 adds Aptitude = 82.
     offered = mvp_quality_catalog(QUALITIES)
     assert {q.name for q in offered} == {
+        "Aptitude",
         "Addiction (Mild)",
         "Addiction (Moderate)",
         "Addiction (Severe)",
@@ -244,12 +246,11 @@ def test_mvp_quality_catalog_excludes_qualities_researched_and_rejected_this_wp(
     # excluded (each needs its own, still-unbuilt kind of engine support: a branching bonus, a
     # magic-gate, a dice-pool-modifier mechanism, respectively).
     #
-    # WP114 and WP115 offered every one of them. What is still unoffered is exactly what the rest
-    # of Phase X schedules (Aptitude: WP116; the four purchase-rule qualities: WP117), plus the
+    # WP114 and WP115 offered every one of them, and WP116 Aptitude. What is still unoffered is
+    # exactly what the rest of Phase X schedules (the four purchase-rule qualities: WP117), plus the
     # rows that are never offered from this catalog on purpose.
     unoffered = {q.name for q in QUALITIES} - {q.name for q in mvp_quality_catalog(QUALITIES)}
     assert unoffered == {
-        "Aptitude",
         "Incompetent",
         "Uncouth",
         "Uneducated",
@@ -1193,8 +1194,8 @@ def test_a_gate_built_only_from_non_core_conditions_can_never_be_met() -> None:
 
 def test_out_of_scope_rows_are_excluded_by_name_and_the_catalog_size_is_pinned() -> None:
     """Loud on data drift: 96 SR5 rows, 8 out of scope, 1 metatype-only (the Dwarf's racial
-    Resistance row, WP114), 81 offered today (WP112 added 2, WP114 19, WP115 36). WP116-WP117
-    move the offered count towards 87 (every purchasable in-scope row) and must update this
+    Resistance row, WP114), 82 offered today (WP112 added 2, WP114 19, WP115 36, WP116 1).
+    WP117 moves the offered count to 87 (every purchasable in-scope row) and must update this
     number."""
     names = {q.name for q in QUALITIES}
     assert len(QUALITIES) == 96
@@ -1202,7 +1203,7 @@ def test_out_of_scope_rows_are_excluded_by_name_and_the_catalog_size_is_pinned()
     assert len(OUT_OF_SCOPE_QUALITY_NAMES) == 8
     offered = {q.name for q in mvp_quality_catalog(QUALITIES)}
     assert not offered & OUT_OF_SCOPE_QUALITY_NAMES
-    assert len(offered) == 81
+    assert len(offered) == 82
     forced = tuple(replace(q, bonus_support=BonusSupport.NO_EFFECT) for q in QUALITIES)
     assert len(mvp_quality_catalog(forced)) == 87
 

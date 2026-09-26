@@ -313,7 +313,11 @@ from chummer5.engine.resources import (
     create_contact_selection,
     create_resources_selection,
 )
-from chummer5.engine.skills import create_karma_skill_selection, create_skill_allocation
+from chummer5.engine.skills import (
+    create_karma_skill_selection,
+    create_skill_allocation,
+    skill_maximum_bonuses,
+)
 from chummer5.engine.spirits import create_bound_spirit_selection
 from chummer5.engine.vehicles import VEHICLE_CATALOG, create_vehicle_selection
 
@@ -955,6 +959,8 @@ def build_character(
         skill_points=save.skill_points,
         group_points=save.group_points,
         specializations=save.specializations,
+        # WP116: Aptitude's +1, applied with the qualities above.
+        maximum_bonus=skill_maximum_bonuses(character),
     )
 
     contact_selection = create_contact_selection(character, save.contacts)

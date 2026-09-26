@@ -759,6 +759,16 @@ def _classify_bonus(
                     value=int(child.findtext("bonus", "0")),
                 )
             )
+        elif child.tag == "selectskill" and [c.tag for c in child] == ["max"]:
+            # WP116: Aptitude -- the chosen skill's maximum rises by `<max>` (7 at creation, 13
+            # after). Empty target: "the pick's `choice`".
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind="skill_maximum",
+                    target_name="",
+                    value=int(child.findtext("max", "0")),
+                )
+            )
         elif child.tag == "selectskill" and _is_select_skill_pool(child):
             # WP115: Loss of Confidence -- a dice-pool modifier on the chosen skill, and that
             # skill's specialization switched off. Empty target: "the pick's `choice`".
@@ -785,7 +795,7 @@ def _classify_bonus(
 
 def _is_select_skill_pool(elem: ET.Element) -> bool:
     """`<selectskill>` holding one `<val>` and optionally `<disablespecializationeffects/>` --
-    a pool modifier on a chosen skill. Aptitude's `<max>` shape is not this."""
+    a pool modifier on a chosen skill. Aptitude's `<max>` shape is parsed separately (WP116)."""
     tags = [c.tag for c in elem]
     return tags.count("val") == 1 and set(tags) <= {"val", "disablespecializationeffects"}
 
@@ -805,7 +815,10 @@ def _choice_kind(name: str, flat_bonuses: tuple[FlatBonus, ...]) -> str | None:
         return _CHOICE_KIND_NAMES[name]
     if any(b.target_kind == "attribute_maximum" and not b.target_name for b in flat_bonuses):
         return "attribute"
-    if any(b.target_kind == "skill_pool" and not b.target_name for b in flat_bonuses):
+    if any(
+        b.target_kind in ("skill_pool", "skill_maximum") and not b.target_name
+        for b in flat_bonuses
+    ):
         return "skill"
     return None
 

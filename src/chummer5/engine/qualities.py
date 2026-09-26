@@ -106,6 +106,8 @@ _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "skill_category_pool": ImprovementType.SKILL_CATEGORY_POOL,
     "skill_pool": ImprovementType.SKILL_POOL,
     "specialization_disabled": ImprovementType.SPECIALIZATION_DISABLED,
+    # WP116: Aptitude.
+    "skill_maximum": ImprovementType.SKILL_MAXIMUM,
 }
 
 # WP114: Home Ground's five bonuses (p. 74), as stable ids -- the page translates each through
