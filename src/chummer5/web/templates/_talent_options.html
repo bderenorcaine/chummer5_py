@@ -1,5 +1,5 @@
 <div id="talent-options-fragment">
-  {% if selected_codename == "Magician" %}
+  {% if selected_codename in ("Magician", "Aspected Magician") %}
   <label>
     {{ _("Web_Talent_Tradition") }}
     <select name="tradition_id">
@@ -11,6 +11,20 @@
       {% endfor %}
     </select>
   </label>
+  {% endif %}
+
+  {% if aspect_choices %}
+  {#- WP121: the Aspected Magician's one magic skill group. -#}
+  <label>
+    {{ _("Web_Talent_Aspect") }}
+    <select name="magic_aspect">
+      <option value="">{{ _("Web_Talent_ChooseAspect") }}</option>
+      {% for group in aspect_choices %}
+      <option value="{{ group }}" {% if group == selected_aspect %}selected{% endif %}>{{ group | dterm("skills.xml") }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if aspect_rating %}<p>{{ _("Web_Talent_AspectGrant", rating=aspect_rating) }}</p>{% endif %}
   {% endif %}
 
   {% if skill_qty %}

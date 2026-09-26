@@ -366,6 +366,8 @@ class Character:
     lifestyle_selection: LifestyleSelection | None = None
     metatype_qualities: tuple[Quality, ...] = ()
     magic_type: str | None = None  # Talent codename: "Magician"/"Adept"; None for Mundane (WP25)
+    # WP121: an Aspected Magician's group ("Sorcery"/"Conjuring"/"Enchanting"); None otherwise.
+    magic_aspect: str | None = None
     magic_rating: int = 0  # the Talent-granted starting MAG rating; 0 for Mundane (WP25)
     tradition: Tradition | None = None  # Magician only (WP25)
     magic_granted_skill_ids: tuple[str, ...] = ()  # the Talent free-skill grant's picks (WP25)

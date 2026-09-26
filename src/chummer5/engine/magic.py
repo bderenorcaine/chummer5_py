@@ -3,9 +3,9 @@
 Composes WP24's real Talent-letter plumbing with WP2's Talent priority data
 (`chummer5.data.priorities`), the new SR5-tradition catalog (`chummer5.data.traditions`), and WP7's
 skill catalog (`chummer5.data.skills`) into a buildable Magic-type + Magic-rating + tradition +
-free-skill selection. Mundane/Magician/Adept only — Mystic Adept/Technomancer/A.I./Aspected
-Magician/Apprentice/Explorer/Enchanter/Aware are all excluded, per the explicit scope cuts recorded
-in the Implementation Plan's Phase I intro.
+free-skill selection. Mundane/Magician/Adept, and since WP121 the Aspected Magician — Mystic
+Adept/Technomancer/A.I./Apprentice/Explorer/Enchanter/Aware are all excluded, per the explicit
+scope cuts recorded in the Implementation Plan's Phase I intro and Phase X's rulings.
 
 **The one finding this module must not miscopy from `chummer5.engine.character`'s EDG precedent:
 Magic rating is not a point-buy.** Every other attribute is `metatype minimum + points spent + Σ
@@ -36,14 +36,41 @@ from chummer5.engine.improvements import Improvement, ImprovementSource, Improve
 from chummer5.engine.skills import natural_skill_rating
 
 # This phase's offered subset of each Talent letter's real option list (Implementation Plan's Phase
-# I intro): Mystic Adept (explicit product decision, not deferred) and Technomancer/A.I./Aspected
-# Magician/Apprentice/Explorer/Enchanter/Aware (each a real archetype with its own restricted-access
+# I intro; WP121 added the Aspected Magician): Mystic Adept (explicit product decision, not
+# deferred) and Technomancer/A.I./Apprentice/Explorer/Enchanter/Aware (each a real archetype with its own restricted-access
 # rules neither of this phase's two fixtures exercises) are all excluded. "Mundane" is included so a
 # player assigning Talent a letter that happens to offer it can still choose it -- none of A-D
 # currently do (every option at those letters is a real archetype; only E offers "Mundane" -- see
 # `chummer5.data.priorities.PriorityTable.mundane_talent`), but this module doesn't hardcode that,
 # it just restricts to the *name*.
-OFFERED_TALENT_CODENAMES = ("Mundane", "Magician", "Adept")
+OFFERED_TALENT_CODENAMES = ("Mundane", "Magician", "Adept", "Aspected Magician")
+
+# WP121: the Aspected Magician (p. 69). It picks one aspect group, gets that group free at the
+# option's rating, and "can never take skills from the other two, ever". It casts spells only as a
+# Sorcery aspect and binds spirits only as a Conjuring one; it uses a tradition, a mentor's
+# Magician slot and tradition Drain like a Magician, and never projects astrally.
+ASPECTED_MAGICIAN = "Aspected Magician"
+ASPECT_GROUPS = ("Conjuring", "Enchanting", "Sorcery")
+
+
+def uses_tradition(magic_type: str | None) -> bool:
+    """Magician or Aspected Magician (WP121): a tradition, tradition Drain, the Magician slot."""
+    return magic_type in ("Magician", ASPECTED_MAGICIAN)
+
+
+def casts_spells(character: Character) -> bool:
+    """WP121: a Magician, or an Aspected Magician of the Sorcery aspect."""
+    return character.magic_type == "Magician" or (
+        character.magic_type == ASPECTED_MAGICIAN and character.magic_aspect == "Sorcery"
+    )
+
+
+def binds_spirits(character: Character) -> bool:
+    """WP121: a Magician, or an Aspected Magician of the Conjuring aspect."""
+    return character.magic_type == "Magician" or (
+        character.magic_type == ASPECTED_MAGICIAN and character.magic_aspect == "Conjuring"
+    )
+
 
 # Talent's `skilltype = "magic"` grant (Magician, every letter that grants one): traced directly
 # from `SelectMetatypePriority.cs`'s `GetMagicalSkillList()`, confirmed verbatim as
@@ -83,6 +110,9 @@ class MagicSelection:
     tradition: Tradition | None  # Magician only
     granted_skill_ids: tuple[str, ...]  # () for Mundane or a no-grant letter/codename
     granted_skill_rating: int  # 0 when granted_skill_ids is empty
+    # WP121: the Aspected Magician's group; None for everyone else. Its free grant is the group's
+    # skills, in `granted_skill_ids`, at the option's `skill_group_val`.
+    aspect: str | None = None
 
 
 def offered_talent_options(letter: str, priorities: PriorityTable) -> tuple[TalentOption, ...]:
@@ -123,6 +153,7 @@ def create_magic_selection(
     priorities: PriorityTable,
     traditions: Iterable[Tradition],
     skills: Iterable[Skill],
+    aspect: str | None = None,
 ) -> MagicSelection:
     """Build a `MagicSelection`, validating the codename/tradition/free-skill-grant together.
 
@@ -133,6 +164,10 @@ def create_magic_selection(
     no-grant option forbids any picks at all. Does not touch `chummer5.engine.skills
     .SkillAllocation` or its budget -- see `apply_magic_skill_grant_improvements` for how the grant
     still reaches a skill's real total rating without double-counting against that budget.
+
+    **WP121**: an Aspected Magician needs a tradition, like a Magician, and an `aspect` from the
+    option's `skill_group_choices`; it takes no `granted_skill_ids` -- its grant is the aspect
+    group's skills, derived here. Every other codename must pass no `aspect`.
     """
     offered = {opt.codename: opt for opt in offered_talent_options(talent_letter, priorities)}
     option = offered.get(talent_codename)
@@ -160,15 +195,38 @@ def create_magic_selection(
         raise ValueError(f"{talent_codename!r} at letter {talent_letter!r} has no Magic rating")
     magic_rating = option.magic
 
+    if option.codename == ASPECTED_MAGICIAN:
+        if aspect not in option.skill_group_choices:
+            raise ValueError(
+                f"an Aspected Magician needs an aspect, one of {list(option.skill_group_choices)}"
+            )
+        if skill_ids:
+            raise ValueError("an Aspected Magician's free grant is its aspect group, not skills")
+    elif aspect is not None:
+        raise ValueError(f"{talent_codename!r} has no aspect")
+
     tradition: Tradition | None = None
-    if option.codename == "Magician":
+    if uses_tradition(option.codename):
         if tradition_id is None:
-            raise ValueError("Magician requires a tradition")
+            raise ValueError(f"{option.codename} requires a tradition")
         tradition = next((t for t in traditions if t.id == tradition_id), None)
         if tradition is None:
             raise ValueError(f"not an offered tradition id: {tradition_id!r}")
     elif tradition_id is not None:
         raise ValueError(f"{talent_codename!r} cannot choose a tradition")
+
+    if option.codename == ASPECTED_MAGICIAN:
+        rating = option.skill_group_val or 0
+        return MagicSelection(
+            magic_type=option.codename,
+            magic_rating=magic_rating,
+            tradition=tradition,
+            granted_skill_ids=(
+                tuple(s.id for s in skills if s.skill_group == aspect) if rating else ()
+            ),
+            granted_skill_rating=rating,
+            aspect=aspect,
+        )
 
     if option.skill_qty is None:
         if skill_ids:

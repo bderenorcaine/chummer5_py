@@ -1,5 +1,5 @@
 <div id="spell-selection" class="panel">
-  {% if character and character.magic_type == "Magician" %}
+  {% if character and spells_available %}
   <details open>
   <summary class="panel__heading">{{ _("String_Spells") }}</summary>
 

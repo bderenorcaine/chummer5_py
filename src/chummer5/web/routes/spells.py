@@ -14,7 +14,12 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from chummer5.engine.character import Character
-from chummer5.engine.magic import KARMA_PER_SPELL, create_spell_selection, offered_talent_options
+from chummer5.engine.magic import (
+    KARMA_PER_SPELL,
+    casts_spells,
+    create_spell_selection,
+    offered_talent_options,
+)
 from chummer5.web.catalogs import PRIORITIES, SPELLS, templates
 from chummer5.web.i18n import Message
 from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
@@ -55,10 +60,16 @@ def _spell_selection_context(
     """
     if character is None:
         return {"character": None, "spell_error": error}
-    if character.magic_type != "Magician":
+    # WP121: a Sorcery-aspected Aspected Magician casts too -- with no free spells, since its
+    # Talent option grants none (the budget reads the character's own option).
+    if not casts_spells(character):
         return {"character": character, "spell_error": error}
     magician_option = next(
-        (o for o in offered_talent_options(talent_letter, PRIORITIES) if o.codename == "Magician"),
+        (
+            o
+            for o in offered_talent_options(talent_letter, PRIORITIES)
+            if o.codename == character.magic_type
+        ),
         None,
     )
     budget = (magician_option.spells or 0) if magician_option is not None else 0
@@ -86,6 +97,7 @@ def _spell_selection_context(
             budget_warning = Message.of("Web_Stale_Spells", error=str(exc))
     return {
         "character": character,
+        "spells_available": True,  # WP121: the template's gate
         "spell_rows": rows,
         "spell_budget": budget,
         "spells_selected": len(ids),
@@ -103,7 +115,7 @@ def _spell_selection_context(
 async def submit_spells(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
     session.current_page = "magic"  # WP61/WP97
-    if session.character is None or session.character.magic_type != "Magician":
+    if session.character is None or not casts_spells(session.character):
         context = _spell_selection_context(session.character, session.talent_letter, ())
     else:
         form = await request.form()
@@ -112,7 +124,7 @@ async def submit_spells(request: Request) -> HTMLResponse:
             (
                 o
                 for o in offered_talent_options(session.talent_letter, PRIORITIES)
-                if o.codename == "Magician"
+                if o.codename == session.character.magic_type
             ),
             None,
         )

@@ -117,6 +117,11 @@ def create_bound_spirit_selection(
         raise ValueError(
             "Bound Spirits require a Magician's tradition to know which spirit types are eligible"
         )
+    if character.magic_aspect is not None and character.magic_aspect != "Conjuring":
+        # WP121, p. 69: an Aspected Magician conjures only as a Conjuring aspect.
+        raise ValueError(
+            f"a {character.magic_aspect}-aspected magician cannot bind spirits (Conjuring only)"
+        )
 
     max_count = character.attribute_value("CHA")
     if len(entries) > max_count:

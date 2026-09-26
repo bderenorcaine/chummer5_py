@@ -338,7 +338,7 @@ the rules it checks.
   Acceptance: all 27 core powers (28 minus Chaos Mentor) are offerable; every non-computed one has a
   registry row.
 
-- [ ] **WP121 — Aspected Magician.**
+- [x] **WP121 — Aspected Magician.**
   Goal: offer the Talent option at B/C/D (`priorities.xml` value `Aspected Magician`).
   Deliverables:
   - `OFFERED_TALENT_CODENAMES` gains it. The talent needs a group choice (Sorcery, Conjuring or
@@ -565,6 +565,7 @@ the rules it checks.
     - The checks a save or import skips because they need a later step: Loss of Confidence's
       rating 4+ and Scorched's prerequisite (WP115, `LaterStepFacts`), and an Adept's free-skill
       grant naming Assensing without the Astral Perception power (WP118).
+    - An Aspected Magician Incompetent in one of the two groups it can never learn (WP121).
   - The WP133 carryover notes are *informational*, not issues.
   - An Export-page panel lists the issues grouped by step, with links. The nav's existing `--stale`
     marker widens to "has validation issues". The title bar shows "✓ Complete" or "N issues".

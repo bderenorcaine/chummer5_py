@@ -287,7 +287,7 @@ def drain_resistance(character: Character) -> int | None:
       same formula for every Adept regardless of which powers were actually bought, the same
       "shown regardless of build specifics" shape Physical/Mental/Social Limit already have).
     """
-    if character.magic_type == "Magician":
+    if character.magic_type in ("Magician", "Aspected Magician"):  # WP121: tradition Drain too
         assert character.tradition is not None
         attr_a, attr_b = character.tradition.drain_attributes
     elif character.magic_type == "Adept":

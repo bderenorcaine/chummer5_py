@@ -87,6 +87,11 @@ class TalentOption:
     skill_val: int | None
     skill_type: str | None
     special_attribute_points: int | None
+    # WP121: the Aspected Magician's grant -- one skill *group*, picked from `skill_group_choices`
+    # (its aspect), at `skill_group_val` (4 at B, 2 at C, 0 at D).
+    skill_group_choices: tuple[str, ...] = ()
+    skill_group_qty: int | None = None
+    skill_group_val: int | None = None
 
 
 @dataclass(frozen=True)
@@ -187,6 +192,11 @@ def _parse_talent_option(elem: ET.Element) -> TalentOption:
         skill_val=_optional_int(elem, "skillval"),
         skill_type=elem.findtext("skilltype"),
         special_attribute_points=_optional_int(elem, "specialattribpoints"),
+        skill_group_choices=tuple(
+            g.text for g in elem.findall("skillgroupchoices/skillgroup") if g.text
+        ),
+        skill_group_qty=_optional_int(elem, "skillgroupqty"),
+        skill_group_val=_optional_int(elem, "skillgroupval"),
     )
 
 

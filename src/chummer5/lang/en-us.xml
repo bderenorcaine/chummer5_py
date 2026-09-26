@@ -387,6 +387,26 @@
       <key>Web_MagicType_Magician</key>
       <text>Magician</text>
     </string>
+    <string>
+      <key>Web_MagicType_Aspected Magician</key>
+      <text>Aspected Magician</text>
+    </string>
+    <string>
+      <key>Web_Talent_Aspect</key>
+      <text>Aspect (the one magic skill group this magician can ever learn)</text>
+    </string>
+    <string>
+      <key>Web_Talent_ChooseAspect</key>
+      <text>-- choose an aspect --</text>
+    </string>
+    <string>
+      <key>Web_Talent_AspectGrant</key>
+      <text>Free grant: the aspect's skill group at rating {rating}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_MagicAspect</key>
+      <text>Aspect: {group}</text>
+    </string>
     <!-- Magic -->
     <string>
       <key>Web_Magic_FociUnavailable</key>

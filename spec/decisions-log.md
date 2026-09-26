@@ -1708,3 +1708,24 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
 - **High Pain Tolerance ⟷ Pain Resistance is enforced from both sides.** `GateContext` gained
   `power_names` and the `power` condition kind. `create_power_selection` checks a power's
   `<forbidden>` qualities.
+
+## 2026-09-26 — WP121: the Aspected Magician is offered
+
+- **The aspect is its own field** (`Character.magic_aspect`, `CharacterSave.magic_aspect`), set by
+  the Talent step. The free grant is derived from it: the aspect group's skills at the option's
+  rating, through the same per-skill `TALENT` Improvements a Magician's grant uses. So a saved
+  Aspected Magician stores no `granted_skill_ids`.
+- **Capability helpers** replace `magic_type == "Magician"` checks: `uses_tradition`,
+  `casts_spells` (Magician, or a Sorcery aspect) and `binds_spirits` (Magician, or a Conjuring
+  aspect), in `chummer5.engine.magic`. The spell and spirit sections and routes gate on them. The
+  free-spell budget reads the character's *own* Talent option rather than the letter's Magician
+  row, so an Aspected Magician gets 0 free spells.
+- **The other two groups are banned** through WP118's `SkillPurchaseRules.banned_groups`, with the
+  aspect in the reason.
+- **Legacy import still blocks an Aspected Magician.** No corpus file holds one, so where legacy
+  records the aspect is unverified. The block is explicit ("its aspect isn't read"), not the old
+  "not supported" catch-all.
+- **Known gap:** Incompetent's choice list offers a Magician-type character all three magic groups.
+  For an Aspected Magician, the two it can never learn are arguably "physically incapable" choices
+  (p. 81), which the rulebook forbids. `choice_options` doesn't see the aspect. Left for WP135's
+  whole-character check, where the full character is in view.

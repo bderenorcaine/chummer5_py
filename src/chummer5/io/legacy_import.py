@@ -509,6 +509,12 @@ def _blocking_reasons(
                 f"Talent option {codename!r} is not supported; MVP magic chargen only supports "
                 "Magician and Adept"
             )
+        elif codename == "Aspected Magician":
+            # WP121: no corpus file holds one, so where legacy records the aspect is unverified.
+            reasons.append(
+                "Talent option 'Aspected Magician' can't be imported yet: its aspect isn't read "
+                "from the .chum5"
+            )
         elif codename == "Magician":
             tradition_names = {t.name for t in traditions}
             if legacy.tradition_name not in tradition_names:

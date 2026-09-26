@@ -221,6 +221,8 @@ NO_PURCHASE_RULES = SkillPurchaseRules()
 # WP118, p. 69: "Adepts cannot use skills from any magic-related skill groups (Sorcery, Conjuring,
 # or Enchanting)" and "can learn Assensing only if they have Astral Perception".
 ADEPT_BANNED_GROUPS = ("Sorcery", "Conjuring", "Enchanting")
+# WP121: the three aspect groups (the same three).
+ASPECT_MAGIC_GROUPS = ADEPT_BANNED_GROUPS
 ADEPT_LOCKED_SKILL = "Assensing"
 
 
@@ -236,6 +238,13 @@ def skill_purchase_rules(character: Character) -> SkillPurchaseRules:
         for group in flags(ImprovementType.SKILL_GROUP_DISABLED)
     }
     banned_skills: dict[str, str] = {}
+    if character.magic_aspect is not None:
+        # WP121, p. 69: an Aspected Magician "can never take skills from the other two" groups.
+        for group in ASPECT_MAGIC_GROUPS:
+            if group != character.magic_aspect:
+                banned_groups.setdefault(
+                    group, f"a {character.magic_aspect}-aspected magician can never learn it"
+                )
     if character.magic_type == "Adept":
         for group in ADEPT_BANNED_GROUPS:
             banned_groups.setdefault(group, "an Adept cannot use magic skill groups' skills")

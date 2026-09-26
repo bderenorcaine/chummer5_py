@@ -110,7 +110,8 @@ Implementation Plan's WP20.
   physical Adepts are scoped as Implementation Plan's Phase I. Technomancers/A.I. (Resonance) remain
   out of scope indefinitely, not just for MVP; **Mystic Adepts are excluded from Phase I too, by
   explicit product decision (2026-07-19)** rather than deferred smallest-scope pragmatism like every
-  other cut on this page — not currently planned at all, not just "later."
+  other cut on this page — not currently planned at all, not just "later." The **Aspected
+  Magician** is in scope since Phase X's WP121.
 - Cyberware, vehicles, drones, full gear catalog beyond a basic purchase flow. Cyberware itself is
   scoped as Implementation Plan's Phase J (Standard grade, flat-cost/flat-essence items only);
   non-Standard cyberware grades remain deferred past that phase. **Bioware is no longer on this list**

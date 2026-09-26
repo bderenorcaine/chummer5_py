@@ -79,6 +79,7 @@
   <h3>{{ _("String_AttributeMAGLong") }}</h3>
   <ul>
     <li>{{ _("Web_Sheet_MagicType", type=_("Web_MagicType_" ~ magic_type)) }}</li>
+    {% if magic_aspect %}<li>{{ _("Web_Sheet_MagicAspect", group=magic_aspect | dterm("skills.xml")) }}</li>{% endif %}
     {% if magic_essence_loss > 0 %}
     <li>{{ _("Web_Sheet_MagicRatingReduced", rating=magic_rating, before=magic_rating_before_essence_loss) }}</li>
     {% else %}

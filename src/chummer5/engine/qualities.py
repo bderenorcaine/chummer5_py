@@ -714,8 +714,8 @@ def create_quality_selection(
     if mentor_spirit_selected:
         if mentor_spirit_archetype_id is None:
             raise ValueError("Mentor Spirit requires an archetype to be selected")
-        if magic_type not in ("Magician", "Adept"):
-            raise ValueError("Mentor Spirit requires a magic-active (Magician or Adept) character")
+        if magic_type not in ("Magician", "Adept", "Aspected Magician"):
+            raise ValueError("Mentor Spirit requires a magic-active character")
         archetype_by_id = {a.id: a for a in mentor_catalog}
         archetype = archetype_by_id.get(mentor_spirit_archetype_id)
         if archetype is None:

@@ -394,6 +394,8 @@ class CharacterSave:
     talent_letter: str = DEFAULT_TALENT_LETTER
     talent_codename: str = DEFAULT_TALENT_CODENAME
     tradition_id: str | None = None
+    # WP121: an Aspected Magician's group. Absent from older saves, which hold no Aspected Magician.
+    magic_aspect: str | None = None
     granted_skill_ids: tuple[str, ...] = ()
     spell_ids: tuple[str, ...] = ()
     power_picks: tuple[PowerPickTriple, ...] = ()
@@ -484,6 +486,7 @@ def create_character_save(
     talent_letter: str = DEFAULT_TALENT_LETTER,
     talent_codename: str = DEFAULT_TALENT_CODENAME,
     tradition_id: str | None = None,
+    magic_aspect: str | None = None,
     granted_skill_ids: Iterable[str] = (),
     spell_ids: Iterable[str] = (),
     power_picks: Iterable[PowerPickTriple] = (),
@@ -534,6 +537,7 @@ def create_character_save(
         lifestyle_months=lifestyle_months,
         talent_letter=talent_letter,
         talent_codename=talent_codename,
+        magic_aspect=magic_aspect,
         tradition_id=tradition_id,
         granted_skill_ids=tuple(granted_skill_ids),
         spell_ids=tuple(spell_ids),
@@ -683,6 +687,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "talent_letter": save.talent_letter,
         "talent_codename": save.talent_codename,
         "tradition_id": save.tradition_id,
+        "magic_aspect": save.magic_aspect,
         "granted_skill_ids": list(save.granted_skill_ids),
         "spell_ids": list(save.spell_ids),
         "power_picks": [
@@ -765,6 +770,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         talent_letter=data.get("talent_letter", DEFAULT_TALENT_LETTER),
         talent_codename=data.get("talent_codename", DEFAULT_TALENT_CODENAME),
         tradition_id=data.get("tradition_id"),
+        magic_aspect=data.get("magic_aspect"),
         granted_skill_ids=data.get("granted_skill_ids", ()),
         spell_ids=data.get("spell_ids", ()),
         power_picks=(
@@ -1049,6 +1055,7 @@ def build_character(
         priorities,
         traditions,
         skills,
+        aspect=save.magic_aspect,  # WP121
     )
     apply_magic_skill_grant_improvements(character, magic_selection, skills)
 
@@ -1079,11 +1086,13 @@ def build_character(
     spell_budget = 0
     spell_magic_rating = 0
     power_point_budget = 0
-    if magic_selection.magic_type == "Magician":
+    # WP121: a Sorcery-aspected Aspected Magician casts too, with its own option's (zero) free
+    # spells.
+    if magic_selection.magic_type == "Magician" or magic_selection.aspect == "Sorcery":
         magician_option = next(
             o
             for o in offered_talent_options(save.talent_letter, priorities)
-            if o.codename == "Magician"
+            if o.codename == magic_selection.magic_type
         )
         spell_budget = magician_option.spells or 0
         spell_magic_rating = total_magic_rating
@@ -1117,6 +1126,7 @@ def build_character(
         lifestyle_selection=lifestyle_selection,
         metatype_qualities=metatype_qualities,
         magic_type=magic_selection.magic_type,
+        magic_aspect=magic_selection.aspect,
         magic_rating=magic_selection.magic_rating,
         tradition=magic_selection.tradition,
         magic_granted_skill_ids=magic_selection.granted_skill_ids,

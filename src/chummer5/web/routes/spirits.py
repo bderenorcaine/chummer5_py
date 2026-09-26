@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from starlette.datastructures import FormData
 
 from chummer5.engine.character import Character
+from chummer5.engine.magic import binds_spirits
 from chummer5.engine.spirits import create_bound_spirit_selection, offered_spirit_types
 from chummer5.web.catalogs import MAX_BOUND_SPIRIT_ROWS, templates
 from chummer5.web.i18n import Message
@@ -82,7 +83,7 @@ def _spirit_selection_context(
     """
     if character is None:
         return {"character": None, "spirit_error": error}
-    if character.magic_type != "Magician":
+    if not binds_spirits(character):  # WP121: a Conjuring aspect binds too
         return {"character": character, "spirit_error": error}
     offered = offered_spirit_types(character.tradition) if character.tradition is not None else ()
     own_committed_cost = (
@@ -128,6 +129,7 @@ def _spirit_selection_context(
         "spirit_karma_remaining": karma_budget - karma_spent,
         "spirit_error": error,
         "spirit_budget_warning": budget_warning,
+        "spirits_available": True,  # WP121: the template's gate
     }
 
 
@@ -135,7 +137,7 @@ def _spirit_selection_context(
 async def submit_spirits(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
     session.current_page = "magic"  # WP61/WP97
-    if session.character is None or session.character.magic_type != "Magician":
+    if session.character is None or not binds_spirits(session.character):
         context = _spirit_selection_context(session.character, ())
     else:
         form = await request.form()

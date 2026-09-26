@@ -544,6 +544,7 @@ def _character_sheet_context(
         # block in `_character_sheet.html`, mirroring how `lifestyle_tier_name`/etc. already gate
         # their own "None until committed" sections.
         "magic_type": character.magic_type,
+        "magic_aspect": character.magic_aspect,  # WP121
         # Post-WP29 correction: the *finished* MAG rating (Talent-granted base + any Special
         # Attribute Points spent + improvements), not the raw Talent-granted `magic_rating` alone
         # -- see chummer5.engine.character.Character's own docstring correction. WP35: this is
@@ -838,7 +839,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         talent_letter=session.talent_letter,
         talent_codename=character.magic_type or DEFAULT_TALENT_CODENAME,
         tradition_id=character.tradition.id if character.tradition is not None else None,
-        granted_skill_ids=character.magic_granted_skill_ids,
+        magic_aspect=character.magic_aspect,  # WP121
+        # WP121: an Aspected Magician's grant is re-derived from its aspect on load.
+        granted_skill_ids=(
+            () if character.magic_aspect is not None else character.magic_granted_skill_ids
+        ),
         spell_ids=spell_ids,
         power_picks=power_picks,
         magic_attribute_points=character.magic_attribute_points,

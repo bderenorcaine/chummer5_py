@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from chummer5.engine.character import STARTING_KARMA, Character
+from chummer5.engine.magic import binds_spirits, casts_spells
 from chummer5.engine.resources import available_nuyen, resources_gear_args
 from chummer5.web.catalogs import (
     DEFAULT_LIFESTYLE_MONTHS,
@@ -48,8 +49,14 @@ def _always(_character: Character | None) -> bool:
     return True
 
 
-def _is_magician(character: Character | None) -> bool:
-    return character is not None and character.magic_type == "Magician"
+def _casts_spells(character: Character | None) -> bool:
+    """WP121: a Magician, or a Sorcery-aspected Aspected Magician."""
+    return character is not None and casts_spells(character)
+
+
+def _binds_spirits(character: Character | None) -> bool:
+    """WP121: a Magician, or a Conjuring-aspected Aspected Magician."""
+    return character is not None and binds_spirits(character)
 
 
 def _is_adept(character: Character | None) -> bool:
@@ -181,14 +188,14 @@ STEP_PAGES: tuple[StepPage, ...] = (
                 "String_Spells",
                 "_spell_selection.html",
                 ("spell_budget_warning",),
-                _is_magician,
+                _casts_spells,
                 "Web_Magic_SpellsUnavailable",
             ),
             PageSection(
                 "powers",
                 "Tab_Adept",
                 "_power_selection.html",
-                (),
+                ("power_budget_warning",),  # WP119
                 _is_adept,
                 "Web_Magic_PowersUnavailable",
             ),
@@ -197,7 +204,7 @@ STEP_PAGES: tuple[StepPage, ...] = (
                 "Web_Tab_BoundSpirits",
                 "_spirit_selection.html",
                 ("spirit_budget_warning",),
-                _is_magician,
+                _binds_spirits,
                 "Web_Magic_SpiritsUnavailable",
             ),
             PageSection(
@@ -380,7 +387,7 @@ def resource_panel_context(session: ChargenSession, chargen_ctx: dict[str, Any])
             "of": chargen_ctx["knowledge_free_points"],
         },
     ]
-    if character.magic_type == "Magician":
+    if casts_spells(character):
         rows.append(
             {
                 "label_key": "String_FreeSpells",
@@ -443,7 +450,12 @@ def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> di
     )
     granted_skill_ids = character.magic_granted_skill_ids if character is not None else ()
     talent_ctx = _talent_selection_context(
-        character, session.talent_letter, talent_codename, tradition_id, granted_skill_ids
+        character,
+        session.talent_letter,
+        talent_codename,
+        tradition_id,
+        granted_skill_ids,
+        aspect=character.magic_aspect if character is not None else None,  # WP121
     )
     spell_ids = (
         tuple(spell.id for spell in character.spell_selection.spells)

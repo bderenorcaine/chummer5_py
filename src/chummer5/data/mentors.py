@@ -264,7 +264,7 @@ def gated_choice(archetype: MentorSpiritArchetype, magic_type: str) -> MentorCho
     "Adept" (Phase I's scope; see `chummer5.engine.magic`), so anything else is a real caller bug,
     not an expected runtime edge case.
     """
-    if magic_type == "Magician":
+    if magic_type in ("Magician", "Aspected Magician"):  # WP121: an Aspected Magician's slot
         return archetype.magician_choice
     if magic_type == "Adept":
         return archetype.adept_choice

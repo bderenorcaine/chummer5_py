@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.magic import (
+    ASPECTED_MAGICIAN,
     MAGIC_SKILL_GRANT_SOURCE_ID,
     MagicSelection,
     apply_magic_skill_grant_improvements,
@@ -51,6 +52,7 @@ def _talent_selection_context(
     tradition_id: str | None,
     granted_skill_ids: tuple[str, ...],
     *,
+    aspect: str | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
     """Context for `_talent_selection.html` (WP29): Phase I's Magic-type/tradition/free-skill-grant
@@ -83,10 +85,12 @@ def _talent_selection_context(
                 talent_letter,
                 character.magic_type,
                 character.tradition.id if character.tradition is not None else None,
-                character.magic_granted_skill_ids,
+                # WP121: an Aspected Magician's grant is derived from its aspect, not re-picked.
+                () if character.magic_aspect is not None else character.magic_granted_skill_ids,
                 PRIORITIES,
                 TRADITIONS,
                 SKILLS,
+                aspect=character.magic_aspect,
             )
         except ValueError as exc:
             budget_warning = Message.of("Web_Stale_Talent", error=str(exc))
@@ -101,6 +105,10 @@ def _talent_selection_context(
         "eligible_skills": eligible_skills,
         "selected_skill_ids": set(granted_skill_ids),
         "skill_qty": selected_option.skill_qty if selected_option is not None else None,
+        # WP121
+        "aspect_choices": selected_option.skill_group_choices if selected_option else (),
+        "aspect_rating": selected_option.skill_group_val if selected_option else None,
+        "selected_aspect": aspect,
         "talent_error": error,
         "talent_budget_warning": budget_warning,
     }
@@ -141,6 +149,7 @@ def _replace_committed_talent(character: Character, selection: MagicSelection) -
     return replace(
         character,
         magic_type=selection.magic_type,
+        magic_aspect=selection.aspect,
         magic_rating=selection.magic_rating,
         tradition=selection.tradition,
         magic_granted_skill_ids=selection.granted_skill_ids,
@@ -178,6 +187,9 @@ def talent_options_fragment(
         "eligible_skills": eligible_skills,
         "selected_skill_ids": set(),
         "skill_qty": option.skill_qty if option is not None else None,
+        "aspect_choices": option.skill_group_choices if option is not None else (),
+        "aspect_rating": option.skill_group_val if option is not None else None,
+        "selected_aspect": None,
     }
     return templates.TemplateResponse(request, "_talent_options.html", context)
 
@@ -194,6 +206,12 @@ async def submit_talent(request: Request) -> HTMLResponse:
         raw_tradition_id = form.get("tradition_id")
         tradition_id = str(raw_tradition_id) if raw_tradition_id else None
         granted_skill_ids = tuple(str(v) for v in form.getlist("granted_skill_id"))
+        # WP121: only meaningful for an Aspected Magician, like the tradition for a Magician.
+        aspect = (
+            (str(form.get("magic_aspect") or "") or None)
+            if (talent_codename == ASPECTED_MAGICIAN)
+            else None
+        )
         try:
             selection = create_magic_selection(
                 session.talent_letter,
@@ -203,6 +221,7 @@ async def submit_talent(request: Request) -> HTMLResponse:
                 PRIORITIES,
                 TRADITIONS,
                 SKILLS,
+                aspect=aspect,
             )
         except ValueError as exc:
             context = _talent_selection_context(
@@ -211,6 +230,7 @@ async def submit_talent(request: Request) -> HTMLResponse:
                 talent_codename,
                 tradition_id,
                 granted_skill_ids,
+                aspect=aspect,
                 error=str(exc),
             )
         else:
@@ -221,6 +241,7 @@ async def submit_talent(request: Request) -> HTMLResponse:
                 selection.magic_type or "Mundane",
                 tradition_id,
                 selection.granted_skill_ids,
+                aspect=selection.aspect,
             )
     response = templates.TemplateResponse(request, "_talent_selection.html", context)
     if new_cookie is not None:
