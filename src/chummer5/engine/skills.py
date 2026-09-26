@@ -178,8 +178,11 @@ class SkillPurchaseRules:
       group with a member in the category (Uneducated, p. 87).
     - `disabled_group_categories`: no group with a member in these categories may be bought
       (Uncouth: "may never learn any Social skill groups").
-    - `disabled_groups`: these groups, *and each of their skills*, may not be bought (Incompetent,
-      p. 81: "Characters may not possess that skill group").
+    - `banned_groups`: group -> why. The group *and each of its skills* may not be bought.
+      Incompetent (p. 81: "Characters may not possess that skill group"), and since WP118 an
+      Adept's Sorcery, Conjuring and Enchanting (p. 69).
+    - `banned_skills`: skill name -> why (WP118): an Adept's Assensing, until the Astral
+      Perception power unlocks it (p. 69).
     """
 
     maximum_bonus: Mapping[str, int] = MappingProxyType({})
@@ -188,12 +191,21 @@ class SkillPurchaseRules:
     specialization_karma_cost_percent: Mapping[str, int] = MappingProxyType({})
     group_karma_cost_percent: Mapping[str, int] = MappingProxyType({})
     disabled_group_categories: frozenset[str] = frozenset()
-    disabled_groups: frozenset[str] = frozenset()
+    banned_groups: Mapping[str, str] = MappingProxyType({})
+    banned_skills: Mapping[str, str] = MappingProxyType({})
 
-    def group_blocked(self, group: str, skills: tuple[Skill, ...]) -> str | None:
+    def skill_blocked(self, skill: Skill) -> str | None:
+        """Why `skill` may not be bought, or `None` (WP117/WP118)."""
+        if skill.name in self.banned_skills:
+            return f"{skill.name}: {self.banned_skills[skill.name]}"
+        if skill.skill_group is not None and skill.skill_group in self.banned_groups:
+            return f"{skill.name}: {self.banned_groups[skill.skill_group]}"
+        return None
+
+    def group_blocked(self, group: str, skills: Iterable[Skill]) -> str | None:
         """Why `group` may not be bought, or `None`."""
-        if group in self.disabled_groups:
-            return f"{group}: the character is Incompetent in this skill group"
+        if group in self.banned_groups:
+            return f"{group}: {self.banned_groups[group]}"
         categories = _group_categories(group, skills) & self.disabled_group_categories
         if categories:
             return (
@@ -206,11 +218,31 @@ class SkillPurchaseRules:
 NO_PURCHASE_RULES = SkillPurchaseRules()
 
 
+# WP118, p. 69: "Adepts cannot use skills from any magic-related skill groups (Sorcery, Conjuring,
+# or Enchanting)" and "can learn Assensing only if they have Astral Perception".
+ADEPT_BANNED_GROUPS = ("Sorcery", "Conjuring", "Enchanting")
+ADEPT_LOCKED_SKILL = "Assensing"
+
+
 def skill_purchase_rules(character: Character) -> SkillPurchaseRules:
-    """The character's `SkillPurchaseRules`, from its Improvements (WP117)."""
+    """The character's `SkillPurchaseRules`, from its Improvements (WP117) and, since WP118, its
+    Talent: an Adept's magic-group and Assensing bans."""
 
     def flags(improvement_type: ImprovementType) -> frozenset[str]:
         return frozenset(k for k, v in _sum_by_target(character, improvement_type).items() if v)
+
+    banned_groups = {
+        group: "the character is Incompetent in this skill group"
+        for group in flags(ImprovementType.SKILL_GROUP_DISABLED)
+    }
+    banned_skills: dict[str, str] = {}
+    if character.magic_type == "Adept":
+        for group in ADEPT_BANNED_GROUPS:
+            banned_groups.setdefault(group, "an Adept cannot use magic skill groups' skills")
+        if ADEPT_LOCKED_SKILL not in flags(ImprovementType.SKILL_UNLOCKED):
+            banned_skills[ADEPT_LOCKED_SKILL] = (
+                "an Adept can learn it only with the Astral Perception power"
+            )
 
     return SkillPurchaseRules(
         maximum_bonus=skill_maximum_bonuses(character),
@@ -227,7 +259,8 @@ def skill_purchase_rules(character: Character) -> SkillPurchaseRules:
             character, ImprovementType.SKILL_GROUP_CATEGORY_KARMA_COST_PERCENT
         ),
         disabled_group_categories=flags(ImprovementType.SKILL_GROUP_CATEGORY_DISABLED),
-        disabled_groups=flags(ImprovementType.SKILL_GROUP_DISABLED),
+        banned_groups=MappingProxyType(banned_groups),
+        banned_skills=MappingProxyType(banned_skills),
     )
 
 
@@ -345,11 +378,9 @@ def create_skill_allocation(
                 f"{skill_id}: {points} exceeds the chargen skill rating maximum of {maximum}"
             )
         group = skills_by_id[skill_id].skill_group
-        if points > 0 and group is not None and group in rules.disabled_groups:
-            raise ValueError(
-                f"{skills_by_id[skill_id].name}: the character is Incompetent in its skill group "
-                f"{group!r}"
-            )
+        blocked = rules.skill_blocked(skills_by_id[skill_id]) if points > 0 else None
+        if blocked is not None:
+            raise ValueError(blocked)
         if group is not None and group_points.get(group, 0) > 0:
             raise ValueError(
                 f"{skill_id}: cannot spend points directly while its group {group!r} also has "
@@ -526,10 +557,9 @@ def create_karma_skill_selection(
             continue
         skill = skills_by_id[skill_id]
         group = skill.skill_group
-        if group is not None and group in rules.disabled_groups:
-            raise ValueError(
-                f"{skill.name}: the character is Incompetent in its skill group {group!r}"
-            )
+        blocked = rules.skill_blocked(skill)
+        if blocked is not None:
+            raise ValueError(blocked)
         if group is not None and group in broken_groups:
             start_rating = existing_group_points.get(group, 0)
         else:

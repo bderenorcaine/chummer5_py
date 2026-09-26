@@ -31,6 +31,7 @@ from chummer5.engine.character import Character
 from chummer5.engine.lifestyle import MIN_LIFESTYLE_MONTHS
 from chummer5.engine.magic import MAGICAL_SKILL_CATEGORIES, mvp_power_catalog
 from chummer5.engine.qualities import MENTOR_SPIRIT_QUALITY_NAME, mvp_quality_catalog
+from chummer5.engine.skills import skill_purchase_rules
 from chummer5.web.i18n import (
     jinja_data_term,
     jinja_data_text,
@@ -217,29 +218,41 @@ MUNDANE_SKILL_GROUPS = tuple(
 #
 # WP61: resolved by reusing `MAGICAL_SKILL_CATEGORIES` (the exact category filter already verified
 # against the legacy `GetMagicalSkillList()` for the free-grant itself, WP25) rather than any
-# narrower per-tradition/per-magic-type subset -- SR5 doesn't restrict regular skill-point spend by
-# magic type or tradition, only the free grant is restricted, and an Adept's MAG > 0 makes these
-# skills just as functional (not "permanently crippled") as they are for a Magician. Applies
-# identically to both. `_offered_skills`/`_offered_skill_groups` are the character-scoped
-# equivalents of `MUNDANE_SKILLS`/`MUNDANE_SKILL_GROUPS` every buy-UI call site now uses instead --
-# both return the exact Mundane-only sets unchanged when `character.magic_type is None`.
+# narrower per-tradition/per-magic-type subset. `_offered_skills`/`_offered_skill_groups` are the
+# character-scoped equivalents of `MUNDANE_SKILLS`/`MUNDANE_SKILL_GROUPS` every buy-UI call site
+# now uses instead -- both return the exact Mundane-only sets unchanged when
+# `character.magic_type is None`.
+#
+# **WP118 correction.** WP61 also claimed "SR5 doesn't restrict regular skill-point spend by
+# magic type" and offered every Magical Active skill to an Adept. That read p. 69 backwards:
+# "Adepts cannot use skills from any magic-related skill groups (Sorcery, Conjuring, or
+# Enchanting)" and "can learn the Assensing skill only if they have the Astral Perception power".
+# The rule now lives in the engine (`chummer5.engine.skills.skill_purchase_rules`), and these two
+# functions hide whatever it bans -- for an Adept, and for Incompetent's group and an Uncouth
+# character's Social groups too.
 _MAGICAL_SKILLS = tuple(
     sorted((s for s in SKILLS if s.category in MAGICAL_SKILL_CATEGORIES), key=lambda s: s.name)
 )
 
 
 def offered_skills(character: Character | None) -> tuple[Skill, ...]:
-    if character is None or character.magic_type is None:
+    if character is None:
         return MUNDANE_SKILLS
-    return tuple(sorted(MUNDANE_SKILLS + _MAGICAL_SKILLS, key=lambda s: s.name))
+    candidates = (
+        MUNDANE_SKILLS
+        if character.magic_type is None
+        else tuple(sorted(MUNDANE_SKILLS + _MAGICAL_SKILLS, key=lambda s: s.name))
+    )
+    rules = skill_purchase_rules(character)  # WP118: whatever the engine would reject
+    return tuple(s for s in candidates if rules.skill_blocked(s) is None)
 
 
 def offered_skill_groups(character: Character | None) -> tuple[str, ...]:
-    if character is None or character.magic_type is None:
+    if character is None:
         return MUNDANE_SKILL_GROUPS
-    return tuple(
-        sorted({s.skill_group for s in offered_skills(character) if s.skill_group is not None})
-    )
+    rules = skill_purchase_rules(character)
+    groups = {s.skill_group for s in offered_skills(character) if s.skill_group is not None}
+    return tuple(sorted(g for g in groups if rules.group_blocked(g, SKILLS) is None))
 
 
 # WP29: the character sheet's read-only skill list needs every skill (so a Magician's granted

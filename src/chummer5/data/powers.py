@@ -112,6 +112,19 @@ class Power:
     bonus_support: BonusSupport
     flat_bonuses: tuple[PowerFlatBonus, ...]  # populated only when bonus_support is FLAT_BONUS
     raw_bonus: str | None  # serialized <bonus> element, kept for future parser work; None if absent
+    # WP118: the power's in-play effect this engine doesn't compute (the Project Overview registry),
+    # mirroring `chummer5.data.qualities.Quality.unmodeled_effect_note`.
+    unmodeled_effect_note: str | None = None
+
+
+# WP118: the registry text for offered powers with an in-play part. WP119/WP120 add the rest.
+_UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
+    "Astral Perception": (
+        "Seeing into the astral plane while dual-natured, and so able to attack astral forms "
+        "(p. 309; astral perception, p. 312) -- no astral resolution exists. (Its unlocking of "
+        "the Assensing skill is applied.)"
+    ),
+}
 
 
 def _is_flat_skill_bonus(elem: ET.Element) -> bool:
@@ -164,6 +177,16 @@ def _classify_bonus(
                     attribute_options=options,
                 )
             )
+        elif child.tag == "unlockskills" and child.get("name") and len(child) == 0:
+            # WP118: Astral Perception's `<unlockskills name="Assensing">` -- the one gate on an
+            # Adept learning Assensing (p. 69).
+            flat_bonuses.append(
+                PowerFlatBonus(
+                    target_kind="unlock_skill",
+                    target_name=child.get("name", ""),
+                    attribute_options=(),
+                )
+            )
         elif child.tag in _LIMIT_BONUS_TAGS and len(child) == 0 and child.text == "Rating":
             flat_bonuses.append(
                 PowerFlatBonus(
@@ -194,6 +217,7 @@ def _parse_power(elem: ET.Element) -> Power:
         bonus_support=support,
         flat_bonuses=flat_bonuses,
         raw_bonus=raw_bonus,
+        unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(elem.findtext("name", "")),
     )
 
 

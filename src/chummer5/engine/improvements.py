@@ -191,6 +191,9 @@ class ImprovementType(Enum):
     SKILL_CATEGORY_DEFAULTING_BLOCKED = auto()
     CYBERWARE_ESSENCE_PERCENT = auto()
     BIOWARE_DISABLED = auto()
+    # WP118: a skill the character may learn only once something unlocks it (target: skill name) --
+    # the Astral Perception power unlocks Assensing for an Adept (p. 69).
+    SKILL_UNLOCKED = auto()
 
 
 class ImprovementSource(Enum):

@@ -954,18 +954,6 @@ def build_character(
         ),
     )
 
-    skill_allocation = create_skill_allocation(
-        letter=save.skills_letter,
-        priorities=priorities,
-        skills=skills,
-        skill_points=save.skill_points,
-        group_points=save.group_points,
-        specializations=save.specializations,
-        # WP116/WP117: Aptitude's +1 and the purchase-rule qualities, applied with the qualities
-        # above.
-        rules=skill_purchase_rules(character),
-    )
-
     contact_selection = create_contact_selection(character, save.contacts)
 
     lifestyle_selection = create_lifestyle_selection(
@@ -1105,6 +1093,19 @@ def build_character(
         save.power_picks, powers, power_point_budget=power_point_budget
     )
     apply_power_improvements(character, power_selection)
+
+    # WP118: the skill spend is validated here, after the Talent and powers, because an Adept's
+    # magic-group and Assensing bans (and Astral Perception's unlock) are part of its rules.
+    # WP116/WP117: so are Aptitude and the purchase-rule qualities, applied further up.
+    skill_allocation = create_skill_allocation(
+        letter=save.skills_letter,
+        priorities=priorities,
+        skills=skills,
+        skill_points=save.skill_points,
+        group_points=save.group_points,
+        specializations=save.specializations,
+        rules=skill_purchase_rules(replace(character, magic_type=magic_selection.magic_type)),
+    )
 
     character = replace(
         character,

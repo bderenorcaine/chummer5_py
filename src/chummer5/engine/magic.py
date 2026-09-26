@@ -396,6 +396,8 @@ _POWER_TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "mental_limit": ImprovementType.MENTAL_LIMIT,
     "physical_limit": ImprovementType.PHYSICAL_LIMIT,
     "social_limit": ImprovementType.SOCIAL_LIMIT,
+    # WP118: Astral Perception.
+    "unlock_skill": ImprovementType.SKILL_UNLOCKED,
 }
 
 

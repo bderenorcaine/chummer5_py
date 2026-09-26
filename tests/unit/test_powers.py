@@ -129,10 +129,11 @@ def test_empty_or_absent_bonus_powers_stay_not_yet_supported() -> None:
 
 def test_supported_vs_unsupported_counts_are_visible() -> None:
     # FLAT_BONUS: Enhanced Perception, Improved Physical Attribute, Improved Potential x3, Voice
-    # Control = 6. NOT_YET_SUPPORTED: 28 - 6 = 22. No NO_EFFECT value exists in this module.
+    # Control = 6. NOT_YET_SUPPORTED: 28 - 6 = 22. No NO_EFFECT value exists in this module. WP118
+    # adds Astral Perception (its Assensing unlock).
     counts = count_by_support(POWERS)
-    assert counts[BonusSupport.FLAT_BONUS] == 6
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 22
+    assert counts[BonusSupport.FLAT_BONUS] == 7
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 21
     assert set(counts) == {BonusSupport.FLAT_BONUS, BonusSupport.NOT_YET_SUPPORTED}
 
 

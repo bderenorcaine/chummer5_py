@@ -1674,3 +1674,18 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
 - **The pickers still list what a quality bans** (a Social group for an Uncouth character,
   Incompetent's group). Submitting one is rejected with the reason. Hiding the rows is a possible
   later UI improvement; it's not needed for correctness.
+
+## 2026-09-26 — WP118: skill bans are one mechanism, and the pickers hide banned rows
+
+- **`SkillPurchaseRules.banned_groups` / `banned_skills`** (group or skill → reason) replace WP117's
+  `disabled_groups`. Incompetent's group, an Adept's Sorcery/Conjuring/Enchanting, and an Adept's
+  Assensing (until the Astral Perception power's `SKILL_UNLOCKED`) all go through them. The engine
+  rejects a purchase by points or Karma. That was the Finding 4 bug: WP61 had read p. 69 backwards.
+- **The skill pickers now hide whatever the rules ban** (`offered_skills` / `offered_skill_groups`).
+  This supersedes WP117's "the pickers still list what a quality bans". A committed spend that a
+  later change made illegal is still flagged by the skills page's WP19 warning. Resubmitting the
+  page drops it, because the form only reads rows it shows.
+- **The save loader validates the skill spend after the Talent and powers**, not before. Nothing in
+  between read the allocation, and the Adept rules need both.
+- **An Adept's Talent grant may still name Assensing.** Rejecting it at the Talent step would fire
+  before powers exist. WP135's whole-character check is to report it (added to that WP's check list).

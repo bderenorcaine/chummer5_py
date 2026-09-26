@@ -296,7 +296,7 @@ the rules it checks.
 
 #### Step Three — magic
 
-- [ ] **WP118 — Adept skill restrictions, and the Astral Perception power.**
+- [x] **WP118 — Adept skill restrictions, and the Astral Perception power.**
   Goal: fix Finding 4.
   Deliverables:
   - Adepts cannot buy or be granted Sorcery/Conjuring/Enchanting-group skills or groups. Enforce this
@@ -562,6 +562,9 @@ the rules it checks.
     - Nuyen over budget; Karma negative.
     - No contacts: a warning.
     - Every existing WP19 "no longer fits" diagnostic.
+    - The checks a save or import skips because they need a later step: Loss of Confidence's
+      rating 4+ and Scorched's prerequisite (WP115, `LaterStepFacts`), and an Adept's free-skill
+      grant naming Assensing without the Astral Perception power (WP118).
   - The WP133 carryover notes are *informational*, not issues.
   - An Export-page panel lists the issues grouped by step, with links. The nav's existing `--stale`
     marker widens to "has validation issues". The title bar shows "✓ Complete" or "N issues".
