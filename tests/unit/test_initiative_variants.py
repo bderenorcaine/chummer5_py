@@ -13,6 +13,7 @@ from chummer5.engine.cyberware_subsystems import (
     create_cyberware_tree_selection,
 )
 from chummer5.engine.derived import (
+    ASTRAL_INITIATIVE_DICE,
     astral_initiative,
     initiative_dice,
     initiative_value,
@@ -45,6 +46,7 @@ def _human(*, magic_type: str | None = None, gear: tuple[str, ...] = ()) -> Char
 def test_a_magician_with_a_cyberdeck_and_trodes_shows_all_four_rows() -> None:
     character = _human(magic_type="Magician", gear=("Hermes Chariot", "Trodes"))
     assert astral_initiative(character) == 8  # INT 4 x 2
+    assert ASTRAL_INITIATIVE_DICE == 3  # p. 314 / the user's 2026-09-26 ruling, not p. 159's 2D6
     # Matrix AR is the physical Initiative (p. 229).
     assert (initiative_value(character), initiative_dice(character)) == (7, 1)
     vr = matrix_vr_initiative(character)

@@ -81,13 +81,13 @@ something to target:
 
 **WP111 adds the remaining Step Eight initiative rows** (Living Persona is out of scope):
 
-- **Astral Initiative** (`astral_initiative`): `INT x 2` + 2D6, and only for a character who can
+- **Astral Initiative** (`astral_initiative`): `INT x 2` + 3D6, and only for a character who can
   astrally *project* -- a Magician. p. 313: "Only characters who are full Magicians can astrally
   project"; an Adept or an Aspected Magician can at most *perceive*, and a perceiving character
   stays in its body on the physical Initiative (p. 159 swaps to Astral Initiative on the action
-  that *projects*). The dice follow the Step Eight table and p. 159's chart (2D6); p. 314's Astral
-  Attributes table prints "+2D6 (3D6 total)" and legacy defaults to 3 -- a printed conflict,
-  recorded in `spec/rulebooks/learnings/phase-x.md`.
+  that *projects*). The dice follow p. 314's Astral Attributes table ("+2D6 (3D6 total)") and
+  legacy's default of 3, by the user's ruling of 2026-09-26; the Step Eight table and p. 159's
+  chart print 2D6 -- a printed conflict, recorded in `spec/rulebooks/learnings/phase-x.md`.
 - **Matrix AR Initiative** is the physical Initiative, augmentations and all (p. 229: "When in AR,
   you use your normal Initiative and Initiative Dice"; the User Modes Table says the same). It is
   shown for everyone, as its own row, with the physical numbers.
@@ -143,9 +143,9 @@ BASE_WOUND_BOXES_PER_MODIFIER = 3
 # The gear category whose items are body armor or `+N` accessories (armor.xml's own category name).
 ARMOR_CATEGORY = "Armor"
 
-# WP111: Astral Initiative's dice (the Step Eight table and p. 159 -- see module docstring for the
-# p. 314 conflict), and the two VR modes' (pp. 229-230).
-ASTRAL_INITIATIVE_DICE = 2
+# WP111: Astral Initiative's dice -- 3, per p. 314 and the user's 2026-09-26 ruling (see module
+# docstring for the 2D6 printings it overrides) -- and the two VR modes' (pp. 229-230).
+ASTRAL_INITIATIVE_DICE = 3
 COLD_SIM_INITIATIVE_DICE = 3
 HOT_SIM_INITIATIVE_DICE = 4
 

@@ -1617,3 +1617,9 @@ split between the two, and legacy defaults to 3. WP111 follows 2D6, the reading 
 states, and puts it in one constant (`chummer5.engine.derived.ASTRAL_INITIATIVE_DICE`). **Open for
 the user to rule on**: if 3D6 is preferred (legacy's choice, and possibly an erratum), changing that
 constant and one test is the whole change.
+
+## 2026-09-26 — Ruling: Astral Initiative is INT x 2 + 3D6
+
+The user resolved WP111's open question: Astral Initiative uses **3D6**, following p. 314's Astral
+Attributes Table ("+2D6 (3D6 total)") and legacy Chummer's default, over the 2D6 printed in the
+Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_DICE` is now 3.
