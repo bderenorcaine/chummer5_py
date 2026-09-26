@@ -287,8 +287,11 @@ def test_reconfirming_priorities_with_a_lower_attributes_budget_flags_the_existi
     """
     client = TestClient(create_app())
     _confirm_human(client)  # Attributes letter B, budget 20
-    # BOD/AGI/REA at 5 each (value 6, Human's max) = 15 points -- fits B's 20-point budget.
-    client.post("/ui/attributes", data={"attr_BOD": "5", "attr_AGI": "5", "attr_REA": "5"})
+    # 15 points -- fits B's 20-point budget. Only BOD reaches Human's maximum (6): since WP112 a
+    # single submission may not put a second Mental/Physical attribute there.
+    client.post(
+        "/ui/attributes", data={"attr_BOD": "5", "attr_AGI": "4", "attr_REA": "4", "attr_STR": "2"}
+    )
 
     heritage = PRIORITIES.heritage["A"]
     human_choice = next(

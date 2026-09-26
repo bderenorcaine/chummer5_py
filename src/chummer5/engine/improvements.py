@@ -159,6 +159,9 @@ class ImprovementType(Enum):
     DAMAGE_RESISTANCE = auto()
     # WP110: the character's Notoriety (p. 368), fed from quality `<notoriety>` nodes.
     NOTORIETY = auto()
+    # WP112: raises one attribute's natural *and* augmented maximum (target: the attribute code) --
+    # Exceptional Attribute and Lucky. Legacy `MaximumModifier`.
+    ATTRIBUTE_MAXIMUM = auto()
 
 
 class ImprovementSource(Enum):

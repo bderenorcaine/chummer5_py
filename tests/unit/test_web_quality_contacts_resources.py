@@ -719,3 +719,27 @@ def test_a_pick_that_stops_fitting_after_a_metatype_change_is_flagged_and_kept()
     assert 'class="warning"' in page.text
     assert "not an MVP-offered quality id" in page.text
     assert "step-nav__item--stale" in page.text
+
+
+# --- WP112: Exceptional Attribute's attribute choice ----------------------------------------------
+
+_EXCEPTIONAL = next(q for q in MVP_QUALITIES if q.name == "Exceptional Attribute")
+
+
+def test_exceptional_attribute_takes_an_attribute_and_raises_its_maximum() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    page = client.post("/ui/qualities", data={"quality_id": _EXCEPTIONAL.id})
+    assert "needs one of" in page.text
+    assert f'name="quality_choice_{_EXCEPTIONAL.id}"' in page.text
+
+    client.post(
+        "/ui/qualities",
+        data={"quality_id": _EXCEPTIONAL.id, f"quality_choice_{_EXCEPTIONAL.id}": "STR"},
+    )
+    assert "Exceptional Attribute (STR)" in client.get("/character/sheet").text
+
+    # Human STR is 1-6; with the quality, 7 (6 points) is legal.
+    response = client.post("/ui/attributes", data={"attr_STR": "6"})
+    assert "exceeds" not in response.text
+    assert "STR" in client.get("/character/sheet").text

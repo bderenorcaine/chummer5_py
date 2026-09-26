@@ -148,7 +148,7 @@
   {% if quality_picks %}
   <ul>
     {% for pick in quality_picks %}
-    <li>{{ pick.quality | dterm("qualities.xml") }}{% if pick.quality.max_rating > 1 %} {{ pick.rating }}{% endif %}{% if pick.text %} ({{ pick.text }}){% endif %}</li>
+    <li>{{ pick.quality | dterm("qualities.xml") }}{% if pick.quality.max_rating > 1 %} {{ pick.rating }}{% endif %}{% if pick.choice %} ({{ _("String_Attribute" ~ pick.choice ~ "Short") if pick.quality.choice_kind == "attribute" else pick.choice }}){% endif %}{% if pick.text %} ({{ pick.text }}){% endif %}</li>
     {% endfor %}
   </ul>
   {% else %}

@@ -138,7 +138,7 @@ def _attribute_allocation_context(
         {
             "code": code,
             "minimum": display.attribute_range(code).minimum,
-            "maximum": display.attribute_range(code).maximum,
+            "maximum": display.attribute_maximum(code),
             "points": attribute_points.get(code, 0),
             "karma_points": karma_points.get(code, 0),
             # WP81: two numbers, not one. `natural` is what the points above actually bought;
@@ -156,7 +156,7 @@ def _attribute_allocation_context(
             {
                 "code": "MAG",
                 "minimum": character.magic_rating,
-                "maximum": display.attribute_range("MAG").maximum,
+                "maximum": display.attribute_maximum("MAG"),
                 "points": magic_points,
                 "karma_points": None,  # WP52: MAG is not Karma-allocatable, no input to render
                 # MAG has no natural/augmented split (its `magaug` equals its `magmax` for every
@@ -177,13 +177,14 @@ def _attribute_allocation_context(
                 character.attributes_letter,
                 PRIORITIES,
                 attribute_points,
+                maximum_bonus=character.attribute_maximum_bonuses(),
             )
             if character.magic_type is not None:
                 create_magic_attribute_points(
                     character.magic_type,
                     magic_points,
                     character.magic_rating,
-                    character.attribute_range("MAG").maximum,
+                    character.attribute_maximum("MAG"),
                     character.special_attribute_points,
                     attribute_points.get("EDG", 0),
                 )
@@ -266,13 +267,18 @@ async def submit_attributes(request: Request) -> HTMLResponse:
                 session.attributes_letter,
                 PRIORITIES,
                 attribute_points,
+                # WP112: raised maximums, and the one-at-natural-maximum rule scoped to what this
+                # submission changed (see `create_character`).
+                maximum_bonus=previous.attribute_maximum_bonuses(),
+                previous_attribute_points=previous.attribute_points,
+                karma_points=karma_points,
             )
             if previous.magic_type is not None:
                 magic_points = create_magic_attribute_points(
                     previous.magic_type,
                     magic_points,
                     previous.magic_rating,
-                    previous.attribute_range("MAG").maximum,
+                    previous.attribute_maximum("MAG"),
                     previous.special_attribute_points,
                     attribute_points.get("EDG", 0),
                 )

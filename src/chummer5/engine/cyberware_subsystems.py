@@ -340,7 +340,8 @@ def cyberlimb_attribute_maximums(character: Character) -> Mapping[str, int]:
     (p. 456) -- so the cap is the metatype's own maximum, which is what the legacy engine
     substitutes too (`AttributeSection.ProcessAttributesInXPath` -> the attribute's `TotalMaximum`).
     """
-    return {code: character.attribute_range(code).maximum for code in ("AGI", "STR")}
+    # WP112: `attribute_maximum` (legacy `TotalMaximum` includes maximum modifiers).
+    return {code: character.attribute_maximum(code) for code in ("AGI", "STR")}
 
 
 def _resolve_bound(

@@ -24,6 +24,7 @@ from chummer5.engine.qualities import (
     QualitySelection,
     apply_mentor_spirit_improvements,
     apply_quality_improvements,
+    attribute_choices,
     create_quality_selection,
     offerable_quality_catalog,
     resolve_metatype_qualities,
@@ -129,7 +130,9 @@ def _row_key(quality_id: str, index: int) -> str:
 
 
 def _quality_rows(
-    offered: Iterable[Quality], requests: Sequence[QualityPickRequest]
+    offered: Iterable[Quality],
+    requests: Sequence[QualityPickRequest],
+    magic_type: str | None = None,
 ) -> list[dict[str, Any]]:
     """One row per quality instance to render (WP107).
 
@@ -156,6 +159,13 @@ def _quality_rows(
                     "text_value": (request.text or "") if request is not None else "",
                     "rating": request.rating if request is not None else 1,
                     "max_rating": quality.max_rating,
+                    # WP112: a choice-bearing quality's dropdown (Exceptional Attribute).
+                    "choice_options": (
+                        attribute_choices(quality, magic_type)
+                        if quality.choice_kind == "attribute"
+                        else ()
+                    ),
+                    "choice_value": request.choice if request is not None else None,
                     "another": quality.repeatable and index > 0 and request is None,
                 }
             )
@@ -234,7 +244,7 @@ def _quality_selection_context(
         "quality_budget_warning": (
             _committed_quality_warning(character, offered) if error is None else None
         ),
-        "quality_rows": _quality_rows(offered, requests),
+        "quality_rows": _quality_rows(offered, requests, character.magic_type),
         "positive_karma": positive_karma,
         "negative_karma": negative_karma,
         "karma_limit": QUALITY_KARMA_LIMIT,
@@ -295,13 +305,20 @@ def _submitted_picks(form: Any, offered: Iterable[Quality]) -> list[QualityPickR
             if quality.bonus_support == BonusSupport.SELECT_TEXT
             else None
         )
+        choice = (
+            str(form.get(f"quality_choice_{key}") or "") or None
+            if quality.choice_kind is not None
+            else None
+        )
         rating = 1
         if quality.max_rating > 1:
             try:
                 rating = int(str(form.get(f"quality_rating_{key}") or "1"))
             except ValueError:
                 rating = 0
-        picks.append(QualityPickRequest(quality_id=quality_id, rating=rating, text=text))
+        picks.append(
+            QualityPickRequest(quality_id=quality_id, rating=rating, text=text, choice=choice)
+        )
     return picks
 
 

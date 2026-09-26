@@ -83,7 +83,7 @@ def _by_name(name: str) -> Quality:
     return next(q for q in QUALITIES if q.name == name)
 
 
-def test_mvp_quality_catalog_is_exactly_the_twenty_four_offerable_qualities() -> None:
+def test_mvp_quality_catalog_is_exactly_the_twenty_six_offerable_qualities() -> None:
     # WP8's 3 FLAT_BONUS qualities (Catlike, Double-Jointed, Natural Athlete) + WP22's 3 new
     # FLAT_BONUS Indomitable qualities + WP22's 8 verified-NO_EFFECT qualities = 14, +1 for WP49's
     # Bilingual (see spec/rulebooks/learnings.md's WP49 entry -- Bilingual was NOT_YET_SUPPORTED
@@ -91,9 +91,12 @@ def test_mvp_quality_catalog_is_exactly_the_twenty_four_offerable_qualities() ->
     # +9 for WP55's SELECT_TEXT qualities (SINner x4, Code of Honor, Codeblock, Social Stress,
     # Natural Immunity x2) = 24. Two of the NO_EFFECT qualities (Simsense Vertigo, Unsteady Hands)
     # plus the 4 SINner variants, Code of Honor, Codeblock, and Social Stress (7 more) are
-    # Negative -- 9 Negative qualities total, the rest (15) Positive.
+    # Negative -- 9 Negative qualities total, the rest (15) Positive. WP112 adds Exceptional
+    # Attribute and Lucky (Positive) = 26.
     offered = mvp_quality_catalog(QUALITIES)
     assert {q.name for q in offered} == {
+        "Exceptional Attribute",
+        "Lucky",
         "Catlike",
         "Double-Jointed",
         "Natural Athlete",
@@ -963,13 +966,19 @@ def test_a_repeatable_quality_rejects_two_identical_instances() -> None:
         )
 
 
-def test_the_choice_slot_round_trips_uninterpreted() -> None:
-    catlike = _by_name("Catlike")
+def test_the_choice_slot_round_trips() -> None:
+    exceptional = _by_name("Exceptional Attribute")
     selection = create_quality_selection(
-        [QualityPickRequest(catlike.id, choice="anything")], QUALITIES
+        [QualityPickRequest(exceptional.id, choice="STR")], QUALITIES
     )
-    assert selection.qualities[0].choice == "anything"
-    assert selection.to_requests() == (QualityPickRequest(catlike.id, choice="anything"),)
+    assert selection.qualities[0].choice == "STR"
+    assert selection.to_requests() == (QualityPickRequest(exceptional.id, choice="STR"),)
+
+
+def test_a_choice_on_a_quality_that_takes_none_is_rejected() -> None:
+    catlike = _by_name("Catlike")
+    with pytest.raises(ValueError, match="takes no choice"):
+        create_quality_selection([QualityPickRequest(catlike.id, choice="anything")], QUALITIES)
 
 
 # --- WP108: prerequisites and catalog hygiene -----------------------------------------------------
@@ -1078,15 +1087,16 @@ def test_a_gate_built_only_from_non_core_conditions_can_never_be_met() -> None:
 
 
 def test_out_of_scope_rows_are_excluded_by_name_and_the_catalog_size_is_pinned() -> None:
-    """Loud on data drift: 96 SR5 rows, 8 out of scope, 24 offered today. WP114/WP115 move the
-    offered count towards 88 (every in-scope row) and must update this number when they do."""
+    """Loud on data drift: 96 SR5 rows, 8 out of scope, 26 offered today (WP112 added two).
+    WP114/WP115 move the offered count towards 88 (every in-scope row) and must update this number
+    when they do."""
     names = {q.name for q in QUALITIES}
     assert len(QUALITIES) == 96
     assert OUT_OF_SCOPE_QUALITY_NAMES <= names
     assert len(OUT_OF_SCOPE_QUALITY_NAMES) == 8
     offered = {q.name for q in mvp_quality_catalog(QUALITIES)}
     assert not offered & OUT_OF_SCOPE_QUALITY_NAMES
-    assert len(offered) == 24
+    assert len(offered) == 26  # WP112: + Exceptional Attribute, Lucky
     forced = tuple(replace(q, bonus_support=BonusSupport.NO_EFFECT) for q in QUALITIES)
     assert len(mvp_quality_catalog(forced)) == 88
 

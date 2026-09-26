@@ -580,6 +580,10 @@
       <text>(another)</text>
     </string>
     <string>
+      <key>Web_Qualities_ChooseAttribute</key>
+      <text>-- choose an attribute --</text>
+    </string>
+    <string>
       <key>Web_Qualities_ChooseArchetype</key>
       <text>-- choose an archetype --</text>
     </string>

@@ -516,7 +516,24 @@ class Character:
             if self.karma_attribute_selection is not None
             else 0
         )
-        return min(attribute_range.minimum + points + karma_points, attribute_range.maximum)
+        return min(attribute_range.minimum + points + karma_points, self.attribute_maximum(code))
+
+    def attribute_maximum(self, code: str) -> int:
+        """WP112: the attribute's **natural** maximum -- the metatype's, plus Σ `ATTRIBUTE_MAXIMUM`
+        (Exceptional Attribute, Lucky: "+1 to [its] maximum", p. 72/75). Every rule that asks "is
+        this attribute at its maximum" reads this, not `attribute_range(code).maximum`."""
+        return self.attribute_range(code).maximum + self.improvements.resolve(
+            ImprovementType.ATTRIBUTE_MAXIMUM, code
+        )
+
+    def attribute_maximum_bonuses(self) -> dict[str, int]:
+        """WP112: every nonzero `ATTRIBUTE_MAXIMUM` raise, by attribute -- what `create_character`
+        needs to re-validate an attribute spend against the raised maximums."""
+        bonuses = {
+            code: self.improvements.resolve(ImprovementType.ATTRIBUTE_MAXIMUM, code)
+            for code in (*self.metatype.attributes, "MAG")
+        }
+        return {code: bonus for code, bonus in bonuses.items() if bonus}
 
     def attribute_augmented_maximum(self, code: str) -> int:
         """WP81: the highest this attribute may reach once Improvements are counted --
@@ -531,8 +548,13 @@ class Character:
         with Karma; but at no point can augmentations exceed the +4 bonus cap." Edge is not a
         Mental or Physical attribute and its data carries no headroom, so an EDG Improvement is
         clamped to zero by construction rather than by a special case.
+
+        **WP112**: raised by Σ `ATTRIBUTE_MAXIMUM` too -- Exceptional Attribute and Lucky raise the
+        natural *and* augmented maximum, keeping the `+4` headroom between them.
         """
-        return self.attribute_range(code).augmented
+        return self.attribute_range(code).augmented + self.improvements.resolve(
+            ImprovementType.ATTRIBUTE_MAXIMUM, code
+        )
 
     def attribute_value(self, code: str) -> int:
         """The **augmented** attribute total: `natural_attribute_value` plus Σ `ATTRIBUTE`
@@ -579,7 +601,7 @@ class Character:
         natural = self.natural_attribute_value(code)
         bonus = self.improvements.resolve(ImprovementType.ATTRIBUTE, code)
         headroom = max(attribute_range.augmented - attribute_range.maximum, 0)
-        return min(natural + min(bonus, headroom), attribute_range.augmented)
+        return min(natural + min(bonus, headroom), self.attribute_augmented_maximum(code))
 
     @property
     def power_points(self) -> int:
@@ -612,7 +634,7 @@ class Character:
             return 0
         bonus = self.improvements.resolve(ImprovementType.ATTRIBUTE, "MAG")
         total = self.magic_rating + self.magic_attribute_points + bonus
-        return min(total, self.attribute_range("MAG").maximum)
+        return min(total, self.attribute_maximum("MAG"))
 
     @property
     def magic_essence_loss(self) -> int:
@@ -647,6 +669,10 @@ def create_character(
     attributes_letter: str,
     priorities: PriorityTable,
     attribute_points: Mapping[str, int],
+    *,
+    maximum_bonus: Mapping[str, int] | None = None,
+    previous_attribute_points: Mapping[str, int] | None = None,
+    karma_points: Mapping[str, int] | None = None,
 ) -> Character:
     """Build a `Character`, validating the attribute-point spend against both budgets.
 
@@ -656,6 +682,17 @@ def create_character(
     budget; and every resulting value stays within the metatype's min/max range. Does not require
     the full budget to be spent — SR5 doesn't mandate that, and this project treats "must spend
     everything" as a UI nudge, not an engine invariant.
+
+    **WP112**: `maximum_bonus` is `{code: raise}` from Exceptional Attribute / Lucky (see
+    `Character.attribute_maximum`), and the range check reads the raised maximum. The **one at
+    natural maximum** rule (Step Two: "only one Physical or Mental attribute may be at its natural
+    maximum") is checked here too, but only against a submission that *itself* puts a second
+    attribute there: it needs `previous_attribute_points` (the committed spend before this edit),
+    and runs only when a Mental/Physical attribute that was below its maximum before ends at it.
+    That is WP52's scoping, for WP52's reason -- a character already in breach (a legacy import, a
+    pre-WP112 save) must still be editable elsewhere; WP135 reports it instead. `karma_points`
+    (Step Seven's committed spend) counts towards the natural rating, since the rule is about the
+    finished number.
     """
     unknown = set(attribute_points) - set(ALLOCATABLE_ATTRIBUTES)
     if unknown:
@@ -677,17 +714,27 @@ def create_character(
             f"{metatype_choice.metatype.name}'s special-attribute-points budget of {special_budget}"
         )
 
+    bonus = maximum_bonus or {}
     for code in ALLOCATABLE_ATTRIBUTES:
         points = attribute_points.get(code, 0)
         if points < 0:
             raise ValueError(f"{code}: points spent must not be negative, got {points}")
         attribute_range = metatype_choice.metatype.attributes[code]
         value = attribute_range.minimum + points
-        if value > attribute_range.maximum:
+        maximum = attribute_range.maximum + bonus.get(code, 0)
+        if value > maximum:
             raise ValueError(
-                f"{code}: {value} exceeds {metatype_choice.metatype.name}'s maximum of "
-                f"{attribute_range.maximum}"
+                f"{code}: {value} exceeds {metatype_choice.metatype.name}'s maximum of {maximum}"
             )
+
+    if previous_attribute_points is not None:
+        _check_one_at_natural_maximum(
+            metatype_choice.metatype,
+            attribute_points,
+            previous_attribute_points,
+            karma_points or {},
+            bonus,
+        )
 
     return Character(
         metatype=metatype_choice.metatype,
@@ -697,6 +744,34 @@ def create_character(
         attribute_points=MappingProxyType(dict(attribute_points)),
         improvements=ImprovementIndex(),
     )
+
+
+def _check_one_at_natural_maximum(
+    metatype: Metatype,
+    attribute_points: Mapping[str, int],
+    previous_attribute_points: Mapping[str, int],
+    karma_points: Mapping[str, int],
+    maximum_bonus: Mapping[str, int],
+) -> None:
+    """WP112: reject a priority spend that itself puts a second Mental/Physical attribute at its
+    natural maximum. See `create_character`'s docstring for the scoping."""
+
+    def at_maximum(points: Mapping[str, int], code: str) -> bool:
+        attribute_range = metatype.attributes[code]
+        natural = attribute_range.minimum + points.get(code, 0) + karma_points.get(code, 0)
+        return natural >= attribute_range.maximum + maximum_bonus.get(code, 0)
+
+    raised = [
+        code
+        for code in PRIMARY_ATTRIBUTES
+        if at_maximum(attribute_points, code) and not at_maximum(previous_attribute_points, code)
+    ]
+    at_max_count = sum(1 for code in PRIMARY_ATTRIBUTES if at_maximum(attribute_points, code))
+    if raised and at_max_count > 1:
+        raise ValueError(
+            "only one Mental or Physical attribute may sit at its natural maximum at character "
+            f"creation -- raising {', '.join(raised)} would put {at_max_count} there"
+        )
 
 
 @dataclass(frozen=True)
@@ -780,10 +855,11 @@ def create_karma_attribute_points(
         attribute_range = character.attribute_range(code)
         start_rating = attribute_range.minimum + character.attribute_points.get(code, 0)
         total = start_rating + points
-        if total > attribute_range.maximum:
+        maximum = character.attribute_maximum(code)  # WP112: raised by Exceptional Attribute
+        if total > maximum:
             raise ValueError(
                 f"{code}: {total} (priority + Karma) exceeds {character.metatype.name}'s "
-                f"maximum of {attribute_range.maximum}"
+                f"maximum of {maximum}"
             )
         cost += karma_advancement_cost(start_rating, points, ATTRIBUTE_KARMA_PER_RATING)
 
@@ -812,7 +888,7 @@ def create_karma_attribute_points(
         at_natural_maximum = sum(
             1
             for code in PRIMARY_ATTRIBUTES
-            if candidate.natural_attribute_value(code) >= candidate.attribute_range(code).maximum
+            if candidate.natural_attribute_value(code) >= candidate.attribute_maximum(code)
         )
         if at_natural_maximum > 1:
             raise ValueError(

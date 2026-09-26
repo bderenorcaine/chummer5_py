@@ -194,13 +194,14 @@ def test_supported_vs_unsupported_counts_are_visible() -> None:
     # verified qualities (SINner x4, Code of Honor, Codeblock, Social Stress, Natural Immunity x2).
     # The rest (select-a-target choices with a real computed effect, category-wide/conditional
     # bonuses, notoriety shifts, multi-effect bonuses, attribute max/min changes, etc.) are
-    # NOT_YET_SUPPORTED: 96 - 7 - 8 - 9 = 72.
+    # NOT_YET_SUPPORTED: 96 - 7 - 8 - 9 = 72. WP112 adds 2 FLAT_BONUS attribute-maximum raises
+    # (Exceptional Attribute, Lucky): 9 FLAT_BONUS, 70 NOT_YET_SUPPORTED.
     qualities = load_qualities()
     counts = count_by_support(qualities)
-    assert counts[BonusSupport.FLAT_BONUS] == 7
+    assert counts[BonusSupport.FLAT_BONUS] == 9
     assert counts[BonusSupport.NO_EFFECT] == 8
     assert counts[BonusSupport.SELECT_TEXT] == 9
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 72
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 70
 
 
 def test_indomitable_mental_limit_bonus_is_supported() -> None:

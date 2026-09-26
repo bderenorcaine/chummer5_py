@@ -89,7 +89,14 @@ _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     # for the classification, and chummer5.engine.knowledge.create_knowledge_selection for the one
     # consumer of ImprovementType.NATIVE_LANGUAGE_LIMIT.
     "native_language_limit": ImprovementType.NATIVE_LANGUAGE_LIMIT,
+    # WP112: Exceptional Attribute / Lucky.
+    "attribute_maximum": ImprovementType.ATTRIBUTE_MAXIMUM,
 }
+
+# WP112: what an Exceptional Attribute pick may name -- every Mental/Physical attribute, and Magic
+# for a magic user (p. 72: "Physical, Mental, or Special attribute [...] Magic or Resonance"; Edge
+# is excluded by the data and belongs to Lucky; Resonance is out of scope).
+ATTRIBUTE_CHOICES = ("BOD", "AGI", "REA", "STR", "WIL", "LOG", "INT", "CHA", "MAG")
 
 # WP22: FLAT_BONUS has a real Improvement to apply; NO_EFFECT is offerable too -- it's a
 # verified-inert quality (see chummer5.data.qualities module docstring) with an empty
@@ -294,6 +301,55 @@ class QualityPick:
         )
 
 
+def attribute_choices(quality: Quality, magic_type: str | None) -> tuple[str, ...]:
+    """The attributes a `choice_kind == "attribute"` pick of `quality` may name (WP112)."""
+    return tuple(
+        code
+        for code in ATTRIBUTE_CHOICES
+        if code not in quality.choice_excludes and (code != "MAG" or magic_type is not None)
+    )
+
+
+def _validate_choice(quality: Quality, choice: str | None, magic_type: str | None) -> None:
+    """WP112: a quality with a `choice_kind` needs a valid choice; one without must carry none (the
+    same "don't silently ignore a stale/tampered field" rule the free-text detail follows)."""
+    if quality.choice_kind is None:
+        if choice is not None:
+            raise ValueError(f"{quality.name} takes no choice, got {choice!r}")
+        return
+    if quality.choice_kind == "attribute":
+        allowed = attribute_choices(quality, magic_type)
+        if choice not in allowed:
+            raise ValueError(f"{quality.name} needs one of {list(allowed)}, got {choice!r}")
+        return
+    raise ValueError(f"{quality.name}: unsupported choice kind {quality.choice_kind!r}")
+
+
+def requested_attribute_maximum_bonuses(
+    picks: Iterable[str | QualityPickRequest], catalog: Iterable[Quality]
+) -> dict[str, int]:
+    """WP112: the attribute-maximum raises a set of *unvalidated* pick requests asks for.
+
+    `create_character` has to know them before any quality is committed -- a saved Troll with STR
+    11 and Exceptional Attribute (STR) is rebuilt attributes first -- so this reads them straight
+    off the requests. `create_quality_selection` validates the same requests afterwards; an invalid
+    one fails there, so trusting it here for one step changes no outcome.
+    """
+    by_id = {q.id: q for q in catalog}
+    bonuses: dict[str, int] = {}
+    for request in (_as_request(p) for p in picks):
+        quality = by_id.get(request.quality_id)
+        if quality is None:
+            continue
+        for bonus in quality.flat_bonuses:
+            if bonus.target_kind != "attribute_maximum":
+                continue
+            code = bonus.target_name or request.choice
+            if code:
+                bonuses[code] = bonuses.get(code, 0) + bonus.value * request.rating
+    return bonuses
+
+
 def _as_request(pick: str | QualityPickRequest) -> QualityPickRequest:
     """A bare id means "this quality, once, at rating 1, with no detail" -- the shorthand every
     caller with nothing to choose keeps using (the same convention `create_bioware_selection`
@@ -390,6 +446,7 @@ def create_quality_selection(
             raise ValueError(
                 f"{quality.name}: rating {request.rating} is outside 1-{quality.max_rating}"
             )
+        _validate_choice(quality, request.choice, magic_type)
         text = request.text.strip() if request.text is not None else None
         if quality.bonus_support == BonusSupport.SELECT_TEXT:
             if not text:
@@ -550,7 +607,8 @@ def apply_quality_improvements(
             character.improvements.add(
                 Improvement(
                     improvement_type=_TARGET_KIND_TO_IMPROVEMENT_TYPE[flat_bonus.target_kind],
-                    target=flat_bonus.target_name,
+                    # WP112: an empty target on a choice-bearing bonus means "what was chosen".
+                    target=flat_bonus.target_name or (pick.choice or ""),
                     value=flat_bonus.value * pick.rating,
                     source_type=source_type,
                     source_id=pick.quality.id,

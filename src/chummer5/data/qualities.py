@@ -264,7 +264,9 @@ class FlatBonus:
     `_GLOBAL_TARGET` sentinel for the same reason).
     """
 
-    target_kind: str  # "skill", "attribute", "mental_limit", "physical_limit", or "social_limit"
+    # "skill", "attribute", "mental_limit", "physical_limit", "social_limit", or (WP112)
+    # "attribute_maximum" -- whose empty `target_name` means "the attribute the pick chose"
+    target_kind: str
     target_name: str
     value: int
 
@@ -320,6 +322,11 @@ class Quality:
     # child still counts as unsupported when classifying, so a quality whose only other content is
     # unmodeled stays unoffered until its own WP registers the rest.
     notoriety: int = 0
+    # WP112: the kind of player choice a pick must carry (`QualityPick.choice`), or None. Only
+    # "attribute" so far (Exceptional Attribute); later Phase X WPs add skills, Matrix actions, ...
+    choice_kind: str | None = None
+    # WP112: attributes a `choice_kind == "attribute"` pick may not name (`<excludeattribute>`).
+    choice_excludes: tuple[str, ...] = ()
 
     @property
     def max_rating(self) -> int:
@@ -368,6 +375,34 @@ def _classify_bonus(
 
     flat_bonuses = []
     for child in bonus_elem:
+        if child.tag == "notoriety":
+            # WP110/WP112: read separately into `Quality.notoriety`. Recognised here only
+            # *alongside* another supported child (the check after this loop), so a quality whose
+            # whole `<bonus>` is a Notoriety shift (Bad Luck, Blandness, ...) stays unoffered until
+            # its own WP registers the rest of its effect.
+            continue
+        if child.tag == "specificattribute" and {c.tag for c in child} == {"name", "max"}:
+            # WP112: Lucky's "+1 to Edge's maximum" -- `<max>` raises the attribute's natural and
+            # augmented maximum, not its value.
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind="attribute_maximum",
+                    target_name=child.findtext("name", ""),
+                    value=int(child.findtext("max", "0")),
+                )
+            )
+            continue
+        if child.tag == "selectattributes" and _is_select_attribute_maximum(child):
+            # WP112: Exceptional Attribute's "+1 to one attribute's maximum, player's choice". An
+            # empty `target_name` means "the pick's `choice`"; see `Quality.choice_kind`.
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind="attribute_maximum",
+                    target_name="",
+                    value=int(child.findtext("selectattribute/max", "0")),
+                )
+            )
+            continue
         if child.tag == "specificskill" and _is_flat_skill_bonus(child):
             flat_bonuses.append(
                 FlatBonus(
@@ -394,7 +429,25 @@ def _classify_bonus(
             )
         else:
             return BonusSupport.NOT_YET_SUPPORTED, ()
+    if not flat_bonuses:
+        return BonusSupport.NOT_YET_SUPPORTED, ()
     return BonusSupport.FLAT_BONUS, tuple(flat_bonuses)
+
+
+def _is_select_attribute_maximum(elem: ET.Element) -> bool:
+    """`<selectattributes><selectattribute>` holding only `<excludeattribute>`s and one `<max>`."""
+    choices = elem.findall("selectattribute")
+    if len(choices) != 1 or len(elem) != 1:
+        return False
+    tags = [c.tag for c in choices[0]]
+    return tags.count("max") == 1 and set(tags) <= {"max", "excludeattribute"}
+
+
+def _choice_kind(flat_bonuses: tuple[FlatBonus, ...]) -> str | None:
+    """WP112: which kind of thing a pick of this quality must name in `QualityPick.choice`."""
+    if any(b.target_kind == "attribute_maximum" and not b.target_name for b in flat_bonuses):
+        return "attribute"
+    return None
 
 
 def _parse_forbidden_names(elem: ET.Element) -> tuple[str, ...]:
@@ -459,6 +512,12 @@ def _parse_quality(elem: ET.Element) -> Quality:
         ),
         forbidden=_parse_requirements(elem.find("forbidden")),
         notoriety=_parse_notoriety(elem.findtext("name", ""), bonus_elem),
+        choice_kind=_choice_kind(flat_bonuses),
+        choice_excludes=tuple(
+            e.text
+            for e in elem.findall("bonus/selectattributes/selectattribute/excludeattribute")
+            if e.text
+        ),
         include_in_limit=tuple(
             n.text for n in elem.findall("includeinlimit/name") if n.text is not None
         ),

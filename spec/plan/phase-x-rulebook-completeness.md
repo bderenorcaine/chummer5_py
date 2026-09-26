@@ -189,7 +189,7 @@ the rules it checks.
 
 #### Step Two — attributes and metatype
 
-- [ ] **WP112 — Attribute rules: one at natural maximum; Exceptional Attribute and Lucky.**
+- [x] **WP112 — Attribute rules: one at natural maximum; Exceptional Attribute and Lucky.**
   Goal: close Step Two's two remaining attribute rules.
   Deliverables:
   - `create_character` rejects a priority spend **that itself** raises a second Mental/Physical

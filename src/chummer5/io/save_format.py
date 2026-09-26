@@ -304,6 +304,7 @@ from chummer5.engine.qualities import (
     apply_mentor_spirit_improvements,
     apply_quality_improvements,
     create_quality_selection,
+    requested_attribute_maximum_bonuses,
     resolve_metatype_qualities,
 )
 from chummer5.engine.resources import (
@@ -897,6 +898,8 @@ def build_character(
         attributes_letter=save.attributes_letter,
         priorities=priorities,
         attribute_points=save.attribute_points,
+        # WP112: Exceptional Attribute / Lucky raise a maximum before any quality is committed.
+        maximum_bonus=requested_attribute_maximum_bonuses(save.quality_picks, qualities),
     )
 
     # WP23: metatype_qualities is never persisted in CharacterSave (it's 100% determined by
@@ -1051,7 +1054,7 @@ def build_character(
         magic_selection.magic_type,
         save.magic_attribute_points,
         magic_selection.magic_rating,
-        choice.metatype.attributes["MAG"].maximum,
+        character.attribute_maximum("MAG"),  # WP112: Exceptional Attribute (MAG)
         choice.special_attribute_points,
         save.attribute_points.get("EDG", 0),
     )

@@ -62,6 +62,14 @@
             {% endif %}
           </td>
           <td>
+            {% if row.choice_options %}
+            <select name="quality_choice_{{ row.key }}">
+              <option value="">{{ _("Web_Qualities_ChooseAttribute") }}</option>
+              {% for code in row.choice_options %}
+              <option value="{{ code }}" {% if code == row.choice_value %}selected{% endif %}>{{ _("String_Attribute" ~ code ~ "Short") }}</option>
+              {% endfor %}
+            </select>
+            {% endif %}
             {% if row.needs_text %}
             <input
               type="text"
