@@ -46,15 +46,17 @@ def test_improved_physical_attribute_is_a_select_attribute_flat_bonus() -> None:
     assert power.limit == 12
 
 
-def test_attribute_boost_is_not_yet_supported_despite_sharing_selectattribute() -> None:
+def test_attribute_boost_applies_no_bonus_despite_sharing_selectattribute() -> None:
     # The exact regression this WP's intro exists to prevent: Attribute Boost's <bonus> uses the
     # same <selectattribute> tag and attribute list as Improved Physical Attribute, but has no
     # <val> child -- its real effect (rulebook p.309) is a temporary, test-gated, Drain-costing
     # boost, not a permanent bonus. A classifier keyed only on the "selectattribute" tag would
-    # silently misapply it as a flat attribute bonus.
+    # silently misapply it as a flat attribute bonus. WP120 offers it as a registry row: NO_EFFECT,
+    # still with no flat bonus, and a note saying the attribute isn't raised.
     power = next(p for p in POWERS if p.name == "Attribute Boost")
-    assert power.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    assert power.bonus_support == BonusSupport.NO_EFFECT
     assert power.flat_bonuses == ()
+    assert power.unmodeled_effect_note and "not raised" in power.unmodeled_effect_note
     assert power.raw_bonus is not None
     assert "selectattribute" in power.raw_bonus
     assert "<val>" not in power.raw_bonus
@@ -114,16 +116,17 @@ def test_improved_ability_skill_targets_a_known_skill() -> None:
     assert power.target_minimum_rating == 1
 
 
-def test_empty_or_absent_bonus_powers_stay_not_yet_supported() -> None:
+def test_empty_or_absent_bonus_powers_are_registry_rows() -> None:
     # Light Body, Missile Parry, Traceless Walk, Wall Running all have an empty/absent <bonus> --
     # each individually confirmed via the rulebook text (this WP's own research pass) to have a
     # real, unmodeled in-play effect (jump distance, ranged-attack defense, stealth, wall-climbing),
     # not a verified-inert one. Unlike chummer5.data.qualities's NO_EFFECT tranche, none of these
-    # qualify. (WP119 later added NO_EFFECT for three powers offered with a registry note.)
+    # qualify. WP120 offers them anyway, as NO_EFFECT registry rows with a note each.
     for name in ("Light Body", "Missile Parry", "Traceless Walk", "Wall Running"):
         power = next(p for p in POWERS if p.name == name)
-        assert power.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+        assert power.bonus_support == BonusSupport.NO_EFFECT
         assert power.flat_bonuses == ()
+        assert power.unmodeled_effect_note
 
 
 def test_supported_vs_unsupported_counts_are_visible() -> None:
@@ -131,11 +134,12 @@ def test_supported_vs_unsupported_counts_are_visible() -> None:
     # Control = 6. NOT_YET_SUPPORTED: 28 - 6 = 22. No NO_EFFECT value exists in this module. WP118
     # adds Astral Perception (its Assensing unlock). WP119 adds Improved Ability, Improved Reflexes,
     # Mystic Armor and Pain Resistance, and the NO_EFFECT value for Critical Strike, Enhanced
-    # Accuracy and Killing Hands.
+    # Accuracy and Killing Hands. WP120 makes the other 13 registry rows; only Improved Potential
+    # (Chaos Mentor) is left, and it is out of scope by name.
     counts = count_by_support(POWERS)
     assert counts[BonusSupport.FLAT_BONUS] == 11
-    assert counts[BonusSupport.NO_EFFECT] == 3
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 14
+    assert counts[BonusSupport.NO_EFFECT] == 16
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 1
 
 
 def test_power_fields_hand_checked_against_the_raw_xml() -> None:
@@ -148,8 +152,9 @@ def test_power_fields_hand_checked_against_the_raw_xml() -> None:
         limit=1,
         source="SR5",
         page=309,
-        bonus_support=BonusSupport.NOT_YET_SUPPORTED,
+        bonus_support=BonusSupport.NO_EFFECT,
         flat_bonuses=(),
         raw_bonus=danger_sense.raw_bonus,
+        unmodeled_effect_note=danger_sense.unmodeled_effect_note,
     )
     assert danger_sense.raw_bonus is not None and "surprise" in danger_sense.raw_bonus

@@ -358,7 +358,6 @@ IMPROVED_POTENTIAL_PHYSICAL_ID = next(
     p.id for p in POWERS if p.name == "Improved Potential (Physical)"
 )
 VOICE_CONTROL_ID = next(p.id for p in POWERS if p.name == "Voice Control")
-ATTRIBUTE_BOOST_ID = next(p.id for p in POWERS if p.name == "Attribute Boost")  # NOT_YET_SUPPORTED
 
 
 def test_power_selection_within_budget() -> None:
@@ -386,10 +385,12 @@ def test_power_selection_rejects_unknown_id() -> None:
 
 
 def test_power_selection_rejects_not_yet_supported_power() -> None:
-    # Attribute Boost is a real SR5 power but NOT_YET_SUPPORTED (see test_powers.py) -- it's
-    # excluded from mvp_power_catalog, so it's rejected the same way an unknown id is.
+    # Improved Potential (Chaos Mentor) is a real SR5 row but out of scope (WP120; Attribute Boost
+    # was the example until WP120 offered it) -- excluded from mvp_power_catalog, so it's rejected
+    # the same way an unknown id is.
+    chaos = next(p for p in POWERS if p.name == "Improved Potential (Chaos Mentor)")
     with pytest.raises(ValueError, match="not an MVP-offered power id"):
-        create_power_selection([(ATTRIBUTE_BOOST_ID, 1, None)], POWERS, power_point_budget=4)
+        create_power_selection([(chaos.id, 1, None)], POWERS, power_point_budget=4)
 
 
 def test_power_selection_rejects_duplicate_pick() -> None:

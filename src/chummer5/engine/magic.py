@@ -409,6 +409,9 @@ _POWER_TARGET_KIND_TO_IMPROVEMENT_TYPE = {
 # WP119: NO_EFFECT powers (in play only, with a note) are offered too, like NO_EFFECT qualities.
 _OFFERABLE_POWER_SUPPORT = (PowerBonusSupport.FLAT_BONUS, PowerBonusSupport.NO_EFFECT)
 
+# WP120: the one core row no core Adept can hold -- Chaos is not a core mentor spirit.
+OUT_OF_SCOPE_POWER_NAMES = frozenset({"Improved Potential (Chaos Mentor)"})
+
 # WP119: what a skill-targeted power's categories resolve against.
 _SKILLS = load_skills()
 
@@ -422,7 +425,11 @@ def mvp_power_catalog(powers: Iterable[Power]) -> tuple[Power, ...]:
     `NO_EFFECT` (an in-play power offered with its registry note). A `NOT_YET_SUPPORTED` power is
     excluded entirely rather than offered with its mechanical effect silently dropped.
     """
-    return tuple(p for p in powers if p.bonus_support in _OFFERABLE_POWER_SUPPORT)
+    return tuple(
+        p
+        for p in powers
+        if p.bonus_support in _OFFERABLE_POWER_SUPPORT and p.name not in OUT_OF_SCOPE_POWER_NAMES
+    )
 
 
 @dataclass(frozen=True)

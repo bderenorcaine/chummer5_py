@@ -157,6 +157,63 @@ _UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
         "Unarmed attacks may deal Physical instead of Stun damage, and count as magical against "
         "critters' magical defenses (p. 310) -- no unarmed-combat or damage resolution exists."
     ),
+    # WP120
+    "Adrenaline Boost": (
+        "+2 Initiative Score per level for the current Combat Turn, then Drain equal to the level "
+        "at the start of the next (p. 308) -- no Initiative or Drain resolution exists."
+    ),
+    "Attribute Boost": (
+        "A Magic + level Test whose hits raise the chosen attribute's dice pools (not its limit "
+        "or Initiative) for twice as many Combat Turns, then Drain equal to the level (p. 309) -- "
+        "no test or Drain resolution exists, so the attribute on the sheet is not raised. The "
+        "chosen attribute is recorded."
+    ),
+    "Combat Sense": (
+        "+1 die per level on defense tests against ranged and melee attacks, and a Perception Test "
+        "before a possible surprise (p. 309) -- no combat or surprise resolution exists."
+    ),
+    "Danger Sense": (
+        "+1 die per level on Surprise Tests (p. 309) -- no surprise resolution exists."
+    ),
+    "Improved Sense": (
+        "The chosen sense improvement -- low-light or thermographic vision, directional sense, "
+        "improved tactile, perfect pitch, human scale, ... (p. 310) -- no Perception or sensory "
+        "resolution exists. The chosen sense is recorded."
+    ),
+    "Kinesics": (
+        "+1 die per level to resist Social Tests and tests to read the character's emotions, such "
+        "as Judge Intentions (p. 310) -- no Social test resolution exists."
+    ),
+    "Light Body": (
+        "Adds its level to Agility for jump distance, +1 die per level on the Gymnastics Test to "
+        "jump, and shortens a fall by its level in meters (p. 310) -- no movement or falling "
+        "resolution exists."
+    ),
+    "Missile Parry": (
+        "+1 die per level to defend against thrown weapons and slow missiles, catching one on net "
+        "hits (p. 310) -- no combat resolution exists."
+    ),
+    "Natural Immunity": (
+        "+1 die per level on tests to resist toxins and disease (p. 311) -- no toxin/pathogen "
+        "resistance subsystem exists."
+    ),
+    "Rapid Healing": (
+        "+1 die per level to Body for Healing Tests, and to any test to heal the character (p. "
+        "311) -- no healing resolution exists."
+    ),
+    "Spell Resistance": (
+        "+1 die per level on Resistance Tests against spells, rituals, alchemical preparations "
+        "and Innate Spell (p. 311) -- no spell resolution exists."
+    ),
+    "Traceless Walk": (
+        "Moving without visible traces or contact noise: -4 dice to hearing-based Perception "
+        "against the character, no ground sensors tripped, -2 to Track Tests (p. 311) -- no "
+        "stealth or Perception resolution exists."
+    ),
+    "Wall Running": (
+        "A Running + Strength [Magic] Test to run up (or, with a Sprint, across) a wall (p. 311) "
+        "-- no movement resolution exists."
+    ),
     "Mystic Armor": (
         "Its Armor also protects against damage in astral combat (p. 310) -- no astral combat "
         "exists. (Its +1 Armor per level is applied.)"
@@ -193,7 +250,27 @@ def _is_select_attribute_flat_bonus(elem: ET.Element) -> bool:
 
 # WP119: powers whose whole effect is in play, offered with a note (`BonusSupport.NO_EFFECT`).
 _VERIFIED_NO_EFFECT_NAMES = frozenset(
-    {"Critical Strike", "Enhanced Accuracy (skill)", "Killing Hands"}
+    {
+        "Critical Strike",
+        "Enhanced Accuracy (skill)",
+        "Killing Hands",
+        # WP120: the rest of the core list. Attribute Boost is here, not a flat attribute bonus:
+        # its boost is a Magic + Rating Test's hits, in play, with Drain after (p. 309; the
+        # 2026-07-19 decisions-log entry), so it must never raise the attribute on the sheet.
+        "Adrenaline Boost",
+        "Attribute Boost",
+        "Combat Sense",
+        "Danger Sense",
+        "Improved Sense",
+        "Kinesics",
+        "Light Body",
+        "Missile Parry",
+        "Natural Immunity",
+        "Rapid Healing",
+        "Spell Resistance",
+        "Traceless Walk",
+        "Wall Running",
+    }
 )
 
 # WP119: the rulebook's non-stacking rule for Improved Reflexes (p. 310: "the increase cannot be

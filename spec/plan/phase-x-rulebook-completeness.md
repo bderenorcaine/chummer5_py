@@ -327,7 +327,7 @@ the rules it checks.
   Acceptance: the rulebook's Kyra power list (Step Three worked example) builds, with the Mystic
   Adept Power Points replaced by an Adept's free ones.
 
-- [ ] **WP120 — The remaining adept powers.**
+- [x] **WP120 — The remaining adept powers.**
   Goal: offer the rest of the core list, as registry rows.
   Deliverables:
   - Adrenaline Boost and Attribute Boost: in-play test, Adept Drain.

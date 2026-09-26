@@ -249,12 +249,12 @@ def test_wesson_adept_powers_hand_verified_against_the_raw_fixture_and_catalog()
     }
     assert non_sr5_names == {"Motion Sense", "Rapid Draw"}
 
-    # WP119 offers Enhanced Accuracy (a registry row) and Improved Ability (a skill rating); the
-    # other two wait for WP120.
+    # WP119 offers Enhanced Accuracy (a registry row) and Improved Ability (a skill rating), and
+    # WP120 the other two as registry rows.
     support = {name: next(p for p in POWERS if p.name == name).bonus_support for name in sr5_names}
     assert support == {
-        "Attribute Boost": PowerBonusSupport.NOT_YET_SUPPORTED,
-        "Combat Sense": PowerBonusSupport.NOT_YET_SUPPORTED,
+        "Attribute Boost": PowerBonusSupport.NO_EFFECT,
+        "Combat Sense": PowerBonusSupport.NO_EFFECT,
         "Enhanced Accuracy (skill)": PowerBonusSupport.NO_EFFECT,
         "Improved Ability (skill)": PowerBonusSupport.FLAT_BONUS,
     }

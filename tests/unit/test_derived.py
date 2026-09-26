@@ -341,7 +341,7 @@ def test_unmodeled_effect_notes_walks_other_selection_kinds_without_crashing() -
     # rather than assuming every kind it visits already has the field.
     cyberware = next(iter(load_cyberware_entries()))
     bioware = next(iter(load_bioware()))
-    power = next(iter(load_powers()))
+    power = next(p for p in load_powers() if p.unmodeled_effect_note is None)
     focus = next(iter(load_foci()))
     lifestyle_tier = next(iter(load_lifestyles()))
     spell = next(iter(load_spells()))
