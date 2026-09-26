@@ -367,3 +367,19 @@ def test_unchecking_worn_takes_armor_out_of_the_total_and_survives_a_save() -> N
 
     saved = from_json(client.get("/character/save").text)
     assert saved.unworn_armor == ("Armor Jacket",)
+
+
+def test_the_sheet_shows_the_reputation_row() -> None:
+    from chummer5.web.app import MVP_QUALITIES
+
+    sinner = next(q for q in MVP_QUALITIES if q.name == "SINner (Criminal)")
+    client = TestClient(create_app())
+    _confirm_human(client)
+    client.post(
+        "/ui/qualities",
+        data={"quality_id": sinner.id, f"quality_text_{sinner.id}": "Lone Star priors"},
+    )
+    sheet = client.get("/character/sheet").text
+    assert "<th>Street Cred</th><td>0</td>" in sheet
+    assert "<th>Notoriety</th><td>1</td>" in sheet
+    assert "<th>Public Awareness</th><td>0</td>" in sheet

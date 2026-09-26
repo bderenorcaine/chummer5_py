@@ -942,6 +942,10 @@
       <text>Armor accessories over Strength: −{penalty} Agility and Reaction while worn.</text>
     </string>
     <string>
+      <key>Web_Sheet_PublicAwareness</key>
+      <text>Public Awareness</text>
+    </string>
+    <string>
       <key>Web_Sheet_PhysicalCM</key>
       <text>Physical condition monitor</text>
     </string>

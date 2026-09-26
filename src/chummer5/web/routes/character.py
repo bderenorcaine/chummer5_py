@@ -37,10 +37,13 @@ from chummer5.engine.derived import (
     initiative_dice,
     initiative_value,
     mental_limit,
+    notoriety,
     overflow,
     physical_condition_monitor,
     physical_limit,
+    public_awareness,
     social_limit,
+    street_cred,
     stun_condition_monitor,
     unmodeled_effect_notes,
     wound_modifier_rule,
@@ -518,6 +521,10 @@ def _character_sheet_context(
         "wound_rule": wound_modifier_rule(character),
         "armor": armor_breakdown(character),
         "damage_resistance": damage_resistance(character),
+        # WP110: Step Eight's Reputation row.
+        "street_cred": street_cred(character),
+        "notoriety": notoriety(character),
+        "public_awareness": public_awareness(character),
         # WP29: hidden entirely (not shown as zeroes) for Mundane -- `magic_type` gates the whole
         # block in `_character_sheet.html`, mirroring how `lifestyle_tier_name`/etc. already gate
         # their own "None until committed" sections.

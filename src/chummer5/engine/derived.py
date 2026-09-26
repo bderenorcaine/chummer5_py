@@ -445,3 +445,30 @@ def damage_resistance(character: Character) -> int:
         + armor(character)
         + character.improvements.resolve(ImprovementType.DAMAGE_RESISTANCE, _GLOBAL_TARGET)
     )
+
+
+def street_cred(character: Character) -> int:
+    """Street Cred at creation (WP110): always 0.
+
+    p. 368: "Street Cred equals the character's total Karma [earned], divided by 10". Karma is
+    *earned* in play; the 25 Karma a character is built with, and any Karma a negative quality
+    refunds, are spent at creation, not earned. The legacy engine agrees (`CalculatedStreetCred`
+    reads career Karma only). GM awards come later still.
+    """
+    del character
+    return 0
+
+
+def notoriety(character: Character) -> int:
+    """Notoriety (WP110): Σ `NOTORIETY` -- p. 368's "starts off with a Notoriety of 0", shifted by
+    the listed qualities (+1 per negative, -1 per positive, 3 for Bad Rep). May be negative."""
+    return character.improvements.resolve(ImprovementType.NOTORIETY, _GLOBAL_TARGET)
+
+
+def public_awareness(character: Character) -> int:
+    """Public Awareness at creation (WP110): always 0. p. 368: "the gamemaster determines when the
+    actions of a runner should be awarded a point of Public Awareness" -- nothing at creation.
+    Legacy has an optional house rule deriving it as (Street Cred + Notoriety) / 3; it is off by
+    default and not in the rulebook, so it isn't followed."""
+    del character
+    return 0

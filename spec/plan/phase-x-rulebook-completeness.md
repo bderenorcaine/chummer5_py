@@ -163,7 +163,7 @@ the rules it checks.
   Acceptance: hand-computed values for a synthetic street sam with an Armor Jacket, a Helmet and
   Dermal Plating 2; the Bone Lacing and Dermal Plating registry rows are updated in the same commit.
 
-- [ ] **WP110 — Reputation: Street Cred, Notoriety, Public Awareness.**
+- [x] **WP110 — Reputation: Street Cred, Notoriety, Public Awareness.**
   Goal: the Step 8 "Reputation" row, per Finding 3.
   Deliverables: a `NOTORIETY` Improvement type fed from quality `<notoriety>` nodes, plus a
   name-gated override that gives Gremlins +1. Street Cred and Public Awareness are 0 at creation,

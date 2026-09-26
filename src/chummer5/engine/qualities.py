@@ -526,12 +526,26 @@ def apply_quality_improvements(
     pre-WP23 caller passes a player's chosen qualities); WP23 passes `ImprovementSource.METATYPE`
     for metatype-granted ones, so the two are independently retractable.
 
+    **WP110**: a quality with a Notoriety shift also adds a `NOTORIETY` Improvement, grouped so
+    each listed quality counts once however many instances are held (see `_notoriety_group`).
+
     **WP107**: a `QualityPick` applies each flat bonus `x rating` (Indomitable (Mental) 2 is +2
     Mental limit); a bare `Quality` counts as rating 1. Every instance of a repeatable quality
     shares its `source_id`, which is fine: removal is always wholesale per quality.
     """
     for item in qualities:
         pick = item if isinstance(item, QualityPick) else QualityPick(quality=item)
+        if pick.quality.notoriety:
+            character.improvements.add(
+                Improvement(
+                    improvement_type=ImprovementType.NOTORIETY,
+                    target="",
+                    value=pick.quality.notoriety,
+                    source_type=source_type,
+                    source_id=pick.quality.id,
+                    unique_name=_notoriety_group(pick.quality),
+                )
+            )
         for flat_bonus in pick.quality.flat_bonuses:
             character.improvements.add(
                 Improvement(
@@ -542,6 +556,20 @@ def apply_quality_improvements(
                     source_id=pick.quality.id,
                 )
             )
+
+
+def _notoriety_group(quality: Quality) -> str:
+    """WP110: the dedup group that makes each p. 368-listed quality count once.
+
+    p. 368 lists "Addiction", not its four severities, and says a character "cannot earn a
+    Notoriety point for something for which they have already received a point". So every Addiction
+    row and every repeated instance of any quality share one group, and `ImprovementIndex`'s
+    highest-wins pass keeps one point.
+    """
+    family = quality.name
+    if family.startswith("Addiction ("):
+        family = "Addiction"
+    return f"notoriety:{family}"
 
 
 def apply_mentor_spirit_improvements(character: Character, pick: MentorSpiritPick) -> None:

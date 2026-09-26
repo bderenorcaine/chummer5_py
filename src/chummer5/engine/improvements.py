@@ -157,6 +157,8 @@ class ImprovementType(Enum):
     CM_SHARED_THRESHOLD_OFFSET = auto()
     ARMOR = auto()
     DAMAGE_RESISTANCE = auto()
+    # WP110: the character's Notoriety (p. 368), fed from quality `<notoriety>` nodes.
+    NOTORIETY = auto()
 
 
 class ImprovementSource(Enum):

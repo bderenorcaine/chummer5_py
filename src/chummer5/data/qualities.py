@@ -22,8 +22,8 @@ values:
   `spec/rulebooks/learnings.md`'s WP22 entry for the full per-quality research.
 - `SELECT_TEXT` (WP55) — a quality whose only unrecognized `<bonus>` content is a `<selecttext>`
   node (a free-text detail the player fills in, e.g. which SIN, which protected group, which
-  disease) plus, for one quality (SINner (Criminal)), an accompanying `<notoriety>` this project's
-  never modeled (documented, not applied — see Project Overview's "Unmodeled real effects" table).
+  disease) plus, for one quality (SINner (Criminal)), an accompanying `<notoriety>` (applied since
+  WP110 through `Quality.notoriety`, which is parsed independently of this classification).
   Name-gated (`_VERIFIED_SELECT_TEXT_NAMES`), the identical pattern `NO_EFFECT` already
   established — see `spec/worklogs/WP55.md` and `spec/rulebooks/learnings.md`'s WP55 entry for the
   full per-quality research into why each of these 9 has no *other* unmodeled computed effect.
@@ -123,10 +123,9 @@ _VERIFIED_NO_EFFECT_NAMES = frozenset(
 # WP55: 9 SR5 qualities individually verified (rulebook text via `pdftotext -layout`, cross-checked
 # against qualities.xml) to have no computed effect this engine's scope reaches beyond the free-text
 # detail itself -- see spec/rulebooks/learnings.md's WP55 entry for the full per-quality citation.
-# SINner (Criminal)'s own <bonus> also carries a <notoriety>1</notoriety> sibling to <selecttext> --
-# the wholly unmodeled Notoriety/reputation system this project shares with 18 other SR5 qualities
-# (Project Overview's "Unmodeled real effects" table), not a second thing this classifier needs to
-# recognize structurally.
+# SINner (Criminal)'s own <bonus> also carries a <notoriety>1</notoriety> sibling to <selecttext>.
+# Since WP110 that is read separately, into `Quality.notoriety`, so this classifier still doesn't
+# need to recognize it structurally.
 _VERIFIED_SELECT_TEXT_NAMES = frozenset(
     {
         "SINner (National)",
@@ -192,8 +191,8 @@ _UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
         "background-check/arrest-risk subsystem exists."
     ),
     "SINner (Criminal)": (
-        "Background-check/arrest consequences (p. 84-85), plus an unmodeled Notoriety point -- no "
-        "background-check/arrest-risk or Notoriety/reputation subsystem exists."
+        "Background-check/arrest consequences (p. 84-85) -- no background-check/arrest-risk "
+        "subsystem exists. (Its Notoriety point is applied, since WP110.)"
     ),
     "SINner (Corporate)": (
         "Background-check/arrest consequences (p. 85), the single largest-magnitude Negative "
@@ -229,6 +228,21 @@ _RULEBOOK_REQUIRED_ADDITIONS: Mapping[str, tuple[tuple[str, str], ...]] = {
     # leaves out Adept, who is as much a magic user as anyone on the data's list.
     "Spirit Affinity": (("quality", "Adept"),),
 }
+
+
+# WP110: Gremlins is on p. 368's list of Notoriety-raising negative qualities, but its data row has
+# no `<bonus>` at all -- the one gap in the data's otherwise complete `<notoriety>` coverage (see
+# spec/plan/phase-x-rulebook-completeness.md's Finding 3). Name-gated, rulebook wins.
+_NOTORIETY_OVERRIDES: Mapping[str, int] = {"Gremlins": 1}
+
+
+def _parse_notoriety(name: str, bonus_elem: ET.Element | None) -> int:
+    """A quality's Notoriety shift (WP110): its `<bonus><notoriety>` value, or an override."""
+    if name in _NOTORIETY_OVERRIDES:
+        return _NOTORIETY_OVERRIDES[name]
+    if bonus_elem is None:
+        return 0
+    return sum(int(n.text) for n in bonus_elem.findall("notoriety") if n.text)
 
 
 class BonusSupport(Enum):
@@ -301,6 +315,11 @@ class Quality:
     # above stays as the quality-name-only view WP55 introduced.
     required: tuple[Requirement, ...] = ()
     forbidden: tuple[Requirement, ...] = ()
+    # WP110: this quality's Notoriety shift at creation (p. 368) -- +1 per listed negative, -1 per
+    # listed positive, 3 for Bad Rep. Parsed independently of `bonus_support`: the `<notoriety>`
+    # child still counts as unsupported when classifying, so a quality whose only other content is
+    # unmodeled stays unoffered until its own WP registers the rest.
+    notoriety: int = 0
 
     @property
     def max_rating(self) -> int:
@@ -439,6 +458,7 @@ def _parse_quality(elem: ET.Element) -> Quality:
             elem.findtext("name", ""), _parse_requirements(elem.find("required"))
         ),
         forbidden=_parse_requirements(elem.find("forbidden")),
+        notoriety=_parse_notoriety(elem.findtext("name", ""), bonus_elem),
         include_in_limit=tuple(
             n.text for n in elem.findall("includeinlimit/name") if n.text is not None
         ),
