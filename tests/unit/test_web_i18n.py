@@ -344,7 +344,8 @@ def test_no_project_key_is_an_orphan() -> None:
     """Every `Web_*` key is used by some template or web module -- literally, as the base of an
     `_n()` pair, or through one of the computed families -- so dead keys cannot pile up for
     translators to translate for nothing."""
-    computed_prefixes = ("Web_BuildMethod_", "Web_MagicType_")
+    # WP114: Home Ground's bonus names are `"Web_HomeGround_" ~ code` (_quality_choice_label.html).
+    computed_prefixes = ("Web_BuildMethod_", "Web_MagicType_", "Web_HomeGround_")
     sources = "\n".join(
         path.read_text()
         for path in [

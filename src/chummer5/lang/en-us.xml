@@ -580,8 +580,28 @@
       <text>(another)</text>
     </string>
     <string>
-      <key>Web_Qualities_ChooseAttribute</key>
-      <text>-- choose an attribute --</text>
+      <key>Web_Qualities_Choose</key>
+      <text>-- choose --</text>
+    </string>
+    <string>
+      <key>Web_HomeGround_AstralAcclimation</key>
+      <text>Astral Acclimation</text>
+    </string>
+    <string>
+      <key>Web_HomeGround_YouKnowAGuy</key>
+      <text>You Know a Guy</text>
+    </string>
+    <string>
+      <key>Web_HomeGround_DigitalTurf</key>
+      <text>Digital Turf</text>
+    </string>
+    <string>
+      <key>Web_HomeGround_TheTransporter</key>
+      <text>The Transporter</text>
+    </string>
+    <string>
+      <key>Web_HomeGround_StreetPolitics</key>
+      <text>Street Politics</text>
     </string>
     <string>
       <key>Web_Qualities_ChooseArchetype</key>
@@ -944,6 +964,10 @@
     <string>
       <key>Web_Sheet_ArmorEncumbrance</key>
       <text>Armor accessories over Strength: −{penalty} Agility and Reaction while worn.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_Memory</key>
+      <text>Memory</text>
     </string>
     <string>
       <key>Web_Sheet_PublicAwareness</key>

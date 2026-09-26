@@ -1,0 +1,9 @@
+{#- WP114: one quality choice's label, by kind. Expects `code` and either `row.choice_kind` (the
+    quality form) or `pick.quality.choice_kind` (the character sheet) in scope. -#}
+{%- set kind = row.choice_kind if row is defined else pick.quality.choice_kind -%}
+{%- if kind == "attribute" -%}{{ _("String_Attribute" ~ code ~ "Short") }}
+{%- elif kind == "home_ground" -%}{{ _("Web_HomeGround_" ~ code) }}
+{%- elif kind == "spirit_type" -%}{{ code | dterm("traditions.xml") }}
+{%- elif kind == "matrix_action" -%}{{ code | dterm("actions.xml") }}
+{%- else -%}{{ code }}
+{%- endif -%}

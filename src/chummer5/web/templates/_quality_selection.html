@@ -64,9 +64,9 @@
           <td>
             {% if row.choice_options %}
             <select name="quality_choice_{{ row.key }}">
-              <option value="">{{ _("Web_Qualities_ChooseAttribute") }}</option>
+              <option value="">{{ _("Web_Qualities_Choose") }}</option>
               {% for code in row.choice_options %}
-              <option value="{{ code }}" {% if code == row.choice_value %}selected{% endif %}>{{ _("String_Attribute" ~ code ~ "Short") }}</option>
+              <option value="{{ code }}" {% if code == row.choice_value %}selected{% endif %}>{% include "_quality_choice_label.html" %}</option>
               {% endfor %}
             </select>
             {% endif %}

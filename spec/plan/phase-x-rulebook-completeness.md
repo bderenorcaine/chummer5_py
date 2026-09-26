@@ -219,7 +219,7 @@ the rules it checks.
 
 #### Step Four — qualities
 
-- [ ] **WP114 — Positive qualities: the remaining core catalog.**
+- [x] **WP114 — Positive qualities: the remaining core catalog.**
   Goal: offer every remaining core positive quality, each with its computed part modeled and the
   rest registered.
   Deliverables, grouped by what each needs:

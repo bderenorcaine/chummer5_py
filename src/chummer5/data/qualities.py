@@ -94,7 +94,14 @@ _GLOBAL_BONUS_TAGS = {
     "physicallimit": "physical_limit",
     "sociallimit": "social_limit",
     "nativelanguagelimit": "native_language_limit",
+    # WP114: Toughness's Damage Resistance die and Photographic Memory's Memory dice.
+    "damageresistance": "damage_resistance",
+    "memory": "memory",
 }
+
+# WP114: `<conditionmonitor>` holding exactly one of these leaves -- High Pain Tolerance's ignored
+# wound box and Will to Live's Overflow box, both per rating.
+_CONDITION_MONITOR_TAGS = {"thresholdoffset": "cm_threshold_offset", "overflow": "cm_overflow"}
 
 # WP22 Tranche 2: SR5 qualities individually verified (rulebook text + a `grep` of the legacy C#
 # for by-name special-casing, both turning up nothing) to have zero mechanical effect this engine's
@@ -117,8 +124,29 @@ _VERIFIED_NO_EFFECT_NAMES = frozenset(
         "Thermographic Vision",
         "Simsense Vertigo",
         "Unsteady Hands",
+        # WP114: the positive qualities whose whole effect is in play -- each has a note below.
+        "Ambidextrous",
+        "Analytical Mind",
+        "Astral Chameleon",
+        "Blandness",
+        "First Impression",
+        "Focused Concentration",
+        "Human-Looking",
+        "Magic Resistance",
+        "Quick Healer",
+        "Resistance to Pathogens",
+        "Resistance to Toxins",
+        "Resistance to Pathogens and Toxins",
     }
 )
+
+# WP114: qualities whose pick names one thing from a fixed list (`Quality.choice_kind`) and whose
+# effect is otherwise in play -- offered as NO_EFFECT, with the choice carried and validated.
+_CHOICE_KIND_NAMES: Mapping[str, str] = {
+    "Codeslinger": "matrix_action",
+    "Home Ground": "home_ground",
+    "Spirit Affinity": "spirit_type",
+}
 
 # WP55: 9 SR5 qualities individually verified (rulebook text via `pdftotext -layout`, cross-checked
 # against qualities.xml) to have no computed effect this engine's scope reaches beyond the free-text
@@ -218,6 +246,70 @@ _UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
         "Full immunity to one chosen disease or toxin, at the higher (synthetic) tier (p. 76) -- "
         "no toxin/pathogen resistance subsystem exists."
     ),
+    # WP114: the positive qualities offered with their in-play effect registered.
+    "Ambidextrous": (
+        "No -2 off-hand penalty on actions done solely with the off hand, such as firing a gun "
+        "(p. 71) -- no attack or off-hand action resolution exists."
+    ),
+    "Analytical Mind": (
+        "+2 dice to Logic Tests involving pattern recognition, evidence analysis, clue hunting "
+        "or puzzles, and half the time to solve a problem (p. 72) -- no test resolution exists."
+    ),
+    "Astral Chameleon": (
+        "Astral signatures last half as long and Assensing Tests against them take -2 dice (p. "
+        "72) -- no astral-signature or Assensing resolution exists."
+    ),
+    "Blandness": (
+        "+1 to the threshold to recall details about the character, and -2 dice to shadow or "
+        "locate them by appearance in a crowd (p. 72); lost while they carry distinguishing "
+        "features -- no Memory-test or search resolution exists. (Its -1 Notoriety is applied.)"
+    ),
+    "First Impression": (
+        "+2 dice to relevant Social Tests at a first meeting only (p. 74) -- no Social test "
+        "resolution exists. (Its -1 Notoriety is applied.)"
+    ),
+    "Focused Concentration": (
+        "Sustains one spell of Force up to the rating without the -2 per sustained spell "
+        "penalty (p. 74) -- no spell-sustaining or casting resolution exists."
+    ),
+    "Human-Looking": (
+        "Passes for human in most Social-test circumstances (p. 75) -- no Social test "
+        "resolution exists."
+    ),
+    "Magic Resistance": (
+        "+1 die per rating to Spell Resistance Tests, always on, and voluntary-subject spells "
+        "always fail on the character (p. 76) -- no spell resolution exists."
+    ),
+    "Quick Healer": (
+        "+2 dice to all Healing Tests made on, for or by the character, including magical "
+        "healing (p. 77) -- no healing resolution exists."
+    ),
+    "Resistance to Pathogens": (
+        "+1 die to Resistance Tests against pathogens (p. 77) -- no toxin/pathogen resistance "
+        "subsystem exists."
+    ),
+    "Resistance to Toxins": (
+        "+1 die to Resistance Tests against toxins (p. 77) -- no toxin/pathogen resistance "
+        "subsystem exists."
+    ),
+    "Resistance to Pathogens and Toxins": (
+        "+1 die to Resistance Tests against both pathogens and toxins (p. 77) -- no "
+        "toxin/pathogen resistance subsystem exists."
+    ),
+    "Codeslinger": (
+        "+2 dice on the chosen Matrix action (p. 72) -- no Matrix test resolution exists. The "
+        "chosen action is recorded."
+    ),
+    "Home Ground": (
+        "The chosen home-turf bonus (p. 74) -- ignoring background count, local Street Cred, "
+        "Matrix, Evasion or gang-Knowledge dice there -- none of those tests or locations exist "
+        "here. The chosen bonus is recorded."
+    ),
+    "Spirit Affinity": (
+        "One extra service from each spirit of the chosen type, and +1 die to bind it (p. 77) "
+        "-- bound spirits' services are the player's own entry here and no Binding Test exists. "
+        "The chosen type is recorded."
+    ),
 }
 
 
@@ -228,6 +320,16 @@ _RULEBOOK_REQUIRED_ADDITIONS: Mapping[str, tuple[tuple[str, str], ...]] = {
     # p. 77: "Available only to magic users" -- the data lists only spellcasting talents and so
     # leaves out Adept, who is as much a magic user as anyone on the data's list.
     "Spirit Affinity": (("quality", "Adept"),),
+}
+
+# WP114: forbidden-list additions, same rulebook-wins posture. The three purchasable Resistance rows
+# may not be bought on top of the Dwarf's racial "+2 dice vs. pathogen/toxin" (the metatype-granted
+# `Resistance to Pathogens/Toxins` row) -- the same "don't re-buy a racial trait" rule WP23 applies
+# to Low-Light Vision, extended to the variants the grant already covers.
+_RULEBOOK_FORBIDDEN_ADDITIONS: Mapping[str, tuple[tuple[str, str], ...]] = {
+    "Resistance to Pathogens": (("quality", "Resistance to Pathogens/Toxins"),),
+    "Resistance to Toxins": (("quality", "Resistance to Pathogens/Toxins"),),
+    "Resistance to Pathogens and Toxins": (("quality", "Resistance to Pathogens/Toxins"),),
 }
 
 
@@ -367,7 +469,7 @@ def _classify_bonus(
     one of WP22's individually-verified `_VERIFIED_NO_EFFECT_NAMES`, in which case it's
     `NO_EFFECT` instead.
     """
-    if name in _VERIFIED_NO_EFFECT_NAMES:
+    if name in _VERIFIED_NO_EFFECT_NAMES or name in _CHOICE_KIND_NAMES:
         return BonusSupport.NO_EFFECT, ()
     if name in _VERIFIED_SELECT_TEXT_NAMES:
         return BonusSupport.SELECT_TEXT, ()
@@ -420,6 +522,19 @@ def _classify_bonus(
                     value=int(child.findtext("val", "0")),
                 )
             )
+        elif (
+            child.tag == "conditionmonitor"
+            and len(child) == 1
+            and child[0].tag in _CONDITION_MONITOR_TAGS
+            and len(child[0]) == 0
+        ):
+            flat_bonuses.append(
+                FlatBonus(
+                    target_kind=_CONDITION_MONITOR_TAGS[child[0].tag],
+                    target_name="",
+                    value=int(child[0].text or "0"),
+                )
+            )
         elif child.tag in _GLOBAL_BONUS_TAGS and len(child) == 0 and child.text is not None:
             flat_bonuses.append(
                 FlatBonus(
@@ -444,8 +559,10 @@ def _is_select_attribute_maximum(elem: ET.Element) -> bool:
     return tags.count("max") == 1 and set(tags) <= {"max", "excludeattribute"}
 
 
-def _choice_kind(flat_bonuses: tuple[FlatBonus, ...]) -> str | None:
+def _choice_kind(name: str, flat_bonuses: tuple[FlatBonus, ...]) -> str | None:
     """WP112: which kind of thing a pick of this quality must name in `QualityPick.choice`."""
+    if name in _CHOICE_KIND_NAMES:
+        return _CHOICE_KIND_NAMES[name]
     if any(b.target_kind == "attribute_maximum" and not b.target_name for b in flat_bonuses):
         return "attribute"
     return None
@@ -490,6 +607,15 @@ def _with_rulebook_additions(
     return (widened, *rest)
 
 
+def _with_forbidden_additions(
+    name: str, forbidden: tuple[Requirement, ...]
+) -> tuple[Requirement, ...]:
+    additions = _RULEBOOK_FORBIDDEN_ADDITIONS.get(name)
+    if not additions:
+        return forbidden
+    return (*forbidden, Requirement(mode="oneof", conditions=additions))
+
+
 def _parse_quality(elem: ET.Element) -> Quality:
     bonus_elem = elem.find("bonus")
     support, flat_bonuses = _classify_bonus(elem.findtext("name", ""), bonus_elem)
@@ -511,9 +637,11 @@ def _parse_quality(elem: ET.Element) -> Quality:
         required=_with_rulebook_additions(
             elem.findtext("name", ""), _parse_requirements(elem.find("required"))
         ),
-        forbidden=_parse_requirements(elem.find("forbidden")),
+        forbidden=_with_forbidden_additions(
+            elem.findtext("name", ""), _parse_requirements(elem.find("forbidden"))
+        ),
         notoriety=_parse_notoriety(elem.findtext("name", ""), bonus_elem),
-        choice_kind=_choice_kind(flat_bonuses),
+        choice_kind=_choice_kind(elem.findtext("name", ""), flat_bonuses),
         choice_excludes=tuple(
             e.text
             for e in elem.findall("bonus/selectattributes/selectattribute/excludeattribute")

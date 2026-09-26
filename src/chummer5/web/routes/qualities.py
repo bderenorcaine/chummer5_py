@@ -26,7 +26,7 @@ from chummer5.engine.qualities import (
     apply_mentor_spirit_improvements,
     apply_metatype_bonus_improvements,
     apply_quality_improvements,
-    attribute_choices,
+    choice_options,
     create_quality_selection,
     offerable_quality_catalog,
     resolve_metatype_qualities,
@@ -182,11 +182,8 @@ def _quality_rows(
                     "rating": request.rating if request is not None else 1,
                     "max_rating": quality.max_rating,
                     # WP112: a choice-bearing quality's dropdown (Exceptional Attribute).
-                    "choice_options": (
-                        attribute_choices(quality, magic_type)
-                        if quality.choice_kind == "attribute"
-                        else ()
-                    ),
+                    "choice_options": choice_options(quality, magic_type),
+                    "choice_kind": quality.choice_kind,
                     "choice_value": request.choice if request is not None else None,
                     "another": quality.repeatable and index > 0 and request is None,
                 }

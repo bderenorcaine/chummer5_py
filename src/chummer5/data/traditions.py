@@ -119,3 +119,24 @@ def load_traditions(xml_path: Path = DEFAULT_TRADITIONS_PATH) -> tuple[Tradition
         if t.findtext("source") == CORE_RULEBOOK_SOURCE
         and t.findtext("name") not in EXCLUDED_TRADITION_NAMES
     )
+
+
+# WP114: the spirit kinds `traditions.xml` marks as constructs rather than summoned spirits -- the
+# same filter Spirit Affinity's own `<selecttext xpath=...>` applies ("not Watcher or Homunculus").
+_CONSTRUCT_SPIRIT_PREFIXES = ("Watcher", "Homunculus")
+
+
+def load_core_spirit_types(xml_path: Path = DEFAULT_TRADITIONS_PATH) -> tuple[str, ...]:
+    """The SR5-core summonable spirit types (WP114): `<spirits><spirit>` with `source == "SR5"`,
+    minus Watchers and Homunculi. For Spirit Affinity and Spirit Bane, whose pick names one."""
+    root = ET.parse(xml_path).getroot()
+    spirits_elem = root.find("spirits")
+    if spirits_elem is None:
+        return ()
+    return tuple(
+        name
+        for spirit in spirits_elem.findall("spirit")
+        if spirit.findtext("source") == CORE_RULEBOOK_SOURCE
+        and (name := spirit.findtext("name", ""))
+        and not name.startswith(_CONSTRUCT_SPIRIT_PREFIXES)
+    )

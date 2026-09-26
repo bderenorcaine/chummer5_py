@@ -83,7 +83,7 @@ def _by_name(name: str) -> Quality:
     return next(q for q in QUALITIES if q.name == name)
 
 
-def test_mvp_quality_catalog_is_exactly_the_twenty_six_offerable_qualities() -> None:
+def test_mvp_quality_catalog_is_exactly_the_forty_five_offerable_qualities() -> None:
     # WP8's 3 FLAT_BONUS qualities (Catlike, Double-Jointed, Natural Athlete) + WP22's 3 new
     # FLAT_BONUS Indomitable qualities + WP22's 8 verified-NO_EFFECT qualities = 14, +1 for WP49's
     # Bilingual (see spec/rulebooks/learnings.md's WP49 entry -- Bilingual was NOT_YET_SUPPORTED
@@ -92,9 +92,29 @@ def test_mvp_quality_catalog_is_exactly_the_twenty_six_offerable_qualities() -> 
     # Natural Immunity x2) = 24. Two of the NO_EFFECT qualities (Simsense Vertigo, Unsteady Hands)
     # plus the 4 SINner variants, Code of Honor, Codeblock, and Social Stress (7 more) are
     # Negative -- 9 Negative qualities total, the rest (15) Positive. WP112 adds Exceptional
-    # Attribute and Lucky (Positive) = 26.
+    # Attribute and Lucky (Positive) = 26. WP114 adds the 19 remaining in-scope Positive qualities
+    # (Aptitude is WP116's; Mentor Spirit is widened per-character, not here) = 45.
     offered = mvp_quality_catalog(QUALITIES)
     assert {q.name for q in offered} == {
+        "Ambidextrous",
+        "Analytical Mind",
+        "Astral Chameleon",
+        "Blandness",
+        "Codeslinger",
+        "First Impression",
+        "Focused Concentration",
+        "High Pain Tolerance",
+        "Home Ground",
+        "Human-Looking",
+        "Magic Resistance",
+        "Photographic Memory",
+        "Quick Healer",
+        "Resistance to Pathogens",
+        "Resistance to Toxins",
+        "Resistance to Pathogens and Toxins",
+        "Spirit Affinity",
+        "Toughness",
+        "Will to Live",
         "Exceptional Attribute",
         "Lucky",
         "Catlike",
@@ -152,12 +172,10 @@ def test_mvp_quality_catalog_excludes_qualities_researched_and_rejected_this_wp(
     # magic-gate, a dice-pool-modifier mechanism, respectively).
     offered_names = {q.name for q in mvp_quality_catalog(QUALITIES)}
     excluded_names = {
+        # Astral Chameleon, Focused Concentration, Home Ground and Spirit Affinity left this list in
+        # WP114, which offered them (gated, with registry notes / choices).
         "Astral Beacon",
-        "Astral Chameleon",
-        "Focused Concentration",
         "Gremlins",
-        "Home Ground",
-        "Spirit Affinity",
         "Prejudiced (Common, Biased)",
         "Prejudiced (Common, Outspoken)",
         "Prejudiced (Common, Radical)",
@@ -173,16 +191,16 @@ def test_mvp_quality_catalog_excludes_qualities_researched_and_rejected_this_wp(
 
 
 def test_mvp_quality_catalog_excludes_not_yet_supported_quality() -> None:
-    # Explicit acceptance-criteria test: a NOT_YET_SUPPORTED quality (Analytical Mind: conditional
-    # <skillattribute> bonus) is excluded from the offered list entirely, not offered with its bonus
-    # silently dropped.
-    analytical_mind = _by_name("Analytical Mind")
-    assert analytical_mind.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    # Explicit acceptance-criteria test: a NOT_YET_SUPPORTED quality is excluded from the offered
+    # list entirely, not offered with its bonus silently dropped. (Analytical Mind was the example
+    # until WP114 registered it; Gremlins waits for WP115.)
+    gremlins = _by_name("Gremlins")
+    assert gremlins.bonus_support == BonusSupport.NOT_YET_SUPPORTED
     offered_names = {q.name for q in mvp_quality_catalog(QUALITIES)}
-    assert analytical_mind.name not in offered_names
+    assert gremlins.name not in offered_names
 
     with pytest.raises(ValueError, match="not an MVP-offered quality id"):
-        create_quality_selection([analytical_mind.id], QUALITIES)
+        create_quality_selection([gremlins.id], QUALITIES)
 
 
 def test_create_quality_selection_single_positive_quality() -> None:
@@ -490,16 +508,25 @@ def test_offerable_quality_catalog_excludes_metatype_granted_quality() -> None:
     elf_character = replace(elf_character, metatype_qualities=metatype_qualities)
     offered = offerable_quality_catalog(elf_character, QUALITIES)
     assert "Low-Light Vision" not in {q.name for q in offered}
-    # Every other MVP-offered quality is still there -- this excludes exactly the granted one(s).
+    # Every other MVP-offered quality is still there, except WP108's magic-gated ones (this Elf is
+    # mundane) -- this excludes exactly the granted one(s).
     assert {q.name for q in offered} == {q.name for q in mvp_quality_catalog(QUALITIES)} - {
-        "Low-Light Vision"
+        "Low-Light Vision",
+        *_MAGIC_GATED,
     }
+
+
+# WP114: offered qualities a mundane character's gate hides (WP108).
+_MAGIC_GATED = {"Astral Chameleon", "Focused Concentration", "Spirit Affinity"}
 
 
 def test_offerable_quality_catalog_unaffected_for_human() -> None:
     human_character = _mundane_character("Human")
     offered = offerable_quality_catalog(human_character, QUALITIES)
-    assert {q.name for q in offered} == {q.name for q in mvp_quality_catalog(QUALITIES)}
+    assert {q.name for q in offered} == {q.name for q in mvp_quality_catalog(QUALITIES)} - {
+        "Human-Looking",
+        *_MAGIC_GATED,
+    }
 
 
 def test_create_quality_selection_rejects_already_metatype_granted_quality() -> None:
@@ -1087,18 +1114,18 @@ def test_a_gate_built_only_from_non_core_conditions_can_never_be_met() -> None:
 
 
 def test_out_of_scope_rows_are_excluded_by_name_and_the_catalog_size_is_pinned() -> None:
-    """Loud on data drift: 96 SR5 rows, 8 out of scope, 26 offered today (WP112 added two).
-    WP114/WP115 move the offered count towards 88 (every in-scope row) and must update this number
-    when they do."""
+    """Loud on data drift: 96 SR5 rows, 8 out of scope, 1 metatype-only (the Dwarf's racial
+    Resistance row, WP114), 45 offered today (WP112 added 2, WP114 19). WP115-WP117 move the
+    offered count towards 87 (every purchasable in-scope row) and must update this number."""
     names = {q.name for q in QUALITIES}
     assert len(QUALITIES) == 96
     assert OUT_OF_SCOPE_QUALITY_NAMES <= names
     assert len(OUT_OF_SCOPE_QUALITY_NAMES) == 8
     offered = {q.name for q in mvp_quality_catalog(QUALITIES)}
     assert not offered & OUT_OF_SCOPE_QUALITY_NAMES
-    assert len(offered) == 26  # WP112: + Exceptional Attribute, Lucky
+    assert len(offered) == 45
     forced = tuple(replace(q, bonus_support=BonusSupport.NO_EFFECT) for q in QUALITIES)
-    assert len(mvp_quality_catalog(forced)) == 88
+    assert len(mvp_quality_catalog(forced)) == 87
 
 
 def test_mutual_exclusion_still_reports_its_wp55_wording() -> None:

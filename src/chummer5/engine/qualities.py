@@ -61,9 +61,11 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from chummer5.data.actions import load_matrix_action_names
 from chummer5.data.mentors import MentorChoice, MentorSpiritArchetype, gated_choice
 from chummer5.data.metatypes import Metatype
 from chummer5.data.qualities import BonusSupport, Quality, Requirement
+from chummer5.data.traditions import load_core_spirit_types
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
 
@@ -91,7 +93,29 @@ _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     "native_language_limit": ImprovementType.NATIVE_LANGUAGE_LIMIT,
     # WP112: Exceptional Attribute / Lucky.
     "attribute_maximum": ImprovementType.ATTRIBUTE_MAXIMUM,
+    # WP114: Toughness, Photographic Memory, High Pain Tolerance, Will to Live.
+    "damage_resistance": ImprovementType.DAMAGE_RESISTANCE,
+    "memory": ImprovementType.MEMORY,
+    "cm_threshold_offset": ImprovementType.CM_THRESHOLD_OFFSET,
+    "cm_overflow": ImprovementType.CM_OVERFLOW,
 }
+
+# WP114: Home Ground's five bonuses (p. 74), as stable ids -- the page translates each through
+# `Web_HomeGround_<id>`. "Can be taken multiple times, choosing a different category each time."
+HOME_GROUND_CHOICES = (
+    "AstralAcclimation",
+    "YouKnowAGuy",
+    "DigitalTurf",
+    "TheTransporter",
+    "StreetPolitics",
+)
+MATRIX_ACTION_CHOICES = load_matrix_action_names()
+SPIRIT_TYPE_CHOICES = load_core_spirit_types()
+
+# WP114: catalog rows only a metatype can grant. `Resistance to Pathogens/Toxins` is the Dwarf's
+# racial "+2 dice vs. pathogen/toxin" as `metatypes.xml` encodes it; the purchasable quality is the
+# three separate rows (p. 77's 4- or 8-Karma levels).
+METATYPE_ONLY_QUALITY_NAMES = frozenset({"Resistance to Pathogens/Toxins"})
 
 # WP112: what an Exceptional Attribute pick may name -- every Mental/Physical attribute, and Magic
 # for a magic user (p. 72: "Physical, Mental, or Special attribute [...] Magic or Resonance"; Edge
@@ -245,7 +269,9 @@ def mvp_quality_catalog(qualities: Iterable[Quality]) -> tuple[Quality, ...]:
     return tuple(
         q
         for q in qualities
-        if q.bonus_support in _OFFERABLE_SUPPORT and q.name not in OUT_OF_SCOPE_QUALITY_NAMES
+        if q.bonus_support in _OFFERABLE_SUPPORT
+        and q.name not in OUT_OF_SCOPE_QUALITY_NAMES
+        and q.name not in METATYPE_ONLY_QUALITY_NAMES
     )
 
 
@@ -317,11 +343,24 @@ def _validate_choice(quality: Quality, choice: str | None, magic_type: str | Non
         if choice is not None:
             raise ValueError(f"{quality.name} takes no choice, got {choice!r}")
         return
+    allowed = choice_options(quality, magic_type)
+    if choice not in allowed:
+        raise ValueError(f"{quality.name} needs one of {list(allowed)}, got {choice!r}")
+
+
+def choice_options(quality: Quality, magic_type: str | None) -> tuple[str, ...]:
+    """Every value a pick of `quality` may name in `choice` (WP112/WP114), or `()` for a quality
+    that takes none."""
     if quality.choice_kind == "attribute":
-        allowed = attribute_choices(quality, magic_type)
-        if choice not in allowed:
-            raise ValueError(f"{quality.name} needs one of {list(allowed)}, got {choice!r}")
-        return
+        return attribute_choices(quality, magic_type)
+    if quality.choice_kind == "matrix_action":
+        return MATRIX_ACTION_CHOICES
+    if quality.choice_kind == "home_ground":
+        return HOME_GROUND_CHOICES
+    if quality.choice_kind == "spirit_type":
+        return SPIRIT_TYPE_CHOICES
+    if quality.choice_kind is None:
+        return ()
     raise ValueError(f"{quality.name}: unsupported choice kind {quality.choice_kind!r}")
 
 

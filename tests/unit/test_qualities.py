@@ -51,14 +51,16 @@ def test_flat_skill_bonus_multiple_targets_is_supported() -> None:
     assert targets == {("skill", "Running", 2), ("skill", "Gymnastics", 2)}
 
 
-def test_conditional_skill_bonus_is_not_yet_supported() -> None:
-    # Analytical Mind's <skillattribute> bonus carries a narrative <condition> — MVP's flat-bonus
-    # classifier only accepts unconditional <specificskill>/<specificattribute> nodes.
+def test_conditional_skill_bonus_is_registered_not_applied() -> None:
+    # Analytical Mind's <skillattribute> bonus carries a narrative <condition> -- the flat-bonus
+    # classifier still doesn't parse it, but since WP114 the quality is offered as a name-gated
+    # NO_EFFECT row with its whole (in-play) effect in its unmodeled-effect note.
     qualities = load_qualities()
     analytical_mind = next(q for q in qualities if q.name == "Analytical Mind")
-    assert analytical_mind.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    assert analytical_mind.bonus_support == BonusSupport.NO_EFFECT
     assert analytical_mind.flat_bonuses == ()
     assert analytical_mind.raw_bonus is not None
+    assert analytical_mind.unmodeled_effect_note
 
 
 def test_quality_with_no_bonus_element_is_not_yet_supported() -> None:
@@ -195,13 +197,15 @@ def test_supported_vs_unsupported_counts_are_visible() -> None:
     # The rest (select-a-target choices with a real computed effect, category-wide/conditional
     # bonuses, notoriety shifts, multi-effect bonuses, attribute max/min changes, etc.) are
     # NOT_YET_SUPPORTED: 96 - 7 - 8 - 9 = 72. WP112 adds 2 FLAT_BONUS attribute-maximum raises
-    # (Exceptional Attribute, Lucky): 9 FLAT_BONUS, 70 NOT_YET_SUPPORTED.
+    # (Exceptional Attribute, Lucky): 9 FLAT_BONUS, 70 NOT_YET_SUPPORTED. WP114 adds 4 FLAT_BONUS
+    # (Toughness, High Pain Tolerance, Will to Live, Photographic Memory) and 15 NO_EFFECT (12
+    # registry rows + 3 choice rows): 13 FLAT_BONUS, 23 NO_EFFECT, 51 NOT_YET_SUPPORTED.
     qualities = load_qualities()
     counts = count_by_support(qualities)
-    assert counts[BonusSupport.FLAT_BONUS] == 9
-    assert counts[BonusSupport.NO_EFFECT] == 8
+    assert counts[BonusSupport.FLAT_BONUS] == 13
+    assert counts[BonusSupport.NO_EFFECT] == 23
     assert counts[BonusSupport.SELECT_TEXT] == 9
-    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 70
+    assert counts[BonusSupport.NOT_YET_SUPPORTED] == 51
 
 
 def test_indomitable_mental_limit_bonus_is_supported() -> None:
@@ -236,13 +240,16 @@ def test_verified_no_effect_quality_has_no_flat_bonuses() -> None:
     assert gearhead.flat_bonuses == ()
 
 
-def test_unverified_empty_bonus_quality_stays_not_yet_supported() -> None:
-    # Human-Looking also has an empty <bonus/> but needs a "required metatype" check WP22 didn't
-    # build (see Implementation Plan's WP22 entry) -- it must NOT be swept into NO_EFFECT just
-    # because its <bonus> node happens to be empty too.
+def test_empty_bonus_quality_is_no_effect_only_by_name() -> None:
+    # Human-Looking has an empty <bonus/> and needed the metatype gate WP108 built; WP114 then
+    # name-gated it NO_EFFECT with a note. Gremlins, whose effect is not yet registered (WP115),
+    # shows an empty/absent <bonus> is still not swept in on shape alone.
     qualities = load_qualities()
     human_looking = next(q for q in qualities if q.name == "Human-Looking")
-    assert human_looking.bonus_support == BonusSupport.NOT_YET_SUPPORTED
+    assert human_looking.bonus_support == BonusSupport.NO_EFFECT
+    assert human_looking.unmodeled_effect_note
+    gremlins = next(q for q in qualities if q.name == "Gremlins")
+    assert gremlins.bonus_support == BonusSupport.NOT_YET_SUPPORTED
 
 
 def test_flat_attribute_bonus_shape_is_supported() -> None:

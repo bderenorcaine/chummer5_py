@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.engine.character import create_character, metatype_choices
-from chummer5.engine.qualities import QUALITY_KARMA_LIMIT
+from chummer5.engine.qualities import QUALITY_KARMA_LIMIT, offerable_quality_catalog
 from chummer5.engine.resources import STARTER_GEAR_CATALOG
 from chummer5.web.app import MAX_CONTACT_ROWS, MVP_QUALITIES, create_app
 
@@ -82,8 +82,8 @@ def test_index_after_confirmation_shows_full_budgets() -> None:
     assert f"Free contact points: {free_points}." in contacts
     budget = PRIORITIES.resources["D"].nuyen
     assert f"{budget} / {budget}" in equipment
-    # Every MVP-offered quality and every starter-gear item is listed.
-    for quality in MVP_QUALITIES:
+    # Every quality offered to this (mundane Human) character and every starter-gear item is listed.
+    for quality in offerable_quality_catalog(_human_character(), MVP_QUALITIES):
         assert quality.name in qualities
     for item in STARTER_GEAR_CATALOG:
         assert item.name in equipment
@@ -220,7 +220,8 @@ def test_human_offerable_catalog_unaffected_by_wp23() -> None:
     response = client.get("/ui/page/qualities")
 
     assert "Free from metatype:" not in response.text
-    for quality in MVP_QUALITIES:
+    # Since WP108/WP114 the gate hides Human-Looking and the magic-only rows from a mundane Human.
+    for quality in offerable_quality_catalog(_human_character(), MVP_QUALITIES):
         assert quality.name in response.text
 
 
@@ -743,3 +744,18 @@ def test_exceptional_attribute_takes_an_attribute_and_raises_its_maximum() -> No
     response = client.post("/ui/attributes", data={"attr_STR": "6"})
     assert "exceeds" not in response.text
     assert "STR" in client.get("/character/sheet").text
+
+
+def test_home_ground_offers_its_five_bonuses_and_shows_the_choice() -> None:
+    home = next(q for q in MVP_QUALITIES if q.name == "Home Ground")
+    client = TestClient(create_app())
+    _confirm_human(client)
+    page = client.get("/ui/page/qualities").text
+    assert "Street Politics" in page
+    client.post(
+        "/ui/qualities",
+        data={"quality_id": home.id, f"quality_choice_{home.id}": "StreetPolitics"},
+    )
+    sheet = client.get("/character/sheet").text
+    assert "Home Ground (Street Politics)" in sheet
+    assert "<th>Memory</th>" in sheet

@@ -307,7 +307,7 @@ def test_wesson_imports_end_to_end() -> None:
         p for p in quality_selection.qualities if p.quality.name == "SINner (Corporate Limited)"
     )
     assert sinner.text == "Lone Star Security Services"
-    assert quality_selection.positive_karma == 10  # Guts
+    assert quality_selection.positive_karma == 14  # Guts 10 + (since WP114) Ambidextrous 4
     assert quality_selection.negative_karma == 15  # SINner (Corporate Limited)
 
     karma_attribute_selection = character.karma_attribute_selection
@@ -315,19 +315,21 @@ def test_wesson_imports_end_to_end() -> None:
     assert karma_attribute_selection.points == {"EDG": 1}
     assert karma_attribute_selection.karma_cost == 20
 
-    # 25 starting - 10 (Guts) + 15 (SINner) = 30 available; 30 - 20 (EDG buy) = 10 left, minus the
+    # 25 starting - 14 (Guts, Ambidextrous) + 15 (SINner) = 26 available; 26 - 20 (EDG buy) = 6
+    # left, minus the
     # 1 Karma Wesson's own `<nuyenbp>1</nuyenbp>` converted to nuyen at Step Six (WP89 -- that
     # conversion is a Karma spend, not a free top-up; core rulebook p. 94). Shifted from 10 by WP89,
     # and legacy agrees on the direction: `CalculateKarmaValue` adds the converted amount to the
-    # character's total Karma spend rather than ignoring it.
+    # character's total Karma spend rather than ignoring it. Shifted again by WP114, which made
+    # Ambidextrous importable.
     assert character.resources_selection is not None
     assert character.resources_selection.karma_converted == 1
-    assert character.karma_remaining == 9
+    assert character.karma_remaining == 5
 
-    # "Adept" (the Talent-granted metatype quality), Ambidextrous, and Common Sense are still
-    # dropped -- unrelated to this WP (the first is metatype-sourced, never a player pick to import;
-    # the other two simply aren't in mvp_quality_catalog).
-    assert set(result.dropped_qualities) == {"Adept", "Ambidextrous", "Common Sense"}
+    # "Adept" (the Talent-granted metatype quality) and Common Sense are still dropped -- the
+    # first is metatype-sourced, never a player pick to import, and Common Sense isn't SR5-core.
+    # WP114 made Ambidextrous offered, so it now imports.
+    assert set(result.dropped_qualities) == {"Adept", "Common Sense"}
 
 
 def test_wesson_karma_funded_edg_increase_via_direct_engine_construction() -> None:

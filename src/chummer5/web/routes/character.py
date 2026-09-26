@@ -41,6 +41,7 @@ from chummer5.engine.derived import (
     initiative_dice,
     initiative_value,
     matrix_vr_initiative,
+    memory,
     mental_limit,
     notoriety,
     overflow,
@@ -534,6 +535,7 @@ def _character_sheet_context(
         "armor": armor_breakdown(character),
         "damage_resistance": damage_resistance(character),
         "reach": reach(character),  # WP113: Troll +1
+        "memory": memory(character),  # WP114: LOG + WIL + Photographic Memory
         # WP110: Step Eight's Reputation row.
         "street_cred": street_cred(character),
         "notoriety": notoriety(character),

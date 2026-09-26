@@ -590,3 +590,13 @@ def reach(character: Character) -> int:
     """Extra melee Reach (WP113): Σ `REACH` -- the Troll's racial +1 (p. 185). A sheet number only;
     no melee resolution exists here to read it (Project Overview registry)."""
     return character.improvements.resolve(ImprovementType.REACH, _GLOBAL_TARGET)
+
+
+def memory(character: Character) -> int:
+    """Memory (WP114): `LOG + WIL + Σ MEMORY` -- what Memory Tests roll (p. 152), raised by
+    Photographic Memory's +2 (p. 76) and, from WP128, the Mnemonic Enhancer."""
+    return (
+        character.attribute_value("LOG")
+        + character.attribute_value("WIL")
+        + character.improvements.resolve(ImprovementType.MEMORY, _GLOBAL_TARGET)
+    )

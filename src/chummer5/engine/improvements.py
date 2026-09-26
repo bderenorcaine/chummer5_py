@@ -166,6 +166,8 @@ class ImprovementType(Enum):
     # extra melee Reach (Troll +1).
     LIFESTYLE_COST = auto()
     REACH = auto()
+    # WP114: dice added to the Memory pool (LOG + WIL) -- Photographic Memory.
+    MEMORY = auto()
 
 
 class ImprovementSource(Enum):

@@ -148,7 +148,7 @@
   {% if quality_picks %}
   <ul>
     {% for pick in quality_picks %}
-    <li>{{ pick.quality | dterm("qualities.xml") }}{% if pick.quality.max_rating > 1 %} {{ pick.rating }}{% endif %}{% if pick.choice %} ({{ _("String_Attribute" ~ pick.choice ~ "Short") if pick.quality.choice_kind == "attribute" else pick.choice }}){% endif %}{% if pick.text %} ({{ pick.text }}){% endif %}</li>
+    <li>{{ pick.quality | dterm("qualities.xml") }}{% if pick.quality.max_rating > 1 %} {{ pick.rating }}{% endif %}{% if pick.choice %}{% set code = pick.choice %} ({% include "_quality_choice_label.html" %}){% endif %}{% if pick.text %} ({{ pick.text }}){% endif %}</li>
     {% endfor %}
   </ul>
   {% else %}
@@ -334,6 +334,7 @@
         </td>
       </tr>
       <tr><th>{{ _("String_DamageResistance") }}</th><td>{{ damage_resistance }}</td></tr>
+      <tr><th>{{ _("Web_Sheet_Memory") }}</th><td>{{ memory }}</td></tr>
       {% if reach %}<tr><th>{{ _("String_Reach") }}</th><td>+{{ reach }}</td></tr>{% endif %}
       {# WP110: Step Eight's Reputation row -- Street Cred and Public Awareness are 0 at creation. #}
       <tr><th>{{ _("String_StreetCred") }}</th><td>{{ street_cred }}</td></tr>
