@@ -1815,3 +1815,20 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   higher rating, not a second implant.
 - **Pain Editor and Suprathyroid Gland stay excluded.** They are flat and over Availability 12, and
   were never offered, so WP126's "leave offered items alone" doesn't reach them.
+
+## 2026-09-27 — WP132: Lifestyle Options; roommates not built
+
+- **Roommates are not implemented.** The plan asked for "the Lifestyle chapter's rule (pp.
+  369-373)". There is none in the core book: legacy's split comes from Hard Targets p. 139 (see
+  the learnings). Building it would import sourcebook content into a core-only project, against the
+  standing "MVP content = SR5 core" scope. **Flagged for the user**: if roommates are wanted anyway,
+  that is a scope ruling, and WP133's "tier after roommates" question goes with it.
+- **The five options' percents are summed, each against the tier's price**, not compounded (p. 370
+  gives each as "percent of the lifestyle"). Flat amounts are added after. WP113's metatype and
+  Dependents surcharge then applies to the whole month, per the plan: a troll's Special Work Area
+  costs 2,000¥, not 1,000¥.
+- **Lifestyle Points are not shown.** The plan said "their LP effects are shown", but LP is Run
+  Faster's mechanic. Each option's printed in-play effect is registered instead (Project Overview
+  rows, `unmodeled_effect_note`).
+- **A permanent purchase stores `months = 100`** alongside `lifestyle_permanent`, so the stored
+  cost reads the same to anything that only knows months.

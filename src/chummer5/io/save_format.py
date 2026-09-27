@@ -251,6 +251,10 @@ specialization, the same name-keyed shape as `karma_knowledge_points`. Additive,
 bump. A Knowledge/Language pick may now be rated 0 (Karma buys it), and the Knowledge spend past
 its free pool is re-derived, not stored: `build_character` passes it to `create_skill_allocation`.
 
+**WP132** adds `lifestyle_options` (`{name, text}` per Lifestyle Option) and `lifestyle_permanent`.
+Additive, defaulting to none and `false`. A permanent Lifestyle also stores `lifestyle_months` =
+100, so an older reader prices it the same.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -272,7 +276,7 @@ from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware_subsystems import CyberwareEntry
 from chummer5.data.foci import Focus
 from chummer5.data.grades import STANDARD_GRADE
-from chummer5.data.lifestyle import LifestyleTier
+from chummer5.data.lifestyle import LifestyleTier, load_lifestyle_options
 from chummer5.data.mentors import MentorSpiritArchetype
 from chummer5.data.metatypes import Metatype
 from chummer5.data.powers import Power
@@ -481,6 +485,9 @@ class CharacterSave:
     # WP125: Knowledge/Language specializations by pick name, point-funded and Karma-funded.
     knowledge_specializations: MappingProxyType[str, str] = MappingProxyType({})
     karma_knowledge_specializations: MappingProxyType[str, str] = MappingProxyType({})
+    # WP132: the primary Lifestyle's Options, as (name, text) pairs, and a permanent purchase.
+    lifestyle_options: tuple[tuple[str, str | None], ...] = ()
+    lifestyle_permanent: bool = False
     # WP66: Rating-priced starter-gear purchases, as (gear_name, rating) pairs (repeats = quantity)
     # -- kept separate from flat `gear_names` since a rating item's price depends on the chosen
     # rating. Defaults to () -- "predates this field", the identical shape every other optional
@@ -540,6 +547,8 @@ def create_character_save(
     karma_knowledge_points: Mapping[str, int] = MappingProxyType({}),
     knowledge_specializations: Mapping[str, str] = MappingProxyType({}),
     karma_knowledge_specializations: Mapping[str, str] = MappingProxyType({}),
+    lifestyle_options: Iterable[tuple[str, str | None]] = (),
+    lifestyle_permanent: bool = False,
     rating_gear_picks: Iterable[RatingGearPick] = (),
     vehicle_ids: Iterable[str] = (),
     unworn_armor: Iterable[str] = (),
@@ -596,6 +605,8 @@ def create_character_save(
         karma_knowledge_points=MappingProxyType(dict(karma_knowledge_points)),
         knowledge_specializations=MappingProxyType(dict(knowledge_specializations)),
         karma_knowledge_specializations=MappingProxyType(dict(karma_knowledge_specializations)),
+        lifestyle_options=tuple(lifestyle_options),
+        lifestyle_permanent=lifestyle_permanent,
         rating_gear_picks=tuple(rating_gear_picks),
         vehicle_ids=tuple(vehicle_ids),
         unworn_armor=tuple(sorted(set(unworn_armor))),
@@ -777,6 +788,8 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "karma_knowledge_points": dict(save.karma_knowledge_points),
         "knowledge_specializations": dict(save.knowledge_specializations),
         "karma_knowledge_specializations": dict(save.karma_knowledge_specializations),
+        "lifestyle_options": [{"name": n, "text": t} for n, t in save.lifestyle_options],
+        "lifestyle_permanent": save.lifestyle_permanent,
         "rating_gear_picks": [
             {"name": name, "rating": rating} for name, rating in save.rating_gear_picks
         ],
@@ -857,6 +870,8 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         karma_knowledge_points=data.get("karma_knowledge_points", {}),
         knowledge_specializations=data.get("knowledge_specializations", {}),
         karma_knowledge_specializations=data.get("karma_knowledge_specializations", {}),
+        lifestyle_options=((o["name"], o.get("text")) for o in data.get("lifestyle_options", ())),
+        lifestyle_permanent=data.get("lifestyle_permanent", False),
         rating_gear_picks=((p["name"], p["rating"]) for p in data.get("rating_gear_picks", ())),
         vehicle_ids=data.get("vehicle_ids", ()),
         unworn_armor=data.get("unworn_armor", ()),
@@ -1029,6 +1044,10 @@ def build_character(
         save.lifestyle_months,
         lifestyles,
         cost_percent=lifestyle_cost_percent(character),  # WP113: Dwarf/Troll surcharge
+        # WP132: Lifestyle Options and a permanent purchase.
+        options=save.lifestyle_options,
+        option_catalog=load_lifestyle_options(),
+        permanent=save.lifestyle_permanent,
     )
 
     resources_selection = create_resources_selection(

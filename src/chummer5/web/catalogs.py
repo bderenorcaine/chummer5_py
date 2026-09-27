@@ -18,7 +18,7 @@ from chummer5.data.bioware import load_bioware
 from chummer5.data.cyberware import load_cyberware
 from chummer5.data.cyberware_subsystems import load_cyberware_entries
 from chummer5.data.foci import load_foci
-from chummer5.data.lifestyle import load_lifestyles
+from chummer5.data.lifestyle import load_lifestyle_options, load_lifestyles
 from chummer5.data.mentors import load_mentors
 from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import load_powers
@@ -63,6 +63,7 @@ PRIORITIES = load_priorities()
 SKILLS = load_skills()
 QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
+LIFESTYLE_OPTIONS = load_lifestyle_options()  # WP132
 # WP34 (Phase J's UI): the flat-cost, flat-Essence, Standard-grade cyberware catalog (WP31).
 # **No longer what the picker offers** -- WP42 widened `_cyberware.html` to the full SR5 set below.
 # Kept because it is still the WP31 flat view several test modules and fixtures read (and because

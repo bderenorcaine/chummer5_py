@@ -72,3 +72,75 @@ def load_lifestyles(xml_path: Path = DEFAULT_LIFESTYLES_PATH) -> tuple[Lifestyle
             continue
         tiers.append(_parse_tier(elem))
     return tuple(tiers)
+
+
+# WP132: the five core Lifestyle Options (p. 370). `lifestyles.xml` files them as lifestyle
+# `<qualities>` alongside the four DocWagon contracts (category "Contracts", sold as gear since
+# WP21) -- only the Positive/Negative ones are options. Their `<lp>` values are Run Faster's
+# Lifestyle Points, not core, and are ignored.
+LIFESTYLE_OPTION_CATEGORIES = ("Positive", "Negative")
+
+# p. 370's in-play effects, which nothing here resolves ("Unmodeled real effects" rows).
+_OPTION_EFFECT_NOTES = {
+    "Special Work Area": (
+        "Skill checks relevant to the setting have their Limit increased by 2 when performed in "
+        "this space (p. 370)."
+    ),
+    "Extra Secure": (
+        "High Threat Response and other security response rolls are made at one level better "
+        "than the area would normally be (p. 370)."
+    ),
+    "Obscure/Difficult to Find": (
+        "Sneaking checks in the vicinity (the owner excluded) are made at -2 (p. 370)."
+    ),
+    "Cramped": (
+        "Skill checks tied to Logic have their Limit reduced by 2 (minimum 1) when performed in "
+        "this space (p. 370)."
+    ),
+    "Dangerous Area": (
+        "High Threat Response and similar security responses are made as if the area were one "
+        "level lower (p. 370)."
+    ),
+}
+
+
+@dataclass(frozen=True)
+class LifestyleOption:
+    """One core Lifestyle Option (WP132, p. 370): a percent of the lifestyle's cost (Cramped
+    -10, Dangerous Area -20, Obscure +10, Extra Secure +20) or a flat monthly amount (Special Work
+    Area +1,000). `repeatable` options (Special Work Area) name what each one is, in `text`."""
+
+    id: str
+    name: str
+    cost_percent: int
+    flat_cost: int
+    repeatable: bool
+    source: str
+    page: int
+    unmodeled_effect_note: str | None = None
+
+
+def _parse_option(elem: ET.Element) -> LifestyleOption:
+    percent = elem.findtext("multiplier") or elem.findtext("multiplierbaseonly") or "0"
+    name = elem.findtext("name", "")
+    return LifestyleOption(
+        id=elem.findtext("id", ""),
+        name=name,
+        cost_percent=int(percent),
+        flat_cost=int(elem.findtext("cost") or "0"),
+        repeatable=elem.find("allowmultiple") is not None,
+        source=elem.findtext("source", ""),
+        page=int(elem.findtext("page", "0")),
+        unmodeled_effect_note=_OPTION_EFFECT_NOTES.get(name),
+    )
+
+
+def load_lifestyle_options(xml_path: Path = DEFAULT_LIFESTYLES_PATH) -> tuple[LifestyleOption, ...]:
+    """The five SR5 Lifestyle Options (WP132)."""
+    root = ET.parse(xml_path).getroot()
+    return tuple(
+        _parse_option(elem)
+        for elem in root.findall("qualities/quality")
+        if elem.findtext("source") == CORE_RULEBOOK_SOURCE
+        and elem.findtext("category") in LIFESTYLE_OPTION_CATEGORIES
+    )

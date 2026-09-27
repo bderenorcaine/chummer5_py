@@ -40,6 +40,35 @@
         max="{{ max_lifestyle_months }}"
       />
     </label>
+    <label>
+      <input type="checkbox" name="lifestyle_permanent" {% if lifestyle_permanent %}checked{% endif %} />
+      {{ _("Web_Lifestyle_Permanent", months=permanent_months) }}
+    </label>
+    {# WP132: p. 370's Lifestyle Options -- not for Streets. #}
+    <fieldset>
+      <legend>{{ _("Web_Lifestyle_Options") }}</legend>
+      {% for row in option_rows %}
+      {% set option_index = loop.index0 %}
+      <div>
+        {% if row.option.repeatable %}
+        {{ row.option | dterm("lifestyles.xml") }} ({{ _("Web_Lifestyle_OptionFlat", cost=row.option.flat_cost | nuyen) }}):
+        {% for text in row.texts %}
+        <input
+          type="text"
+          name="lifestyle_option_{{ option_index }}_text_{{ loop.index0 }}"
+          value="{{ text }}"
+          placeholder="{{ _('Web_Lifestyle_WorkAreaPlaceholder') }}"
+        />
+        {% endfor %}
+        {% else %}
+        <label>
+          <input type="checkbox" name="lifestyle_option_{{ option_index }}" {% if row.checked %}checked{% endif %} />
+          {{ row.option | dterm("lifestyles.xml") }} ({{ _("Web_Lifestyle_OptionPercent", percent="%+d" | format(row.option.cost_percent)) }})
+        </label>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </fieldset>
     <button type="submit">{{ _("Web_Lifestyle_Update") }}</button>
   </form>
   </details>

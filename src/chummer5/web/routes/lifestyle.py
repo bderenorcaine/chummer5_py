@@ -19,6 +19,7 @@ from chummer5.engine.character import Character
 from chummer5.engine.lifestyle import (
     MAX_LIFESTYLE_MONTHS,
     MIN_LIFESTYLE_MONTHS,
+    PERMANENT_LIFESTYLE_MONTHS,
     create_lifestyle_selection,
     lifestyle_cost_percent,
 )
@@ -30,6 +31,7 @@ from chummer5.engine.resources import (
 from chummer5.web.catalogs import (
     DEFAULT_LIFESTYLE_MONTHS,
     DEFAULT_LIFESTYLE_TIER_NAME,
+    LIFESTYLE_OPTIONS,
     LIFESTYLES,
     PRIORITIES,
     templates,
@@ -66,6 +68,8 @@ def _lifestyle_context(
     karma_converted: int = 0,
     foci_cost: int = 0,
     vehicle_cost: int = 0,
+    options: tuple[tuple[str, str | None], ...] = (),
+    permanent: bool = False,
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
@@ -91,10 +95,15 @@ def _lifestyle_context(
     redisplaying a submission this same request just rejected), re-derives whether the
     currently-selected tier/months still fits the combined budget, surfacing a distinct
     `lifestyle_budget_warning` rather than silently going over on the next render.
+
+    **WP132**: `options` (`(name, text)` pairs) and `permanent` are echoed and priced the same way.
     """
+    option_rows = _option_rows(options)
     if character is None:
         return {
             "character": None,
+            "option_rows": option_rows,
+            "lifestyle_permanent": permanent,
             "lifestyle_options": LIFESTYLES,
             "selected_tier_name": tier_name,
             "selected_months": months,
@@ -107,7 +116,13 @@ def _lifestyle_context(
     if error is None:
         try:
             selection = create_lifestyle_selection(
-                tier_name, months, LIFESTYLES, cost_percent=lifestyle_cost_percent(character)
+                tier_name,
+                months,
+                LIFESTYLES,
+                cost_percent=lifestyle_cost_percent(character),
+                options=options,
+                option_catalog=LIFESTYLE_OPTIONS,
+                permanent=permanent,
             )
         except ValueError as exc:
             budget_warning = str(exc)  # an engine message: stays as-is (WP102)
@@ -152,7 +167,47 @@ def _lifestyle_context(
         "nuyen_budget": budget,
         "lifestyle_error": error,
         "lifestyle_budget_warning": budget_warning,
+        "option_rows": option_rows,
+        "lifestyle_permanent": permanent,
+        "permanent_months": PERMANENT_LIFESTYLE_MONTHS,
     }
+
+
+# WP132: how many Special Work Areas the form offers a text field for.
+MAX_WORK_AREAS = 3
+
+
+def _option_rows(options: tuple[tuple[str, str | None], ...]) -> list[dict[str, Any]]:
+    """One form row per Lifestyle Option: a checkbox, or (for a repeatable one) up to
+    `MAX_WORK_AREAS` text fields, echoing `options`."""
+    rows: list[dict[str, Any]] = []
+    for option in LIFESTYLE_OPTIONS:
+        texts = [text or "" for name, text in options if name == option.name]
+        rows.append(
+            {
+                "option": option,
+                "checked": bool(texts),
+                "texts": (texts + [""] * MAX_WORK_AREAS)[:MAX_WORK_AREAS]
+                if option.repeatable
+                else [],
+            }
+        )
+    return rows
+
+
+def _parse_options(form: FormData) -> tuple[tuple[str, str | None], ...]:
+    """WP132: `lifestyle_option_{i}` checkboxes, and `lifestyle_option_{i}_text_{n}` fields for a
+    repeatable option -- each nonblank one is an instance."""
+    picks: list[tuple[str, str | None]] = []
+    for index, option in enumerate(LIFESTYLE_OPTIONS):
+        if option.repeatable:
+            for n in range(MAX_WORK_AREAS):
+                text = str(form.get(f"lifestyle_option_{index}_text_{n}") or "").strip()
+                if text:
+                    picks.append((option.name, text))
+        elif form.get(f"lifestyle_option_{index}") is not None:
+            picks.append((option.name, None))
+    return tuple(picks)
 
 
 @router.post("/ui/lifestyle", response_class=HTMLResponse)
@@ -174,6 +229,8 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
         form = await request.form()
         tier_name = str(form.get("lifestyle_tier") or "")
         months = _parse_lifestyle_months(form)
+        options = _parse_options(form)  # WP132
+        permanent = form.get("lifestyle_permanent") is not None
         resources_selection = session.character.resources_selection
         # WP66: preserve each committed Rating-priced item's chosen rating across re-validation.
         gear_names, rating_gear = (
@@ -201,6 +258,9 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
                 months,
                 LIFESTYLES,
                 cost_percent=lifestyle_cost_percent(session.character),
+                options=options,
+                option_catalog=LIFESTYLE_OPTIONS,
+                permanent=permanent,
             )
             new_resources_selection = create_resources_selection(
                 session.resources_letter,
@@ -226,6 +286,8 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
                 karma_converted,
                 foci_cost,
                 vehicle_cost,
+                options,
+                permanent,
                 error=str(exc),
             )
         else:
@@ -245,6 +307,8 @@ async def submit_lifestyle(request: Request) -> HTMLResponse:
                 karma_converted,
                 foci_cost,
                 vehicle_cost,
+                options,
+                permanent,
             )
     response = templates.TemplateResponse(request, "_lifestyle.html", context)
     if new_cookie is not None:

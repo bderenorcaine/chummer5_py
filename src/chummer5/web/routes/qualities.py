@@ -22,7 +22,7 @@ from chummer5.engine.cyberware_subsystems import (
     cyberware_essence_multiplier,
 )
 from chummer5.engine.improvements import ImprovementSource
-from chummer5.engine.lifestyle import lifestyle_cost_percent, surcharged_monthly_cost
+from chummer5.engine.lifestyle import lifestyle_cost_percent, reprice_lifestyle
 from chummer5.engine.qualities import (
     MENTOR_SPIRIT_QUALITY_NAME,
     QUALITY_KARMA_LIMIT,
@@ -89,15 +89,10 @@ def _reprice_lifestyle(character: Character) -> Character:
     selection = character.lifestyle_selection
     if selection is None:
         return character
-    percent = lifestyle_cost_percent(character)
     return replace(
         character,
-        lifestyle_selection=replace(
-            selection,
-            cost_percent=percent,
-            total_cost=surcharged_monthly_cost(selection.tier.monthly_cost, percent)
-            * selection.months,
-        ),
+        # WP132: keeps the Lifestyle Options and a permanent purchase.
+        lifestyle_selection=reprice_lifestyle(selection, lifestyle_cost_percent(character)),
     )
 
 

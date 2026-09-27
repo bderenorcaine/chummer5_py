@@ -373,6 +373,9 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
     if character.lifestyle_selection is not None:
         tier = character.lifestyle_selection.tier
         add(tier.name, getattr(tier, "unmodeled_effect_note", None))
+        # WP132: the Lifestyle Options' in-play effects.
+        for option_pick in character.lifestyle_selection.options:
+            add(option_pick.option.name, option_pick.option.unmodeled_effect_note)
     if character.resources_selection is not None:
         for gear_item in character.resources_selection.gear:
             add(gear_item.name, getattr(gear_item, "unmodeled_effect_note", None))

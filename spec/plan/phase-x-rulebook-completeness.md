@@ -497,7 +497,7 @@ the rules it checks.
   Depends on: WP109.
   Acceptance: an Armor Jacket with Fire Resistance 2 within Capacity; Clothing at 500¥.
 
-- [ ] **WP132 — Lifestyle options: qualities, roommates, permanent purchase.**
+- [x] **WP132 — Lifestyle options: qualities, roommates, permanent purchase.**
   Goal: the three Lifestyle features WP20 deferred.
   Deliverables:
   - The 5 core lifestyle qualities: Cramped, Dangerous Area, Obscure/Difficult to Find, Extra

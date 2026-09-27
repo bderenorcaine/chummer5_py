@@ -200,7 +200,15 @@
 
   <h3>{{ _("String_Lifestyle") }}</h3>
   {% if lifestyle_tier_name %}
+  {% if lifestyle_permanent %}
+  <p>{{ _("Web_Sheet_LifestylePermanent", tier=lifestyle_tier_name | dterm("lifestyles.xml"), cost=lifestyle_cost | nuyen) }}</p>
+  {% else %}
   <p>{{ _n("Web_Sheet_Lifestyle", lifestyle_months, tier=lifestyle_tier_name | dterm("lifestyles.xml"), cost=lifestyle_cost | nuyen) }}</p>
+  {% endif %}
+  {% if lifestyle_option_rows %}
+  {# WP132 #}
+  <p>{{ _("Web_Sheet_LifestyleOptions") }} {% for row in lifestyle_option_rows %}{{ row.name | dterm("lifestyles.xml") }}{% if row.text %} ({{ row.text }}){% endif %}{% if not loop.last %}{{ _("Web_List_Separator") }}{% endif %}{% endfor %}</p>
+  {% endif %}
   {% else %}
   <p>{{ _("Web_Sheet_NoneSelected") }}</p>
   {% endif %}

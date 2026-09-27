@@ -560,6 +560,15 @@ def _character_sheet_context(
             lifestyle_selection.tier.name if lifestyle_selection is not None else None
         ),
         "lifestyle_months": lifestyle_selection.months if lifestyle_selection is not None else None,
+        # WP132
+        "lifestyle_permanent": (
+            lifestyle_selection.permanent if lifestyle_selection is not None else False
+        ),
+        "lifestyle_option_rows": (
+            [{"name": p.option.name, "text": p.text} for p in lifestyle_selection.options]
+            if lifestyle_selection is not None
+            else []
+        ),
         "lifestyle_cost": (
             lifestyle_selection.total_cost if lifestyle_selection is not None else 0
         ),
@@ -912,6 +921,15 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
             lifestyle_selection.months
             if lifestyle_selection is not None
             else DEFAULT_LIFESTYLE_MONTHS
+        ),
+        # WP132
+        lifestyle_options=(
+            tuple((p.option.name, p.text) for p in lifestyle_selection.options)
+            if lifestyle_selection is not None
+            else ()
+        ),
+        lifestyle_permanent=(
+            lifestyle_selection.permanent if lifestyle_selection is not None else False
         ),
         talent_letter=session.talent_letter,
         talent_codename=character.magic_type or DEFAULT_TALENT_CODENAME,

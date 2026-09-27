@@ -641,6 +641,11 @@ def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> di
         karma_converted,
         foci_cost,
         vehicle_cost,
+        # WP132
+        tuple((p.option.name, p.text) for p in lifestyle_selection.options)
+        if lifestyle_selection is not None
+        else (),
+        lifestyle_selection.permanent if lifestyle_selection is not None else False,
     )
     cyberware_ctx = _cyberware_context(
         character,

@@ -370,6 +370,26 @@
       <text>Months</text>
     </string>
     <string>
+      <key>Web_Lifestyle_OptionFlat</key>
+      <text>+{cost} a month each</text>
+    </string>
+    <string>
+      <key>Web_Lifestyle_OptionPercent</key>
+      <text>{percent}% of the lifestyle</text>
+    </string>
+    <string>
+      <key>Web_Lifestyle_Options</key>
+      <text>Lifestyle options (not for Street)</text>
+    </string>
+    <string>
+      <key>Web_Lifestyle_Permanent</key>
+      <text>Buy permanently ({months} months' upkeep)</text>
+    </string>
+    <string>
+      <key>Web_Lifestyle_WorkAreaPlaceholder</key>
+      <text>e.g. garage</text>
+    </string>
+    <string>
       <key>Web_Lifestyle_Placeholder</key>
       <text>Confirm a metatype and priorities on the Priorities page before selecting a Lifestyle.</text>
     </string>
@@ -924,6 +944,14 @@
     <string>
       <key>Web_Sheet_LegacySaveFile</key>
       <text>Legacy Chummer5 save (.chum5)</text>
+    </string>
+    <string>
+      <key>Web_Sheet_LifestyleOptions</key>
+      <text>Options:</text>
+    </string>
+    <string>
+      <key>Web_Sheet_LifestylePermanent</key>
+      <text>{tier} (bought permanently, {cost}).</text>
     </string>
     <string>
       <key>Web_Sheet_Lifestyle_One</key>
