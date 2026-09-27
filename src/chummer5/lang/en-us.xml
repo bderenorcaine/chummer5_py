@@ -1630,5 +1630,25 @@
       <key>Web_Vehicles_Update</key>
       <text>Update vehicles</text>
     </string>
+    <string>
+      <key>Web_Weapons_Accessories</key>
+      <text>Weapon accessories</text>
+    </string>
+    <string>
+      <key>Web_Weapons_Copy</key>
+      <text>{weapon} #{number}</text>
+    </string>
+    <string>
+      <key>Web_Weapons_Mount</key>
+      <text>{mount} mount</text>
+    </string>
+    <string>
+      <key>Web_Weapons_BuiltIn</key>
+      <text>built in</text>
+    </string>
+    <string>
+      <key>Web_Weapons_Add</key>
+      <text>Add an accessory…</text>
+    </string>
   </strings>
 </chummer>

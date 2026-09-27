@@ -473,7 +473,7 @@ the rules it checks.
   Acceptance: an Elf with Cybereyes Basic System and no Low-Light plugin loses Low-Light Vision on
   the sheet; adding the plugin restores it.
 
-- [ ] **WP130 — Weapon accessories.**
+- [x] **WP130 — Weapon accessories.**
   Goal: the 30 core weapon accessories (smartgun system, silencer, scopes, ...), installed on a
   purchased weapon.
   Deliverables:

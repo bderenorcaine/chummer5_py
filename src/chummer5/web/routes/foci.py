@@ -24,7 +24,12 @@ from chummer5.engine.foci import (
     create_foci_selection,
 )
 from chummer5.engine.improvements import ImprovementSource
-from chummer5.engine.resources import available_nuyen, create_resources_selection, starting_nuyen
+from chummer5.engine.resources import (
+    available_nuyen,
+    create_resources_selection,
+    resources_gear_args,
+    starting_nuyen,
+)
 from chummer5.web.catalogs import FOCI, PRIORITIES, templates
 from chummer5.web.forms import display_karma_to_nuyen
 from chummer5.web.i18n import Message
@@ -201,6 +206,12 @@ async def submit_foci(request: Request) -> HTMLResponse:
         picks = _parse_foci(form, FOCI)
         character = session.character
         resources_selection = character.resources_selection
+        # WP130: rating gear used to be passed here as bare names, pricing it at 0.
+        gear_names, rating_gear = (
+            resources_gear_args(resources_selection)
+            if resources_selection is not None
+            else ((), ())
+        )
         gear_cost = resources_selection.nuyen_spent if resources_selection is not None else 0
         karma_converted = (
             resources_selection.karma_converted if resources_selection is not None else 0
@@ -228,11 +239,10 @@ async def submit_foci(request: Request) -> HTMLResponse:
             new_resources_selection = create_resources_selection(
                 session.resources_letter,
                 PRIORITIES,
-                tuple(
-                    item.name
-                    for item in (
-                        resources_selection.gear if resources_selection is not None else ()
-                    )
+                gear_names,
+                rating_gear=rating_gear,
+                weapon_accessories=(  # WP130
+                    resources_selection.accessory_picks if resources_selection is not None else ()
                 ),
                 lifestyle_cost=lifestyle_cost,
                 cyberware_cost=cyberware_cost,

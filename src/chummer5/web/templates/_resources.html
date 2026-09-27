@@ -91,6 +91,36 @@
     </details>
     {% endfor %}
     </div>
+
+    {# WP130: accessories, per purchased weapon copy. An installed one is a checked box (untick to
+       remove); the select adds one on a free mount. #}
+    {% if weapon_rows %}
+    <details id="weapon-accessories" data-details-key="weapon-accessories" open>
+      <summary>{{ _("Web_Weapons_Accessories") }}</summary>
+      {% for row in weapon_rows %}
+      <fieldset class="weapon-accessories">
+        <legend>{{ _("Web_Weapons_Copy", weapon=(row.weapon | dterm("weapons.xml")), number=row.number) }}</legend>
+        <ul>
+          {% for builtin in row.builtins %}
+          <li>{{ builtin.name | dterm("weapons.xml") }}{% if builtin.mount %} ({{ _("Web_Weapons_Mount", mount=builtin.mount) }}){% endif %} — {{ _("Web_Weapons_BuiltIn") }}</li>
+          {% endfor %}
+          {% for installed in row.installed %}
+          <li><label><input type="checkbox" name="weapon_accessory" value="{{ installed.value }}" checked />
+            {{ installed.item.accessory | dterm("weapons.xml") }}{% if installed.item.mount %} ({{ _("Web_Weapons_Mount", mount=installed.item.mount) }}){% endif %} — {{ installed.item.cost | nuyen }}</label></li>
+          {% endfor %}
+        </ul>
+        {% if row.options %}
+        <select name="add_accessory" aria-label="{{ _('Web_Weapons_Add') }}">
+          <option value="">{{ _("Web_Weapons_Add") }}</option>
+          {% for option in row.options %}
+          <option value="{{ option.value }}">{{ option.name | dterm("weapons.xml") }}{% if option.mount %} ({{ _("Web_Weapons_Mount", mount=option.mount) }}){% endif %} — {{ option.cost | nuyen }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+      </fieldset>
+      {% endfor %}
+    </details>
+    {% endif %}
     <button type="submit">{{ _("Web_Resources_Update") }}</button>
   </form>
   <script>

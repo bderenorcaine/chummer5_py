@@ -1832,3 +1832,30 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   rows, `unmodeled_effect_note`).
 - **A permanent purchase stores `months = 100`** alongside `lifestyle_permanent`, so the stored
   cost reads the same to anything that only knows months.
+
+## 2026-09-27 — WP130: weapon accessories
+
+- **Accessories live on `ResourcesSelection`, keyed to a weapon copy.** A weapon stays a plain gear
+  name (repeats allowed), and an accessory names `(weapon, copy index)`, counting that weapon's
+  purchases in gear order. The alternative, a separate weapon-purchase selection with its own
+  nuyen term (the vehicles shape), would have moved weapons out of the gear list and added a
+  seventh cost to thread through six routes and three `build_character` calls. Accessories are
+  gear, so their cost joins `nuyen_spent`.
+- **Lowering a weapon's quantity drops its accessories in the same submission**, rather than the
+  engine refusing the change. Copies are dropped from the end.
+- **Built-ins occupy a mount; legacy's don't.** Each built-in takes the first of its own mounts the
+  weapon still has free, so a `Top/Under` laser sight takes Top, as the weapon texts print. When two
+  built-ins want one mount (Ingram Smartgun X), the second takes none rather than being refused.
+- **Two printed-text overrides of the data**: the Smart firing platform costs 2,500¥ (p. 432,
+  not 2,000¥), and the three holsters are limited to the pistol/taser categories their text names
+  (the data admits a combat knife). Both follow the WP92 Tundra-9 "the printed value wins" precedent.
+- **One of each accessory per copy**, except Spare Clip and Speed Loader; **at most one
+  ammunition-feed replacement** (belt, drum, external power). Neither is printed as a rule; both are
+  what the items physically are.
+- **Availability ≤ 12 per new accessory**, the internal smartgun counting as weapon + 2. The
+  weapon catalog itself is still uncapped (the general backfill remains unscheduled), so an Ingram
+  Valiant (12F) can be bought but not retrofitted with an internal smartgun.
+- **Out of this WP**: gear inside an accessory (the imaging scope's Capacity 3 for vision
+  enhancements, the smart firing platform's autosofts), underbarrel *weapons*, and any weapon stat
+  (Accuracy, RC, Concealability) — there are no attack tests. Every offered accessory has a
+  registry row.

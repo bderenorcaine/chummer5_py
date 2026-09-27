@@ -629,6 +629,11 @@ def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> di
         foci_cost,
         vehicle_cost,
         rating_gear,
+        accessory_picks=(
+            character.resources_selection.accessory_picks
+            if character is not None and character.resources_selection is not None
+            else ()
+        ),
     )
     lifestyle_ctx = _lifestyle_context(
         character,

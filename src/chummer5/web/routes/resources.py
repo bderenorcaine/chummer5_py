@@ -19,12 +19,22 @@ from chummer5.engine.character import Character
 from chummer5.engine.derived import ARMOR_CATEGORY
 from chummer5.engine.resources import (
     KARMA_TO_NUYEN_RATE,
+    MAX_AVAILABILITY,
     MAX_KARMA_TO_NUYEN,
     STARTER_GEAR_CATALOG,
     ResourcesSelection,
     StarterGearItem,
     create_resources_selection,
     starting_nuyen,
+)
+from chummer5.engine.weapon_accessories import (
+    OFFERED_WEAPON_ACCESSORIES,
+    WEAPON_MOUNT_INFO,
+    AccessoryPick,
+    InstalledAccessory,
+    accessory_problem,
+    builtin_accessories,
+    free_mounts,
 )
 from chummer5.web.catalogs import PRIORITIES, templates
 from chummer5.web.forms import display_karma_to_nuyen
@@ -153,6 +163,100 @@ def _parse_rating_gear(
     return tuple(picks)
 
 
+# WP130: an accessory pick travels through the form as one "weapon|copy|accessory|mount" string --
+# a checked box for each installed one, and one "add" <select> per weapon copy.
+_PICK_SEPARATOR = "|"
+
+
+def encode_accessory_pick(pick: AccessoryPick) -> str:
+    return _PICK_SEPARATOR.join((pick.weapon, str(pick.copy), pick.accessory, pick.mount or ""))
+
+
+def _decode_accessory_pick(raw: str) -> AccessoryPick | None:
+    parts = raw.split(_PICK_SEPARATOR)
+    if len(parts) != 4 or not parts[1].isdigit():
+        return None
+    weapon, copy, accessory, mount = parts
+    return AccessoryPick(weapon, int(copy), accessory, mount or None)
+
+
+def _weapon_copies(gear_names: Iterable[str]) -> list[tuple[str, int]]:
+    """Every purchased weapon copy that can take accessories, as `(name, copy index)` in gear
+    order -- the key `chummer5.engine.weapon_accessories` installs on."""
+    seen: dict[str, int] = {}
+    copies = []
+    for name in gear_names:
+        info = WEAPON_MOUNT_INFO.get(name)
+        if info is None or not info.allows_accessories:
+            continue
+        copies.append((name, seen.get(name, 0)))
+        seen[name] = seen.get(name, 0) + 1
+    return copies
+
+
+def _parse_accessories(form: FormData, gear_names: tuple[str, ...]) -> tuple[AccessoryPick, ...]:
+    """The kept installed accessories, then any newly added ones (WP130). A pick whose weapon copy
+    is no longer bought -- the player lowered that weapon's quantity in this same submission -- is
+    dropped with it, rather than blocking the change."""
+    owned = set(_weapon_copies(gear_names))
+    picks = []
+    for raw in [*form.getlist("weapon_accessory"), *form.getlist("add_accessory")]:
+        pick = _decode_accessory_pick(str(raw))
+        if pick is not None and (pick.weapon, pick.copy) in owned:
+            picks.append(pick)
+    return tuple(picks)
+
+
+def _weapon_rows(
+    gear_names: tuple[str, ...], picks: tuple[AccessoryPick, ...]
+) -> list[dict[str, Any]]:
+    """One row per purchased weapon copy: its built-ins, its installed accessories, and what can
+    still be added (each accessory once per mount it could take)."""
+    by_name = {a.name: a for a in OFFERED_WEAPON_ACCESSORIES}
+    costs = {item.name: item.cost for item in STARTER_GEAR_CATALOG}
+    rows = []
+    for weapon, copy in _weapon_copies(gear_names):
+        on_copy = []
+        for pick in picks:
+            accessory = by_name.get(pick.accessory)
+            if (pick.weapon, pick.copy) != (weapon, copy) or accessory is None:
+                continue
+            cost = costs.get(weapon, 0) if accessory.cost_is_weapon_cost else accessory.cost or 0
+            on_copy.append(InstalledAccessory(weapon, copy, accessory, pick.mount, cost))
+        free = free_mounts(weapon, on_copy)
+        options = []
+        for accessory in OFFERED_WEAPON_ACCESSORIES:
+            if accessory_problem(accessory, weapon, on_copy, MAX_AVAILABILITY) is not None:
+                continue
+            mounts: tuple[str | None, ...] = (
+                tuple(m for m in accessory.mounts if m in free) if accessory.mounts else (None,)
+            )
+            price = costs.get(weapon, 0) if accessory.cost_is_weapon_cost else accessory.cost or 0
+            for mount in mounts:
+                options.append(
+                    {
+                        "value": encode_accessory_pick(
+                            AccessoryPick(weapon, copy, accessory.name, mount)
+                        ),
+                        "name": accessory.name,
+                        "mount": mount,
+                        "cost": price,
+                    }
+                )
+        rows.append(
+            {
+                "weapon": weapon,
+                "number": copy + 1,
+                "builtins": builtin_accessories(weapon),
+                "installed": [
+                    {"value": encode_accessory_pick(i.to_pick()), "item": i} for i in on_copy
+                ],
+                "options": options,
+            }
+        )
+    return rows
+
+
 def _parse_karma_converted(form: FormData) -> int:
     """Read `karma_converted` off a submitted form (WP43), clamping an unparseable or negative
     value to 0 -- the same "let the engine validate what it's already responsible for" choice
@@ -179,6 +283,7 @@ def _resources_context(
     vehicle_cost: int = 0,
     rating_gear: tuple[tuple[str, int], ...] = (),
     *,
+    accessory_picks: tuple[AccessoryPick, ...] = (),
     error: str | None = None,
 ) -> dict[str, Any]:
     """Context for `_resources.html`. `gear_names` is the flat, repeats-allowed name list
@@ -221,6 +326,9 @@ def _resources_context(
     gear+Lifestyle+cyberware+bioware+Foci.
 
     **WP93**: `vehicle_cost` folds in the same way, extending it to six sections.
+
+    **WP130**: `accessory_picks` are the weapon accessories, re-validated with the gear and shown
+    per weapon copy (`weapon_rows`); their cost is part of the gear spend.
     """
     if character is None:
         return {"character": None, "resources_error": error}
@@ -275,7 +383,10 @@ def _resources_context(
         )
     ]
     budget = starting_nuyen(resources_letter, PRIORITIES)
-    spent = sum(int(row["subtotal"]) for group in gear_groups for row in group["rows"])
+    weapon_rows = _weapon_rows(gear_names, accessory_picks)
+    spent = sum(int(row["subtotal"]) for group in gear_groups for row in group["rows"]) + sum(
+        int(installed["item"].cost) for row in weapon_rows for installed in row["installed"]
+    )
     budget_warning: Message | None = None
     if error is None:
         try:
@@ -290,12 +401,14 @@ def _resources_context(
                 karma_converted=karma_converted,
                 foci_cost=foci_cost,
                 vehicle_cost=vehicle_cost,
+                weapon_accessories=accessory_picks,
             )
         except ValueError as exc:
             budget_warning = Message.of("Web_Stale_Resources", error=str(exc))
     return {
         "character": character,
         "gear_groups": gear_groups,
+        "weapon_rows": weapon_rows,
         "nuyen_budget": budget,
         "nuyen_spent": spent,
         "nuyen_remaining": (
@@ -328,6 +441,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
         form = await request.form()
         gear_names = _parse_gear(form, STARTER_GEAR_CATALOG)
         rating_gear = _parse_rating_gear(form, STARTER_GEAR_CATALOG)
+        accessory_picks = _parse_accessories(form, gear_names)  # WP130
         karma_converted = _parse_karma_converted(form)
         lifestyle_selection = session.character.lifestyle_selection
         lifestyle_cost = lifestyle_selection.total_cost if lifestyle_selection is not None else 0
@@ -355,6 +469,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 karma_converted=karma_converted,
                 foci_cost=foci_cost,
                 vehicle_cost=vehicle_cost,
+                weapon_accessories=accessory_picks,
             )
         except ValueError as exc:
             context = _resources_context(
@@ -368,6 +483,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 foci_cost,
                 vehicle_cost,
                 rating_gear=rating_gear,
+                accessory_picks=accessory_picks,
                 error=str(exc),
             )
         else:
@@ -387,6 +503,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 foci_cost,
                 vehicle_cost,
                 rating_gear=rating_gear,
+                accessory_picks=accessory_picks,
             )
     response = templates.TemplateResponse(request, "_resources.html", context)
     if new_cookie is not None:

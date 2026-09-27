@@ -226,6 +226,19 @@
   {% else %}
   <p>{{ _("Web_Sheet_NonePurchased") }}</p>
   {% endif %}
+  {# WP130: the accessorized weapon copies. #}
+  {% if weapon_accessory_rows %}
+  <h4>{{ _("Web_Weapons_Accessories") }}</h4>
+  <ul>
+    {% for row in weapon_accessory_rows %}
+    <li>{{ _("Web_Weapons_Copy", weapon=(row.weapon | dterm("weapons.xml")), number=row.number) }}:
+      {% for builtin in row.builtins %}{{ builtin.name | dterm("weapons.xml") }} ({{ _("Web_Weapons_BuiltIn") }}), {% endfor %}
+      {%- for installed in row.installed %}
+      {{ installed.accessory | dterm("weapons.xml") }}{% if installed.mount %} ({{ _("Web_Weapons_Mount", mount=installed.mount) }}){% endif %}{% if not loop.last %},{% endif %}
+      {%- endfor %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
 
   <h3>{{ _("Web_Cyberware_Cyberware") }}</h3>
   {% if cyberware_rows %}

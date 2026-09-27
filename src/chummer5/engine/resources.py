@@ -122,6 +122,12 @@ from chummer5.data.gear import (
 )
 from chummer5.data.priorities import PriorityTable
 from chummer5.engine.character import Character
+from chummer5.engine.weapon_accessories import (
+    WEAPON_MOUNT_INFO,
+    AccessoryPick,
+    InstalledAccessory,
+    create_weapon_accessories,
+)
 
 # CharacterSettings.ContactPointsExpression (legacy default: `"{CHAUnaug} * 3"`) -- confirmed
 # against the core rulebook ("Making Connections", p. 98: "This Karma is equal to a Character's
@@ -538,6 +544,13 @@ class ResourcesSelection:
     karma_converted: int = 0
     foci_cost: int = 0
     vehicle_cost: int = 0
+    # WP130: accessories on purchased weapons, priced into `nuyen_spent` (they are gear).
+    weapon_accessories: tuple[InstalledAccessory, ...] = ()
+
+    @property
+    def accessory_picks(self) -> tuple[AccessoryPick, ...]:
+        """The persistable inverse of `create_resources_selection`'s `weapon_accessories`."""
+        return tuple(installed.to_pick() for installed in self.weapon_accessories)
 
 
 def starting_nuyen(letter: str, priorities: PriorityTable) -> int:
@@ -589,6 +602,7 @@ def create_resources_selection(
     karma_converted: int = 0,
     foci_cost: int = 0,
     vehicle_cost: int = 0,
+    weapon_accessories: Iterable[AccessoryPick] = (),
 ) -> ResourcesSelection:
     """Build a `ResourcesSelection`, validating the combined gear + lifestyle + cyberware + bioware
     + foci spend against the nuyen budget (priority-derived, plus whatever Karma-to-Nuyen conversion
@@ -611,6 +625,10 @@ def create_resources_selection(
     spent, mirroring WP6/WP7/WP8's identical choice. `lifestyle_cost`/`cyberware_cost`/
     `bioware_cost`/`karma_converted`/`foci_cost`/`vehicle_cost` each default to 0 so every
     pre-WP20/pre-WP34/pre-WP45/pre-WP43/pre-WP47/pre-WP92 call site is unaffected.
+
+    **WP130**: `weapon_accessories` are installed on the purchased weapons by
+    `chummer5.engine.weapon_accessories.create_weapon_accessories` -- each names a weapon copy that
+    must be among the selected gear -- and their cost joins `nuyen_spent`.
     """
     by_name = {item.name: item for item in catalog}
     names = list(gear_names)
@@ -636,9 +654,20 @@ def create_resources_selection(
         rating_selected.append(replace(item, cost=rating * item.cost_per_rating, rating=rating))
 
     selected = flat_selected + tuple(rating_selected)
+
+    weapon_counts: dict[str, int] = {}
+    weapon_costs: dict[str, int] = {}
+    for item in flat_selected:
+        if item.name in WEAPON_MOUNT_INFO:
+            weapon_counts[item.name] = weapon_counts.get(item.name, 0) + 1
+            weapon_costs[item.name] = item.cost
+    installed = create_weapon_accessories(
+        weapon_accessories, weapon_costs, weapon_counts, MAX_AVAILABILITY
+    )
+
     budget = starting_nuyen(letter, priorities)
     available = budget + karma_to_nuyen(karma_converted)
-    spent = sum(item.cost for item in selected)
+    spent = sum(item.cost for item in selected) + sum(i.cost for i in installed)
     total_spent = spent + lifestyle_cost + cyberware_cost + bioware_cost + foci_cost + vehicle_cost
     if total_spent > available:
         parts = [f"gear ({spent})"]
@@ -674,4 +703,5 @@ def create_resources_selection(
         karma_converted=karma_converted,
         foci_cost=foci_cost,
         vehicle_cost=vehicle_cost,
+        weapon_accessories=installed,
     )

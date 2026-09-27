@@ -73,6 +73,7 @@ from chummer5.engine.skills import (
     natural_skill_rating,
     skill_rating,
 )
+from chummer5.engine.weapon_accessories import InstalledAccessory, builtin_accessories
 from chummer5.io.legacy_import import UnsupportedLegacyCharacterError, import_chum5
 from chummer5.io.save_format import (
     DEFAULT_TALENT_CODENAME,
@@ -118,6 +119,7 @@ def _resources_selection_for_display(
     karma_converted: int = 0,
     foci_cost: int = 0,
     vehicle_cost: int = 0,
+    weapon_accessories: tuple[InstalledAccessory, ...] = (),
 ) -> ResourcesSelection:
     """Recompute a `ResourcesSelection`'s nuyen totals against `letter`'s *current* budget, without
     `create_resources_selection`'s "spend must not exceed budget" check.
@@ -153,6 +155,8 @@ def _resources_selection_for_display(
 
     **WP93**: `vehicle_cost` (the character's currently-selected `vehicle_selection.nuyen_spent`,
     or 0 if none yet) folds in the same way, extending the shared budget to six sections.
+
+    **WP130**: `weapon_accessories` are carried through, already priced, and count as gear spend.
     """
     # WP66: the committed purchased items are passed straight through -- each already carries its
     # own final cost (a Rating-priced item's is `rating * cost_per_rating`, a flat item's is its
@@ -160,7 +164,7 @@ def _resources_selection_for_display(
     # shape) would drop the chosen rating and mis-cost every rating item at 0.
     selected = tuple(gear)
     budget = starting_nuyen(letter, PRIORITIES)
-    spent = sum(item.cost for item in selected)
+    spent = sum(item.cost for item in selected) + sum(i.cost for i in weapon_accessories)
     return ResourcesSelection(
         resources_letter=letter,
         nuyen_budget=budget,
@@ -182,6 +186,7 @@ def _resources_selection_for_display(
         karma_converted=karma_converted,
         foci_cost=foci_cost,
         vehicle_cost=vehicle_cost,
+        weapon_accessories=weapon_accessories,
     )
 
 
@@ -463,6 +468,11 @@ def _character_sheet_context(
         committed_karma_converted,
         foci_selection.nuyen_cost if foci_selection is not None else 0,
         vehicle_selection.nuyen_spent if vehicle_selection is not None else 0,
+        (
+            character.resources_selection.weapon_accessories
+            if character.resources_selection is not None
+            else ()
+        ),
     )
     # WP66: keyed by (name, rating) so two Rating-priced buys of the same item at different ratings
     # don't collapse into one line; `rating` is None for flat items (a plain "name × qty" line).
@@ -556,6 +566,8 @@ def _character_sheet_context(
                 gear_counts.items(), key=lambda kv: (kv[0][0], kv[0][1] or 0)
             )
         ],
+        # WP130: each accessorized weapon copy, with what it ships with and what was added.
+        "weapon_accessory_rows": _sheet_weapon_accessory_rows(resources_selection),
         "lifestyle_tier_name": (
             lifestyle_selection.tier.name if lifestyle_selection is not None else None
         ),
@@ -770,6 +782,23 @@ def _character_sheet_context(
     }
 
 
+def _sheet_weapon_accessory_rows(selection: ResourcesSelection) -> list[dict[str, Any]]:
+    """WP130: one row per weapon copy that carries a bought accessory -- `Ares Predator V #1:
+    Smartgun System, Internal (built in), Silencer/Suppressor (Barrel mount)`."""
+    by_copy: dict[tuple[str, int], list[InstalledAccessory]] = {}
+    for installed in selection.weapon_accessories:
+        by_copy.setdefault((installed.weapon, installed.copy), []).append(installed)
+    return [
+        {
+            "weapon": weapon,
+            "number": copy + 1,
+            "builtins": builtin_accessories(weapon),
+            "installed": installed,
+        }
+        for (weapon, copy), installed in sorted(by_copy.items())
+    ]
+
+
 def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     """Build a `CharacterSave` (WP11) from a session's currently committed selections -- the
     inverse of `_apply_built_character_to_session` below. Only called once `session.character` is
@@ -912,6 +941,11 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         resources_letter=session.resources_letter,
         gear_names=gear_names,
         rating_gear_picks=rating_gear_picks,
+        weapon_accessories=(  # WP130
+            character.resources_selection.accessory_picks
+            if character.resources_selection is not None
+            else ()
+        ),
         lifestyle_tier_name=(
             lifestyle_selection.tier.name
             if lifestyle_selection is not None

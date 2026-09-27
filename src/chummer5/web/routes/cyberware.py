@@ -727,6 +727,9 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 PRIORITIES,
                 gear_names,
                 rating_gear=rating_gear,
+                weapon_accessories=(  # WP130
+                    resources_selection.accessory_picks if resources_selection is not None else ()
+                ),
                 lifestyle_cost=lifestyle_cost,
                 cyberware_cost=selection.nuyen_spent,
                 bioware_cost=bioware_selection.nuyen_spent,

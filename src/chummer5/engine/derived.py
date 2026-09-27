@@ -379,6 +379,9 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
     if character.resources_selection is not None:
         for gear_item in character.resources_selection.gear:
             add(gear_item.name, getattr(gear_item, "unmodeled_effect_note", None))
+        # WP130: accessories on purchased weapons.
+        for installed in character.resources_selection.weapon_accessories:
+            add(installed.name, installed.unmodeled_effect_note)
     # WP95: the one selection this walk did not cover at all -- `vehicle_selection` postdates the
     # function (WP92) and was never added. Repeats are legal here (four Fly-Spies), and `add`
     # already dedupes by name, so a fleet contributes one note per distinct model.
