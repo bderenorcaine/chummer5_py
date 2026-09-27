@@ -168,8 +168,13 @@
   {% else %}
   <p>{{ _("Web_Sheet_NoneSelected") }}</p>
   {% endif %}
-  {% if metatype_quality_names %}
-  <p>{{ _("Web_Qualities_FreeFromMetatype", names=metatype_quality_names | map("dterm", "qualities.xml") | join(_("Web_List_Separator"))) }}</p>
+  {% if metatype_quality_rows %}
+  {# WP129: a trait an implant replaced is struck through, with what replaced it (p. 94). #}
+  <p>{{ _("Web_Sheet_FreeFromMetatypeLabel") }}
+    {% for row in metatype_quality_rows -%}
+    {% if row.replaced_by %}<s>{{ row.name | dterm("qualities.xml") }}</s> ({{ _("Web_Sheet_ReplacedBy", implant=row.replaced_by | dterm("cyberware.xml", "bioware.xml")) }}){% else %}{{ row.name | dterm("qualities.xml") }}{% endif %}{% if not loop.last %}{{ _("Web_List_Separator") }}{% endif %}
+    {%- endfor %}
+  </p>
   {% endif %}
 
   <h3>{{ _("String_Contacts") }}</h3>
@@ -350,6 +355,7 @@
       <tr><th>{{ _("String_DamageResistance") }}</th><td>{{ damage_resistance }}</td></tr>
       <tr><th>{{ _("Web_Sheet_Memory") }}</th><td>{{ memory }}</td></tr>
       {% if reach %}<tr><th>{{ _("String_Reach") }}</th><td>+{{ reach }}</td></tr>{% endif %}
+      {% if racial_armor %}<tr><th>{{ _("Web_Sheet_RacialDermalArmor") }}</th><td>{% if racial_armor_replaced_by %}<s>+{{ racial_armor }}</s> ({{ _("Web_Sheet_ReplacedBy", implant=racial_armor_replaced_by | dterm("cyberware.xml", "bioware.xml")) }}){% else %}+{{ racial_armor }}{% endif %}</td></tr>{% endif %}
       {# WP110: Step Eight's Reputation row -- Street Cred and Public Awareness are 0 at creation. #}
       <tr><th>{{ _("String_StreetCred") }}</th><td>{{ street_cred }}</td></tr>
       <tr><th>{{ _("String_Notoriety") }}</th><td>{{ notoriety }}</td></tr>

@@ -1122,6 +1122,18 @@
       <text>{name} (rating {rating}, {attribute})</text>
     </string>
     <string>
+      <key>Web_Sheet_FreeFromMetatypeLabel</key>
+      <text>Free from metatype:</text>
+    </string>
+    <string>
+      <key>Web_Sheet_RacialDermalArmor</key>
+      <text>Racial dermal armor</text>
+    </string>
+    <string>
+      <key>Web_Sheet_ReplacedBy</key>
+      <text>replaced by {implant}</text>
+    </string>
+    <string>
       <key>Web_Sheet_RatingSuffix</key>
       <text>(Rating {rating})</text>
     </string>

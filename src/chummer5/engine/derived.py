@@ -597,6 +597,65 @@ def reach(character: Character) -> int:
     return character.improvements.resolve(ImprovementType.REACH, _GLOBAL_TARGET)
 
 
+# WP129, p. 94: "if a character takes cyberware or bioware, it may remove a particular racial
+# bonus. For example, if a player who has an elf character buys cybereyes, their natural low-light
+# vision is removed and replaced with the cybereyes [...] she'll have to select the low-light
+# modification for the cybereyes. Similarly, orthoskin replaces the natural dermal deposits of a
+# troll so he would no longer receive the +1 dermal armor from his natural skin hardness."
+CYBEREYES = "Cybereyes Basic System"
+# A racial vision quality -> the cybereye plugin that keeps it (the same names in both files).
+RACIAL_VISION_PLUGINS = {
+    "Low-Light Vision": "Low-Light Vision",
+    "Thermographic Vision": "Thermographic Vision",
+}
+# The skin augmentations that replace a troll's dermal armor: Orthoskin (p. 94), and Dermal
+# Plating, which legacy puts in the same `armor group="0"` dedup group (so its Armor already
+# replaces, never stacks with, the racial +1 -- `Improvement.unique_name`).
+SKIN_ARMOR_AUGMENTATIONS = ("Orthoskin", "Dermal Plating")
+# `SuppressedRacialTrait.trait` for the Troll's racial Armor, which is not a quality.
+DERMAL_ARMOR_TRAIT = "dermal armor"
+
+
+@dataclass(frozen=True)
+class SuppressedRacialTrait:
+    """A racial trait an implant has taken the place of (WP129): `trait` is the metatype
+    quality's name, or `DERMAL_ARMOR_TRAIT`; `replaced_by` names the implant."""
+
+    trait: str
+    replaced_by: str
+
+
+def suppressed_racial_traits(character: Character) -> tuple[SuppressedRacialTrait, ...]:
+    """The racial traits the character's implants replace (WP129, p. 94) -- for the sheet. Nothing
+    here changes a number: the vision qualities carry no computed effect, and the dermal armor's
+    replacement is already the Armor dedup group's highest-wins.
+
+    Cybereyes remove a racial Low-Light or Thermographic Vision unless some pair of cybereyes
+    carries that plugin. A troll's dermal armor is replaced by Orthoskin or Dermal Plating.
+    Cyberears replace nothing: no core metatype has a racial hearing trait (checked against the
+    Metatype Attribute Table, p. 66).
+    """
+    cyberware = character.cyberware_selection
+    nodes = cyberware.walk() if cyberware is not None else ()
+    eyes = [node for node in nodes if node.item.name == CYBEREYES]
+    eye_plugins = {plugin.item.name for node in eyes for plugin in node.plugins}
+    suppressed: list[SuppressedRacialTrait] = []
+    if eyes:
+        for quality in character.metatype_qualities:
+            plugin = RACIAL_VISION_PLUGINS.get(quality.name)
+            if plugin is not None and plugin not in eye_plugins:
+                suppressed.append(SuppressedRacialTrait(quality.name, CYBEREYES))
+    if character.metatype.armor:
+        bioware = character.bioware_selection
+        implants = [node.item.name for node in nodes] + (
+            [item.name for item in bioware.items] if bioware is not None else []
+        )
+        replacement = next((name for name in implants if name in SKIN_ARMOR_AUGMENTATIONS), None)
+        if replacement is not None:
+            suppressed.append(SuppressedRacialTrait(DERMAL_ARMOR_TRAIT, replacement))
+    return tuple(suppressed)
+
+
 def memory(character: Character) -> int:
     """Memory (WP114): `LOG + WIL + Σ MEMORY` -- what Memory Tests roll (p. 152), raised by
     Photographic Memory's +2 (p. 76) and, from WP128, the Mnemonic Enhancer."""

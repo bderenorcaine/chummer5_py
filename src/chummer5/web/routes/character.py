@@ -33,6 +33,7 @@ from chummer5.engine.cyberware_subsystems import (
 from chummer5.engine.derived import (
     ASTRAL_INITIATIVE_DICE,
     COLD_SIM_INITIATIVE_DICE,
+    DERMAL_ARMOR_TRAIT,
     HOT_SIM_INITIATIVE_DICE,
     armor_breakdown,
     astral_initiative,
@@ -53,6 +54,7 @@ from chummer5.engine.derived import (
     social_limit,
     street_cred,
     stun_condition_monitor,
+    suppressed_racial_traits,
     unmodeled_effect_notes,
     wound_modifier_rule,
 )
@@ -429,7 +431,12 @@ def _character_sheet_context(
     # WP23: shown separately from quality_picks -- these were never a karma spend (excluded from
     # quality_karma_cost below, which stays quality_selection-only), so conflating the two lists
     # would misrepresent what the player actually chose to buy.
-    metatype_quality_names = [q.name for q in character.metatype_qualities]
+    # WP129: each with the implant that replaced it, if one did (p. 94), struck through on the
+    # sheet.
+    replaced = {s.trait: s.replaced_by for s in suppressed_racial_traits(character)}
+    metatype_quality_rows = [
+        {"name": q.name, "replaced_by": replaced.get(q.name)} for q in character.metatype_qualities
+    ]
     committed_contacts = (
         character.contact_selection.contacts if character.contact_selection is not None else ()
     )
@@ -531,7 +538,10 @@ def _character_sheet_context(
         ],
         "sheet_skill_rows": skill_rows,
         "quality_picks": quality_picks,
-        "metatype_quality_names": metatype_quality_names,
+        "metatype_quality_rows": metatype_quality_rows,
+        # WP129: the Troll's racial dermal armor, and what replaced it.
+        "racial_armor": character.metatype.armor,
+        "racial_armor_replaced_by": replaced.get(DERMAL_ARMOR_TRAIT),
         "contacts": contact_selection.contacts,
         # WP94: `matrix_stat_block` is None for all but the three Matrix-device categories, so the
         # overwhelming majority of gear rows render exactly as they did before.

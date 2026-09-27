@@ -459,7 +459,7 @@ the rules it checks.
   Acceptance: Muscle Toner 2 raises AGI by 2 under the +4 augmentation cap; Toner plus Augmentation is
   rejected; Orthoskin 2 shows in Armor.
 
-- [ ] **WP129 — Implants that replace racial traits.**
+- [x] **WP129 — Implants that replace racial traits.**
   Goal: Step Six, "Cyberware/bioware may remove a racial bonus."
   Deliverables:
   - Cybereyes suppress a metatype-granted Low-Light / Thermographic Vision unless the matching
