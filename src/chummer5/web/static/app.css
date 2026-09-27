@@ -470,3 +470,31 @@ details[open] > .panel__heading {
 .page tbody tr:nth-child(even) {
   background: var(--table-row-bg-b);
 }
+
+/* WP134: the Bio page -- short fields two to a row where there is room, long ones full width. */
+.bio-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.bio-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.bio-form__field--long {
+  grid-column: 1 / -1;
+}
+
+.bio-form__field--long textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sheet-bio {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.2rem 1rem;
+}

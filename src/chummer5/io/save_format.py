@@ -261,6 +261,11 @@ a purchased weapon copy). Additive, defaulting to none.
 **WP131** adds `armor_mods` (`{armor, copy, mod, rating}`) and `variable_gear_picks`
 (`{name, price}`, e.g. Clothing at the price the player entered). Additive, defaulting to none.
 
+**WP134** adds `biography` (`{field: text}`, only the non-empty fields of
+`chummer5.engine.biography.Biography`). Additive, defaulting to empty, so `FORMAT_VERSION` stays 2:
+an older reader drops the Bio but reads everything else correctly, the same trade every additive
+key above made.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -293,6 +298,7 @@ from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
 from chummer5.data.vehicles import Vehicle
 from chummer5.engine.armor_mods import ArmorModPick
+from chummer5.engine.biography import NO_BIOGRAPHY, Biography, create_biography
 from chummer5.engine.bioware import (
     BiowarePurchaseRequest,
     apply_bioware_improvements,
@@ -506,6 +512,8 @@ class CharacterSave:
     # WP131: armor modifications, and variable-priced gear as (name, price) pairs.
     armor_mods: tuple[ArmorModPick, ...] = ()
     variable_gear_picks: tuple[tuple[str, int], ...] = ()
+    # WP134: the Bio page.
+    biography: Biography = Biography()
     # WP92: purchased stock vehicles/drones, as catalog ids (repeats = quantity, e.g. four
     # Fly-Spies). A bare id list is the whole persistable shape a vehicle purchase has -- unlike
     # cyberware there is no tree, unlike bioware no player choice, unlike foci no Force. Defaults
@@ -566,6 +574,7 @@ def create_character_save(
     weapon_accessories: Iterable[AccessoryPick] = (),
     armor_mods: Iterable[ArmorModPick] = (),
     variable_gear_picks: Iterable[tuple[str, int]] = (),
+    biography: Biography = NO_BIOGRAPHY,
     vehicle_ids: Iterable[str] = (),
     unworn_armor: Iterable[str] = (),
 ) -> CharacterSave:
@@ -627,6 +636,7 @@ def create_character_save(
         weapon_accessories=tuple(weapon_accessories),
         armor_mods=tuple(armor_mods),
         variable_gear_picks=tuple(variable_gear_picks),
+        biography=biography,
         vehicle_ids=tuple(vehicle_ids),
         unworn_armor=tuple(sorted(set(unworn_armor))),
     )
@@ -823,6 +833,7 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "variable_gear_picks": [
             {"name": name, "price": price} for name, price in save.variable_gear_picks
         ],
+        "biography": save.biography.to_dict(),
         "vehicle_ids": list(save.vehicle_ids),
         "unworn_armor": list(save.unworn_armor),
     }
@@ -912,6 +923,7 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
             for m in data.get("armor_mods", ())
         ),
         variable_gear_picks=((p["name"], p["price"]) for p in data.get("variable_gear_picks", ())),
+        biography=create_biography(data.get("biography", {})),
         vehicle_ids=data.get("vehicle_ids", ()),
         unworn_armor=data.get("unworn_armor", ()),
     )
@@ -1370,4 +1382,5 @@ def build_character(
         vehicle_selection=vehicle_selection,
         resources_selection=resources_selection,
         unworn_armor=frozenset(save.unworn_armor),
+        biography=save.biography,  # WP134
     )

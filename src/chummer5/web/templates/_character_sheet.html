@@ -7,7 +7,22 @@
   {% endif %}
 
   {% if character %}
+  {# WP134: the street name heads the sheet (falling back to the name), then metatype and concept. #}
+  {% set bio = character.biography %}
+  {% if bio.display_name %}
+  <h2>{{ bio.display_name }}</h2>
+  <p class="sheet-subtitle">{{ character.metatype | dterm("metatypes.xml") }}{% if bio.concept %} — {{ bio.concept }}{% endif %}</p>
+  {% else %}
   <h2>{{ character.metatype | dterm("metatypes.xml") }}</h2>
+  {% if bio.concept %}<p class="sheet-subtitle">{{ bio.concept }}</p>{% endif %}
+  {% endif %}
+  {% if bio_sheet_rows %}
+  <dl class="sheet-bio">
+    {% for row in bio_sheet_rows %}
+    <dt>{{ _(row.label_key) }}</dt><dd>{{ row.value }}</dd>
+    {% endfor %}
+  </dl>
+  {% endif %}
   <ul>
     <li>{{ _("Web_Priorities_SummaryHeritage", letter=priority_summary.heritage[0], name=priority_summary.heritage[1] | dterm("priorities.xml")) }}</li>
     <li>{{ _("Web_Priorities_SummaryTalent", letter=priority_summary.talent[0], name=priority_summary.talent[1] | dterm("priorities.xml")) }}</li>

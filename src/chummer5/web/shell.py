@@ -33,6 +33,7 @@ from chummer5.web.catalogs import (
     PRIORITIES,
 )
 from chummer5.web.routes.attributes import _attribute_allocation_context
+from chummer5.web.routes.bio import _bio_context
 from chummer5.web.routes.contacts import _contacts_context
 from chummer5.web.routes.cyberware import _cyberware_context
 from chummer5.web.routes.foci import _foci_selection_context
@@ -249,12 +250,7 @@ STEP_PAGES: tuple[StepPage, ...] = (
     StepPage(
         "contacts", "String_Contacts", _single("contacts", "String_Contacts", "_contacts.html")
     ),
-    StepPage(
-        "bio",
-        "Web_Nav_Bio",
-        enabled=False,
-        disabled_reason_key="Web_Nav_BioUnsupported",
-    ),
+    StepPage("bio", "Web_Nav_Bio", _single("bio", "Web_Nav_Bio", "_bio.html")),  # WP134
     StepPage(
         "export",
         "String_Export",
@@ -711,6 +707,7 @@ def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> di
         **foci_ctx,
         **quality_ctx,
         **contact_ctx,
+        **_bio_context(character),  # WP134
         **lifestyle_ctx,
         **cyberware_ctx,
         **vehicles_ctx,

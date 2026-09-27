@@ -955,6 +955,7 @@ def import_legacy_character(
         build_method=legacy.build_method,
         knowledge_skill_picks=knowledge_skill_picks,
         language_skill_picks=language_skill_picks,
+        biography=legacy.biography,  # WP134
     )
 
     built = build_character(

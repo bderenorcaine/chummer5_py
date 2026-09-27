@@ -44,6 +44,7 @@ from chummer5.web.catalogs import (
 )
 from chummer5.web.routes import (
     attributes,
+    bio,
     character,
     contacts,
     cyberware,
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(spirits.router)
     app.include_router(qualities.router)
     app.include_router(contacts.router)
+    app.include_router(bio.router)
     app.include_router(resources.router)
     app.include_router(lifestyle.router)
     app.include_router(cyberware.router)

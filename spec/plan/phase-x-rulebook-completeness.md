@@ -529,7 +529,7 @@ the rules it checks.
 
 #### Step Nine — final touches
 
-- [ ] **WP134 — The Bio page.**
+- [x] **WP134 — The Bio page.**
   Goal: enable Phase W's disabled "Bio" nav entry with a real data model.
   Deliverables:
   - A `Biography` field on `Character`: name, street name/alias, player name, concept, sex, age,

@@ -495,10 +495,6 @@
       <text>Bio</text>
     </string>
     <string>
-      <key>Web_Nav_BioUnsupported</key>
-      <text>Character background details are not supported yet.</text>
-    </string>
-    <string>
       <key>Web_Nav_Equipment</key>
       <text>Equipment</text>
     </string>
@@ -1681,6 +1677,14 @@
     <string>
       <key>Web_Sheet_KarmaCarryoverLost</key>
       <text>{lost} Karma over the 7-Karma carryover limit will be lost.</text>
+    </string>
+    <string>
+      <key>Web_Bio_Update</key>
+      <text>Update bio</text>
+    </string>
+    <string>
+      <key>Web_Bio_Placeholder</key>
+      <text>Confirm a metatype and priorities on the Priorities page before writing a bio.</text>
     </string>
   </strings>
 </chummer>

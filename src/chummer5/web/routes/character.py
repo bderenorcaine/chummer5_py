@@ -106,6 +106,7 @@ from chummer5.web.catalogs import (
 )
 from chummer5.web.forms import display_karma_to_nuyen
 from chummer5.web.i18n import Message, MessageJoin
+from chummer5.web.routes.bio import _bio_context
 from chummer5.web.routes.resources import matrix_stat_block
 from chummer5.web.routes.vehicles import vehicle_stat_block
 from chummer5.web.session import SESSION_COOKIE_NAME, ChargenSession, resolve_session
@@ -581,6 +582,14 @@ def _character_sheet_context(
                 gear_counts.items(), key=lambda kv: (kv[0][0], kv[0][1] or 0)
             )
         ],
+        # WP134: the filled-in Bio fields other than the two the header already shows.
+        "bio_sheet_rows": [
+            row
+            for row in _bio_context(character)["bio_rows"]
+            if row["value"]
+            and row["field"] not in ("street_name", "concept")
+            and row["value"] != character.biography.display_name
+        ],
         # WP130: each accessorized weapon copy, with what it ships with and what was added.
         "weapon_accessory_rows": _sheet_weapon_accessory_rows(resources_selection),
         # WP131: each modified armor copy, with its mods and the Capacity they use.
@@ -978,6 +987,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         specializations=allocation.specializations if allocation is not None else {},
         quality_picks=quality_picks,
         unworn_armor=character.unworn_armor,
+        biography=character.biography,  # WP134
         contacts=contacts,
         resources_letter=session.resources_letter,
         gear_names=gear_names,

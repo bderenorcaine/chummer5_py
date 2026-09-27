@@ -1899,3 +1899,19 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   roommates don't exist in core. The sheet omits the roll until a Lifestyle is chosen.
 - **The fresh-character Karma note is expected.** A character with 25 Karma unspent sees "18 Karma
   ... will be lost". That is the rule, and nothing blocks it.
+
+## 2026-09-27 — WP134: the Bio page
+
+- **`Character.biography`**: fourteen plain-text fields mirroring the legacy `.chum5` elements (the
+  street name is `<alias>`). They are carried across every rebuild by `dataclasses.replace`, like
+  any other field. Nothing reads them but the page, the sheet and the save.
+- **No format bump, despite the plan's "save-format bump".** `biography` is an additive key
+  (`{field: text}`, non-empty fields only), and every additive key since WP20 has kept
+  `FORMAT_VERSION` at 2. A bump would make older readers reject a file they could otherwise read in
+  full, less the Bio.
+- **The mugshot is deferred**, as the plan said. It needs binary data in a JSON save and an upload
+  route. `<gamenotes>` (GM notes) is not imported either.
+- **The sheet heads with the street name**, falling back to the name, then the metatype, then the
+  concept. The other filled fields follow as a short list.
+- **Labels reuse legacy keys** (`Label_Alias`, `Label_Concept`, ...), so the street-name field reads
+  "Alias:". The disabled-entry string `Web_Nav_BioUnsupported` is gone.

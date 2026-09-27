@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 from chummer5.data.metatypes import AttributeRange, Metatype
 from chummer5.data.priorities import HeritagePriority, PriorityTable
 from chummer5.data.qualities import Quality
+from chummer5.engine.biography import Biography
 from chummer5.engine.improvements import ImprovementIndex, ImprovementType
 
 if TYPE_CHECKING:
@@ -396,6 +397,8 @@ class Character:
     # `resources_selection`, so none of the many sites that re-validate the nuyen budget has to
     # carry it along.
     unworn_armor: frozenset[str] = frozenset()
+    # WP134: name, alias, concept and the rest of the Bio page. Feeds no rule.
+    biography: Biography = Biography()
 
     @property
     def karma_spent(self) -> int:

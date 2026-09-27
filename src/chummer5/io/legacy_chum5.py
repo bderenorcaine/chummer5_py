@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
+from chummer5.engine.biography import LEGACY_ELEMENTS, Biography, create_biography
+
 
 @dataclass(frozen=True)
 class LegacyAttribute:
@@ -259,6 +261,8 @@ class LegacyCharacter:
     # entry), which this parser doesn't need since chummer5.engine.resources hardcodes the same
     # cap directly (the QUALITY_KARMA_LIMIT precedent).
     karma_converted_to_nuyen: int
+    # WP134: <name>, <alias>, <concept>, ... -- see chummer5.engine.biography.LEGACY_ELEMENTS.
+    biography: Biography = Biography()
 
 
 def _parse_bool(text: str | None) -> bool:
@@ -531,4 +535,7 @@ def load_chum5(path: Path) -> LegacyCharacter:
         nuyen_remaining=float(root.findtext("nuyen", "0")),
         starting_nuyen=int(root.findtext("startingnuyen", "0")),
         karma_converted_to_nuyen=int(root.findtext("nuyenbp", "0")),
+        biography=create_biography(
+            {field: root.findtext(element) or "" for field, element in LEGACY_ELEMENTS.items()}
+        ),
     )

@@ -82,21 +82,21 @@ def test_nav_renders_all_eleven_entries_in_the_sketch_order() -> None:
     assert positions == sorted(positions)
 
 
-def test_resonance_and_bio_are_present_but_disabled() -> None:
+def test_resonance_is_present_but_disabled() -> None:
+    # WP134 enabled Bio, the other entry Phase W left disabled.
     client = TestClient(create_app())
 
     html = client.get("/").text
 
-    for label in ("Resonance", "Bio"):
-        item = _nav_item(html, label)
-        assert item.startswith("<span")
-        assert 'aria-disabled="true"' in item
-        assert "href=" not in item and "hx-get=" not in item
-    enabled = [label for label in NAV_LABELS if label not in ("Resonance", "Bio")]
+    item = _nav_item(html, "Resonance")
+    assert item.startswith("<span")
+    assert 'aria-disabled="true"' in item
+    assert "href=" not in item and "hx-get=" not in item
+    enabled = [label for label in NAV_LABELS if label != "Resonance"]
     for label in enabled:
         assert _nav_item(html, label).startswith("<a")
     assert client.get("/ui/page/resonance").status_code == 404
-    assert client.get("/ui/page/bio").status_code == 404
+    assert client.get("/ui/page/bio").status_code == 200
     assert client.get("/ui/page/no-such-step").status_code == 404
 
 

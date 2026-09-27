@@ -1,0 +1,34 @@
+<div id="bio" class="panel">
+  {% if character %}
+  <details open>
+  <summary class="panel__heading">{{ _("Web_Nav_Bio") }}</summary>
+
+  {% if bio_error %}
+  <p class="error">{{ bio_error | tr }}</p>
+  {% endif %}
+
+  {# WP134: saved on every change; nothing here feeds a rule. #}
+  <form
+    class="bio-form"
+    hx-post="/ui/bio"
+    hx-target="#bio"
+    hx-swap="outerHTML"
+    hx-trigger="change"
+  >
+    {% for row in bio_rows %}
+    <label class="bio-form__field{% if row.long %} bio-form__field--long{% endif %}">
+      {{ _(row.label_key) }}
+      {% if row.long %}
+      <textarea name="{{ row.field }}" rows="5">{{ row.value }}</textarea>
+      {% else %}
+      <input type="text" name="{{ row.field }}" value="{{ row.value }}" />
+      {% endif %}
+    </label>
+    {% endfor %}
+    <button type="submit">{{ _("Web_Bio_Update") }}</button>
+  </form>
+  </details>
+  {% else %}
+  <p>{{ _("Web_Bio_Placeholder") }}</p>
+  {% endif %}
+</div>
