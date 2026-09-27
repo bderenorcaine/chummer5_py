@@ -52,6 +52,7 @@
     <div class="app-shell">
       <header class="app-shell__titlebar">
         <span class="app-shell__title">{{ _("Web_App_Title") }}</span>
+        {% include "_validation_status.html" %}
         {# WP100/WP101: display preferences. Changing one is not a chargen change (see
            chummer5.web.prefs): the theme swaps only its own <link>, out of band; the language
            reloads the page, since every string on it changes. #}

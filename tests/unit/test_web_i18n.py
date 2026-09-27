@@ -352,6 +352,8 @@ def test_no_project_key_is_an_orphan() -> None:
         for path in [
             *Path(TEMPLATES_DIR).glob("*.html"),
             *Path(TEMPLATES_DIR).parent.rglob("*.py"),
+            # WP135: the whole-character validator names its issues' i18n keys.
+            Path(TEMPLATES_DIR).parents[1] / "engine" / "validation.py",
         ]
     )
     orphans = []

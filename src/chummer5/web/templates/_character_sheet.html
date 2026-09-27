@@ -7,6 +7,24 @@
   {% endif %}
 
   {% if character %}
+  {# WP135: the closing checklist -- every whole-character issue, grouped by step, with a link to
+     it. Saving and export are never blocked. #}
+  <section class="validation-panel" id="validation-panel">
+    <h3>{{ _("Web_Validation_Heading") }}</h3>
+    {% if validation_groups %}
+    {% for group in validation_groups %}
+    <h4><a href="/ui/page/{{ group.page.slug }}" hx-get="/ui/page/{{ group.page.slug }}" hx-target="#page" hx-swap="innerHTML" hx-push-url="true">{{ _(group.page.label_key) }}</a></h4>
+    <ul>
+      {% for issue in group.issues %}
+      <li class="validation-panel__{{ issue.severity }}"><a href="{{ issue.href }}" hx-get="{{ issue.href }}" hx-target="#page" hx-swap="innerHTML" hx-push-url="true">{{ issue.message | tr }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endfor %}
+    {% else %}
+    <p class="validation-panel__complete">✓ {{ _("Web_Validation_AllClear") }}</p>
+    {% endif %}
+  </section>
+
   {# WP134: the street name heads the sheet (falling back to the name), then metatype and concept. #}
   {% set bio = character.biography %}
   {% if bio.display_name %}

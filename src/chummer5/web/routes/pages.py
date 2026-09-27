@@ -47,6 +47,7 @@ from chummer5.web.shell import (
     resolve_tab,
     resource_panel_context,
     tabs_context,
+    validation_context,
 )
 
 router = APIRouter()
@@ -77,10 +78,15 @@ def _shell_context(
     read it whichever page is showing.
     """
     chargen_ctx = chargen_context(session, _session_priority_form_context(session))
-    page_ctx = _character_sheet_context(session) if page.slug == "export" else chargen_ctx
+    page_ctx = (
+        _character_sheet_context(session, chargen_ctx=chargen_ctx)
+        if page.slug == "export"
+        else chargen_ctx
+    )
     context = {
         **page_ctx,
         **nav_context(session, chargen_ctx),
+        **validation_context(session, chargen_ctx),  # WP135
         **resource_panel_context(session, chargen_ctx),
         "page": page,
         "theme": session.theme,
@@ -173,6 +179,20 @@ def step_nav(request: Request) -> HTMLResponse:
     chargen_ctx = chargen_context(session, _session_priority_form_context(session))
     response = templates.TemplateResponse(
         request, "_step_nav.html", nav_context(session, chargen_ctx)
+    )
+    if new_cookie is not None:
+        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    return response
+
+
+@router.get("/ui/validation-status", response_class=HTMLResponse)
+def validation_status(request: Request) -> HTMLResponse:
+    """The title bar's "✓ Complete" / "N issues" status alone (WP135), re-fetched on
+    `chargen-changed` like the nav."""
+    session, new_cookie = resolve_session(request)
+    chargen_ctx = chargen_context(session, _session_priority_form_context(session))
+    response = templates.TemplateResponse(
+        request, "_validation_status.html", validation_context(session, chargen_ctx)
     )
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

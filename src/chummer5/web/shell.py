@@ -27,11 +27,14 @@ from chummer5.engine.resources import (
     resources_addon_args,
     resources_gear_args,
 )
+from chummer5.engine.validation import Issue, SessionLetters, validate
 from chummer5.web.catalogs import (
     DEFAULT_LIFESTYLE_MONTHS,
     DEFAULT_LIFESTYLE_TIER_NAME,
     PRIORITIES,
+    SKILLS,
 )
+from chummer5.web.i18n import Message
 from chummer5.web.routes.attributes import _attribute_allocation_context
 from chummer5.web.routes.bio import _bio_context
 from chummer5.web.routes.contacts import _contacts_context
@@ -264,17 +267,93 @@ STEP_PAGES_BY_SLUG: dict[str, StepPage] = {page.slug: page for page in STEP_PAGE
 DEFAULT_PAGE = "priorities"
 
 
+def session_letters(session: ChargenSession) -> SessionLetters:
+    return SessionLetters(
+        heritage=session.heritage_letter,
+        talent=session.talent_letter,
+        attributes=session.attributes_letter,
+        skills=session.skills_letter,
+        resources=session.resources_letter,
+        build_method=session.build_method,
+    )
+
+
+def validation_issues(session: ChargenSession, chargen_ctx: dict[str, Any]) -> tuple[Issue, ...]:
+    """WP135: `chummer5.engine.validation.validate`'s issues, plus every step section's WP19
+    "no longer fits" warning (an error: a committed spend the current priorities reject), in
+    `STEP_PAGES` order. Empty before a character exists."""
+    character = session.character
+    if character is None:
+        return ()
+    stale = [
+        Issue(
+            "error",
+            page.slug,
+            "Web_Validation_Stale",
+            {"warning": chargen_ctx[key]},
+            section.slug if page.tabbed else None,
+        )
+        for page in STEP_PAGES
+        for section in page.sections
+        for key in section.warning_keys
+        if chargen_ctx.get(key)
+    ]
+    found = validate(character, session_letters(session), priorities=PRIORITIES, skills=SKILLS)
+    order = {page.slug: index for index, page in enumerate(STEP_PAGES)}
+    return tuple(sorted((*found, *stale), key=lambda issue: order.get(issue.step, len(order))))
+
+
+def issue_message(issue: Issue) -> Message:
+    """An issue's text: its key, with every `*_key` parameter translated in turn."""
+    params = {
+        name: Message.of(value) if name.endswith("_key") else value
+        for name, value in issue.params.items()
+    }
+    return Message.of(issue.key, **params)
+
+
+def validation_context(session: ChargenSession, chargen_ctx: dict[str, Any]) -> dict[str, Any]:
+    """WP135: the title bar's status and the Export page's issue list, grouped by step."""
+    issues = validation_issues(session, chargen_ctx)
+    groups = [
+        {
+            "page": page,
+            "issues": [
+                {
+                    "severity": issue.severity,
+                    "message": issue_message(issue),
+                    "href": f"/ui/page/{page.slug}" + (f"/{issue.tab}" if issue.tab else ""),
+                }
+                for issue in issues
+                if issue.step == page.slug
+            ],
+        }
+        for page in STEP_PAGES
+    ]
+    return {
+        "validation_has_character": session.character is not None,
+        "validation_count": len(issues),
+        "validation_errors": sum(1 for issue in issues if issue.severity == "error"),
+        "validation_groups": [group for group in groups if group["issues"]],
+    }
+
+
 def nav_context(session: ChargenSession, chargen_ctx: dict[str, Any]) -> dict[str, Any]:
     """The step nav's own context: one item per `STEP_PAGES` entry, with the session's
     `current_page` marked and each page's WP19 staleness read off `chargen_ctx` (the same
     `chargen_context` result a full render already has, rather than re-deriving any of it).
+
+    **WP135**: the marker widens from "no longer fits" to "has validation issues" -- a page is
+    marked when `validation_issues` names it, which includes every WP19 warning.
     """
+    flagged = {issue.step for issue in validation_issues(session, chargen_ctx)}
     return {
         "nav_items": [
             {
                 "page": page,
                 "current": page.slug == session.current_page,
-                "stale": any(chargen_ctx.get(key) for key in page.warning_keys),
+                "stale": page.slug in flagged
+                or any(chargen_ctx.get(key) for key in page.warning_keys),
             }
             for page in STEP_PAGES
         ]

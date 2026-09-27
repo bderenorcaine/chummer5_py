@@ -107,9 +107,11 @@ from chummer5.web.catalogs import (
 from chummer5.web.forms import display_karma_to_nuyen
 from chummer5.web.i18n import Message, MessageJoin
 from chummer5.web.routes.bio import _bio_context
+from chummer5.web.routes.priorities import _session_priority_form_context
 from chummer5.web.routes.resources import matrix_stat_block
 from chummer5.web.routes.vehicles import vehicle_stat_block
 from chummer5.web.session import SESSION_COOKIE_NAME, ChargenSession, resolve_session
+from chummer5.web.shell import chargen_context, validation_context
 
 router = APIRouter()
 
@@ -356,6 +358,7 @@ def _character_sheet_context(
     *,
     error: Message | None = None,
     info: Message | MessageJoin | None = None,
+    chargen_ctx: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Context for `_character_sheet.html`: WP10's derived stats plus a read-only recap of every
     already-committed selection. Unlike the `_*_context` builders in `chummer5.web.routes`, there is
@@ -531,7 +534,11 @@ def _character_sheet_context(
         )
         bioware_counts[key] = bioware_counts.get(key, 0) + 1
 
+    # WP135: the Export page's issue list (the title bar's status reads the same issues).
+    if chargen_ctx is None:
+        chargen_ctx = chargen_context(session, _session_priority_form_context(session))
     return {
+        **validation_context(session, chargen_ctx),
         "character": character,
         # WP103: letter and priority-row name kept apart, so the sheet can translate the name.
         "priority_summary": {

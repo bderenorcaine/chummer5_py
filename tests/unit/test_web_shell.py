@@ -234,7 +234,9 @@ def test_a_priorities_change_that_invalidates_a_skill_spend_marks_skills_in_the_
     ungrouped = [s for s in MUNDANE_SKILLS if s.skill_group is None][:5]
     points = {s.id: 6 for s in ungrouped[:4]} | {ungrouped[4].id: 1}  # 25 points -- fits C
     client.post("/ui/skills", data={f"skill_{sid}": str(v) for sid, v in points.items()})
-    assert "step-nav__marker" not in client.get("/ui/nav").text
+    # WP135 widened the marker to "has validation issues", so unspent points mark steps too; the
+    # WP19 diagnostic itself shows in the Export page's checklist.
+    assert "No longer fits" not in client.get("/character/sheet").text
 
     # Skills C (28) -> D (22): the committed 25 points no longer fit.
     priorities_page = _confirm_priorities(client, skills_letter="D", resources_letter="C")
@@ -249,8 +251,10 @@ def test_a_priorities_change_that_invalidates_a_skill_spend_marks_skills_in_the_
     nav = client.get("/ui/nav").text
     assert "step-nav__marker" in _nav_item(nav, "Skills")
     assert "step-nav__item--stale" in _nav_item(nav, "Skills")
-    for label in ("Priorities", "Attributes", "Magic", "Equipment", "Augmentation"):
+    # Steps with no issue at all stay unmarked (Attributes and Equipment have unfinished spends).
+    for label in ("Priorities", "Magic", "Augmentation"):
         assert "step-nav__marker" not in _nav_item(nav, label)
+    assert "No longer fits" in client.get("/character/sheet").text
     assert _current_items(nav) == ["Priorities"]
 
     # And the page itself still says what's wrong, once the player goes there.

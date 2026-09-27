@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase X — Post-MVP: closing the "Creating a Shadowrunner" gaps (planned, WP107-135)
+### Phase X — Post-MVP: closing the "Creating a Shadowrunner" gaps (done, WP107-135)
 
 **Why now.** Raised 2026-09-26. A gap survey walked every step of
 `spec/rulebooks/character_creation_chapter.md` (core rulebook pp. 62-104) against the code as it
@@ -544,7 +544,7 @@ the rules it checks.
   Acceptance: the Bio nav entry is enabled; a Bio round-trips through save/load; a legacy `.chum5`
   alias appears on the sheet.
 
-- [ ] **WP135 — Character validation: the rulebook's closing checklist.**
+- [x] **WP135 — Character validation: the rulebook's closing checklist.**
   Goal: one validator that reports every whole-character rule (the chapter's closing Character Creation Checklist), so the player
   knows when the character is finished.
   Deliverables:

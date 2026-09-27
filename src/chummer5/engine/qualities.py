@@ -552,6 +552,16 @@ def _check_later_step_prerequisites(
         )
 
 
+def later_step_problem(picks: Iterable[QualityPick], later_steps: LaterStepFacts) -> str | None:
+    """WP135: why `picks` fail their later-step prerequisites, or None -- the whole-character
+    check a save or import skipped (see `LaterStepFacts`)."""
+    try:
+        _check_later_step_prerequisites(picks, later_steps)
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
 def _as_request(pick: str | QualityPickRequest) -> QualityPickRequest:
     """A bare id means "this quality, once, at rating 1, with no detail" -- the shorthand every
     caller with nothing to choose keeps using (the same convention `create_bioware_selection`

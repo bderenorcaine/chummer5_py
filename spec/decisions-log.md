@@ -1915,3 +1915,27 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   concept. The other filled fields follow as a short list.
 - **Labels reuse legacy keys** (`Label_Alias`, `Label_Concept`, ...), so the street-name field reads
   "Alias:". The disabled-entry string `Web_Nav_BioUnsupported` is gone.
+
+## 2026-09-27 — WP135: whole-character validation
+
+- **The engine checks what it can see; the web adds the WP19 diagnostics.**
+  `chummer5.engine.validation.validate(character, SessionLetters, priorities=, skills=)` runs every
+  finish rule. The six per-step "no longer fits" warnings are already computed by the step contexts,
+  so `chummer5.web.shell.validation_issues` adds them as errors instead of re-running six
+  re-validations in the engine.
+- **Severity**: an unspent pool is a warning, an overspent one an error. So are a missing
+  Lifestyle and no contacts (warnings), and a second attribute at natural maximum, quality caps,
+  later-step prerequisites, the Adept's Assensing grant, an Aspected Magician's Incompetent,
+  nuyen or Karma over budget, and bad priority rows (errors).
+- **The nav marker now means "has issues"**, not only "no longer fits", as the plan said. A fresh
+  character therefore marks most steps; `test_web_shell`'s WP19 test now checks the checklist text
+  instead of the marker's absence. The marker's tooltip says so.
+- **The title bar shows "✓ Complete" or "N issues"**, linking to Export. It re-fetches itself on
+  `chargen-changed`, like the nav. Nothing is ever blocked.
+- **The "James validates clean" acceptance is met by the synthetic rigger build instead.** James is
+  a Technomancer, which this project doesn't build.
+- **Yeti shows one real error.** Its Resonance Talent imports as Mundane at E (WP29's import rule),
+  and its Resources are also E, so its priority rows repeat. The validator reports that honestly.
+  Its over-cap contact is not reported, as ruled.
+- **Issue text is an i18n key.** A parameter named `*_key` is itself a key; the web translates it.
+  The orphan-key test now also scans `engine/validation.py`.

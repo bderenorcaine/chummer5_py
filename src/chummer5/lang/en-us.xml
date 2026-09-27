@@ -504,7 +504,7 @@
     </string>
     <string>
       <key>Web_Nav_StaleMarker</key>
-      <text>Some selections here no longer fit your priorities</text>
+      <text>This step has issues to resolve (see the Export page)</text>
     </string>
     <!-- Panel -->
     <string>
@@ -1685,6 +1685,102 @@
     <string>
       <key>Web_Bio_Placeholder</key>
       <text>Confirm a metatype and priorities on the Priorities page before writing a bio.</text>
+    </string>
+    <string>
+      <key>Web_Validation_Complete</key>
+      <text>Complete</text>
+    </string>
+    <string>
+      <key>Web_Validation_Issues_One</key>
+      <text>{count} issue</text>
+    </string>
+    <string>
+      <key>Web_Validation_Issues_Other</key>
+      <text>{count} issues</text>
+    </string>
+    <string>
+      <key>Web_Validation_Heading</key>
+      <text>Character checklist</text>
+    </string>
+    <string>
+      <key>Web_Validation_AllClear</key>
+      <text>Every creation rule is met: the character is finished.</text>
+    </string>
+    <string>
+      <key>Web_Validation_PriorityRows</key>
+      <text>Each priority row A-E must be used exactly once.</text>
+    </string>
+    <string>
+      <key>Web_Validation_SumToTen</key>
+      <text>Sum-to-Ten priorities must total exactly 10.</text>
+    </string>
+    <string>
+      <key>Web_Validation_AttributePoints</key>
+      <text>{count} attribute points are unspent.</text>
+    </string>
+    <string>
+      <key>Web_Validation_SpecialPoints</key>
+      <text>{count} special attribute points are unspent; they are lost at the end of creation.</text>
+    </string>
+    <string>
+      <key>Web_Validation_Overspent</key>
+      <text>{pool_key} are overspent by {count}.</text>
+    </string>
+    <string>
+      <key>Web_Validation_NaturalMaximum</key>
+      <text>Only one Mental or Physical attribute may be at its natural maximum ({attributes} are).</text>
+    </string>
+    <string>
+      <key>Web_Validation_PositiveCap</key>
+      <text>Positive qualities cost {karma} Karma, over the 25-Karma limit.</text>
+    </string>
+    <string>
+      <key>Web_Validation_NegativeCap</key>
+      <text>Negative qualities grant {karma} Karma, over the 25-Karma limit.</text>
+    </string>
+    <string>
+      <key>Web_Validation_Rule</key>
+      <text>{error}</text>
+    </string>
+    <string>
+      <key>Web_Validation_AspectIncompetent</key>
+      <text>Incompetent in {group}: a {aspect}-aspected magician can never learn it, so it is no handicap.</text>
+    </string>
+    <string>
+      <key>Web_Validation_SkillPoints</key>
+      <text>{count} skill points are unspent.</text>
+    </string>
+    <string>
+      <key>Web_Validation_GroupPoints</key>
+      <text>{count} skill group points are unspent.</text>
+    </string>
+    <string>
+      <key>Web_Validation_KnowledgePoints</key>
+      <text>{count} free Knowledge points are unspent.</text>
+    </string>
+    <string>
+      <key>Web_Validation_AdeptAssensing</key>
+      <text>The Adept's free skill is Assensing, which needs the Astral Perception power.</text>
+    </string>
+    <string>
+      <key>Web_Validation_NoLifestyle</key>
+      <text>No primary Lifestyle has been chosen.</text>
+    </string>
+    <string>
+      <key>Web_Validation_NuyenOver</key>
+      <text>Nuyen is overspent by {amount}.</text>
+    </string>
+    <string>
+      <key>Web_Validation_NoContacts</key>
+      <text>The character has no contacts.</text>
+    </string>
+    <string>
+      <key>Web_Validation_KarmaOver</key>
+      <text>Karma is overspent by {amount}.</text>
+    </string>
+    <string>
+      <key>Web_Validation_Stale</key>
+      <text>{warning}</text>
     </string>
   </strings>
 </chummer>

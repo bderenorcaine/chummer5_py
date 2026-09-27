@@ -1,0 +1,24 @@
+{# WP135: the title bar's finish line -- "✓ Complete", or how many issues the Export page lists.
+   Re-fetches itself on `chargen-changed`, like the step nav. #}
+<span
+  id="validation-status"
+  class="validation-status"
+  hx-get="/ui/validation-status"
+  hx-trigger="chargen-changed from:body"
+  hx-swap="outerHTML"
+>
+  {% if validation_has_character %}
+  {% if validation_count == 0 %}
+  <span class="validation-status__complete">✓ {{ _("Web_Validation_Complete") }}</span>
+  {% else %}
+  <a
+    class="validation-status__issues{% if validation_errors %} validation-status__issues--errors{% endif %}"
+    href="/ui/page/export"
+    hx-get="/ui/page/export"
+    hx-target="#page"
+    hx-swap="innerHTML"
+    hx-push-url="true"
+  >{{ _n("Web_Validation_Issues", validation_count) }}</a>
+  {% endif %}
+  {% endif %}
+</span>
