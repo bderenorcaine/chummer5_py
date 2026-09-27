@@ -226,6 +226,29 @@ def parse_rating_availability(avail: str) -> tuple[int, int] | None:
     return None
 
 
+_AVAIL_FIXED_VALUES_RE = re.compile(r"FixedValues\(([^)]*)\)")
+
+
+def availability_at_rating(avail: str, rating: int) -> int | None:
+    """An `<avail>`'s magnitude at `rating` (WP126), or None for a form this can't read.
+
+    `parse_rating_availability`'s forms, plus `FixedValues(a,b,c)` -- Wired Reflexes'
+    `FixedValues(8R,12R,20R)` -- indexed 1-based by rating and clamped at both ends, the same rule
+    `chummer5.data.cyberware_formula` documents for cost and Essence.
+    """
+    fixed = _AVAIL_FIXED_VALUES_RE.fullmatch(avail.strip())
+    if fixed:
+        values = [_AVAIL_RESTRICTION_RE.sub("", v.strip()) for v in fixed.group(1).split(",")]
+        if not all(v.isdigit() for v in values):
+            return None
+        return int(values[min(max(rating, 1), len(values)) - 1])
+    parsed = parse_rating_availability(avail)
+    if parsed is None:
+        return None
+    slope, intercept = parsed
+    return slope * rating + intercept
+
+
 @dataclass(frozen=True)
 class Gear:
     """One flat-cost, SR5-sourced `<gear>` entry.

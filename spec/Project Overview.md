@@ -139,9 +139,11 @@ Implementation Plan's WP20.
   (WP21's own doc flags this as a deliberate, undone cut). **Partially backfilled since:** WP66
   capped the Rating-priced half of the gear catalog, and WP94 capped its Commlinks / Cyberdecks /
   Rigger Command Consoles categories (6 rows dropped, purchasable catalog 379 → 373). Every other
-  flat-gear category and the whole cyberware catalog remain uncapped, with no WP scheduled — sized
-  concretely in `spec/decisions-log.md`'s 2026-08-01 and 2026-08-24 entries. Flagged here so it
-  isn't forgotten.
+  flat-gear category and the whole cyberware catalog remained uncapped — sized concretely in
+  `spec/decisions-log.md`'s 2026-08-01 and 2026-08-24 entries. **Settled by Phase X's Step Six
+  ruling (WP126, 2026-09-27):** items whose Availability scales with their rating are capped (a new
+  cyberware pick at the highest rating within 12; rated electronics at Device Rating 6), and flat
+  items already over 12 stay offered, by ruling. No backfill remains.
 - Technomancers/Resonance — reaffirmed out of scope, 2026-07-21 (already excluded per above; recorded
   again here since it came up explicitly in the same ruling as the items above).
 - Plugins.

@@ -1756,3 +1756,23 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
 - **Legacy import still blocks a legacy MAG `<karma>` spend** (WP52's block, unchanged). Lifting it
   means checking how legacy records Karma-raised Magic next to Essence loss, and no corpus file
   exercises that. Left as is.
+
+## 2026-09-27 — WP126: the Availability and Device Rating caps, and what they leave alone
+
+- **The Step Six ruling, implemented.** A cyberware row whose `<avail>` scales with its rating is
+  capped at the highest rating within Availability 12 (Muscle Replacement 1-2, Wired Reflexes 1-2,
+  Dermal Plating 1-3, Data Lock 1-6, ...). A fixed Availability already over 12 stays offered at
+  every rating (Retinal Duplication `16F`, Bone Lacing (Titanium), the cranial bombs, ...), as do
+  the flat over-cap gear rows. This retires the Project Overview's standing "flagged, not
+  scheduled" backfill note.
+- **The cap is per-action: it binds new picks, not what a character already has.** The 2026-08-01
+  entry deferred this cap because it "retroactively changes what existing saves and fixtures
+  contain". So `create_cyberware_tree_selection` checks it only when given `availability_exempt`.
+  The web route passes the committed tree's `(id, rating)` pairs, so an edit elsewhere never trips
+  over an old Wired Reflexes 3. Save loading and legacy import pass nothing and skip the check.
+  WP135's validation is where an over-cap import will be reported.
+- **Device Rating <= 6** applies to the rated electronics categories (Audio/Vision Devices, Sensor
+  Housings, Sensors, Communications and Countermeasures). Only the two sensors (printed "Rating
+  2-8") change. Unlike cyberware, the gear cap is catalog-level, as WP66's is. A pre-WP126 save
+  holding a rating 7-8 sensor would no longer load. That's accepted as vanishingly rare: 7,000-8,000¥
+  for a sensor, with no fixture carrying one.

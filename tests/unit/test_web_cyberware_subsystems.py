@@ -222,14 +222,20 @@ def test_an_over_capacity_plugin_set_is_rejected_with_the_engines_own_message() 
     client = TestClient(create_app())
     _confirm_human(client)
 
-    # Cyberears rating 1 -> a Capacity budget of 4. A rating-6 Select Sound Filter costs 6.
+    # Cyberears rating 1 -> a Capacity budget of 4. A rating-4 Select Sound Filter costs 4 and a
+    # rating-1 Audio Enhancement 1 more. (WP126: both within Availability 12; a rating-6 filter,
+    # this test's pre-WP126 case, is Availability 18 and now fails on that first.)
+    filter_id = BY_NAME["Select Sound Filter"].id
+    audio_id = BY_NAME["Audio Enhancement"].id
     response = client.post(
         "/ui/cyberware",
         data={
             f"cyberware_{CYBEREARS.id}": "1",
             f"cyberware_rating_{CYBEREARS.id}_0": "1",
-            f"plugin_{CYBEREARS.id}_0_{BY_NAME['Select Sound Filter'].id}": "1",
-            f"plugin_rating_{CYBEREARS.id}_0_{BY_NAME['Select Sound Filter'].id}": "6",
+            f"plugin_{CYBEREARS.id}_0_{filter_id}": "1",
+            f"plugin_rating_{CYBEREARS.id}_0_{filter_id}": "4",
+            f"plugin_{CYBEREARS.id}_0_{audio_id}": "1",
+            f"plugin_rating_{CYBEREARS.id}_0_{audio_id}": "1",
         },
     )
 

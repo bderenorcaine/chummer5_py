@@ -71,9 +71,9 @@ the page *before* the table its numbers live in.
   placeholders (`<rating>{AGIMaximum}</rating>`, `<minrating>{AGIMinimum}+1</minrating>` on
   Customized Agility/Strength) -- character-state lookups, not arithmetic over a rating. The
   resolver takes already-resolved `rating`/`min_rating` ints from its caller.
-- **`<avail>` is out of scope**, even though it carries the same shape family. The Availability-cap
-  mechanic is ruled out project-wide (Project Overview, 2026-07-21), so nothing needs to resolve an
-  availability formula per-rating.
+- **`<avail>` is out of scope here**, even though it carries the same shape family. It has its own,
+  much smaller evaluator: WP126's Availability <= 12 cap reads it through
+  `chummer5.data.gear.availability_at_rating`.
 - **Fail loud, never fail quiet.** `parse_cyberware_formula` returns `None` for an unrecognized
   string (so WP37 can use it as an inclusion filter), while `resolve_cyberware_formula` raises
   `UnsupportedCyberwareFormulaError`. `min_rating` defaults to `None`, not `0`, so resolving

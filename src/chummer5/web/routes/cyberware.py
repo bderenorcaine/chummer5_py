@@ -70,6 +70,7 @@ from chummer5.engine.cyberware_subsystems import (
     cyberlimb_attribute_maximums,
     cyberware_essence_multiplier,
     cyberware_rating_bounds,
+    purchased_ratings,
 )
 from chummer5.engine.derived import BASE_ESSENCE
 from chummer5.engine.improvements import ImprovementSource
@@ -162,14 +163,21 @@ def _form_int(form: FormData, key: str) -> int | None:
 
 
 def _rating_range(
-    item: CyberwareEntry, attribute_maximums: Mapping[str, int]
+    item: CyberwareEntry, attribute_maximums: Mapping[str, int], current: int | None = None
 ) -> tuple[int, int] | None:
     """The rating range to offer for `item`, or `None` when it has no rating to pick.
 
     `None` covers both an unrated row (`cyberware_rating_bounds` gives `(1, 1)`) and the degenerate
     single-value range, so the template renders a control only where there is a choice.
+
+    **WP126**: capped at Availability 12, but never below `current` -- the rating the unit already
+    has, so a pre-WP126 save's Wired Reflexes 3 stays selectable instead of silently snapping down.
     """
-    minimum, maximum = cyberware_rating_bounds(item, attribute_maximums=attribute_maximums)
+    minimum, maximum = cyberware_rating_bounds(
+        item, attribute_maximums=attribute_maximums, cap_availability=True
+    )
+    if current is not None:
+        maximum = max(maximum, current)
     return None if minimum >= maximum else (minimum, maximum)
 
 
@@ -365,7 +373,7 @@ def _cyberware_unit_row(
     return {
         "index": index,
         "rating": rating,
-        "rating_range": _rating_range(item, attribute_maximums),
+        "rating_range": _rating_range(item, attribute_maximums, rating),
         "nuyen_cost": nuyen_cost,
         # Dual costing: a standalone purchase is the only thing that charges Essence -- every plugin
         # below contributes exactly zero (module docstring of `engine.cyberware_subsystems`).
@@ -400,7 +408,7 @@ def _plugin_row(
         "item": plugin,
         "selected": request is not None,
         "rating": rating,
-        "rating_range": _rating_range(plugin, attribute_maximums),
+        "rating_range": _rating_range(plugin, attribute_maximums, rating),
         "field": f"plugin_{parent.id}_{index}_{plugin.id}",
         "rating_field": f"plugin_rating_{parent.id}_{index}_{plugin.id}",
         "nuyen_cost": int(plugin.cost.resolve(rating=rating, min_rating=minimum)),
@@ -618,6 +626,8 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 nuyen_available,
                 attribute_maximums=attribute_maximums,
                 essence_multiplier=cyberware_essence_multiplier(session.character),
+                # WP126: a new pick is capped at Availability 12; what was bought stays.
+                availability_exempt=purchased_ratings(session.character.cyberware_selection),
             )
             bioware_selection = create_bioware_selection(
                 bioware_requests,

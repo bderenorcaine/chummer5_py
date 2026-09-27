@@ -408,7 +408,7 @@ the rules it checks.
 
 #### Step Six — resources
 
-- [ ] **WP126 — Availability and Device Rating caps for scalable items.**
+- [x] **WP126 — Availability and Device Rating caps for scalable items.**
   Goal: per the Step 6 ruling, **leave already-offered flat items that exceed Availability 12 as
   they are**; cap only the items whose rating scales their Availability.
   Deliverables:

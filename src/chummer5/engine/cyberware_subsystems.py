@@ -171,15 +171,18 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from enum import Enum
 
 from chummer5.data.cyberware_subsystems import CyberwareEntry
+from chummer5.data.gear import availability_at_rating
 from chummer5.engine.character import Character
 from chummer5.engine.cyberware import cyberware_bonus_improvements
 from chummer5.engine.derived import BASE_ESSENCE
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
+from chummer5.engine.resources import MAX_AVAILABILITY
 
 # p. 456, "All standard cyberlimbs come with Strength and Agility attributes of 3" -- the value
 # `{AGIMinimum}`/`{STRMinimum}` resolves to for a cyberlimb enhancement (legacy `Cyberware
@@ -384,7 +387,10 @@ def _resolve_bound(
 
 
 def cyberware_rating_bounds(
-    item: CyberwareEntry, *, attribute_maximums: Mapping[str, int] | None = None
+    item: CyberwareEntry,
+    *,
+    attribute_maximums: Mapping[str, int] | None = None,
+    cap_availability: bool = False,
 ) -> tuple[int, int]:
     """The `(minimum, maximum)` rating this item may be purchased at, placeholders resolved.
 
@@ -395,6 +401,9 @@ def cyberware_rating_bounds(
     **Public since WP42**, which needs exactly this to build the picker's per-purchase rating
     dropdown: an offered range the engine would then reject is the one thing a rating control must
     not produce. `_build_purchase` calls it for the validation half, so the two cannot disagree.
+
+    **WP126**: `cap_availability` lowers the maximum to `availability_capped_maximum` -- what a new
+    purchase may use. Off by default: a save or legacy file keeps what it already bought.
     """
     minimum = _resolve_bound(
         item.raw_min_rating,
@@ -412,7 +421,40 @@ def cyberware_rating_bounds(
         field_name="rating",
         absent_default=1,
     )
+    if cap_availability:
+        maximum = availability_capped_maximum(item, minimum, maximum)
     return minimum, maximum
+
+
+def purchased_ratings(selection: CyberwareTreeSelection | None) -> frozenset[tuple[str, int]]:
+    """Every `(item id, rating)` in `selection`'s trees (WP126) -- what a character already has, and
+    so what `create_cyberware_tree_selection(availability_exempt=)` lets stand."""
+    if selection is None:
+        return frozenset()
+    return frozenset((node.item.id, node.rating) for node in selection.walk())
+
+
+def availability_capped_maximum(item: CyberwareEntry, minimum: int, maximum: int) -> int:
+    """The highest rating in `minimum..maximum` whose Availability is at most 12 (WP126), for a row
+    whose Availability scales with its rating -- Muscle Replacement's `(Rating * 5)R` stops at 2,
+    Wired Reflexes' `FixedValues(8R,12R,20R)` at 2.
+
+    `maximum` unchanged for every other row, by the Step Six ruling: a fixed Availability already
+    over 12 (Retinal Duplication's `16F`, at any rating) stays offered, and so does an `<avail>`
+    this can't read (Customized Agility's parent-relative `+Rating - MinRating + 1`). Never below
+    `minimum`, so a scaled row is never dropped outright.
+    """
+    raw = item.raw_availability
+    if raw is None or maximum <= minimum:
+        return maximum
+    ratings = range(minimum, maximum + 1)
+    values = [availability_at_rating(raw, rating) for rating in ratings]
+    if any(value is None for value in values) or len(set(values)) == 1:
+        return maximum
+    fitting = [
+        r for r, v in zip(ratings, values, strict=True) if v is not None and v <= MAX_AVAILABILITY
+    ]
+    return max(fitting, default=minimum)
 
 
 def _as_nuyen(value: Decimal, *, item_name: str) -> int:
@@ -430,6 +472,7 @@ def _build_purchase(
     parent: CyberwareEntry | None,
     attribute_maximums: Mapping[str, int] | None,
     bundled: bool = False,
+    availability_exempt: AbstractSet[tuple[str, int]] | None = None,
 ) -> PurchasedCyberware:
     item = by_id.get(request.item_id)
     if item is None:
@@ -479,6 +522,16 @@ def _build_purchase(
             f"{item.name}: rating {request.rating} is outside its purchasable range "
             f"{minimum}-{maximum}"
         )
+    if (
+        availability_exempt is not None
+        and not bundled
+        and (item.id, request.rating) not in availability_exempt
+        and request.rating > availability_capped_maximum(item, minimum, maximum)
+    ):
+        raise ValueError(
+            f"{item.name}: rating {request.rating} is over Availability 12 at character "
+            f"creation (the highest is {availability_capped_maximum(item, minimum, maximum)})"
+        )
 
     if bundled:
         # Free in all three currencies -- see the module docstring's bundled-subsystem section.
@@ -506,7 +559,14 @@ def _build_purchase(
         else Decimal(0)
     )
 
-    plugins = _build_plugins(request, item, by_id, by_name, attribute_maximums=attribute_maximums)
+    plugins = _build_plugins(
+        request,
+        item,
+        by_id,
+        by_name,
+        attribute_maximums=attribute_maximums,
+        availability_exempt=availability_exempt,
+    )
 
     if plugins:
         spent = sum((plugin.capacity_cost for plugin in plugins), Decimal(0))
@@ -536,6 +596,7 @@ def _build_plugins(
     by_name: Mapping[str, CyberwareEntry],
     *,
     attribute_maximums: Mapping[str, int] | None,
+    availability_exempt: AbstractSet[tuple[str, int]] | None = None,
 ) -> tuple[PurchasedCyberware, ...]:
     """Build `request`'s explicit plugins, then auto-attach any missing bundled subsystem."""
     bundled_names = set(item.bundled_subsystem_names)
@@ -547,6 +608,7 @@ def _build_plugins(
             parent=item,
             attribute_maximums=attribute_maximums,
             bundled=_plugin_item(plugin_request, by_id).name in bundled_names,
+            availability_exempt=availability_exempt,
         )
         for plugin_request in request.plugins
     ]
@@ -611,6 +673,7 @@ def create_cyberware_tree_selection(
     attribute_maximums: Mapping[str, int] | None = None,
     other_essence_spent: Decimal = Decimal(0),
     essence_multiplier: Decimal = Decimal(1),
+    availability_exempt: AbstractSet[tuple[str, int]] | None = None,
 ) -> CyberwareTreeSelection:
     """Build a validated `CyberwareTreeSelection` from nested purchase requests.
 
@@ -637,6 +700,12 @@ def create_cyberware_tree_selection(
     all Essence losses caused by cyberware" (p. 83); see `cyberware_essence_multiplier`. Applied to
     the stored `essence_cost`, so the floor check, the totals, the Improvements and the sheet all
     read the doubled number.
+
+    **WP126**: with `availability_exempt` set, a purchase rated past its Availability 12 cap
+    (`availability_capped_maximum`) is rejected unless its `(item id, rating)` is in the set --
+    the web route passes what the character already had, so only a *new* over-cap pick fails and
+    an edit elsewhere never trips over an old one. `None` (the default: save loading, legacy import)
+    skips the check; WP135's validation reports what it lets through.
     """
     entries = tuple(catalog)
     by_id = {entry.id: entry for entry in entries}
@@ -645,7 +714,12 @@ def create_cyberware_tree_selection(
     purchases = tuple(
         _scale_essence(
             _build_purchase(
-                request, by_id, by_name, parent=None, attribute_maximums=attribute_maximums
+                request,
+                by_id,
+                by_name,
+                parent=None,
+                attribute_maximums=attribute_maximums,
+                availability_exempt=availability_exempt,
             ),
             essence_multiplier,
         )

@@ -116,9 +116,9 @@ many limbs of each slot a body has, and which mounts a limb blocks -- a limb-cou
 Capacity one), `<allowgear>` (25 rows can hold *gear* children, e.g. a Commlink's programs -- a
 gear-in-cyberware mechanic no phase has scoped), `<selectside>`, `<pairbonus>`/`<pairinclude>`
 (bonuses that only apply to a matched pair), `<required>`/`<forbidden>` (prerequisite trees),
-`<addweapon>`/`<addvehicle>`, and `<avail>` (Availability-cap mechanic ruled out project-wide,
-2026-07-21). `<forcegrade>`/`<bannedgrades>` are moot while Phase J's Standard-grade-only scope
-holds.
+`<addweapon>`/`<addvehicle>`. (`<avail>` was skipped too, until WP126's Availability <= 12 cap on
+rating-scaled rows made it load-bearing: it is kept verbatim as `raw_availability`.)
+`<forcegrade>`/`<bannedgrades>` are moot while Phase J's Standard-grade-only scope holds.
 
 `<rating>`/`<minrating>` bounds are captured **both raw and parsed**, because two rows
 (`Customized Agility`, `Customized Strength`) express them as attribute placeholders
@@ -220,6 +220,9 @@ class CyberwareEntry:
     # a `Character`: `chummer5.engine.derived.unmodeled_effect_notes` walks the purchase tree, whose
     # nodes hold `CyberwareEntry`.
     unmodeled_effect_note: str | None = None
+    # WP126: the verbatim `<avail>`, read for the Availability <= 12 cap on rating-scaled rows
+    # (`chummer5.engine.cyberware_subsystems.availability_capped_maximum`).
+    raw_availability: str | None = None
 
     @property
     def is_rated(self) -> bool:
@@ -323,6 +326,7 @@ def _parse_entry(elem: ET.Element) -> CyberwareEntry:
         page=int(elem.findtext("page", "0")),
         cost=_require_formula(elem.findtext("cost", "0"), item_name=name, field="cost"),
         essence_cost=_require_formula(elem.findtext("ess", "0"), item_name=name, field="ess"),
+        raw_availability=elem.findtext("avail"),
         raw_max_rating=raw_max_rating,
         raw_min_rating=raw_min_rating,
         max_rating=_parse_bound(raw_max_rating),

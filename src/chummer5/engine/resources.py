@@ -163,6 +163,22 @@ MAX_KARMA_TO_NUYEN = 10
 # not retroactively to WP21's flat-cost catalog.
 MAX_AVAILABILITY = 12
 
+# WP126, Step Six: "gear is restricted to Availability 12 or less and device rating 6 or less"
+# (p. 94). Applied to rating-priced gear whose Rating *is* its Device Rating -- the electronics
+# categories. The Device Ratings table (p. 421) tops out at 6 ("Bleeding Edge"); only the two
+# sensors (printed "Rating 2-8", p. 446) exceed it today. Ammunition, explosives, patches, lodges
+# and programs rate something other than a device, and keep their ranges.
+MAX_DEVICE_RATING = 6
+DEVICE_RATING_GEAR_CATEGORIES = frozenset(
+    {
+        "Audio Devices",
+        "Vision Devices",
+        "Sensor Housings",
+        "Sensors",
+        "Communications and Countermeasures",
+    }
+)
+
 # WP66: the two Rating-priced gear.xml categories owned by the dedicated Foci bonding system
 # (chummer5.data.foci / chummer5.engine.foci), which models them with real Force/Karma-bonding
 # semantics. Offering them as plain rating-priced gear would duplicate and misrepresent them (a
@@ -377,6 +393,8 @@ def build_starter_gear_catalog(
       enforces the 2026-07-21 Availability ruling at all.
     - A rating-priced catalog entry carries `cost_per_rating`/`max_rating` with `cost = 0` (the
       price isn't known until a rating is picked -- see `StarterGearItem`).
+    - **WP126: Device Rating <= 6** for `DEVICE_RATING_GEAR_CATEGORIES`: Sensor Array and Single
+      Sensor lose ratings 7-8.
 
     **WP94 (Availability<=12 for the three Matrix-device categories).** Commlinks, Cyberdecks and
     Rigger Command Consoles are flat-cost, so WP66's cap never touched them -- this catalog offered
@@ -448,6 +466,8 @@ def build_starter_gear_catalog(
         if rg.hidden or rg.category in _FOCI_GEAR_CATEGORIES:
             continue
         offered_max = _availability_capped_max_rating(rg)
+        if rg.category in DEVICE_RATING_GEAR_CATEGORIES:
+            offered_max = min(offered_max, MAX_DEVICE_RATING)  # WP126
         if offered_max < 1:
             continue
         _consider_rating(
