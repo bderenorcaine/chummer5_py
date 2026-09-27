@@ -1187,6 +1187,26 @@
       <text>Specialization</text>
     </string>
     <string>
+      <key>Web_Skills_Exotic</key>
+      <text>Exotic skills</text>
+    </string>
+    <string>
+      <key>Web_Skills_ExoticDuplicate</key>
+      <text>The character already has that exotic skill for {specific}.</text>
+    </string>
+    <string>
+      <key>Web_Skills_ExoticHelp</key>
+      <text>An exotic skill is bought once for each specific weapon or vehicle, and has no specializations. Name the item and give it points to add it; set an added skill's points to 0 to remove it.</text>
+    </string>
+    <string>
+      <key>Web_Skills_ExoticSpecific</key>
+      <text>Weapon or vehicle</text>
+    </string>
+    <string>
+      <key>Web_Skills_ExoticSpecificPlaceholder</key>
+      <text>e.g. Flamethrower</text>
+    </string>
+    <string>
       <key>Web_Skills_Filter</key>
       <text>Filter skills</text>
     </string>

@@ -40,7 +40,7 @@
     <tbody>
       {% for row in sheet_skill_rows %}
       <tr>
-        <td>{{ row.skill | dterm("skills.xml") }}</td>
+        <td>{{ row.skill | dterm("skills.xml") }}{% if row.skill.specific %} ({{ row.skill.specific }}){% endif %}</td>
         <td>{{ row.natural_rating }}{% if row.rating != row.natural_rating %} ({{ row.rating }}){% endif %}</td>
         <td>{{ row.specialization or "—" }}</td>
         <td>{{ row.pool }}</td>

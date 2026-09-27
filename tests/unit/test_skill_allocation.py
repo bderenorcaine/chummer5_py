@@ -21,6 +21,7 @@ from chummer5.engine.skills import (
     create_karma_skill_selection,
     create_skill_allocation,
     dice_pool,
+    exotic_instance,
     natural_skill_rating,
     skill_point_budget,
     skill_rating,
@@ -248,7 +249,8 @@ def test_dice_pool_specialization_adds_bonus_only_at_positive_rating() -> None:
 
 def test_dice_pool_specialization_ignored_for_exotic_skills() -> None:
     character = _human_with_agi(0)
-    exotic = SKILLS_BY_NAME["Exotic Melee Weapon"]
+    # WP124: bought per named weapon, as an instance.
+    exotic = exotic_instance(SKILLS_BY_NAME["Exotic Melee Weapon"], "Monowhip")
     allocation = create_skill_allocation(
         letter="A",
         priorities=PRIORITIES,

@@ -383,7 +383,7 @@ the rules it checks.
 
 #### Step Five — skills
 
-- [ ] **WP124 — Exotic skills per specific weapon or vehicle.**
+- [x] **WP124 — Exotic skills per specific weapon or vehicle.**
   Goal: Exotic Melee Weapon, Exotic Ranged Weapon and Pilot Exotic Vehicle are bought per named item
   (p. 90: "(Specific)"), as separate skills.
   Deliverables: skill allocation keys become `(skill_id, specific)` for exotic skills, with

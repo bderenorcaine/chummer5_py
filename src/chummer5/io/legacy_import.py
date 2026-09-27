@@ -286,7 +286,14 @@ from chummer5.engine.magic import (
 )
 from chummer5.engine.qualities import QualityPickRequest, choice_options, mvp_quality_catalog
 from chummer5.engine.resources import Contact
-from chummer5.io.legacy_chum5 import LegacyCharacter, LegacyCyberware, load_chum5, priority_letter
+from chummer5.engine.skills import UNSPECIFIED_EXOTIC, exotic_skill_key
+from chummer5.io.legacy_chum5 import (
+    LegacyCharacter,
+    LegacyCyberware,
+    LegacySkill,
+    load_chum5,
+    priority_letter,
+)
 from chummer5.io.save_format import (
     DEFAULT_TALENT_CODENAME,
     DEFAULT_TALENT_LETTER,
@@ -460,6 +467,14 @@ def _cyberware_purchase_requests(
         for item in items
         if item.improvement_source != BIOWARE_IMPROVEMENT_SOURCE
     )
+
+
+def _skill_key(skill: Skill, legacy_skill: LegacySkill) -> str:
+    """The allocation key of an imported skill (WP124): an exotic skill is keyed by its
+    `<specific>` weapon or vehicle, or `UNSPECIFIED_EXOTIC` when the file names none."""
+    if not skill.exotic:
+        return skill.id
+    return exotic_skill_key(skill.id, legacy_skill.specific or UNSPECIFIED_EXOTIC)
 
 
 def _blocking_reasons(
@@ -683,7 +698,7 @@ def import_legacy_character(
             continue
         if skill.skill_group is not None and skill.skill_group in bought_groups:
             continue
-        skill_points[skill.id] = legacy_skill.base
+        skill_points[_skill_key(skill, legacy_skill)] = legacy_skill.base
 
     # WP50: specializations, resolved as a second pass now that `skill_points` is finalized -- a
     # specialization is only importable when its host skill actually reached `skill_points` (see
@@ -698,7 +713,8 @@ def import_legacy_character(
             continue
         skill = skills_by_id.get(legacy_skill.suid)
         skill_name = skill.name if skill is not None else legacy_skill.suid
-        if skill is None or skill.id not in skill_points:
+        # WP124: an exotic skill has no specializations (p. 131), so one never imports.
+        if skill is None or skill.exotic or skill.id not in skill_points:
             dropped_specializations.extend(
                 f"{skill_name}: {name}" for name in legacy_skill.specializations
             )

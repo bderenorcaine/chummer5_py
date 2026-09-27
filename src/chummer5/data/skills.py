@@ -27,10 +27,13 @@ class Skill:
     skill_group: str | None  # None for skills that don't belong to a skill group
     can_default: bool  # whether the skill can be used untrained, at rating 0
     exotic: bool  # exotic skills (Exotic Melee/Ranged Weapon, Pilot Exotic Vehicle) are bought
-    # per-specific-item rather than as a single general rating.
+    # per-specific-item rather than as a single general rating (WP124: see `specific`).
     specializations: tuple[str, ...]  # suggested specializations; not an exhaustive/enforced list
     source: str
     page: int
+    # WP124: the named weapon or vehicle of one exotic-skill *instance* ("Flamethrower"); `None`
+    # for a catalog entry. Instances come from `chummer5.engine.skills.exotic_instance`.
+    specific: str | None = None
 
 
 def _parse_specializations(elem: ET.Element) -> tuple[str, ...]:

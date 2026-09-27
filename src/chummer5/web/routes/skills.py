@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
+from chummer5.data.skills import Skill
 from chummer5.engine.character import Character
 from chummer5.engine.skills import (
     MAX_SKILL_RATING_CREATE,
@@ -23,12 +24,15 @@ from chummer5.engine.skills import (
     create_karma_skill_selection,
     create_skill_allocation,
     dice_pool,
+    exotic_instances,
+    exotic_skill_key,
     natural_skill_rating,
     purchase_maximum,
     skill_point_budget,
     skill_points_spent,
     skill_purchase_rules,
     skill_rating,
+    split_skill_key,
 )
 from chummer5.web.catalogs import (
     PRIORITIES,
@@ -54,7 +58,8 @@ def _skill_allocation_context(
     karma_group_points: Mapping[str, int] = MappingProxyType({}),
     karma_specializations: Mapping[str, str] = MappingProxyType({}),
     *,
-    error: str | None = None,
+    error: str | Message | None = None,
+    new_exotic: Mapping[str, str] = MappingProxyType({}),
 ) -> dict[str, Any]:
     """Context for `_skill_allocation.html`. Same echo-the-submission shape as
     `chummer5.web.routes.attributes._attribute_allocation_context`; `skill_points`/`group_points`/
@@ -83,6 +88,10 @@ def _skill_allocation_context(
     attached, which `skill_rating`/`dice_pool` read directly (see `chummer5.engine.skills`'
     own docstring for why they read `character.karma_skill_selection` rather than taking it as a
     parameter).
+
+    **WP124**: an exotic catalog entry gets no row of its own. Each bought instance (a
+    `"{id}|{specific}"` key in `skill_points`/`karma_skill_points`) gets one in its category, and
+    the "add an exotic skill" row below the tables echoes `new_exotic` until it is bought.
     """
     if character is None:
         return {"character": None, "skill_error": error}
@@ -113,7 +122,13 @@ def _skill_allocation_context(
     # WP61: sorted by (category, name), not just name, so `itertools.groupby` below needs no
     # re-sorting -- mirrors `chummer5.web.routes.resources._resources_context`'s own `gear_groups`
     # comment about `STARTER_GEAR_CATALOG` already being pre-sorted the same way.
-    offered_by_category = sorted(offered_skills(character), key=lambda s: (s.category, s.name))
+    offered = offered_skills(character)
+    exotic_bases = [s for s in offered if s.exotic]
+    offered_by_category = sorted(
+        [s for s in offered if not s.exotic]
+        + list(exotic_instances(exotic_bases, [*skill_points, *karma_skill_points])),
+        key=lambda s: (s.category, s.name, s.specific or ""),
+    )
     # WP65: a specialized skill's Pool is shown as "X (Y)" -- X the base (un-specialized) pool and
     # Y the +2-specialization pool -- rather than the single specialized value WP50 rendered (which
     # hid the base). `pool` is now the un-specialized pool explicitly (not `dice_pool`'s auto-detect
@@ -216,7 +231,58 @@ def _skill_allocation_context(
             else karma_budget
         ),
         "skill_error": error,
+        "exotic_bases": exotic_bases,
+        "new_exotic": new_exotic,
     }
+
+
+def _form_int(raw: object) -> int:
+    try:
+        return int(str(raw))
+    except ValueError:
+        return 0
+
+
+def _parse_exotic_skills(
+    form: Any, bases: tuple[Skill, ...] | list[Skill]
+) -> tuple[list[str], dict[str, str]]:
+    """WP124: the instance keys already on the form (each row's hidden `exotic_key`), and the
+    "add an exotic skill" row's fields as submitted."""
+    base_ids = {s.id for s in bases}
+    keys = [
+        str(key) for key in form.getlist("exotic_key") if split_skill_key(str(key))[0] in base_ids
+    ]
+    new = {
+        field: str(form.get(f"exotic_new_{field}") or "").strip()
+        for field in ("skill", "specific", "points", "karma_points")
+    }
+    return keys, new
+
+
+def _add_new_exotic(
+    new: Mapping[str, str],
+    bases: list[Skill],
+    existing_keys: list[str],
+    skill_points: dict[str, int],
+    karma_skill_points: dict[str, int],
+) -> tuple[bool, Message | None]:
+    """WP124: fold the "add an exotic skill" row into the spend, once it names a skill, an item,
+    and some points; returns whether it did, and why not if the row is a duplicate. Until then
+    the row is only echoed back, so a half-filled one isn't lost."""
+    points = _form_int(new["points"])
+    karma_points = _form_int(new["karma_points"])
+    if new["skill"] not in {s.id for s in bases} or not new["specific"]:
+        return False, None
+    if not (points or karma_points):
+        return False, None
+    key = exotic_skill_key(new["skill"], new["specific"])
+    if key in existing_keys:
+        return False, Message.of("Web_Skills_ExoticDuplicate", specific=new["specific"])
+    if points:
+        skill_points[key] = points
+    if karma_points:
+        karma_skill_points[key] = karma_points
+    return True, None
 
 
 @router.post("/ui/skills", response_class=HTMLResponse)
@@ -234,72 +300,75 @@ async def submit_skills(request: Request) -> HTMLResponse:
         # context`) already widens to offer them. See that helper's own docstring/comment.
         skills_for_form = offered_skills(previous)
         groups_for_form = offered_skill_groups(previous)
-        skill_points = parse_points(form, (s.id for s in skills_for_form), "skill_")
+        # WP124: an exotic skill's points are submitted per instance, never on its catalog id.
+        exotic_bases = [s for s in skills_for_form if s.exotic]
+        exotic_keys, new_exotic = _parse_exotic_skills(form, exotic_bases)
+        point_keys = [s.id for s in skills_for_form if not s.exotic] + exotic_keys
+        skill_points = parse_points(form, point_keys, "skill_")
         group_points = parse_points(form, groups_for_form, "group_")
         specializations = parse_specializations(form, (s.id for s in skills_for_form), "spec_")
         # WP53: Karma-funded points/specializations, submitted in the same form (mirrors
         # WP52's karma_attr_{code} precedent).
-        karma_skill_points = parse_points(form, (s.id for s in skills_for_form), "karma_skill_")
+        karma_skill_points = parse_points(form, point_keys, "karma_skill_")
         karma_group_points = parse_points(form, groups_for_form, "karma_group_")
         karma_specializations = parse_specializations(
             form, (s.id for s in skills_for_form), "karma_spec_"
         )
-        try:
-            allocation = create_skill_allocation(
-                session.skills_letter,
-                PRIORITIES,
-                SKILLS,
-                skill_points,
-                group_points,
-                specializations,
-                skill_purchase_rules(previous),
-            )
-            # WP51: this section's own currently-committed Karma-skill cost is added back onto
-            # `previous.karma_remaining` -- the same "exclude this section's own prior
-            # commitment" idiom `_spirit_selection_context`/`_attribute_allocation_context`
-            # already established -- so re-spending exactly what was already committed doesn't
-            # double-subtract it.
-            karma_budget = previous.karma_remaining + (
-                previous.karma_skill_selection.karma_cost
-                if previous.karma_skill_selection is not None
-                else 0
-            )
-            karma_selection = create_karma_skill_selection(
-                replace(previous, skill_allocation=allocation),
-                SKILLS,
-                karma_skill_points,
-                karma_group_points,
-                karma_specializations,
-                karma_budget,
-            )
-        except ValueError as exc:
-            context = _skill_allocation_context(
-                session.character,
-                session.skills_letter,
-                skill_points,
-                group_points,
-                specializations,
-                karma_skill_points,
-                karma_group_points,
-                karma_specializations,
-                error=str(exc),
-            )
-        else:
-            session.character = replace(
-                session.character,
-                skill_allocation=allocation,
-                karma_skill_selection=karma_selection,
-            )
-            context = _skill_allocation_context(
-                session.character,
-                session.skills_letter,
-                skill_points,
-                group_points,
-                specializations,
-                karma_skill_points,
-                karma_group_points,
-                karma_specializations,
-            )
+        added, duplicate = _add_new_exotic(
+            new_exotic, exotic_bases, exotic_keys, skill_points, karma_skill_points
+        )
+        error: str | Message | None = duplicate
+        if error is None:
+            try:
+                allocation = create_skill_allocation(
+                    session.skills_letter,
+                    PRIORITIES,
+                    SKILLS,
+                    skill_points,
+                    group_points,
+                    specializations,
+                    skill_purchase_rules(previous),
+                )
+                # WP51: this section's own currently-committed Karma-skill cost is added back onto
+                # `previous.karma_remaining` -- the same "exclude this section's own prior
+                # commitment" idiom `_spirit_selection_context`/`_attribute_allocation_context`
+                # already established -- so re-spending exactly what was already committed doesn't
+                # double-subtract it.
+                karma_budget = previous.karma_remaining + (
+                    previous.karma_skill_selection.karma_cost
+                    if previous.karma_skill_selection is not None
+                    else 0
+                )
+                karma_selection = create_karma_skill_selection(
+                    replace(previous, skill_allocation=allocation),
+                    SKILLS,
+                    karma_skill_points,
+                    karma_group_points,
+                    karma_specializations,
+                    karma_budget,
+                )
+            except ValueError as exc:
+                error = str(exc)
+            else:
+                session.character = replace(
+                    session.character,
+                    skill_allocation=allocation,
+                    karma_skill_selection=karma_selection,
+                )
+                if added:
+                    new_exotic = {}
+        context = _skill_allocation_context(
+            session.character,
+            session.skills_letter,
+            skill_points,
+            group_points,
+            specializations,
+            karma_skill_points,
+            karma_group_points,
+            karma_specializations,
+            error=error,
+            new_exotic=new_exotic,
+        )
     response = templates.TemplateResponse(request, "_skill_allocation.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

@@ -42,6 +42,8 @@ class LegacySkill:
     karma: int
     bought_with_karma: bool
     specializations: tuple[str, ...]
+    # WP124: an exotic skill's named weapon or vehicle (`<specific>`), "" for every other skill.
+    specific: str = ""
 
 
 @dataclass(frozen=True)
@@ -296,6 +298,7 @@ def _parse_skill(elem: ET.Element) -> LegacySkill:
         karma=int(elem.findtext("karma", "0")),
         bought_with_karma=_parse_bool(elem.findtext("buywithkarma")),
         specializations=_parse_specializations(elem),
+        specific=(elem.findtext("specific") or "").strip(),
     )
 
 

@@ -233,6 +233,12 @@ round-trips unchanged. `build_character` resolves it third among the shared-nuye
 **WP109** adds `unworn_armor` -- the names of purchased armor the player marked as not worn.
 Additive with a `()` default ("everything bought is worn"), so no version bump.
 
+**WP124** keys each exotic-skill instance `"{skill_id}|{specific}"` inside the existing
+`skill_points`/`karma_skill_points` maps (`chummer5.engine.skills.exotic_skill_key`). No new field
+and no version bump: the maps' shape is unchanged. A pre-WP124 save's bare exotic id is moved onto
+an "Unspecified" instance by `build_character`, and its exotic specialization, which the book never
+allowed, is dropped.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -318,6 +324,8 @@ from chummer5.engine.resources import (
 from chummer5.engine.skills import (
     create_karma_skill_selection,
     create_skill_allocation,
+    drop_exotic_specializations,
+    migrate_bare_exotic_keys,
     skill_purchase_rules,
 )
 from chummer5.engine.spirits import create_bound_spirit_selection
@@ -1124,9 +1132,10 @@ def build_character(
         letter=save.skills_letter,
         priorities=priorities,
         skills=skills,
-        skill_points=save.skill_points,
+        # WP124: a pre-WP124 save may have bought an exotic skill without naming its item.
+        skill_points=migrate_bare_exotic_keys(save.skill_points, skills),
         group_points=save.group_points,
-        specializations=save.specializations,
+        specializations=drop_exotic_specializations(save.specializations, skills),
         rules=skill_purchase_rules(replace(character, magic_type=magic_selection.magic_type)),
     )
 
@@ -1172,9 +1181,9 @@ def build_character(
     karma_skill_selection = create_karma_skill_selection(
         character,
         skills,
-        save.karma_skill_points,
+        migrate_bare_exotic_keys(save.karma_skill_points, skills),
         save.karma_group_points,
-        save.karma_specializations,
+        drop_exotic_specializations(save.karma_specializations, skills),
         character.karma_remaining,
     )
     character = replace(character, karma_skill_selection=karma_skill_selection)

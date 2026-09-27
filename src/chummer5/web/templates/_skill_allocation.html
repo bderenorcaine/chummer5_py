@@ -98,8 +98,8 @@
           </thead>
           <tbody>
             {% for row in group.rows %}
-            <tr data-skill-name="{{ (row.skill | dterm("skills.xml")) | lower }}" data-skill-rating="{{ row.rating }}">
-              <td>{{ row.skill | dterm("skills.xml") }}</td>
+            <tr data-skill-name="{{ (row.skill | dterm("skills.xml")) | lower }}{% if row.skill.specific %} {{ row.skill.specific | lower }}{% endif %}" data-skill-rating="{{ row.rating }}">
+              <td>{{ row.skill | dterm("skills.xml") }}{% if row.skill.specific %} ({{ row.skill.specific }})<input type="hidden" name="exotic_key" value="{{ row.skill.id }}" />{% endif %}</td>
               <td>{{ _("String_Attribute" ~ row.skill.attribute ~ "Short") }}</td>
               <td>{{ (row.skill.skill_group | dterm("skills.xml")) if row.skill.skill_group else "—" }}</td>
               <td>
@@ -121,6 +121,11 @@
                 />
               </td>
               <td>{{ row.natural_rating }}{% if row.rating != row.natural_rating %} ({{ row.rating }}){% endif %}</td>
+              {% if row.skill.exotic %}
+              {# WP124: p. 131/147 -- an exotic skill has no specializations. #}
+              <td>—</td>
+              <td>—</td>
+              {% else %}
               <td>
                 <input
                   type="text"
@@ -137,6 +142,7 @@
                   placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
                 />
               </td>
+              {% endif %}
               <td>{{ row.pool }}{% if row.pool_specialized is not none %} ({{ row.pool_specialized }}){% endif %}</td>
             </tr>
             {% endfor %}
@@ -145,6 +151,46 @@
       </details>
       {% endfor %}
     </div>
+
+    {% if exotic_bases %}
+    <h3>{{ _("Web_Skills_Exotic") }}</h3>
+    <p>{{ _("Web_Skills_ExoticHelp") }}</p>
+    <table id="exotic-skill-add">
+      <thead>
+        <tr>
+          <th>{{ _("Web_Skills_ColSkill") }}</th>
+          <th>{{ _("Web_Skills_ExoticSpecific") }}</th>
+          <th>{{ _("Web_Skills_ColPoints") }}</th>
+          <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <select name="exotic_new_skill">
+              {% for base in exotic_bases %}
+              <option value="{{ base.id }}" {% if new_exotic.skill == base.id %}selected{% endif %}>{{ base | dterm("skills.xml") }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <input
+              type="text"
+              name="exotic_new_specific"
+              value="{{ new_exotic.specific or '' }}"
+              placeholder="{{ _('Web_Skills_ExoticSpecificPlaceholder') }}"
+            />
+          </td>
+          <td>
+            <input type="number" name="exotic_new_points" value="{{ new_exotic.points or 0 }}" min="0" max="{{ max_skill_rating }}" />
+          </td>
+          <td>
+            <input type="number" name="exotic_new_karma_points" value="{{ new_exotic.karma_points or 0 }}" min="0" max="{{ max_skill_rating }}" />
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    {% endif %}
     <button type="submit">{{ _("Web_Skills_Update") }}</button>
   </form>
   <script>

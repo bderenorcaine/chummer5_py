@@ -64,7 +64,12 @@ from chummer5.engine.resources import (
     resources_gear_args,
     starting_nuyen,
 )
-from chummer5.engine.skills import dice_pool, natural_skill_rating, skill_rating
+from chummer5.engine.skills import (
+    character_skills,
+    dice_pool,
+    natural_skill_rating,
+    skill_rating,
+)
 from chummer5.io.legacy_import import UnsupportedLegacyCharacterError, import_chum5
 from chummer5.io.save_format import (
     DEFAULT_TALENT_CODENAME,
@@ -391,7 +396,11 @@ def _character_sheet_context(
                 ),
                 "pool": dice_pool(character, allocation, skill),
             }
-            for skill in ALL_SKILLS_SORTED
+            # WP124: with each exotic instance, beside its catalog entry.
+            for skill in sorted(
+                character_skills(character, ALL_SKILLS_SORTED),
+                key=lambda s: (s.name, s.specific or ""),
+            )
             if (rating := skill_rating(character, allocation, skill)) > 0
         ]
         if allocation is not None

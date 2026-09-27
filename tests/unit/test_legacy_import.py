@@ -1223,3 +1223,39 @@ def test_repeated_nodes_of_a_rated_quality_fold_into_one_pick_s_rating() -> None
     assert result.save.quality_picks == (QualityPickRequest(indomitable.id, rating=2),)
     assert result.built.quality_selection is not None
     assert result.built.quality_selection.positive_karma == 16
+
+
+def _exotic_import(specific: str, specializations: tuple[str, ...] = ()) -> object:
+    flamethrower = LegacySkill(
+        suid=next(s.id for s in SKILLS if s.name == "Exotic Ranged Weapon"),
+        category="Combat Active",
+        base=3,
+        karma=0,
+        bought_with_karma=False,
+        specializations=specializations,
+        specific=specific,
+    )
+    return import_legacy_character(
+        _legacy_character(skills=(flamethrower,)),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+    )
+
+
+def test_an_exotic_skill_imports_keyed_by_its_specific_weapon() -> None:
+    """WP124: `<specific>` names the instance; an exotic skill's specialization never imports."""
+    exotic_id = next(s.id for s in SKILLS if s.name == "Exotic Ranged Weapon")
+    result = _exotic_import("Flamethrower", ("Short bursts",))
+    assert result.save.skill_points == {f"{exotic_id}|Flamethrower": 3}  # type: ignore[attr-defined]
+    assert result.dropped_specializations == (  # type: ignore[attr-defined]
+        "Exotic Ranged Weapon: Short bursts",
+    )
+
+
+def test_an_exotic_skill_without_a_specific_imports_as_unspecified() -> None:
+    exotic_id = next(s.id for s in SKILLS if s.name == "Exotic Ranged Weapon")
+    result = _exotic_import("")
+    assert result.save.skill_points == {f"{exotic_id}|Unspecified": 3}  # type: ignore[attr-defined]

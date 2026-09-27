@@ -90,7 +90,7 @@ the way a single shared selection object would if each route naively replaced it
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 
 from chummer5.data.priorities import PriorityTable
@@ -149,6 +149,115 @@ KARMA_SKILL_GROUP_PER_RATING = 5
 # WP53: same page's "CHARACTER IMPROVEMENT TABLE" -- a flat, non-per-rating cost ("New
 # specialization (for Active, Knowledge, or Language)"), distinct from every formula above.
 KARMA_SPECIALIZATION_COST = 7
+
+# WP124: an exotic skill is bought once per named weapon or vehicle, as separate skills (p. 131,
+# Exotic Ranged Weapon: "This skill must be taken once for each unusual ranged weapon you want to
+# use"; p. 147, Pilot Exotic Vehicle: "one time for each specific exotic vehicle"). Each instance is
+# keyed `"{skill_id}|{specific}"` in the same `skill_points`/`specializations` maps every other
+# skill uses, so the saves, the web forms and every id-keyed lookup keep their shape; the catalog
+# entry's own id is never bought directly. See `spec/worklogs/WP124.md`.
+EXOTIC_KEY_SEPARATOR = "|"
+# What a pre-WP124 save's (or a legacy file's) bare exotic skill becomes: it was bought without a
+# named item, so the instance says so rather than inventing one.
+UNSPECIFIED_EXOTIC = "Unspecified"
+
+
+def exotic_skill_key(skill_id: str, specific: str) -> str:
+    """The allocation key of one exotic-skill instance (WP124)."""
+    return f"{skill_id}{EXOTIC_KEY_SEPARATOR}{specific.strip()}"
+
+
+def split_skill_key(key: str) -> tuple[str, str | None]:
+    """`(skill_id, specific)` for an exotic instance key, `(key, None)` for any other skill."""
+    skill_id, separator, specific = key.partition(EXOTIC_KEY_SEPARATOR)
+    return (skill_id, specific) if separator else (key, None)
+
+
+def exotic_instance(base: Skill, specific: str) -> Skill:
+    """The `Skill` for one instance of the exotic catalog entry `base` (WP124). It keeps `base`'s
+    name, so an Improvement naming the skill (Aptitude, Critical Strike) reaches every instance."""
+    return replace(base, id=exotic_skill_key(base.id, specific), specific=specific.strip())
+
+
+def exotic_instances(skills: Iterable[Skill], keys: Iterable[str]) -> tuple[Skill, ...]:
+    """An instance for every well-formed exotic key in `keys` (WP124), once each, in key order. A
+    key naming a non-exotic skill or a blank item is left out, for the validators' own error to
+    report."""
+    by_id = {s.id: s for s in skills}
+    instances: dict[str, Skill] = {}
+    for key in keys:
+        skill_id, specific = split_skill_key(key)
+        base = by_id.get(skill_id)
+        if specific is None or base is None or not base.exotic or not specific.strip():
+            continue
+        if key == exotic_skill_key(skill_id, specific):
+            instances.setdefault(key, exotic_instance(base, specific))
+    return tuple(instances.values())
+
+
+def with_exotic_instances(skills: Iterable[Skill], keys: Iterable[str]) -> tuple[Skill, ...]:
+    """`skills`, plus `exotic_instances(skills, keys)` after them."""
+    catalog = tuple(skills)
+    return catalog + exotic_instances(catalog, keys)
+
+
+def character_skills(character: Character, skills: Iterable[Skill]) -> tuple[Skill, ...]:
+    """`skills` plus every exotic instance the character has bought, by priority points or Karma."""
+    return with_exotic_instances(skills, bought_skill_keys(character))
+
+
+def bought_skill_keys(character: Character) -> list[str]:
+    """Every skill key the character spent priority points or Karma on."""
+    keys: list[str] = []
+    if character.skill_allocation is not None:
+        keys += list(character.skill_allocation.skill_points)
+    if character.karma_skill_selection is not None:
+        keys += list(character.karma_skill_selection.skill_points)
+    return keys
+
+
+def migrate_bare_exotic_keys(points: Mapping[str, int], skills: Iterable[Skill]) -> dict[str, int]:
+    """A pre-WP124 spend on an exotic catalog id, moved onto an `UNSPECIFIED_EXOTIC` instance."""
+    exotic_ids = {s.id for s in skills if s.exotic}
+    return {
+        (exotic_skill_key(key, UNSPECIFIED_EXOTIC) if key in exotic_ids else key): value
+        for key, value in points.items()
+    }
+
+
+def drop_exotic_specializations(
+    specializations: Mapping[str, str], skills: Iterable[Skill]
+) -> dict[str, str]:
+    """A pre-WP124 specialization on an exotic skill, which the book never allowed (p. 131)."""
+    exotic_ids = {s.id for s in skills if s.exotic}
+    return {k: v for k, v in specializations.items() if split_skill_key(k)[0] not in exotic_ids}
+
+
+def _check_skill_keys(keys: Iterable[str], skills_by_id: Mapping[str, Skill]) -> None:
+    """Reject a bought exotic catalog entry with no named item, and a malformed instance key."""
+    for key in keys:
+        skill_id, specific = split_skill_key(key)
+        base = skills_by_id.get(skill_id)
+        if specific is None:
+            if base is not None and base.exotic:
+                raise ValueError(
+                    f"{base.name}: an exotic skill is bought once per specific weapon or vehicle, "
+                    "and needs one named"
+                )
+        elif base is not None and not base.exotic:
+            raise ValueError(f"{base.name}: only an exotic skill is bought per specific item")
+        elif base is not None and not specific.strip():
+            raise ValueError(f"{base.name}: the specific weapon or vehicle must not be blank")
+
+
+def _check_exotic_specializations(
+    specializations: Iterable[str], skills_by_id: Mapping[str, Skill]
+) -> None:
+    """p. 131/147: the exotic skills list "Specializations: None" / "N/A"."""
+    for skill_id in specializations:
+        skill = skills_by_id.get(skill_id)
+        if skill is not None and skill.exotic:
+            raise ValueError(f"{skill.name}: an exotic skill has no specializations")
 
 
 def _sum_by_target(character: Character, improvement_type: ImprovementType) -> dict[str, int]:
@@ -298,7 +407,7 @@ def skill_points_spent(
     """Priority skill points a spend costs (WP117): a point per rating and per specialization,
     raised by the skill category's `point_cost_percent` -- an Etiquette 3 costs 6 with Uncouth.
     Legacy applies the multiplier to rating and specialization together."""
-    by_id = {s.id: s for s in skills}
+    by_id = {s.id: s for s in with_exotic_instances(skills, skill_points)}
     total = 0
     for skill_id in set(skill_points) | set(specializations):
         points = skill_points.get(skill_id, 0) + (1 if skill_id in specializations else 0)
@@ -367,7 +476,12 @@ def create_skill_allocation(
 
     WP117: `rules` also doubles a Social skill's point cost for Uncouth (`skill_points_spent`),
     rejects a Social group for Uncouth, and rejects Incompetent's group and each of its skills.
+
+    WP124: an exotic skill is keyed per named item (`exotic_skill_key`); its catalog id may not be
+    bought on its own, and none of its instances may be specialized.
     """
+    _check_skill_keys([*skill_points, *specializations], {s.id: s for s in skills})
+    skills = with_exotic_instances(skills, [*skill_points, *specializations])
     skills_by_id = {s.id: s for s in skills}
     unknown_skills = set(skill_points) - set(skills_by_id)
     if unknown_skills:
@@ -412,6 +526,7 @@ def create_skill_allocation(
     if unknown_spec_skills:
         raise ValueError(f"not a known skill id: {sorted(unknown_spec_skills)}")
 
+    _check_exotic_specializations(specializations, skills_by_id)
     for skill_id, name in specializations.items():
         if not name.strip():
             raise ValueError(f"{skill_id}: a specialization's name must not be blank")
@@ -524,6 +639,11 @@ def create_karma_skill_selection(
         allocation.specializations if allocation is not None else MappingProxyType({})
     )
 
+    # WP124: exotic instances, from this submission and from the committed priority spend.
+    _check_skill_keys([*karma_skill_points, *karma_specializations], {s.id: s for s in skills})
+    skills = with_exotic_instances(
+        skills, [*existing_skill_points, *karma_skill_points, *karma_specializations]
+    )
     skills_by_id = {s.id: s for s in skills}
     group_names = {s.skill_group for s in skills if s.skill_group is not None}
     # WP116/WP117: Aptitude's cap, and Uncouth/Uneducated/Incompetent's costs and bans.
@@ -624,6 +744,7 @@ def create_karma_skill_selection(
             group_percent,
         )
 
+    _check_exotic_specializations(karma_specializations, skills_by_id)
     for skill_id, name in karma_specializations.items():
         if not name.strip():
             raise ValueError(f"{skill_id}: a specialization's name must not be blank")
