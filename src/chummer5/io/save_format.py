@@ -239,6 +239,10 @@ and no version bump: the maps' shape is unchanged. A pre-WP124 save's bare exoti
 an "Unspecified" instance by `build_character`, and its exotic specialization, which the book never
 allowed, is dropped.
 
+**WP127** adds `grade` to each cyberware purchase node and each bioware purchase (`"Standard"`,
+`"Alphaware"` or `"Used"`). Additive: an older save's missing key reads as Standard, which is all
+it could have bought. A plugin's stored grade is its parent's; the engine ignores it and inherits.
+
 **WP125** adds `knowledge_specializations` and `karma_knowledge_specializations`, pick name ->
 specialization, the same name-keyed shape as `karma_knowledge_points`. Additive, `{}` default, no
 bump. A Knowledge/Language pick may now be rated 0 (Karma buys it), and the Knowledge spend past
@@ -264,6 +268,7 @@ from typing import Any
 from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware_subsystems import CyberwareEntry
 from chummer5.data.foci import Focus
+from chummer5.data.grades import STANDARD_GRADE
 from chummer5.data.lifestyle import LifestyleTier
 from chummer5.data.mentors import MentorSpiritArchetype
 from chummer5.data.metatypes import Metatype
@@ -605,6 +610,7 @@ def _purchase_to_dict(purchase: CyberwarePurchaseRequest) -> dict[str, Any]:
         "item_id": purchase.item_id,
         "rating": purchase.rating,
         "plugins": [_purchase_to_dict(plugin) for plugin in purchase.plugins],
+        "grade": purchase.grade,  # WP127
     }
 
 
@@ -613,6 +619,7 @@ def _purchase_from_dict(data: Mapping[str, Any]) -> CyberwarePurchaseRequest:
         item_id=data["item_id"],
         rating=data.get("rating", 1),
         plugins=tuple(_purchase_from_dict(p) for p in data.get("plugins", ())),
+        grade=data.get("grade", STANDARD_GRADE),
     )
 
 
@@ -627,7 +634,11 @@ def _bioware_purchase_to_dict(purchase: BiowarePurchaseRequest) -> dict[str, Any
     """One bioware purchase as JSON (WP80), with both keys written unconditionally for the same
     reason `_purchase_to_dict` writes all three: a save file should read the same way at every
     entry, and `null` is a clearer "no pick to make" than an absent key."""
-    return {"item_id": purchase.item_id, "chosen_skill": purchase.chosen_skill}
+    return {
+        "item_id": purchase.item_id,
+        "chosen_skill": purchase.chosen_skill,
+        "grade": purchase.grade,  # WP127
+    }
 
 
 def _bioware_purchases_from_dict(data: Mapping[str, Any]) -> tuple[BiowarePurchaseRequest, ...]:
@@ -640,7 +651,9 @@ def _bioware_purchases_from_dict(data: Mapping[str, Any]) -> tuple[BiowarePurcha
     if "bioware_purchases" in data:
         return tuple(
             BiowarePurchaseRequest(
-                item_id=purchase["item_id"], chosen_skill=purchase.get("chosen_skill")
+                item_id=purchase["item_id"],
+                chosen_skill=purchase.get("chosen_skill"),
+                grade=purchase.get("grade", STANDARD_GRADE),
             )
             for purchase in data["bioware_purchases"]
         )

@@ -303,12 +303,15 @@ def test_json_round_trip_preserves_cyberware_purchases() -> None:
     )
     assert from_json(to_json(save)) == save
     assert json.loads(to_json(save))["cyberware_purchases"] == [
-        {"item_id": "cyber-datajack", "rating": 1, "plugins": []},
-        {"item_id": "cyber-datajack", "rating": 1, "plugins": []},
+        {"item_id": "cyber-datajack", "rating": 1, "plugins": [], "grade": "Standard"},
+        {"item_id": "cyber-datajack", "rating": 1, "plugins": [], "grade": "Standard"},
         {
             "item_id": "cyber-cybereyes",
             "rating": 3,
-            "plugins": [{"item_id": "cyber-vision-enh", "rating": 2, "plugins": []}],
+            "plugins": [
+                {"item_id": "cyber-vision-enh", "rating": 2, "plugins": [], "grade": "Standard"}
+            ],
+            "grade": "Standard",  # WP127
         },
     ]
 
@@ -491,8 +494,8 @@ def test_json_round_trip_preserves_bioware_purchases() -> None:
     assert from_json(to_json(save)) == save
     # WP80: bare ids are accepted as "no player choice" and stored as full requests.
     assert json.loads(to_json(save))["bioware_purchases"] == [
-        {"item_id": "bio-cats-eyes", "chosen_skill": None},
-        {"item_id": "bio-cats-eyes", "chosen_skill": None},
+        {"item_id": "bio-cats-eyes", "chosen_skill": None, "grade": "Standard"},
+        {"item_id": "bio-cats-eyes", "chosen_skill": None, "grade": "Standard"},
     ]
 
 

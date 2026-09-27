@@ -1776,3 +1776,22 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   2-8") change. Unlike cyberware, the gear cap is catalog-level, as WP66's is. A pre-WP126 save
   holding a rating 7-8 sensor would no longer load. That's accepted as vanishingly rare: 7,000-8,000¥
   for a sensor, with no fixture carrying one.
+
+## 2026-09-27 — WP127: implant grades
+
+- **Standard, Alphaware and Used**, per p. 451, on every cyberware and bioware purchase. A plugin
+  takes its parent's grade, whatever its own request says: "All accessories and add-ons must be of
+  the same grade".
+- **Whole nuyen, half up.** Legacy keeps a graded price's fraction. This project stores whole nuyen,
+  so a Used Damper (1,687.50¥) is 1,688¥. It affects two rows (Damper and Hand Razors, both only at
+  Used grade).
+- **The grade counts toward WP126's Availability cap, and the cap still binds only new picks.** A
+  scaled item's rating cap moves with the grade (Used Muscle Replacement reaches 3). A fixed item
+  already over 12 is offered at Standard only, by the plan's ruling, even where Used would bring it
+  to 12 (Bone Lacing (Titanium) at 16R). The exempt sets widen to `(id, rating, grade)` for
+  cyberware and `(id, grade)` for bioware.
+- **Legacy import accepts the three creation grades** and rejects the rest, with a reason that names
+  the grade. The WP32 rule "never trust the file's stored costs" still holds: the engine recomputes
+  them from the catalog and the grade. Several corpus limbs (Bastion's, Blindfire's, Barrett's)
+  that were rejected only for being Used grade now resolve. Only their non-SR5 children are still
+  itemized.

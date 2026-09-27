@@ -151,6 +151,14 @@
       <text>Confirm a metatype and priorities on the Priorities page before installing cyberware or bioware.</text>
     </string>
     <string>
+      <key>Web_Cyberware_GradeLabel</key>
+      <text>Grade:</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_GradeNumbered</key>
+      <text>Grade #{number}:</text>
+    </string>
+    <string>
       <key>Web_Cyberware_RatingLabel</key>
       <text>Rating:</text>
     </string>

@@ -423,7 +423,7 @@ the rules it checks.
   Depends on: nothing new.
   Acceptance: Muscle Replacement offers ratings 1-2 only (5×R R); Single Sensor tops out at 6.
 
-- [ ] **WP127 — Implant grades: Standard, Alphaware, Used.**
+- [x] **WP127 — Implant grades: Standard, Alphaware, Used.**
   Goal: per Finding 2.
   Deliverables:
   - A grade on each cyberware and bioware purchase, applying the Essence / cost / Availability

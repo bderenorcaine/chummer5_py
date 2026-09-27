@@ -64,7 +64,7 @@
             <td>{{ row.subtotal }}</td>
           </tr>
           {% for unit in row.units %}
-          {% if unit.rating_range or unit.plugin_rows or unit.bundled_names %}
+          {% if unit.rating_range or unit.plugin_rows or unit.bundled_names or unit.grade_options | length > 1 %}
           <tr>
             <td colspan="6">
               <details data-details-key="cyberware-unit:{{ row.item.id }}:{{ unit.index }}" open>
@@ -72,6 +72,17 @@
                   {{ row.item | dterm("cyberware.xml", "bioware.xml") }}{% if row.quantity > 1 %} #{{ unit.index + 1 }}{% endif %}
                   — {% if unit.capacity_budget %}{{ _("Web_Cyberware_UnitSummaryCapacity", cost=unit.nuyen_cost | nuyen, essence=unit.essence, remaining=unit.capacity_remaining, budget=unit.capacity_budget) }}{% else %}{{ _("Web_Cyberware_UnitSummary", cost=unit.nuyen_cost | nuyen, essence=unit.essence) }}{% endif %}
                 </summary>
+                {% if unit.grade_options | length > 1 %}
+                {# WP127: p. 451 -- Standard, Alphaware or Used; plugins take the unit's grade. #}
+                <label>
+                  {{ _("Web_Cyberware_GradeLabel") }}
+                  <select name="cyberware_grade_{{ row.item.id }}_{{ unit.index }}">
+                    {% for grade in unit.grade_options %}
+                    <option value="{{ grade }}" {% if unit.grade == grade %}selected{% endif %}>{{ grade | dterm("cyberware.xml") }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                {% endif %}
                 {% if unit.rating_range %}
                 <label>
                   {{ _("Web_Cyberware_RatingLabel") }}
@@ -167,6 +178,21 @@
                       value="{{ skill.name }}"
                       {% if row.chosen_skills[index] == skill.name %}selected{% endif %}
                     >{{ skill | dterm("skills.xml") }} ({{ _("String_Attribute" ~ skill.attribute ~ "Short") }})</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                {% endfor %}
+              </div>
+              {% endif %}
+              {# WP127: one grade per bought unit. #}
+              {% if row.grade_options | length > 1 and row.quantity %}
+              <div class="bioware-grade-picks">
+                {% for index in range(row.quantity) %}
+                <label>
+                  {% if row.quantity > 1 %}{{ _("Web_Cyberware_GradeNumbered", number=index + 1) }}{% else %}{{ _("Web_Cyberware_GradeLabel") }}{% endif %}
+                  <select name="bioware_grade_{{ row.item.id }}_{{ index }}">
+                    {% for grade in row.grade_options %}
+                    <option value="{{ grade }}" {% if row.chosen_grades[index] == grade %}selected{% endif %}>{{ grade | dterm("cyberware.xml") }}</option>
                     {% endfor %}
                   </select>
                 </label>

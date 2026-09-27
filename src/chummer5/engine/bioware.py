@@ -70,14 +70,17 @@ pick. Two consequences worth stating once:
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from decimal import Decimal
 
 from chummer5.data.bioware import Bioware
+from chummer5.data.grades import STANDARD_GRADE, implant_grade
 from chummer5.data.skills import Skill
 from chummer5.engine.character import Character
 from chummer5.engine.derived import BASE_ESSENCE
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
+from chummer5.engine.resources import MAX_AVAILABILITY
 
 # BiowareFlatBonus.target_kind -> ImprovementType, mirroring chummer5.engine.qualities's identical
 # mapping (bioware's own flat shapes are qualities' skill/attribute/limit grammar, reused verbatim
@@ -110,14 +113,28 @@ class BiowarePurchaseRequest:
 
     item_id: str
     chosen_skill: str | None = None
+    grade: str = STANDARD_GRADE  # WP127: Standard, Alphaware or Used (p. 451)
 
 
 @dataclass(frozen=True)
 class BiowarePurchase:
-    """One resolved bioware purchase: the catalog row, and the player's pick if it needed one."""
+    """One resolved bioware purchase: the catalog row, and the player's pick if it needed one.
+
+    WP127: `grade` scales `nuyen_cost` and `essence_cost` (p. 451); read those, not the catalog
+    row's own Standard-grade `cost`/`essence_cost`.
+    """
 
     item: Bioware
     chosen_skill: str | None = None
+    grade: str = STANDARD_GRADE
+
+    @property
+    def nuyen_cost(self) -> int:
+        return implant_grade(self.grade).nuyen(self.item.cost)
+
+    @property
+    def essence_cost(self) -> Decimal:
+        return self.item.essence_cost * implant_grade(self.grade).essence_multiplier
 
 
 @dataclass(frozen=True)
@@ -147,7 +164,9 @@ class BiowareSelection:
         """The persistable inverse of `create_bioware_selection`'s input (WP80) -- mirrors
         `chummer5.engine.cyberware_subsystems.CyberwareTreeSelection.to_requests`."""
         return tuple(
-            BiowarePurchaseRequest(item_id=purchase.item.id, chosen_skill=purchase.chosen_skill)
+            BiowarePurchaseRequest(
+                item_id=purchase.item.id, chosen_skill=purchase.chosen_skill, grade=purchase.grade
+            )
             for purchase in self.purchases
         )
 
@@ -172,6 +191,21 @@ def select_skill_choices(item: Bioware, skills: Iterable[Skill]) -> tuple[Skill,
             key=lambda skill: skill.name,
         )
     )
+
+
+def purchased_grades(selection: BiowareSelection | None) -> frozenset[tuple[str, str]]:
+    """Every `(item id, grade)` the character already has (WP127) -- `availability_exempt`."""
+    if selection is None:
+        return frozenset()
+    return frozenset((p.item.id, p.grade) for p in selection.purchases)
+
+
+def bioware_grade_offered(item: Bioware, grade: str) -> bool:
+    """Whether `item` may be newly bought at `grade` (WP127): its Availability, shifted by the
+    grade, stays within 12. The offered catalog is already within 12 at Standard grade."""
+    if grade == STANDARD_GRADE:
+        return True
+    return item.availability + implant_grade(grade).availability_modifier <= MAX_AVAILABILITY
 
 
 def _as_request(purchase: str | BiowarePurchaseRequest) -> BiowarePurchaseRequest:
@@ -225,6 +259,7 @@ def create_bioware_selection(
     other_essence_spent: Decimal = Decimal(0),
     skills: Iterable[Skill] = (),
     bioware_disabled: bool = False,
+    availability_exempt: AbstractSet[tuple[str, str]] | None = None,
 ) -> BiowareSelection:
     """Build a `BiowareSelection`, validating nuyen spend and the (shared) Essence floor together.
 
@@ -246,6 +281,12 @@ def create_bioware_selection(
     skipping the check.
 
     **WP117**: `bioware_disabled` (Sensitive System, see `bioware_disabled()`) rejects any purchase.
+
+    **WP127**: each request's `grade` scales its nuyen and Essence (p. 451). With
+    `availability_exempt` set (the web route passes `purchased_grades` of what the character
+    already has), a new pick whose grade's Availability shift takes the item over 12 is rejected
+    -- an Alphaware row printed at 11. `None` (save loading, legacy import) skips the check, as
+    WP126's cyberware cap does.
     """
     by_id = {item.id: item for item in catalog}
     requests = [_as_request(purchase) for purchase in purchases]
@@ -262,9 +303,19 @@ def create_bioware_selection(
         BiowarePurchase(
             item=by_id[r.item_id],
             chosen_skill=_resolve_chosen_skill(by_id[r.item_id], r.chosen_skill, skills_by_name),
+            grade=implant_grade(r.grade).name,
         )
         for r in requests
     )
+    if availability_exempt is not None:
+        for purchase in resolved:
+            if (purchase.item.id, purchase.grade) in availability_exempt:
+                continue
+            if not bioware_grade_offered(purchase.item, purchase.grade):
+                raise ValueError(
+                    f"{purchase.item.name}: {purchase.grade} grade is over Availability 12 at "
+                    "character creation"
+                )
 
     # p. 460: multiple recorders are legal, one per skill. Checked per (item, skill) rather than per
     # skill overall, since the rule is about implanting two of *the same* item for one skill.
@@ -280,13 +331,11 @@ def create_bioware_selection(
             )
         picks_seen.add(pick)
 
-    selected = tuple(purchase.item for purchase in resolved)
-
-    nuyen_spent = sum(item.cost for item in selected)
+    nuyen_spent = sum(purchase.nuyen_cost for purchase in resolved)
     if nuyen_spent > nuyen_budget:
         raise ValueError(f"bioware spend {nuyen_spent} exceeds the nuyen budget of {nuyen_budget}")
 
-    essence_spent = sum((item.essence_cost for item in selected), Decimal(0))
+    essence_spent = sum((purchase.essence_cost for purchase in resolved), Decimal(0))
     if essence_spent + other_essence_spent >= BASE_ESSENCE:
         raise ValueError(
             f"bioware Essence cost {essence_spent} would leave no Essence remaining "
@@ -325,7 +374,7 @@ def apply_bioware_improvements(character: Character, selection: BiowareSelection
                 value=0,
                 source_type=ImprovementSource.BIOWARE,
                 source_id=item.id,
-                essence_value=-item.essence_cost,
+                essence_value=-purchase.essence_cost,  # WP127: at its grade
             )
         )
         for flat_bonus in item.flat_bonuses:

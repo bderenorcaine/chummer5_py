@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse, Response
 from starlette.datastructures import UploadFile
 
 from chummer5.data.cyberware import CONDITION_DESCRIPTIONS
+from chummer5.data.grades import STANDARD_GRADE
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character
 from chummer5.engine.cyberware_subsystems import (
     PAIRED_BONUS_ITEM_NAMES,
@@ -220,6 +221,8 @@ def _cyberware_node_row(node: PurchasedCyberware) -> dict[str, Any]:
     return {
         "name": node.item.name,
         "rating": node.rating if node.item.is_rated else None,
+        # WP127: named on the sheet only when it isn't Standard; a plugin shares its parent's.
+        "grade": node.grade if node.grade != STANDARD_GRADE else None,
         "bundled": node.bundled,
         "capacity_budget": node.capacity_budget,
         "capacity_spent": node.capacity_spent,
@@ -244,6 +247,7 @@ def _cyberware_purchase_key(node: PurchasedCyberware) -> tuple[Any, ...]:
     return (
         node.item.id,
         node.rating,
+        node.grade,
         tuple(sorted(_cyberware_purchase_key(plugin) for plugin in node.plugins)),
     )
 
@@ -484,9 +488,9 @@ def _character_sheet_context(
     ]
     # WP103: tallied by (name, chosen skill) rather than a pre-joined "Name (Skill)" label, so the
     # sheet can translate each half for display on its own.
-    bioware_counts: dict[tuple[str, str | None], int] = {}
+    bioware_counts: dict[tuple[str, str | None, str], int] = {}
     for purchase in bioware_selection.purchases if bioware_selection is not None else ():
-        key = (purchase.item.name, purchase.chosen_skill)
+        key = (purchase.item.name, purchase.chosen_skill, purchase.grade)  # WP127: by grade too
         bioware_counts[key] = bioware_counts.get(key, 0) + 1
 
     return {
@@ -664,9 +668,14 @@ def _character_sheet_context(
         "cyberware_rows": cyberware_rows,
         # WP45: same recap for bioware, alongside cyberware's.
         "bioware_rows": [
-            {"name": name, "skill": skill, "quantity": quantity}
-            for (name, skill), quantity in sorted(
-                bioware_counts.items(), key=lambda kv: (kv[0][0], kv[0][1] or "")
+            {
+                "name": name,
+                "skill": skill,
+                "grade": grade if grade != STANDARD_GRADE else None,
+                "quantity": quantity,
+            }
+            for (name, skill, grade), quantity in sorted(
+                bioware_counts.items(), key=lambda kv: (kv[0][0], kv[0][1] or "", kv[0][2])
             )
         ],
         # WP93: purchased vehicles/drones -- the full printed stat block plus the one derived

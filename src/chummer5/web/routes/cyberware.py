@@ -53,12 +53,15 @@ from starlette.datastructures import FormData
 
 from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware_subsystems import CyberwareEntry
+from chummer5.data.grades import CHARGEN_GRADE_NAMES, STANDARD_GRADE, ImplantGrade, implant_grade
 from chummer5.engine.bioware import (
     BiowarePurchaseRequest,
     BiowareSelection,
     apply_bioware_improvements,
     bioware_disabled,
+    bioware_grade_offered,
     create_bioware_selection,
+    purchased_grades,
     select_skill_choices,
 )
 from chummer5.engine.character import Character
@@ -70,6 +73,7 @@ from chummer5.engine.cyberware_subsystems import (
     cyberlimb_attribute_maximums,
     cyberware_essence_multiplier,
     cyberware_rating_bounds,
+    offered_grades,
     purchased_ratings,
 )
 from chummer5.engine.derived import BASE_ESSENCE
@@ -163,7 +167,10 @@ def _form_int(form: FormData, key: str) -> int | None:
 
 
 def _rating_range(
-    item: CyberwareEntry, attribute_maximums: Mapping[str, int], current: int | None = None
+    item: CyberwareEntry,
+    attribute_maximums: Mapping[str, int],
+    current: int | None = None,
+    grade: str = STANDARD_GRADE,
 ) -> tuple[int, int] | None:
     """The rating range to offer for `item`, or `None` when it has no rating to pick.
 
@@ -174,7 +181,10 @@ def _rating_range(
     has, so a pre-WP126 save's Wired Reflexes 3 stays selectable instead of silently snapping down.
     """
     minimum, maximum = cyberware_rating_bounds(
-        item, attribute_maximums=attribute_maximums, cap_availability=True
+        item,
+        attribute_maximums=attribute_maximums,
+        cap_availability=True,
+        grade=_grade_or_standard(grade).name,
     )
     if current is not None:
         maximum = max(maximum, current)
@@ -205,9 +215,27 @@ def _parse_cyberware(
                         form, f"cyberware_rating_{item.id}_{index}", item, attribute_maximums
                     ),
                     plugins=_parse_plugins(form, item, index, attribute_maximums),
+                    grade=_parse_grade(form, f"cyberware_grade_{item.id}_{index}"),
                 )
             )
     return tuple(requests)
+
+
+def _grade_or_standard(name: str) -> ImplantGrade:
+    """The named creation grade for display, Standard for an unknown one (the engine rejects it)."""
+    try:
+        return implant_grade(name)
+    except ValueError:
+        return implant_grade(STANDARD_GRADE)
+
+
+def _with_current(options: tuple[str, ...], current: str) -> tuple[str, ...]:
+    return options if current in options else (*options, current)
+
+
+def _parse_grade(form: FormData, key: str) -> str:
+    """WP127: a unit's grade, Standard when absent; an unknown one reaches the engine's check."""
+    return str(form.get(key) or STANDARD_GRADE)
 
 
 def _parse_rating(
@@ -278,6 +306,7 @@ def _parse_bioware(
                 BiowarePurchaseRequest(
                     item_id=item.id,
                     chosen_skill=str(chosen) if chosen else None,
+                    grade=_parse_grade(form, f"bioware_grade_{item.id}_{index}"),  # WP127
                 )
             )
     return tuple(requests)
@@ -349,8 +378,9 @@ def _cyberware_unit_row(
     (WP37/WP38's third-nesting-level cut), so offering its 3 accessories could only ever produce
     "exceeds its Capacity budget of 0".
     """
-    minimum, _ = cyberware_rating_bounds(item, attribute_maximums=attribute_maximums)
+    minimum, maximum = cyberware_rating_bounds(item, attribute_maximums=attribute_maximums)
     rating = request.rating
+    grade = _grade_or_standard(request.grade)
     budget = (
         item.capacity_budget.resolve(rating=rating, min_rating=minimum)
         if item.capacity_budget is not None
@@ -359,7 +389,9 @@ def _cyberware_unit_row(
     installed = {plugin.item_id: plugin for plugin in request.plugins}
     plugin_rows = (
         [
-            _plugin_row(item, index, plugin, installed.get(plugin.id), attribute_maximums)
+            _plugin_row(
+                item, index, plugin, installed.get(plugin.id), attribute_maximums, grade.name
+            )
             for plugin in CYBERWARE_PLUGIN_CHOICES.get(item.id, ())
         ]
         if budget > 0
@@ -369,16 +401,20 @@ def _cyberware_unit_row(
         (row["capacity_cost"] for row in plugin_rows if row["selected"]),
         Decimal(0),
     )
-    nuyen_cost = int(item.cost.resolve(rating=rating, min_rating=minimum))
+    nuyen_cost = grade.nuyen(item.cost.resolve(rating=rating, min_rating=minimum))
     return {
         "index": index,
         "rating": rating,
-        "rating_range": _rating_range(item, attribute_maximums, rating),
+        "rating_range": _rating_range(item, attribute_maximums, rating, grade.name),
+        # WP127: the grades a new pick may take, plus the unit's own (an owned over-cap grade).
+        "grade": grade.name,
+        "grade_options": _with_current(offered_grades(item, minimum, maximum), grade.name),
         "nuyen_cost": nuyen_cost,
         # Dual costing: a standalone purchase is the only thing that charges Essence -- every plugin
         # below contributes exactly zero (module docstring of `engine.cyberware_subsystems`).
         # WP117: doubled by Sensitive System.
         "essence": item.essence_cost.resolve(rating=rating, min_rating=minimum)
+        * grade.essence_multiplier
         * essence_multiplier,
         "capacity_budget": budget,
         "capacity_spent": spent,
@@ -395,8 +431,10 @@ def _plugin_row(
     plugin: CyberwareEntry,
     request: CyberwarePurchaseRequest | None,
     attribute_maximums: Mapping[str, int],
+    grade: str = STANDARD_GRADE,
 ) -> dict[str, Any]:
-    """One installable-plugin checkbox for one bought parent unit.
+    """One installable-plugin checkbox for one bought parent unit, priced at the parent's `grade`
+    (WP127: a plugin inherits it).
 
     Prices are shown whether or not the box is ticked -- an unticked row's numbers are what
     installing it *would* cost, which is the whole point of showing them next to the parent's
@@ -408,10 +446,12 @@ def _plugin_row(
         "item": plugin,
         "selected": request is not None,
         "rating": rating,
-        "rating_range": _rating_range(plugin, attribute_maximums, rating),
+        "rating_range": _rating_range(plugin, attribute_maximums, rating, grade),
         "field": f"plugin_{parent.id}_{index}_{plugin.id}",
         "rating_field": f"plugin_rating_{parent.id}_{index}_{plugin.id}",
-        "nuyen_cost": int(plugin.cost.resolve(rating=rating, min_rating=minimum)),
+        "nuyen_cost": _grade_or_standard(grade).nuyen(
+            plugin.cost.resolve(rating=rating, min_rating=minimum)
+        ),
         "capacity_cost": (
             plugin.capacity_cost.resolve(rating=rating, min_rating=minimum)
             if plugin.capacity_cost is not None
@@ -464,14 +504,24 @@ def _bioware_groups(
     re-render the form does on every change.
     """
     picks: dict[str, list[str | None]] = {}
+    grades: dict[str, list[str]] = {}
     for request in requests:
         picks.setdefault(request.item_id, []).append(request.chosen_skill)
+        grades.setdefault(request.item_id, []).append(request.grade)
     groups = _catalog_groups(tuple(r.item_id for r in requests), _BIOWARE_BY_CATEGORY, by_id)
     for group in groups:
         for row in group["rows"]:
             item = row["item"]
             row["skill_choices"] = _BIOWARE_SKILL_CHOICES.get(item.id, ())
             row["chosen_skills"] = picks.get(item.id, [])
+            # WP127: one grade per bought unit, priced at it.
+            row["chosen_grades"] = grades.get(item.id, [])
+            row["grade_options"] = tuple(
+                g for g in CHARGEN_GRADE_NAMES if bioware_grade_offered(item, g)
+            )
+            row["subtotal"] = sum(
+                _grade_or_standard(g).nuyen(item.cost) for g in row["chosen_grades"]
+            )
     return groups
 
 
@@ -546,7 +596,12 @@ def _cyberware_context(
         (row["essence"] for group in cyberware_groups for row in group["rows"]), Decimal(0)
     )
     bioware_essence_spent = sum(
-        (bioware_by_id[request.item_id].essence_cost for request in bioware_requests), Decimal(0)
+        (
+            bioware_by_id[request.item_id].essence_cost
+            * _grade_or_standard(request.grade).essence_multiplier
+            for request in bioware_requests
+        ),
+        Decimal(0),
     )
     essence_spent = cyberware_essence_spent + bioware_essence_spent
     budget_warning: Message | None = None
@@ -636,6 +691,8 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 other_essence_spent=selection.essence_spent,
                 skills=SKILLS,
                 bioware_disabled=bioware_disabled(session.character),
+                # WP127: a new pick's grade within Availability 12; what was bought stays.
+                availability_exempt=purchased_grades(session.character.bioware_selection),
             )
             new_resources_selection = create_resources_selection(
                 session.resources_letter,

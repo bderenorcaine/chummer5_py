@@ -406,21 +406,19 @@ def test_accepts_a_rating_scaled_cyberware_item_at_its_stored_rating() -> None:
     assert result.built.cyberware_selection.essence_spent == Decimal("2")
 
 
-def test_rejects_non_standard_grade_cyberware() -> None:
-    """A real WP31 catalog item (Datajack) bought at a non-Standard grade is still rejected --
-    confirmed via real fixture data (`spec/worklogs/WP32.md`) that the legacy save format stores a
-    Standard-grade item's raw `<ess>`/`<cost>` fields unchanged regardless of the grade actually
-    purchased, so silently accepting a non-Standard grade here would misrepresent the character's
-    real Essence/nuyen cost, not just approximate it.
-    """
-    with pytest.raises(UnsupportedLegacyCharacterError, match=r"'Datajack'.*non-Standard-grade"):
+def test_rejects_a_grade_not_available_at_creation() -> None:
+    """WP127: only Standard, Alphaware and Used may be bought at creation (p. 451). A Betaware
+    Datajack is still rejected, with the grade named as the reason."""
+    with pytest.raises(
+        UnsupportedLegacyCharacterError, match=r"'Datajack': Betaware grade is not available"
+    ):
         _import(
             _legacy_character(
                 cyberware=(
                     _legacy_cyberware(
                         "Datajack",
                         category="Headware",
-                        grade="Alphaware",
+                        grade="Betaware",
                         source="SR5",
                         improvement_source="Cyberware",
                         cost="1000",
@@ -429,6 +427,37 @@ def test_rejects_non_standard_grade_cyberware() -> None:
                 )
             )
         )
+
+
+def test_an_alphaware_implant_imports_with_its_grade() -> None:
+    """WP127: an Alphaware Datajack imports. The file stores Standard-grade `<ess>`/`<cost>`
+    (WP32's finding), so the grade is carried and the engine recomputes the costs from it."""
+    result = import_legacy_character(
+        _legacy_character(
+            cyberware=(
+                _legacy_cyberware(
+                    "Datajack",
+                    category="Headware",
+                    grade="Alphaware",
+                    source="SR5",
+                    improvement_source="Cyberware",
+                    cost="1000",
+                    essence="0.1",
+                ),
+            )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        cyberware=CYBERWARE,
+    )
+    assert [p.grade for p in result.save.cyberware_purchases] == ["Alphaware"]
+    selection = result.built.cyberware_selection
+    assert selection is not None
+    assert selection.essence_spent == Decimal("0.08")
+    assert selection.nuyen_spent == 1200
 
 
 def test_rejects_unsupported_bioware_item() -> None:
@@ -457,30 +486,34 @@ def test_rejects_unsupported_bioware_item() -> None:
         )
 
 
-def test_rejects_non_standard_grade_bioware() -> None:
-    """A real WP45 catalog item (Platelet Factories) bought at a non-Standard grade is still
-    rejected -- confirmed via real fixture data (`Bastion.chum5`, see `spec/worklogs/WP45.md`) that
-    the legacy save format stores a Standard-grade item's raw `<ess>`/`<cost>` fields unchanged
-    regardless of the grade actually purchased, mirroring cyberware's own WP32-era finding.
-    """
-    with pytest.raises(
-        UnsupportedLegacyCharacterError, match=r"'Platelet Factories'.*non-Standard-grade"
-    ):
-        _import(
-            _legacy_character(
-                cyberware=(
-                    _legacy_cyberware(
-                        "Platelet Factories",
-                        category="Basic",
-                        grade="Used",
-                        source="SR5",
-                        improvement_source="Bioware",
-                        cost="17000",
-                        essence="0.2",
-                    ),
-                )
+def test_a_used_grade_bioware_item_imports_with_its_grade() -> None:
+    """WP127: Bastion's real Used-grade Platelet Factories (`spec/worklogs/WP45.md`) imports now,
+    at 0.75 x 17,000 = 12,750 nuyen and 1.25 x 0.2 = 0.25 Essence."""
+    result = import_legacy_character(
+        _legacy_character(
+            cyberware=(
+                _legacy_cyberware(
+                    "Platelet Factories",
+                    category="Basic",
+                    grade="Used",
+                    source="SR5",
+                    improvement_source="Bioware",
+                    cost="17000",
+                    essence="0.2",
+                ),
             )
-        )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        bioware=BIOWARE,
+    )
+    selection = result.built.bioware_selection
+    assert selection is not None
+    assert selection.nuyen_spent == 12750
+    assert selection.essence_spent == Decimal("0.250")
 
 
 def test_accepts_standard_grade_flat_cyberware_item() -> None:

@@ -111,18 +111,23 @@ def test_bastions_standard_grade_flat_items_are_not_itemized_as_rejected() -> No
     Cyberlimbs and bioware content should (all 4 of her real Bioware items -- Cerebral Booster
     (rating-scaled), Cerebellum Booster/Adapsin/Genetic Optimization (non-SR5-sourced), Platelet
     Factories (Used grade) -- are themselves rejected, unlike Barrett's own bioware below).
+
+    **WP127**: Used is a creation grade (p. 451), so her Used-grade limbs and Platelet Factories
+    now resolve. Only their non-SR5 children (Cyberlimb Optimization) are itemized.
     """
     reasons = _reasons("Bastion.chum5")
     assert not any("'Smartlink'" in r for r in reasons)
     assert not any("'Datajack'" in r for r in reasons)
-    assert any("'Obvious Full Arm'" in r for r in reasons)  # bought at Used grade -- rejected
-    assert any("'Platelet Factories'" in r and "bioware" in r for r in reasons)
+    assert not any("'Obvious Full Arm' (" in r for r in reasons)
+    assert any("installed in 'Obvious Full Arm'" in r for r in reasons)
+    assert not any("'Platelet Factories'" in r for r in reasons)
 
 
 def test_blindfires_standard_grade_datajack_is_not_itemized_as_rejected() -> None:
     reasons = _reasons("Blindfire.chum5")
     assert not any("'Datajack'" in r for r in reasons)
-    assert any("'Obvious Full Arm'" in r for r in reasons)  # bought at Used grade -- rejected
+    # WP127: the Used-grade arm itself resolves; its non-SR5 children don't.
+    assert any("installed in 'Obvious Full Arm'" in r for r in reasons)
 
 
 def test_barretts_standard_grade_flat_bioware_is_not_itemized_as_rejected() -> None:
@@ -201,21 +206,23 @@ def test_fuzzys_cybereyes_subtree_imports_with_hand_checked_capacity_and_essence
 
 def test_barretts_synthetic_full_arm_itemizes_every_one_of_its_six_children() -> None:
     """The acceptance criteria's negative half. Barrett's first `Synthetic Full Arm` carries 6 real
-    children; the whole limb is `Used` grade, which is still blocking (see this module's docstring
-    and `spec/worklogs/WP33.md` for why a non-Standard grade can't be read as Standard). WP33 would
-    have produced exactly one reason for this limb -- WP41 produces **seven**, one per node, each
-    naming the parent it was installed in, so nothing is dropped without being reported.
+    children. WP33 would have produced exactly one reason for this limb; WP41 produced seven, one
+    per node, each naming the parent it was installed in.
+
+    **WP127**: the whole limb is `Used` grade, which is a creation grade now (p. 451), so the arm
+    and its two SR5 children (Customized Agility, Enhanced Agility) resolve. The four non-SR5
+    children are each still itemized, naming their parent.
     """
     arm = _top_level_item("Barrett.chum5", "Synthetic Full Arm")
     reasons = _augmentation_reasons(
         [arm], CYBERWARE_BY_NAME, BIOWARE_BY_NAME, SKILLS, parent_name=None
     )
-    assert len(reasons) == 7
-    assert any("'Synthetic Full Arm' (Used grade):" in r for r in reasons)
-    for child in arm.children:
+    non_sr5 = ("Cyberlimb Optimization", "Biomonitor", "Math SPU", "Cyberfinger (Lockpick)")
+    assert len(reasons) == len(non_sr5)
+    for name in non_sr5:
         assert any(
-            f"'{child.name}' (Used grade) installed in 'Synthetic Full Arm'" in r for r in reasons
-        ), child.name
+            f"'{name}' (Used grade) installed in 'Synthetic Full Arm'" in r for r in reasons
+        ), name
 
 
 def test_blues_standard_grade_limb_itemizes_only_its_non_sr5_child() -> None:
@@ -230,7 +237,7 @@ def test_blues_standard_grade_limb_itemizes_only_its_non_sr5_child() -> None:
     )
     assert reasons == [
         "cannot import 'Retractable Climbing Claws (Feet)' (Standard grade) installed in "
-        "'Obvious Full Leg': non-Standard-grade or non-SR5 cyberware is out of scope"
+        "'Obvious Full Leg': non-SR5 cyberware is out of scope"
     ]
     assert {child.name for child in leg.children} == {
         "Customized Agility",

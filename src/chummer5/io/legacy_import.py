@@ -266,6 +266,7 @@ from pathlib import Path
 
 from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware_subsystems import CyberwareEntry
+from chummer5.data.grades import CHARGEN_GRADE_NAMES
 from chummer5.data.knowledge import KNOWLEDGE_CATEGORY_NAMES
 from chummer5.data.lifestyle import STARTING_TIER_NAMES, LifestyleTier
 from chummer5.data.metatypes import Metatype
@@ -314,20 +315,14 @@ STANDARD_GAME_OPTION = "Standard"
 # failing cleanly.
 VALID_PRIORITY_LETTERS = frozenset("ABCDE")
 
-# Both cyberware catalogs only carry Standard-grade values (see chummer5.data.cyberware's
-# docstring and the Phase J intro) -- a real purchase at any other grade is rejected even when its
-# name matches a catalog entry (see this module's own docstring for why the stored raw fields can't
-# be trusted to reflect the real grade-adjusted cost/Essence).
-STANDARD_CYBERWARE_GRADE = "Standard"
+# WP127: the grades an import accepts -- the three a character may buy at creation (p. 451). The
+# catalogs still carry Standard-grade values only; the engine applies the grade's multipliers
+# itself, so the file's stored `<ess>`/`<cost>` (Standard values, per WP32) are never trusted.
+IMPORTABLE_GRADES = frozenset(CHARGEN_GRADE_NAMES)
 
 # <improvementsource> value that marks a <cyberwares><cyberware> entry as Bioware rather than
 # Cyberware (see chummer5.io.legacy_chum5.LegacyCyberware's own docstring).
 BIOWARE_IMPROVEMENT_SOURCE = "Bioware"
-
-# chummer5.data.bioware.load_bioware() only offers Standard-grade values, mirroring cyberware's own
-# scope restriction (see this module's own docstring for why a non-Standard purchase can't be
-# trusted to reflect the real grade-adjusted cost/Essence).
-STANDARD_BIOWARE_GRADE = "Standard"
 
 
 class UnsupportedLegacyCharacterError(ValueError):
@@ -367,6 +362,14 @@ def _bioware_pick_reason(
     )
 
 
+def _grade_reason(item: LegacyCyberware, where: str) -> str:
+    """WP127: an implant bought at a grade no character may buy at creation (p. 451)."""
+    return (
+        f"cannot import {item.name!r}{where}: {item.grade or 'unknown'} grade is not available "
+        f"at character creation (only {', '.join(CHARGEN_GRADE_NAMES)})"
+    )
+
+
 def _augmentation_reasons(
     items: Iterable[LegacyCyberware],
     cyberware_by_name: Mapping[str, CyberwareEntry],
@@ -395,12 +398,13 @@ def _augmentation_reasons(
                     f"cannot import {item.name!r} installed in {parent_name!r}: bioware installed "
                     "as a cyberware subsystem is out of scope (no bioware Capacity data)"
                 )
-            elif bioware_by_name.get(item.name) is None or item.grade != STANDARD_BIOWARE_GRADE:
+            elif bioware_by_name.get(item.name) is None:
                 reasons.append(
                     f"cannot import {item.name!r} ({item.grade or 'unknown'} grade): "
-                    "rating-scaled, non-Standard-grade, high-Availability, or non-SR5 bioware is "
-                    "out of scope"
+                    "rating-scaled, high-Availability, or non-SR5 bioware is out of scope"
                 )
+            elif item.grade not in IMPORTABLE_GRADES:
+                reasons.append(_grade_reason(item, where))
             else:
                 # WP80: the item resolves -- but if it carries a purchase-time skill pick, that pick
                 # has to resolve too.
@@ -417,11 +421,13 @@ def _augmentation_reasons(
                 )
             )
             continue
-        if cyberware_by_name.get(item.name) is None or item.grade != STANDARD_CYBERWARE_GRADE:
+        if cyberware_by_name.get(item.name) is None:
             reasons.append(
                 f"cannot import {item.name!r} ({item.grade or 'unknown'} grade){where}: "
-                "non-Standard-grade or non-SR5 cyberware is out of scope"
+                "non-SR5 cyberware is out of scope"
             )
+        elif item.grade not in IMPORTABLE_GRADES:
+            reasons.append(_grade_reason(item, where))
         reasons.extend(
             _augmentation_reasons(
                 item.children, cyberware_by_name, bioware_by_name, skills, parent_name=item.name
@@ -463,6 +469,7 @@ def _cyberware_purchase_requests(
             item_id=cyberware_by_name[item.name].id,
             rating=_import_rating(item, cyberware_by_name[item.name]),
             plugins=_cyberware_purchase_requests(item.children, cyberware_by_name),
+            grade=item.grade,  # WP127: costs are recomputed from it, never read from the file
         )
         for item in items
         if item.improvement_source != BIOWARE_IMPROVEMENT_SOURCE
@@ -660,6 +667,7 @@ def import_legacy_character(
             chosen_skill=(
                 item.extra if bioware_by_name[item.name].select_skill_bonus is not None else None
             ),
+            grade=item.grade,  # WP127
         )
         for item in legacy.cyberware
         if item.improvement_source == BIOWARE_IMPROVEMENT_SOURCE

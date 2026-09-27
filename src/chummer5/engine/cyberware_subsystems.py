@@ -178,6 +178,7 @@ from enum import Enum
 
 from chummer5.data.cyberware_subsystems import CyberwareEntry
 from chummer5.data.gear import availability_at_rating
+from chummer5.data.grades import CHARGEN_GRADE_NAMES, STANDARD_GRADE, implant_grade
 from chummer5.engine.character import Character
 from chummer5.engine.cyberware import cyberware_bonus_improvements
 from chummer5.engine.derived import BASE_ESSENCE
@@ -237,6 +238,9 @@ class CyberwarePurchaseRequest:
     item_id: str
     rating: int = 1
     plugins: tuple[CyberwarePurchaseRequest, ...] = ()
+    # WP127: Standard, Alphaware or Used (p. 451). A plugin's own value is ignored: "all accessories
+    # and add-ons must be of the same grade" as their parent, so it inherits.
+    grade: str = STANDARD_GRADE
 
 
 @dataclass(frozen=True)
@@ -259,6 +263,7 @@ class PurchasedCyberware:
     capacity_cost: Decimal = Decimal(0)
     capacity_budget: Decimal = Decimal(0)
     bundled: bool = False  # auto-included with the parent (its <subsystems> list): free, not a pick
+    grade: str = STANDARD_GRADE  # WP127: already applied to `nuyen_cost`/`essence_cost`
 
     @property
     def total_nuyen_cost(self) -> int:
@@ -331,6 +336,7 @@ class CyberwareTreeSelection:
                 item_id=node.item.id,
                 rating=node.rating,
                 plugins=tuple(_request(plugin) for plugin in node.plugins if not plugin.bundled),
+                grade=node.grade,
             )
 
         return tuple(_request(purchase) for purchase in self.purchases if not purchase.bundled)
@@ -391,6 +397,7 @@ def cyberware_rating_bounds(
     *,
     attribute_maximums: Mapping[str, int] | None = None,
     cap_availability: bool = False,
+    grade: str = STANDARD_GRADE,
 ) -> tuple[int, int]:
     """The `(minimum, maximum)` rating this item may be purchased at, placeholders resolved.
 
@@ -422,19 +429,55 @@ def cyberware_rating_bounds(
         absent_default=1,
     )
     if cap_availability:
-        maximum = availability_capped_maximum(item, minimum, maximum)
+        maximum = availability_capped_maximum(item, minimum, maximum, grade)
     return minimum, maximum
 
 
-def purchased_ratings(selection: CyberwareTreeSelection | None) -> frozenset[tuple[str, int]]:
-    """Every `(item id, rating)` in `selection`'s trees (WP126) -- what a character already has, and
-    so what `create_cyberware_tree_selection(availability_exempt=)` lets stand."""
+def purchased_ratings(
+    selection: CyberwareTreeSelection | None,
+) -> frozenset[tuple[str, int, str]]:
+    """Every `(item id, rating, grade)` in `selection`'s trees (WP126, WP127) -- what a character
+    already has, and so what `create_cyberware_tree_selection(availability_exempt=)` lets stand."""
     if selection is None:
         return frozenset()
-    return frozenset((node.item.id, node.rating) for node in selection.walk())
+    return frozenset((node.item.id, node.rating, node.grade) for node in selection.walk())
 
 
-def availability_capped_maximum(item: CyberwareEntry, minimum: int, maximum: int) -> int:
+def _availabilities(item: CyberwareEntry, minimum: int, maximum: int) -> list[int] | None:
+    """The item's Standard-grade Availability at each rating, or None if unreadable."""
+    if item.raw_availability is None:
+        return None
+    values = [availability_at_rating(item.raw_availability, r) for r in range(minimum, maximum + 1)]
+    if any(value is None for value in values):
+        return None
+    return [value for value in values if value is not None]
+
+
+def grade_offered(item: CyberwareEntry, grade: str, minimum: int, maximum: int) -> bool:
+    """Whether `item` may be newly bought at `grade` (WP127).
+
+    A grade's Availability shift counts toward the cap of 12 (p. 451's +2 / -4). The exception is
+    WP126's ruling: a fixed Availability already over 12 (Bone Lacing (Titanium)'s `16R`) stays
+    offered, but at Standard grade only -- it gains no Alphaware option, and no Used one either.
+    An unreadable `<avail>` offers every grade.
+    """
+    modifier = implant_grade(grade).availability_modifier
+    values = _availabilities(item, minimum, maximum)
+    if not values:
+        return True
+    if len(set(values)) == 1 and values[0] > MAX_AVAILABILITY:
+        return grade == STANDARD_GRADE
+    return min(values) + modifier <= MAX_AVAILABILITY
+
+
+def offered_grades(item: CyberwareEntry, minimum: int, maximum: int) -> tuple[str, ...]:
+    """The creation grades `item` may be newly bought at, in p. 451's order (WP127)."""
+    return tuple(g for g in CHARGEN_GRADE_NAMES if grade_offered(item, g, minimum, maximum))
+
+
+def availability_capped_maximum(
+    item: CyberwareEntry, minimum: int, maximum: int, grade: str = STANDARD_GRADE
+) -> int:
     """The highest rating in `minimum..maximum` whose Availability is at most 12 (WP126), for a row
     whose Availability scales with its rating -- Muscle Replacement's `(Rating * 5)R` stops at 2,
     Wired Reflexes' `FixedValues(8R,12R,20R)` at 2.
@@ -443,16 +486,20 @@ def availability_capped_maximum(item: CyberwareEntry, minimum: int, maximum: int
     over 12 (Retinal Duplication's `16F`, at any rating) stays offered, and so does an `<avail>`
     this can't read (Customized Agility's parent-relative `+Rating - MinRating + 1`). Never below
     `minimum`, so a scaled row is never dropped outright.
+
+    **WP127**: at `grade`, whose Availability shift counts -- a Used Muscle Replacement
+    (`5 x Rating - 4`) reaches 3, an Alphaware one (`+2`) stays at 2.
     """
-    raw = item.raw_availability
-    if raw is None or maximum <= minimum:
+    if maximum <= minimum:
         return maximum
-    ratings = range(minimum, maximum + 1)
-    values = [availability_at_rating(raw, rating) for rating in ratings]
-    if any(value is None for value in values) or len(set(values)) == 1:
+    values = _availabilities(item, minimum, maximum)
+    if values is None or len(set(values)) == 1:
         return maximum
+    modifier = implant_grade(grade).availability_modifier
     fitting = [
-        r for r, v in zip(ratings, values, strict=True) if v is not None and v <= MAX_AVAILABILITY
+        rating
+        for rating, value in zip(range(minimum, maximum + 1), values, strict=True)
+        if value + modifier <= MAX_AVAILABILITY
     ]
     return max(fitting, default=minimum)
 
@@ -472,7 +519,8 @@ def _build_purchase(
     parent: CyberwareEntry | None,
     attribute_maximums: Mapping[str, int] | None,
     bundled: bool = False,
-    availability_exempt: AbstractSet[tuple[str, int]] | None = None,
+    availability_exempt: AbstractSet[tuple[str, int, str]] | None = None,
+    inherited_grade: str | None = None,
 ) -> PurchasedCyberware:
     item = by_id.get(request.item_id)
     if item is None:
@@ -522,16 +570,23 @@ def _build_purchase(
             f"{item.name}: rating {request.rating} is outside its purchasable range "
             f"{minimum}-{maximum}"
         )
+    # WP127: a plugin takes its parent's grade (p. 451); a standalone purchase names its own.
+    grade = implant_grade(request.grade if inherited_grade is None else inherited_grade)
     if (
         availability_exempt is not None
         and not bundled
-        and (item.id, request.rating) not in availability_exempt
-        and request.rating > availability_capped_maximum(item, minimum, maximum)
+        and (item.id, request.rating, grade.name) not in availability_exempt
     ):
-        raise ValueError(
-            f"{item.name}: rating {request.rating} is over Availability 12 at character "
-            f"creation (the highest is {availability_capped_maximum(item, minimum, maximum)})"
-        )
+        if not grade_offered(item, grade.name, minimum, maximum):
+            raise ValueError(
+                f"{item.name}: {grade.name} grade is over Availability 12 at character creation"
+            )
+        capped = availability_capped_maximum(item, minimum, maximum, grade.name)
+        if request.rating > capped:
+            raise ValueError(
+                f"{item.name}: rating {request.rating} is over Availability 12 at character "
+                f"creation (the highest at {grade.name} grade is {capped})"
+            )
 
     if bundled:
         # Free in all three currencies -- see the module docstring's bundled-subsystem section.
@@ -539,11 +594,14 @@ def _build_purchase(
         essence_cost = Decimal(0)
         capacity_cost = Decimal(0)
     else:
-        nuyen_cost = _as_nuyen(
-            item.cost.resolve(rating=request.rating, min_rating=minimum), item_name=item.name
+        nuyen_cost = grade.nuyen(
+            _as_nuyen(
+                item.cost.resolve(rating=request.rating, min_rating=minimum), item_name=item.name
+            )
         )
         essence_cost = (
             item.essence_cost.resolve(rating=request.rating, min_rating=minimum)
+            * grade.essence_multiplier
             if installation is Installation.STANDALONE
             else Decimal(0)
         )
@@ -566,6 +624,7 @@ def _build_purchase(
         by_name,
         attribute_maximums=attribute_maximums,
         availability_exempt=availability_exempt,
+        grade=grade.name,
     )
 
     if plugins:
@@ -586,6 +645,7 @@ def _build_purchase(
         capacity_cost=capacity_cost,
         capacity_budget=capacity_budget,
         bundled=bundled,
+        grade=grade.name,
     )
 
 
@@ -596,7 +656,8 @@ def _build_plugins(
     by_name: Mapping[str, CyberwareEntry],
     *,
     attribute_maximums: Mapping[str, int] | None,
-    availability_exempt: AbstractSet[tuple[str, int]] | None = None,
+    availability_exempt: AbstractSet[tuple[str, int, str]] | None = None,
+    grade: str = STANDARD_GRADE,
 ) -> tuple[PurchasedCyberware, ...]:
     """Build `request`'s explicit plugins, then auto-attach any missing bundled subsystem."""
     bundled_names = set(item.bundled_subsystem_names)
@@ -609,6 +670,7 @@ def _build_plugins(
             attribute_maximums=attribute_maximums,
             bundled=_plugin_item(plugin_request, by_id).name in bundled_names,
             availability_exempt=availability_exempt,
+            inherited_grade=grade,
         )
         for plugin_request in request.plugins
     ]
@@ -633,6 +695,7 @@ def _build_plugins(
                 parent=item,
                 attribute_maximums=attribute_maximums,
                 bundled=True,
+                inherited_grade=grade,
             )
         )
     return tuple(plugins)
@@ -673,7 +736,7 @@ def create_cyberware_tree_selection(
     attribute_maximums: Mapping[str, int] | None = None,
     other_essence_spent: Decimal = Decimal(0),
     essence_multiplier: Decimal = Decimal(1),
-    availability_exempt: AbstractSet[tuple[str, int]] | None = None,
+    availability_exempt: AbstractSet[tuple[str, int, str]] | None = None,
 ) -> CyberwareTreeSelection:
     """Build a validated `CyberwareTreeSelection` from nested purchase requests.
 
@@ -702,10 +765,14 @@ def create_cyberware_tree_selection(
     read the doubled number.
 
     **WP126**: with `availability_exempt` set, a purchase rated past its Availability 12 cap
-    (`availability_capped_maximum`) is rejected unless its `(item id, rating)` is in the set --
-    the web route passes what the character already had, so only a *new* over-cap pick fails and
-    an edit elsewhere never trips over an old one. `None` (the default: save loading, legacy import)
-    skips the check; WP135's validation reports what it lets through.
+    (`availability_capped_maximum`) is rejected unless its `(item id, rating, grade)` is in the
+    set -- the web route passes what the character already had, so only a *new* over-cap pick
+    fails and an edit elsewhere never trips over an old one. `None` (the default: save loading,
+    legacy import) skips the check; WP135's validation reports what it lets through.
+
+    **WP127**: each standalone request's `grade` (Standard, Alphaware or Used, p. 451) scales its
+    nuyen and Essence, and its plugins inherit it. With `availability_exempt` set, a new pick's
+    grade must also pass `grade_offered`.
     """
     entries = tuple(catalog)
     by_id = {entry.id: entry for entry in entries}
