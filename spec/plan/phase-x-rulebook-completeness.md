@@ -510,7 +510,7 @@ the rules it checks.
   Acceptance: a permanent Troll Low Lifestyle costs 400,000¥; Cramped reduces a Middle Lifestyle by
   10%.
 
-- [ ] **WP133 — Carryover and starting-nuyen notices.**
+- [x] **WP133 — Carryover and starting-nuyen notices.**
   Goal: the two display caps and the dice-roll notice, per the Step 6/7 rulings. None of this
   changes a spendable number during creation.
   Deliverables:

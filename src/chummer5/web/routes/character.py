@@ -25,6 +25,7 @@ from starlette.datastructures import UploadFile
 from chummer5.data.cyberware import CONDITION_DESCRIPTIONS
 from chummer5.data.grades import STANDARD_GRADE
 from chummer5.engine.armor_mods import ARMOR_MOD_SLOTS, InstalledArmorMod, capacity_used
+from chummer5.engine.carryover import karma_carryover, nuyen_carryover, starting_nuyen_roll
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character
 from chummer5.engine.cyberware_subsystems import (
     PAIRED_BONUS_ITEM_NAMES,
@@ -602,6 +603,12 @@ def _character_sheet_context(
         ),
         "nuyen_budget": resources_selection.nuyen_budget,
         "nuyen_remaining": resources_selection.nuyen_remaining,
+        # WP133: the carryover display caps and the starting-nuyen roll (display only).
+        "nuyen_carryover": nuyen_carryover(resources_selection.nuyen_remaining),
+        "karma_carryover": karma_carryover(character.karma_remaining),
+        "starting_nuyen_roll": starting_nuyen_roll(
+            lifestyle_selection, resources_selection.nuyen_remaining
+        ),
         "karma_converted": resources_selection.karma_converted,
         "karma_to_nuyen_amount": karma_to_nuyen(resources_selection.karma_converted),
         "quality_karma_cost": (

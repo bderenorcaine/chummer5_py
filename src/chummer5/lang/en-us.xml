@@ -1662,5 +1662,25 @@
       <key>Web_Resources_Price</key>
       <text>Price ({low}¥-{high}¥)</text>
     </string>
+    <string>
+      <key>Web_Sheet_NuyenCarryover</key>
+      <text>Carried into play: {carried}.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_NuyenCarryoverLost</key>
+      <text>{lost} over the 5,000¥ carryover limit will be lost.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_StartingNuyenRoll</key>
+      <text>Roll {dice}D6 × {multiplier} for starting nuyen when play begins, plus the {carried} carried over.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_KarmaCarryover</key>
+      <text>Carried into play: {carried} Karma.</text>
+    </string>
+    <string>
+      <key>Web_Sheet_KarmaCarryoverLost</key>
+      <text>{lost} Karma over the 7-Karma carryover limit will be lost.</text>
+    </string>
   </strings>
 </chummer>

@@ -1887,3 +1887,15 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   consequence to model.
 - **Not offered**: `Custom Commlink` (the commlink table again, under one name) and `Custom Item`
   (Chummer's placeholder).
+
+## 2026-09-27 — WP133: carryover and starting-nuyen notices
+
+- **Display only, as ruled.** `chummer5.engine.carryover` computes `carried = clamp(remaining,
+  0, cap)` and `lost = max(remaining - cap, 0)` for 5,000¥ and 7 Karma. The sheet shows them under
+  the existing "remaining" lines. The sidebar and every section keep the true remaining amounts.
+- **An over-budget character carries 0 and loses 0.** A negative remaining is WP135's error, not
+  a carryover loss.
+- **The roll follows the primary Lifestyle's tier.** A permanent purchase doesn't change it, and
+  roommates don't exist in core. The sheet omits the roll until a Lifestyle is chosen.
+- **The fresh-character Karma note is expected.** A character with 25 Karma unspent sees "18 Karma
+  ... will be lost". That is the rule, and nothing blocks it.

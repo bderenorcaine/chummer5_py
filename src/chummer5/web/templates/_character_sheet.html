@@ -342,6 +342,10 @@
   {% endif %}
 
   <p>{% if karma_to_nuyen_amount %}{{ _("Web_Sheet_NuyenRemainingConverted", remaining=nuyen_remaining, total=nuyen_budget + karma_to_nuyen_amount, priority=nuyen_budget, converted_nuyen=karma_to_nuyen_amount, karma=karma_converted) }}{% else %}{{ _("Web_Sheet_NuyenRemaining", remaining=nuyen_remaining, total=nuyen_budget + karma_to_nuyen_amount) }}{% endif %}</p>
+  {# WP133: what carries into play (p. 94: at most 5,000 nuyen), and the p. 95 starting-nuyen roll. #}
+  <p class="carryover">{{ _("Web_Sheet_NuyenCarryover", carried=nuyen_carryover.carried | nuyen) }}
+    {%- if nuyen_carryover.lost %} <span class="warning">{{ _("Web_Sheet_NuyenCarryoverLost", lost=nuyen_carryover.lost | nuyen) }}</span>{% endif %}
+    {%- if starting_nuyen_roll %}<br />{{ _("Web_Sheet_StartingNuyenRoll", dice=starting_nuyen_roll.dice, multiplier=starting_nuyen_roll.multiplier | nuyen, carried=starting_nuyen_roll.carried | nuyen) }}{% endif %}</p>
 
   <h3>{{ _("Web_Sheet_DerivedStats") }}</h3>
   <table>
@@ -404,6 +408,9 @@
     {{ _("Web_Sheet_KarmaSpell", cost=spell_karma_cost) }}
     {{ _("Web_Sheet_KarmaRemaining", remaining=character.karma_remaining, spent=character.karma_spent) }}
   </p>
+  {# WP133: p. 98, at most 7 Karma carries into play. #}
+  <p class="carryover">{{ _("Web_Sheet_KarmaCarryover", carried=karma_carryover.carried) }}
+    {%- if karma_carryover.lost %} <span class="warning">{{ _("Web_Sheet_KarmaCarryoverLost", lost=karma_carryover.lost) }}</span>{% endif %}</p>
 
   {% if unmodeled_effect_rows %}
   <details>

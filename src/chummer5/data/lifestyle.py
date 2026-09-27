@@ -46,6 +46,10 @@ class LifestyleTier:
     monthly_cost: int
     source: str
     page: int
+    # WP133: Step Six's Starting Nuyen table (p. 95): roll `starting_dice`D6 x `starting_multiplier`
+    # nuyen when play begins. `<dice>`/`<multiplier>` in the data, which match the table row by row.
+    starting_dice: int = 0
+    starting_multiplier: int = 0
 
 
 def _parse_tier(elem: ET.Element) -> LifestyleTier:
@@ -54,6 +58,8 @@ def _parse_tier(elem: ET.Element) -> LifestyleTier:
         monthly_cost=int(elem.findtext("cost", "0")),
         source=elem.findtext("source", ""),
         page=int(elem.findtext("page", "0")),
+        starting_dice=int(elem.findtext("dice", "0") or "0"),
+        starting_multiplier=int(elem.findtext("multiplier", "0") or "0"),
     )
 
 
