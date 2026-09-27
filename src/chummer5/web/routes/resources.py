@@ -15,16 +15,26 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from starlette.datastructures import FormData
 
+from chummer5.engine.armor_mods import (
+    ARMOR_MOD_SLOTS,
+    ARMOR_MODS,
+    ArmorModPick,
+    InstalledArmorMod,
+    capacity_used,
+    mod_problem,
+)
 from chummer5.engine.character import Character
-from chummer5.engine.derived import ARMOR_CATEGORY
+from chummer5.engine.derived import ARMOR_CATEGORIES
 from chummer5.engine.resources import (
     KARMA_TO_NUYEN_RATE,
     MAX_AVAILABILITY,
     MAX_KARMA_TO_NUYEN,
     STARTER_GEAR_CATALOG,
+    ResourcesAddOns,
     ResourcesSelection,
     StarterGearItem,
     create_resources_selection,
+    resources_addon_args,
     starting_nuyen,
 )
 from chummer5.engine.weapon_accessories import (
@@ -106,7 +116,7 @@ def _submitted_unworn_armor(
     shown = {str(v) for v in form.getlist("armor_shown")}
     worn = {str(v) for v in form.getlist("armor_worn")}
     unworn = (set(character.unworn_armor) - shown) | (shown - worn)
-    owned = {item.name for item in selection.gear if item.category == ARMOR_CATEGORY}
+    owned = {item.name for item in selection.gear if item.category in ARMOR_CATEGORIES}
     return frozenset(unworn & owned)
 
 
@@ -121,8 +131,8 @@ def _parse_gear(form: FormData, catalog: Iterable[StarterGearItem]) -> tuple[str
     """
     names: list[str] = []
     for item in catalog:
-        if item.cost_per_rating is not None:
-            continue  # WP66: rating-priced items go through _parse_rating_gear instead
+        if item.cost_per_rating is not None or item.price_range is not None:
+            continue  # WP66/WP131: rating-priced and variable-priced items are parsed separately
         raw = form.get(f"gear_{item.name}")
         try:
             quantity = int(str(raw)) if raw is not None else 0
@@ -257,6 +267,116 @@ def _weapon_rows(
     return rows
 
 
+def _parse_variable_gear(
+    form: FormData, catalog: Iterable[StarterGearItem]
+) -> tuple[tuple[str, int], ...]:
+    """WP131: each variable-priced item's `(quantity, price)` fields as `(name, price)` repeats.
+    A missing or unparseable price defaults to the bottom of the range; an out-of-range one is
+    passed through for the engine to reject."""
+    picks: list[tuple[str, int]] = []
+    for item in catalog:
+        if item.price_range is None:
+            continue
+        try:
+            quantity = int(str(form.get(f"gear_{item.name}") or 0))
+        except ValueError:
+            quantity = 0
+        if quantity <= 0:
+            continue
+        try:
+            price = int(str(form.get(f"price_{item.name}")))
+        except ValueError:
+            price = item.price_range[0]
+        picks.extend([(item.name, price)] * quantity)
+    return tuple(picks)
+
+
+def encode_armor_mod_pick(pick: ArmorModPick) -> str:
+    return _PICK_SEPARATOR.join((pick.armor, str(pick.copy), pick.mod, str(pick.rating)))
+
+
+def _decode_armor_mod_pick(raw: str) -> ArmorModPick | None:
+    parts = raw.split(_PICK_SEPARATOR)
+    if len(parts) != 4 or not parts[1].isdigit() or not parts[3].isdigit():
+        return None
+    return ArmorModPick(parts[0], int(parts[1]), parts[2], int(parts[3]))
+
+
+def _armor_copies(armor_names: Iterable[str]) -> list[tuple[str, int]]:
+    """Every purchased armor copy, as `(name, copy index)` in purchase order (WP131)."""
+    seen: dict[str, int] = {}
+    copies = []
+    for name in armor_names:
+        if name not in ARMOR_MOD_SLOTS:
+            continue
+        copies.append((name, seen.get(name, 0)))
+        seen[name] = seen.get(name, 0) + 1
+    return copies
+
+
+def _parse_armor_mods(form: FormData, armor_names: tuple[str, ...]) -> tuple[ArmorModPick, ...]:
+    """Kept mods, then newly added ones; a mod on a copy no longer bought is dropped with it."""
+    owned = set(_armor_copies(armor_names))
+    picks = []
+    for raw in [*form.getlist("armor_mod"), *form.getlist("add_armor_mod")]:
+        pick = _decode_armor_mod_pick(str(raw))
+        if pick is not None and (pick.armor, pick.copy) in owned:
+            picks.append(pick)
+    return tuple(picks)
+
+
+def _armor_mod_rows(
+    armor_names: tuple[str, ...], picks: tuple[ArmorModPick, ...]
+) -> list[dict[str, Any]]:
+    """One row per purchased armor copy: its mods, Capacity, and what still fits (each rated mod
+    once per rating that fits)."""
+    by_name = {mod.name: mod for mod in ARMOR_MODS}
+    rows = []
+    for armor, copy in _armor_copies(armor_names):
+        on_copy = []
+        for pick in picks:
+            mod = by_name.get(pick.mod)
+            if (pick.armor, pick.copy) != (armor, copy) or mod is None:
+                continue
+            on_copy.append(
+                InstalledArmorMod(
+                    armor,
+                    copy,
+                    mod,
+                    pick.rating,
+                    mod.cost_at(pick.rating),
+                    mod.capacity_at(pick.rating),
+                )
+            )
+        options = [
+            {
+                "value": encode_armor_mod_pick(ArmorModPick(armor, copy, mod.name, rating)),
+                "mod": mod,
+                "rating": rating,
+                "cost": mod.cost_at(rating),
+            }
+            for mod in ARMOR_MODS
+            for rating in range(1, mod.max_rating + 1)
+            if mod_problem(mod, armor, rating, on_copy, MAX_AVAILABILITY) is None
+        ]
+        slots = ARMOR_MOD_SLOTS[armor]
+        if not options and not on_copy:
+            continue
+        rows.append(
+            {
+                "armor": armor,
+                "number": copy + 1,
+                "installed": [
+                    {"value": encode_armor_mod_pick(i.to_pick()), "item": i} for i in on_copy
+                ],
+                "options": options,
+                "capacity_used": capacity_used(on_copy),
+                "capacity": slots.capacity,
+            }
+        )
+    return rows
+
+
 def _parse_karma_converted(form: FormData) -> int:
     """Read `karma_converted` off a submitted form (WP43), clamping an unparseable or negative
     value to 0 -- the same "let the engine validate what it's already responsible for" choice
@@ -283,7 +403,7 @@ def _resources_context(
     vehicle_cost: int = 0,
     rating_gear: tuple[tuple[str, int], ...] = (),
     *,
-    accessory_picks: tuple[AccessoryPick, ...] = (),
+    addons: ResourcesAddOns | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
     """Context for `_resources.html`. `gear_names` is the flat, repeats-allowed name list
@@ -327,11 +447,19 @@ def _resources_context(
 
     **WP93**: `vehicle_cost` folds in the same way, extending it to six sections.
 
-    **WP130**: `accessory_picks` are the weapon accessories, re-validated with the gear and shown
-    per weapon copy (`weapon_rows`); their cost is part of the gear spend.
+    **WP130/WP131**: `addons` are the weapon accessories, armor mods and variable-priced items,
+    re-validated with the gear. Accessories and mods show per weapon/armor copy (`weapon_rows`,
+    `armor_rows`); all of it is gear spend.
     """
     if character is None:
         return {"character": None, "resources_error": error}
+    if addons is None:
+        addons = resources_addon_args(None)
+    variable_counts: dict[str, int] = {}
+    variable_price: dict[str, int] = {}
+    for name, price in addons["variable_gear"]:
+        variable_counts[name] = variable_counts.get(name, 0) + 1
+        variable_price[name] = price
     counts: dict[str, int] = {}
     for name in gear_names:
         counts[name] = counts.get(name, 0) + 1
@@ -347,15 +475,34 @@ def _resources_context(
         if item.cost_per_rating is not None:  # WP66 rating-priced row
             quantity = rating_counts.get(item.name, 0)
             rating = rating_by_name.get(item.name, 1)
-            unit = item.cost_per_rating
+            max_rating = item.max_rating or 1
             return {
                 "item": item,
                 "quantity": quantity,
                 "is_rating": True,
                 "rating": rating,
-                "max_rating": item.max_rating,
-                "unit_cost": unit,
-                "subtotal": quantity * rating * unit,
+                "max_rating": max_rating,
+                "unit_cost": item.cost_per_rating,
+                # WP131: a `FixedValues` item lists its price at each offered rating.
+                "price_list": (
+                    [item.cost_at(r) for r in range(1, max_rating + 1)]
+                    if item.cost_by_rating is not None
+                    else None
+                ),
+                "subtotal": quantity * item.cost_at(rating),
+            }
+        if item.price_range is not None:  # WP131 variable-priced row
+            quantity = variable_counts.get(item.name, 0)
+            price = variable_price.get(item.name, item.price_range[0])
+            return {
+                "item": item,
+                "quantity": quantity,
+                "is_rating": False,
+                "is_variable": True,
+                "price": price,
+                "subtotal": quantity * price,
+                "is_armor": item.category in ARMOR_CATEGORIES and quantity > 0,
+                "worn": item.name not in character.unworn_armor,
             }
         quantity = counts.get(item.name, 0)
         return {
@@ -364,7 +511,7 @@ def _resources_context(
             "is_rating": False,
             "subtotal": item.cost * quantity,
             # WP109: an owned armor row gets a "worn" checkbox (default: worn).
-            "is_armor": item.category == ARMOR_CATEGORY and quantity > 0,
+            "is_armor": item.category in ARMOR_CATEGORIES and quantity > 0,
             "worn": item.name not in character.unworn_armor,
         }
 
@@ -383,9 +530,13 @@ def _resources_context(
         )
     ]
     budget = starting_nuyen(resources_letter, PRIORITIES)
-    weapon_rows = _weapon_rows(gear_names, accessory_picks)
-    spent = sum(int(row["subtotal"]) for group in gear_groups for row in group["rows"]) + sum(
-        int(installed["item"].cost) for row in weapon_rows for installed in row["installed"]
+    weapon_rows = _weapon_rows(gear_names, addons["weapon_accessories"])
+    armor_names = (*gear_names, *(name for name, _ in addons["variable_gear"]))
+    armor_rows = _armor_mod_rows(armor_names, addons["armor_mods"])
+    spent = (
+        sum(int(row["subtotal"]) for group in gear_groups for row in group["rows"])
+        + sum(int(i["item"].cost) for row in weapon_rows for i in row["installed"])
+        + sum(int(i["item"].cost) for row in armor_rows for i in row["installed"])
     )
     budget_warning: Message | None = None
     if error is None:
@@ -401,7 +552,7 @@ def _resources_context(
                 karma_converted=karma_converted,
                 foci_cost=foci_cost,
                 vehicle_cost=vehicle_cost,
-                weapon_accessories=accessory_picks,
+                **addons,
             )
         except ValueError as exc:
             budget_warning = Message.of("Web_Stale_Resources", error=str(exc))
@@ -409,6 +560,7 @@ def _resources_context(
         "character": character,
         "gear_groups": gear_groups,
         "weapon_rows": weapon_rows,
+        "armor_rows": armor_rows,
         "nuyen_budget": budget,
         "nuyen_spent": spent,
         "nuyen_remaining": (
@@ -441,7 +593,12 @@ async def submit_resources(request: Request) -> HTMLResponse:
         form = await request.form()
         gear_names = _parse_gear(form, STARTER_GEAR_CATALOG)
         rating_gear = _parse_rating_gear(form, STARTER_GEAR_CATALOG)
-        accessory_picks = _parse_accessories(form, gear_names)  # WP130
+        variable_gear = _parse_variable_gear(form, STARTER_GEAR_CATALOG)  # WP131
+        addons = ResourcesAddOns(
+            weapon_accessories=_parse_accessories(form, gear_names),  # WP130
+            armor_mods=_parse_armor_mods(form, (*gear_names, *(name for name, _ in variable_gear))),
+            variable_gear=variable_gear,
+        )
         karma_converted = _parse_karma_converted(form)
         lifestyle_selection = session.character.lifestyle_selection
         lifestyle_cost = lifestyle_selection.total_cost if lifestyle_selection is not None else 0
@@ -469,7 +626,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 karma_converted=karma_converted,
                 foci_cost=foci_cost,
                 vehicle_cost=vehicle_cost,
-                weapon_accessories=accessory_picks,
+                **addons,
             )
         except ValueError as exc:
             context = _resources_context(
@@ -483,7 +640,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 foci_cost,
                 vehicle_cost,
                 rating_gear=rating_gear,
-                accessory_picks=accessory_picks,
+                addons=addons,
                 error=str(exc),
             )
         else:
@@ -503,7 +660,7 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 foci_cost,
                 vehicle_cost,
                 rating_gear=rating_gear,
-                accessory_picks=accessory_picks,
+                addons=addons,
             )
     response = templates.TemplateResponse(request, "_resources.html", context)
     if new_cookie is not None:

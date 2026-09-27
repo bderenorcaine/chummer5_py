@@ -108,6 +108,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
+from typing import TypedDict
 
 from chummer5.data.gear import (
     Armor,
@@ -115,12 +116,21 @@ from chummer5.data.gear import (
     RatingGear,
     Weapon,
     load_armor,
+    load_fixed_values_gear,
     load_gear,
+    load_maglock_options,
     load_rating_gear,
+    load_variable_price_armor,
     load_weapons,
     parse_rating_availability,
 )
 from chummer5.data.priorities import PriorityTable
+from chummer5.engine.armor_mods import (
+    ARMOR_MOD_SLOTS,
+    ArmorModPick,
+    InstalledArmorMod,
+    create_armor_mods,
+)
 from chummer5.engine.character import Character
 from chummer5.engine.weapon_accessories import (
     WEAPON_MOUNT_INFO,
@@ -322,6 +332,17 @@ class StarterGearItem:
     # WP109: a `+N` armor accessory (Helmet, Ballistic Shield, Riot Shield) whose rating adds to the
     # worn body armor instead of replacing it (p. 169). `armor_rating` holds the N.
     armor_stacks: bool = False
+    # WP131: a `FixedValues` price by rating (the Agent) -- `cost_per_rating` is then 0 -- and a
+    # player-entered price within a range (Clothing). A purchased variable item's `cost` is the
+    # price paid.
+    cost_by_rating: tuple[int, ...] | None = None
+    price_range: tuple[int, int] | None = None
+
+    def cost_at(self, rating: int) -> int:
+        """A Rating-priced item's price at `rating`."""
+        if self.cost_by_rating is not None:
+            return self.cost_by_rating[min(max(rating, 1), len(self.cost_by_rating)) - 1]
+        return rating * (self.cost_per_rating or 0)
 
 
 def _availability_capped_max_rating(rating_gear: RatingGear) -> int:
@@ -462,6 +483,7 @@ def build_starter_gear_catalog(
                 category=a.category,
                 armor_rating=a.armor_rating,
                 armor_stacks=a.armor_stacks,
+                price_range=a.price_range,
             )
         )
     for w in weapons:
@@ -484,6 +506,7 @@ def build_starter_gear_catalog(
                 cost_per_rating=rg.cost_per_rating,
                 max_rating=offered_max,
                 unmodeled_effect_note=rg.unmodeled_effect_note,
+                cost_by_rating=rg.cost_by_rating,
             )
         )
 
@@ -494,8 +517,15 @@ def build_starter_gear_catalog(
 # exactly what "flat-cost" excludes (Rating/FixedValues/Variable-cost items, the 3 additive-stacking
 # armor items) and how the 5 real cross-file name collisions are resolved. Parsed once at import
 # time (Project Overview's "parsed once at startup" rule), not a hand-curated stand-in anymore.
+#
+# WP131 adds the rows WP21 excluded by cost shape: Clothing (a player-entered price), the Agent
+# (`FixedValues`), and two maglock options -- see `chummer5.data.gear`'s WP131 loaders.
+_MAGLOCK_FLAT_OPTIONS, _MAGLOCK_RATED_OPTIONS = load_maglock_options()
 STARTER_GEAR_CATALOG: tuple[StarterGearItem, ...] = build_starter_gear_catalog(
-    load_gear(), load_armor(), load_weapons(), load_rating_gear()
+    load_gear() + _MAGLOCK_FLAT_OPTIONS,
+    load_armor() + load_variable_price_armor(),
+    load_weapons(),
+    load_rating_gear() + load_fixed_values_gear() + _MAGLOCK_RATED_OPTIONS,
 )
 
 
@@ -546,11 +576,22 @@ class ResourcesSelection:
     vehicle_cost: int = 0
     # WP130: accessories on purchased weapons, priced into `nuyen_spent` (they are gear).
     weapon_accessories: tuple[InstalledAccessory, ...] = ()
+    # WP131: modifications on purchased armor, likewise.
+    armor_mods: tuple[InstalledArmorMod, ...] = ()
 
     @property
     def accessory_picks(self) -> tuple[AccessoryPick, ...]:
         """The persistable inverse of `create_resources_selection`'s `weapon_accessories`."""
         return tuple(installed.to_pick() for installed in self.weapon_accessories)
+
+    @property
+    def armor_mod_picks(self) -> tuple[ArmorModPick, ...]:
+        return tuple(installed.to_pick() for installed in self.armor_mods)
+
+    @property
+    def variable_gear(self) -> tuple[tuple[str, int], ...]:
+        """WP131: each variable-priced purchase as `(name, price paid)`."""
+        return tuple((i.name, i.cost) for i in self.gear if i.price_range is not None)
 
 
 def starting_nuyen(letter: str, priorities: PriorityTable) -> int:
@@ -584,9 +625,29 @@ def resources_gear_args(
     for item in selection.gear:
         if item.rating is not None:
             rated.append((item.name, item.rating))
-        else:
+        elif item.price_range is None:  # WP131: variable-priced items travel in the add-ons
             flat.append(item.name)
     return tuple(flat), tuple(rated)
+
+
+class ResourcesAddOns(TypedDict):
+    """The `create_resources_selection` arguments beyond gear names and ratings (WP130/WP131),
+    as one keyword bundle -- so every site that re-validates a committed selection passes them all
+    with `**resources_addon_args(selection)`, and a later add-on needs adding here only."""
+
+    weapon_accessories: tuple[AccessoryPick, ...]
+    armor_mods: tuple[ArmorModPick, ...]
+    variable_gear: tuple[tuple[str, int], ...]
+
+
+def resources_addon_args(selection: ResourcesSelection | None) -> ResourcesAddOns:
+    if selection is None:
+        return ResourcesAddOns(weapon_accessories=(), armor_mods=(), variable_gear=())
+    return ResourcesAddOns(
+        weapon_accessories=selection.accessory_picks,
+        armor_mods=selection.armor_mod_picks,
+        variable_gear=selection.variable_gear,
+    )
 
 
 def create_resources_selection(
@@ -603,6 +664,8 @@ def create_resources_selection(
     foci_cost: int = 0,
     vehicle_cost: int = 0,
     weapon_accessories: Iterable[AccessoryPick] = (),
+    armor_mods: Iterable[ArmorModPick] = (),
+    variable_gear: Iterable[tuple[str, int]] = (),
 ) -> ResourcesSelection:
     """Build a `ResourcesSelection`, validating the combined gear + lifestyle + cyberware + bioware
     + foci spend against the nuyen budget (priority-derived, plus whatever Karma-to-Nuyen conversion
@@ -629,6 +692,10 @@ def create_resources_selection(
     **WP130**: `weapon_accessories` are installed on the purchased weapons by
     `chummer5.engine.weapon_accessories.create_weapon_accessories` -- each names a weapon copy that
     must be among the selected gear -- and their cost joins `nuyen_spent`.
+
+    **WP131**: `armor_mods` likewise, through `chummer5.engine.armor_mods.create_armor_mods`.
+    `variable_gear` is `(name, price)` for a variable-priced item (Clothing), the price within its
+    printed range; repeats allowed. A `FixedValues` Rating item is priced by `cost_at`.
     """
     by_name = {item.name: item for item in catalog}
     names = list(gear_names)
@@ -651,9 +718,21 @@ def create_resources_selection(
             raise ValueError(
                 f"{name}: rating must be between 1 and {item.max_rating}, got {rating}"
             )
-        rating_selected.append(replace(item, cost=rating * item.cost_per_rating, rating=rating))
+        rating_selected.append(replace(item, cost=item.cost_at(rating), rating=rating))
 
-    selected = flat_selected + tuple(rating_selected)
+    variable_selected: list[StarterGearItem] = []
+    for name, price in variable_gear:
+        item = by_name.get(name)
+        if item is None or item.price_range is None:
+            raise ValueError(f"not a variable-priced starter-gear catalog item: {name!r}")
+        low, high = item.price_range
+        if not low <= price <= high:
+            raise ValueError(f"{name}: price must be between {low} and {high}, got {price}")
+        variable_selected.append(replace(item, cost=price))
+
+    if any(item.price_range is not None for item in flat_selected):
+        raise ValueError("a variable-priced item needs a price")
+    selected = flat_selected + tuple(rating_selected) + tuple(variable_selected)
 
     weapon_counts: dict[str, int] = {}
     weapon_costs: dict[str, int] = {}
@@ -664,10 +743,19 @@ def create_resources_selection(
     installed = create_weapon_accessories(
         weapon_accessories, weapon_costs, weapon_counts, MAX_AVAILABILITY
     )
+    armor_counts: dict[str, int] = {}
+    for item in selected:
+        if item.name in ARMOR_MOD_SLOTS:
+            armor_counts[item.name] = armor_counts.get(item.name, 0) + 1
+    installed_mods = create_armor_mods(armor_mods, armor_counts, MAX_AVAILABILITY)
 
     budget = starting_nuyen(letter, priorities)
     available = budget + karma_to_nuyen(karma_converted)
-    spent = sum(item.cost for item in selected) + sum(i.cost for i in installed)
+    spent = (
+        sum(item.cost for item in selected)
+        + sum(i.cost for i in installed)
+        + sum(m.cost for m in installed_mods)
+    )
     total_spent = spent + lifestyle_cost + cyberware_cost + bioware_cost + foci_cost + vehicle_cost
     if total_spent > available:
         parts = [f"gear ({spent})"]
@@ -704,4 +792,5 @@ def create_resources_selection(
         foci_cost=foci_cost,
         vehicle_cost=vehicle_cost,
         weapon_accessories=installed,
+        armor_mods=installed_mods,
     )

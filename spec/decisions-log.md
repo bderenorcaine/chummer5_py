@@ -1859,3 +1859,31 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   enhancements, the smart firing platform's autosofts), underbarrel *weapons*, and any weapon stat
   (Accuracy, RC, Concealability) — there are no attack tests. Every offered accessory has a
   registry row.
+
+## 2026-09-27 — WP131: armor modifications and the remaining excluded gear
+
+- **Armor mods follow WP130's shape**: keyed to `(armor, copy index)`, validated in
+  `create_resources_selection`, and priced as gear. `resources_addon_args` / `ResourcesAddOns` now
+  bundle every add-on argument (accessories, mods, variable-priced items). The six re-validation
+  sites pass `**resources_addon_args(selection)`, so the next add-on changes one place.
+- **14 of 32 SR5 mod rows are offered.** The 18 `Liner` rows sit in categories no core armor
+  opens. Two of the Full body armor sub-rows are over the cap once their `+N` is added to the suit's
+  14R, which leaves the full helmet.
+- **Printed-text overrides**: the Clothing table's three modifications cost no Capacity (none is
+  printed); shields take only the three p. 438 names; a standalone Helmet takes no armor mods (its
+  Capacity is for gear); either chemical seal needs Full body armor with its helmet installed
+  first.
+- **Mod armor adds to that copy's rating**, and `worn_armor` applies it, so the full helmet makes
+  Full body armor 18 and (Synth)Leather makes Clothing 4. Clothing only counts as worn armor once
+  it has a rating. Worn/unworn is still tracked by armor *name* (WP109), so all copies of one armor
+  are worn or unworn together. The best copy is the body armor.
+- **Clothing is one catalog row with a player-entered price** (`price_range`, `variable_gear`),
+  not a set of price points. The book gives only the range.
+- **The `+N` maglock options are plain line items, not attached to a maglock.** Attaching one
+  computes nothing, and a maglock's Availability (≤ 6) plus the largest option (+4) stays under 12.
+  Card Reader is 50¥; Anti-Tamper Circuits is Rating 1-4 at 250¥ each. The `+200` Biometric
+  Reader is the same item and price as p. 440's standalone one, already sold. This departs from the
+  plan's "attach to a parent commlink/device": the parent is a maglock, and the attachment has no
+  consequence to model.
+- **Not offered**: `Custom Commlink` (the commlink table again, under one name) and `Custom Item`
+  (Chummer's placeholder).

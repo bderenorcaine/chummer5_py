@@ -1650,5 +1650,17 @@
       <key>Web_Weapons_Add</key>
       <text>Add an accessory…</text>
     </string>
+    <string>
+      <key>Web_ArmorMods_Heading</key>
+      <text>Armor modifications</text>
+    </string>
+    <string>
+      <key>Web_ArmorMods_Add</key>
+      <text>Add a modification…</text>
+    </string>
+    <string>
+      <key>Web_Resources_Price</key>
+      <text>Price ({low}¥-{high}¥)</text>
+    </string>
   </strings>
 </chummer>

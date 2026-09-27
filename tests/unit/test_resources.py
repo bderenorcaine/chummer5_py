@@ -200,7 +200,12 @@ def test_create_resources_selection_rejects_budget_overspend() -> None:
         create_resources_selection(
             letter="E",
             priorities=PRIORITIES,
-            gear_names=[item.name for item in STARTER_GEAR_CATALOG for _ in range(20)],
+            gear_names=[
+                item.name
+                for item in STARTER_GEAR_CATALOG
+                if item.price_range is None  # WP131: Clothing needs a price
+                for _ in range(20)
+            ],
         )
 
 
@@ -387,7 +392,12 @@ def test_create_resources_selection_gear_only_overspend_message_omits_lifestyle_
         create_resources_selection(
             letter="E",
             priorities=PRIORITIES,
-            gear_names=[item.name for item in STARTER_GEAR_CATALOG for _ in range(20)],
+            gear_names=[
+                item.name
+                for item in STARTER_GEAR_CATALOG
+                if item.price_range is None  # WP131: Clothing needs a price
+                for _ in range(20)
+            ],
         )
 
 

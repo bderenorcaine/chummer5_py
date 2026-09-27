@@ -64,7 +64,12 @@
               {% endif %}
             </td>
             <td>
-              {% if row.is_rating %}{{ _("Web_Resources_PerRating", cost=row.unit_cost) }}{% else %}{{ row.item.cost }}{% endif %}
+              {% if row.price_list %}{{ row.price_list | join(" / ") }}
+              {% elif row.is_rating %}{{ _("Web_Resources_PerRating", cost=row.unit_cost) }}
+              {% elif row.is_variable %}
+              {# WP131: the player enters the price, within the printed range. #}
+              <input type="number" name="price_{{ row.item.name }}" value="{{ row.price }}" min="{{ row.item.price_range[0] }}" max="{{ row.item.price_range[1] }}" aria-label="{{ _('Web_Resources_Price', low=row.item.price_range[0], high=row.item.price_range[1]) }}" />
+              {% else %}{{ row.item.cost }}{% endif %}
             </td>
             <td>
               {% if row.is_rating %}
@@ -114,6 +119,32 @@
           <option value="">{{ _("Web_Weapons_Add") }}</option>
           {% for option in row.options %}
           <option value="{{ option.value }}">{{ option.name | dterm("weapons.xml") }}{% if option.mount %} ({{ _("Web_Weapons_Mount", mount=option.mount) }}){% endif %} — {{ option.cost | nuyen }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+      </fieldset>
+      {% endfor %}
+    </details>
+    {% endif %}
+
+    {# WP131: armor modifications, per purchased armor copy, within its Capacity. #}
+    {% if armor_rows %}
+    <details id="armor-mods" data-details-key="armor-mods" open>
+      <summary>{{ _("Web_ArmorMods_Heading") }}</summary>
+      {% for row in armor_rows %}
+      <fieldset class="armor-mods">
+        <legend>{{ _("Web_Weapons_Copy", weapon=(row.armor | dterm("armor.xml")), number=row.number) }} — {{ _("Web_Sheet_CapacityUsed", spent=row.capacity_used, budget=row.capacity) }}</legend>
+        <ul>
+          {% for installed in row.installed %}
+          <li><label><input type="checkbox" name="armor_mod" value="{{ installed.value }}" checked />
+            {{ installed.item.mod | dterm("armor.xml") }}{% if installed.item.mod.rated %} {{ _("Web_Sheet_RatingSuffix", rating=installed.item.rating) }}{% endif %} — {{ installed.item.cost | nuyen }}</label></li>
+          {% endfor %}
+        </ul>
+        {% if row.options %}
+        <select name="add_armor_mod" aria-label="{{ _('Web_ArmorMods_Add') }}">
+          <option value="">{{ _("Web_ArmorMods_Add") }}</option>
+          {% for option in row.options %}
+          <option value="{{ option.value }}">{{ option.mod | dterm("armor.xml") }}{% if option.mod.rated %} {{ _("Web_Sheet_RatingSuffix", rating=option.rating) }}{% endif %} — {{ option.cost | nuyen }}</option>
           {% endfor %}
         </select>
         {% endif %}

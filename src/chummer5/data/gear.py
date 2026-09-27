@@ -70,6 +70,14 @@ Rigger Command Consoles, Autosofts) of roughly fifty. The other ~50 stay unannot
 WP79 annotated cyberware without claiming every catalog -- see Phase P's own "explicitly out of
 this phase" list.
 
+**The rest of the excluded rows (WP131).** Three loaders at the end of this module pick up what
+WP21's cost-shape filter left out, other than Rating-priced rows: `load_variable_price_armor`
+(Clothing, a player-entered price), `load_fixed_values_gear` (the Agent; `Custom Commlink` stays out
+as a copy of p. 438's commlink table), and `load_maglock_options` (the `+N` Card Reader, and
+Anti-Tamper Circuits, as plain line items). `Custom Item` (`Variable`, page 1) is Chummer's
+placeholder, not a printed item, and stays out. `load_gear`/`load_armor`/`load_rating_gear` are
+unchanged, so their counts above still hold.
+
 Both of these matter because of a real data collision found while building the catalog on top of
 this module: a `<hide/>` weapon-profile entry can share its *display name* with the real,
 independently-purchasable gear/armor item it's a companion to, at a **different cost** (the
@@ -315,6 +323,8 @@ class Armor:
     hidden: bool
     source: str
     page: int
+    # WP131: a `Variable(min-max)` price the player enters (Clothing); `cost` is then 0.
+    price_range: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -337,6 +347,13 @@ class RatingGear:
     source: str
     page: int
     unmodeled_effect_note: str | None = None
+    # WP131: a `FixedValues(a,b,...)` price, indexed by rating; `cost_per_rating` is then 0.
+    cost_by_rating: tuple[int, ...] | None = None
+
+    def cost_at(self, rating: int) -> int:
+        if self.cost_by_rating is not None:
+            return self.cost_by_rating[min(max(rating, 1), len(self.cost_by_rating)) - 1]
+        return rating * self.cost_per_rating
 
 
 @dataclass(frozen=True)
@@ -488,3 +505,128 @@ def load_weapons(xml_path: Path = DEFAULT_WEAPONS_PATH) -> tuple[Weapon, ...]:
             )
         )
     return tuple(items)
+
+
+# WP131: the rows WP21 left out by cost shape, other than Rating-priced ones (WP66).
+_VARIABLE_COST_RE = re.compile(r"Variable\((\d+)-(\d+)\)")
+_FIXED_VALUES_COST_RE = re.compile(r"FixedValues\(([\d,\s]+)\)")
+
+# `FixedValues` gear rows not offered, by name:
+#   - `Custom Commlink` is Chummer's build-your-own commlink. Its seven prices and Device Ratings
+#     are p. 438's commlink table row for row (Meta Link 100¥ ... Fairlight Caliban 8,000¥), which
+#     the catalog already sells by model name.
+_UNOFFERED_FIXED_VALUES_GEAR = frozenset({"Custom Commlink"})
+
+
+def load_variable_price_armor(xml_path: Path = DEFAULT_ARMOR_PATH) -> tuple[Armor, ...]:
+    """The SR5 armor rows priced `Variable(min-max)` (WP131): Clothing alone, p. 436's
+    "20¥-100,000¥". `gear.xml`'s one `Variable` row, `Custom Item` (page 1), is Chummer's
+    placeholder for anything the book doesn't list, not a printed item, and isn't loaded."""
+    root = ET.parse(xml_path).getroot()
+    armors_elem = root.find("armors")
+    if armors_elem is None:
+        return ()
+    items = []
+    for elem in armors_elem.findall("armor"):
+        if elem.findtext("source") != CORE_RULEBOOK_SOURCE:
+            continue
+        match = _VARIABLE_COST_RE.fullmatch(elem.findtext("cost", "").strip())
+        if match is None:
+            continue
+        items.append(
+            Armor(
+                id=elem.findtext("id", ""),
+                name=elem.findtext("name", ""),
+                category=elem.findtext("category", ""),
+                cost=0,
+                armor_rating=int(elem.findtext("armor", "0").strip() or "0"),
+                armor_stacks=False,
+                hidden=elem.find("hide") is not None,
+                source=elem.findtext("source", ""),
+                page=int(elem.findtext("page", "0")),
+                price_range=(int(match.group(1)), int(match.group(2))),
+            )
+        )
+    return tuple(items)
+
+
+def load_fixed_values_gear(xml_path: Path = DEFAULT_GEAR_PATH) -> tuple[RatingGear, ...]:
+    """SR5 `<gear>` rows priced `FixedValues(...)` by rating (WP131), less
+    `_UNOFFERED_FIXED_VALUES_GEAR`: the Agent, whose p. 246 table prints Rating x 1,000¥ for
+    ratings 1-3 and Rating x 2,000¥ for 4-6 -- the six values the data lists."""
+    root = ET.parse(xml_path).getroot()
+    gears_elem = root.find("gears")
+    if gears_elem is None:
+        return ()
+    items = []
+    for elem in gears_elem.findall("gear"):
+        if elem.findtext("source") != CORE_RULEBOOK_SOURCE:
+            continue
+        name = elem.findtext("name", "")
+        match = _FIXED_VALUES_COST_RE.fullmatch(elem.findtext("cost", "").strip())
+        if match is None or name in _UNOFFERED_FIXED_VALUES_GEAR:
+            continue
+        items.append(
+            RatingGear(
+                id=elem.findtext("id", ""),
+                name=name,
+                category=elem.findtext("category", ""),
+                cost_per_rating=0,
+                max_rating=int(elem.findtext("rating", "0") or "0"),
+                availability=elem.findtext("avail", "0").strip(),
+                hidden=elem.find("hide") is not None,
+                source=elem.findtext("source", ""),
+                page=int(elem.findtext("page", "0")),
+                cost_by_rating=tuple(int(v) for v in match.group(1).split(",")),
+            )
+        )
+    return tuple(items)
+
+
+# WP131: p. 447's maglock options, which `gear.xml` prices relative to a parent maglock (`+50`,
+# `+200`, avail `+4`/`+Rating`). Attaching one to a particular maglock changes nothing this engine
+# computes, and a maglock's Availability (its Rating, at most 6) plus the largest option (+4) is
+# 10, under the cap -- so they are sold as plain line items at their printed price:
+#   - `Card Reader`: p. 447's "Keypad or card reader, +50¥". (`Keypad`, the same row's other half,
+#     was already sold as a flat 50¥ item.)
+#   - `Anti-Tamper Circuits (Rating 1-4)`: "+(Rating x 250)¥".
+# `Biometric Reader` (+200¥) is not added: p. 440's standalone Biometric Reader, already sold at
+# 200¥, is the same item at the same price, and the catalog is name-keyed.
+MAGLOCK_OPTION_NAMES = frozenset({"Card Reader", "Anti-Tamper Circuits"})
+
+
+def load_maglock_options(
+    xml_path: Path = DEFAULT_GEAR_PATH,
+) -> tuple[tuple[Gear, ...], tuple[RatingGear, ...]]:
+    """The maglock options above, as `(flat, rated)` rows with the leading `+` dropped and their
+    parent-relative Availability recorded as 0 (see `MAGLOCK_OPTION_NAMES`)."""
+    root = ET.parse(xml_path).getroot()
+    gears_elem = root.find("gears")
+    flat: list[Gear] = []
+    rated: list[RatingGear] = []
+    for elem in gears_elem.findall("gear") if gears_elem is not None else ():
+        name = elem.findtext("name", "")
+        if elem.findtext("source") != CORE_RULEBOOK_SOURCE or name not in MAGLOCK_OPTION_NAMES:
+            continue
+        cost = elem.findtext("cost", "").strip().lstrip("+")
+        common = {
+            "id": elem.findtext("id", ""),
+            "name": name,
+            "category": elem.findtext("category", ""),
+            "hidden": False,
+            "source": CORE_RULEBOOK_SOURCE,
+            "page": int(elem.findtext("page", "0")),
+        }
+        rating_match = _RATING_COST_RE.fullmatch(cost)
+        if rating_match:
+            rated.append(
+                RatingGear(
+                    cost_per_rating=int(rating_match.group(1)),
+                    max_rating=int(elem.findtext("rating", "0") or "0"),
+                    availability="0",
+                    **common,  # type: ignore[arg-type]
+                )
+            )
+        elif cost.isdigit():
+            flat.append(Gear(cost=int(cost), availability="0", **common))  # type: ignore[arg-type]
+    return tuple(flat), tuple(rated)

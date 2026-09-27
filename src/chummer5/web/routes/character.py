@@ -24,6 +24,7 @@ from starlette.datastructures import UploadFile
 
 from chummer5.data.cyberware import CONDITION_DESCRIPTIONS
 from chummer5.data.grades import STANDARD_GRADE
+from chummer5.engine.armor_mods import ARMOR_MOD_SLOTS, InstalledArmorMod, capacity_used
 from chummer5.engine.character import ALLOCATABLE_ATTRIBUTES, Character
 from chummer5.engine.cyberware_subsystems import (
     PAIRED_BONUS_ITEM_NAMES,
@@ -64,6 +65,7 @@ from chummer5.engine.resources import (
     StarterGearItem,
     create_contact_selection,
     karma_to_nuyen,
+    resources_addon_args,
     resources_gear_args,
     starting_nuyen,
 )
@@ -120,6 +122,7 @@ def _resources_selection_for_display(
     foci_cost: int = 0,
     vehicle_cost: int = 0,
     weapon_accessories: tuple[InstalledAccessory, ...] = (),
+    armor_mods: tuple[InstalledArmorMod, ...] = (),
 ) -> ResourcesSelection:
     """Recompute a `ResourcesSelection`'s nuyen totals against `letter`'s *current* budget, without
     `create_resources_selection`'s "spend must not exceed budget" check.
@@ -157,6 +160,7 @@ def _resources_selection_for_display(
     or 0 if none yet) folds in the same way, extending the shared budget to six sections.
 
     **WP130**: `weapon_accessories` are carried through, already priced, and count as gear spend.
+    **WP131**: `armor_mods` likewise.
     """
     # WP66: the committed purchased items are passed straight through -- each already carries its
     # own final cost (a Rating-priced item's is `rating * cost_per_rating`, a flat item's is its
@@ -164,7 +168,11 @@ def _resources_selection_for_display(
     # shape) would drop the chosen rating and mis-cost every rating item at 0.
     selected = tuple(gear)
     budget = starting_nuyen(letter, PRIORITIES)
-    spent = sum(item.cost for item in selected) + sum(i.cost for i in weapon_accessories)
+    spent = (
+        sum(item.cost for item in selected)
+        + sum(i.cost for i in weapon_accessories)
+        + sum(m.cost for m in armor_mods)
+    )
     return ResourcesSelection(
         resources_letter=letter,
         nuyen_budget=budget,
@@ -187,6 +195,7 @@ def _resources_selection_for_display(
         foci_cost=foci_cost,
         vehicle_cost=vehicle_cost,
         weapon_accessories=weapon_accessories,
+        armor_mods=armor_mods,
     )
 
 
@@ -473,6 +482,11 @@ def _character_sheet_context(
             if character.resources_selection is not None
             else ()
         ),
+        (
+            character.resources_selection.armor_mods
+            if character.resources_selection is not None
+            else ()
+        ),
     )
     # WP66: keyed by (name, rating) so two Rating-priced buys of the same item at different ratings
     # don't collapse into one line; `rating` is None for flat items (a plain "name × qty" line).
@@ -568,6 +582,8 @@ def _character_sheet_context(
         ],
         # WP130: each accessorized weapon copy, with what it ships with and what was added.
         "weapon_accessory_rows": _sheet_weapon_accessory_rows(resources_selection),
+        # WP131: each modified armor copy, with its mods and the Capacity they use.
+        "armor_mod_rows": _sheet_armor_mod_rows(resources_selection),
         "lifestyle_tier_name": (
             lifestyle_selection.tier.name if lifestyle_selection is not None else None
         ),
@@ -799,6 +815,23 @@ def _sheet_weapon_accessory_rows(selection: ResourcesSelection) -> list[dict[str
     ]
 
 
+def _sheet_armor_mod_rows(selection: ResourcesSelection) -> list[dict[str, Any]]:
+    """WP131: one row per armor copy carrying a mod."""
+    by_copy: dict[tuple[str, int], list[InstalledArmorMod]] = {}
+    for installed in selection.armor_mods:
+        by_copy.setdefault((installed.armor, installed.copy), []).append(installed)
+    return [
+        {
+            "armor": armor,
+            "number": copy + 1,
+            "mods": mods,
+            "capacity_used": capacity_used(mods),
+            "capacity": ARMOR_MOD_SLOTS[armor].capacity,
+        }
+        for (armor, copy), mods in sorted(by_copy.items())
+    ]
+
+
 def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     """Build a `CharacterSave` (WP11) from a session's currently committed selections -- the
     inverse of `_apply_built_character_to_session` below. Only called once `session.character` is
@@ -865,6 +898,7 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
     contacts = (
         character.contact_selection.contacts if character.contact_selection is not None else ()
     )
+    addons = resources_addon_args(character.resources_selection)
     # WP66: flat gear names and Rating-priced (name, rating) picks are persisted separately.
     gear_names, rating_gear_picks = (
         resources_gear_args(character.resources_selection)
@@ -941,11 +975,9 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         resources_letter=session.resources_letter,
         gear_names=gear_names,
         rating_gear_picks=rating_gear_picks,
-        weapon_accessories=(  # WP130
-            character.resources_selection.accessory_picks
-            if character.resources_selection is not None
-            else ()
-        ),
+        weapon_accessories=addons["weapon_accessories"],  # WP130
+        armor_mods=addons["armor_mods"],  # WP131
+        variable_gear_picks=addons["variable_gear"],
         lifestyle_tier_name=(
             lifestyle_selection.tier.name
             if lifestyle_selection is not None

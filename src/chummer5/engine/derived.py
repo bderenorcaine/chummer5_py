@@ -104,10 +104,11 @@ filled in), so there is nothing for it to read.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from chummer5.engine.armor_mods import armor_bonus
 from chummer5.engine.character import Character
 from chummer5.engine.improvements import ImprovementType, ResolutionContext
 
@@ -142,6 +143,9 @@ BASE_WOUND_BOXES_PER_MODIFIER = 3
 
 # The gear category whose items are body armor or `+N` accessories (armor.xml's own category name).
 ARMOR_CATEGORY = "Armor"
+# WP131: Clothing (p. 436) is armor once (Synth)Leather gives it a rating.
+CLOTHING_CATEGORY = "Clothing"
+ARMOR_CATEGORIES = frozenset({ARMOR_CATEGORY, CLOTHING_CATEGORY})
 
 # WP111: Astral Initiative's dice -- 3, per p. 314 and the user's 2026-09-26 ruling (see module
 # docstring for the 2D6 printings it overrides) -- and the two VR modes' (pp. 229-230).
@@ -382,6 +386,9 @@ def unmodeled_effect_notes(character: Character) -> tuple[tuple[str, str], ...]:
         # WP130: accessories on purchased weapons.
         for installed in character.resources_selection.weapon_accessories:
             add(installed.name, installed.unmodeled_effect_note)
+        # WP131: armor modifications.
+        for armor_mod in character.resources_selection.armor_mods:
+            add(armor_mod.name, armor_mod.unmodeled_effect_note)
     # WP95: the one selection this walk did not cover at all -- `vehicle_selection` postdates the
     # function (WP92) and was never added. Repeats are legal here (four Fly-Spies), and `add`
     # already dedupes by name, so a fleet contributes one note per distinct model.
@@ -455,16 +462,28 @@ class ArmorBreakdown:
 
 
 def worn_armor(character: Character) -> tuple[StarterGearItem, ...]:
-    """Every purchased Armor-category item not marked unworn (WP109)."""
-    if character.resources_selection is None:
+    """Every purchased Armor-category item not marked unworn (WP109).
+
+    **WP131**: each copy's rating includes what its mods add (a Full body armor helmet's +3), and
+    Clothing counts once a mod gives it a rating ((Synth)Leather's 4).
+    """
+    selection = character.resources_selection
+    if selection is None:
         return ()
-    return tuple(
-        item
-        for item in character.resources_selection.gear
-        if item.category == ARMOR_CATEGORY
-        and item.armor_rating is not None
-        and item.name not in character.unworn_armor
-    )
+    worn = []
+    copies: dict[str, int] = {}
+    for item in selection.gear:
+        if item.category not in ARMOR_CATEGORIES or item.armor_rating is None:
+            continue
+        copy = copies.get(item.name, 0)
+        copies[item.name] = copy + 1
+        if item.name in character.unworn_armor:
+            continue
+        rating = item.armor_rating + armor_bonus(selection.armor_mods, item.name, copy)
+        if item.category == CLOTHING_CATEGORY and rating == 0:
+            continue
+        worn.append(item if rating == item.armor_rating else replace(item, armor_rating=rating))
+    return tuple(worn)
 
 
 def armor_breakdown(character: Character) -> ArmorBreakdown:

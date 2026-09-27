@@ -239,6 +239,17 @@
     {% endfor %}
   </ul>
   {% endif %}
+  {# WP131: modified armor. #}
+  {% if armor_mod_rows %}
+  <h4>{{ _("Web_ArmorMods_Heading") }}</h4>
+  <ul>
+    {% for row in armor_mod_rows %}
+    <li>{{ _("Web_Weapons_Copy", weapon=(row.armor | dterm("armor.xml")), number=row.number) }}:
+      {% for installed in row.mods %}{{ installed.mod | dterm("armor.xml") }}{% if installed.mod.rated %} {{ _("Web_Sheet_RatingSuffix", rating=installed.rating) }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+      — {{ _("Web_Sheet_CapacityUsed", spent=row.capacity_used, budget=row.capacity) }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
 
   <h3>{{ _("Web_Cyberware_Cyberware") }}</h3>
   {% if cyberware_rows %}

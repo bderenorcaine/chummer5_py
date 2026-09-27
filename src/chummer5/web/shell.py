@@ -22,7 +22,11 @@ from typing import Any
 
 from chummer5.engine.character import STARTING_KARMA, Character
 from chummer5.engine.magic import binds_spirits, casts_spells
-from chummer5.engine.resources import available_nuyen, resources_gear_args
+from chummer5.engine.resources import (
+    available_nuyen,
+    resources_addon_args,
+    resources_gear_args,
+)
 from chummer5.web.catalogs import (
     DEFAULT_LIFESTYLE_MONTHS,
     DEFAULT_LIFESTYLE_TIER_NAME,
@@ -629,11 +633,7 @@ def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> di
         foci_cost,
         vehicle_cost,
         rating_gear,
-        accessory_picks=(
-            character.resources_selection.accessory_picks
-            if character is not None and character.resources_selection is not None
-            else ()
-        ),
+        addons=resources_addon_args(character.resources_selection if character else None),
     )
     lifestyle_ctx = _lifestyle_context(
         character,

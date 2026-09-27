@@ -258,6 +258,9 @@ Additive, defaulting to none and `false`. A permanent Lifestyle also stores `lif
 **WP130** adds `weapon_accessories` (`{weapon, copy, accessory, mount}` per accessory installed on
 a purchased weapon copy). Additive, defaulting to none.
 
+**WP131** adds `armor_mods` (`{armor, copy, mod, rating}`) and `variable_gear_picks`
+(`{name, price}`, e.g. Clothing at the price the player entered). Additive, defaulting to none.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -289,6 +292,7 @@ from chummer5.data.skills import Skill
 from chummer5.data.spells import Spell
 from chummer5.data.traditions import Tradition
 from chummer5.data.vehicles import Vehicle
+from chummer5.engine.armor_mods import ArmorModPick
 from chummer5.engine.bioware import (
     BiowarePurchaseRequest,
     apply_bioware_improvements,
@@ -499,6 +503,9 @@ class CharacterSave:
     rating_gear_picks: tuple[RatingGearPick, ...] = ()
     # WP130: accessories on purchased weapon copies.
     weapon_accessories: tuple[AccessoryPick, ...] = ()
+    # WP131: armor modifications, and variable-priced gear as (name, price) pairs.
+    armor_mods: tuple[ArmorModPick, ...] = ()
+    variable_gear_picks: tuple[tuple[str, int], ...] = ()
     # WP92: purchased stock vehicles/drones, as catalog ids (repeats = quantity, e.g. four
     # Fly-Spies). A bare id list is the whole persistable shape a vehicle purchase has -- unlike
     # cyberware there is no tree, unlike bioware no player choice, unlike foci no Force. Defaults
@@ -557,6 +564,8 @@ def create_character_save(
     lifestyle_permanent: bool = False,
     rating_gear_picks: Iterable[RatingGearPick] = (),
     weapon_accessories: Iterable[AccessoryPick] = (),
+    armor_mods: Iterable[ArmorModPick] = (),
+    variable_gear_picks: Iterable[tuple[str, int]] = (),
     vehicle_ids: Iterable[str] = (),
     unworn_armor: Iterable[str] = (),
 ) -> CharacterSave:
@@ -616,6 +625,8 @@ def create_character_save(
         lifestyle_permanent=lifestyle_permanent,
         rating_gear_picks=tuple(rating_gear_picks),
         weapon_accessories=tuple(weapon_accessories),
+        armor_mods=tuple(armor_mods),
+        variable_gear_picks=tuple(variable_gear_picks),
         vehicle_ids=tuple(vehicle_ids),
         unworn_armor=tuple(sorted(set(unworn_armor))),
     )
@@ -805,6 +816,13 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
             {"weapon": p.weapon, "copy": p.copy, "accessory": p.accessory, "mount": p.mount}
             for p in save.weapon_accessories
         ],
+        "armor_mods": [
+            {"armor": m.armor, "copy": m.copy, "mod": m.mod, "rating": m.rating}
+            for m in save.armor_mods
+        ],
+        "variable_gear_picks": [
+            {"name": name, "price": price} for name, price in save.variable_gear_picks
+        ],
         "vehicle_ids": list(save.vehicle_ids),
         "unworn_armor": list(save.unworn_armor),
     }
@@ -889,6 +907,11 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
             AccessoryPick(p["weapon"], p["copy"], p["accessory"], p.get("mount"))
             for p in data.get("weapon_accessories", ())
         ),
+        armor_mods=(
+            ArmorModPick(m["armor"], m["copy"], m["mod"], m.get("rating", 1))
+            for m in data.get("armor_mods", ())
+        ),
+        variable_gear_picks=((p["name"], p["price"]) for p in data.get("variable_gear_picks", ())),
         vehicle_ids=data.get("vehicle_ids", ()),
         unworn_armor=data.get("unworn_armor", ()),
     )
@@ -1072,6 +1095,8 @@ def build_character(
         gear_names=save.gear_names,
         rating_gear=save.rating_gear_picks,
         weapon_accessories=save.weapon_accessories,
+        armor_mods=save.armor_mods,
+        variable_gear=save.variable_gear_picks,
         lifestyle_cost=lifestyle_selection.total_cost,
         karma_converted=save.karma_converted,
     )
@@ -1139,6 +1164,8 @@ def build_character(
         gear_names=save.gear_names,
         rating_gear=save.rating_gear_picks,
         weapon_accessories=save.weapon_accessories,
+        armor_mods=save.armor_mods,
+        variable_gear=save.variable_gear_picks,
         lifestyle_cost=lifestyle_selection.total_cost,
         cyberware_cost=cyberware_selection.nuyen_spent,
         bioware_cost=bioware_selection.nuyen_spent,
@@ -1328,6 +1355,8 @@ def build_character(
         gear_names=save.gear_names,
         rating_gear=save.rating_gear_picks,
         weapon_accessories=save.weapon_accessories,
+        armor_mods=save.armor_mods,
+        variable_gear=save.variable_gear_picks,
         lifestyle_cost=lifestyle_selection.total_cost,
         cyberware_cost=cyberware_selection.nuyen_spent,
         bioware_cost=bioware_selection.nuyen_spent,

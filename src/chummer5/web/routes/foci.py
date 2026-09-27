@@ -27,6 +27,7 @@ from chummer5.engine.improvements import ImprovementSource
 from chummer5.engine.resources import (
     available_nuyen,
     create_resources_selection,
+    resources_addon_args,
     resources_gear_args,
     starting_nuyen,
 )
@@ -241,9 +242,7 @@ async def submit_foci(request: Request) -> HTMLResponse:
                 PRIORITIES,
                 gear_names,
                 rating_gear=rating_gear,
-                weapon_accessories=(  # WP130
-                    resources_selection.accessory_picks if resources_selection is not None else ()
-                ),
+                **resources_addon_args(resources_selection),  # WP130/WP131
                 lifestyle_cost=lifestyle_cost,
                 cyberware_cost=cyberware_cost,
                 bioware_cost=bioware_cost,

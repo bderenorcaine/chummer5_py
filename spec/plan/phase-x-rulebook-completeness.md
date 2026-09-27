@@ -486,7 +486,7 @@ the rules it checks.
   Acceptance: an Ares Predator V with a silencer and a smartgun system round-trips, and a second
   barrel-mount accessory is rejected.
 
-- [ ] **WP131 — Armor modifications, Clothing, and the remaining excluded gear.**
+- [x] **WP131 — Armor modifications, Clothing, and the remaining excluded gear.**
   Goal: the 32 core armor mods, plus the handful of core gear rows WP21 excluded by cost shape.
   Deliverables:
   - Armor mods consume an armor's Capacity (`<armorcapacity>`), priced flat or by rating. Computed
