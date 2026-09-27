@@ -370,7 +370,7 @@ the rules it checks.
   Acceptance: an Adept following Bear or Eagle gets a non-empty applied bonus; the "applies nothing
   at all" note in `data/mentors.py` is gone.
 
-- [ ] **WP123 — Karma-funded Magic increases.**
+- [x] **WP123 — Karma-funded Magic increases.**
   Goal: Step Seven Karma can raise MAG (`new Rating × 5`, p. 106), like any other attribute.
   Deliverables: extend `KarmaAttributeSelection` to MAG for Magician/Adept/Aspected. **Research
   first** how Karma-raised MAG interacts with WP35's Essence-driven Magic loss. The questions are

@@ -123,6 +123,15 @@ def _attribute_allocation_context(
         for code, points in karma_points.items()
         if code in ALLOCATABLE_ATTRIBUTES and points > 0
     )
+    # WP123: Karma-raised Magic starts from the current, Essence-reduced rating.
+    if karma_points.get("MAG", 0) > 0 and character.magic_type is not None:
+        karma_preview_cost += karma_advancement_cost(
+            replace(
+                character, magic_attribute_points=magic_points, karma_attribute_selection=None
+            ).magic_before_karma(),
+            karma_points["MAG"],
+            ATTRIBUTE_KARMA_PER_RATING,
+        )
     display = replace(
         character,
         attribute_points=MappingProxyType(dict(attribute_points)),
@@ -158,7 +167,7 @@ def _attribute_allocation_context(
                 "minimum": character.magic_rating,
                 "maximum": display.attribute_maximum("MAG"),
                 "points": magic_points,
-                "karma_points": None,  # WP52: MAG is not Karma-allocatable, no input to render
+                "karma_points": karma_points.get("MAG", 0),  # WP123: Karma-raisable
                 # MAG has no natural/augmented split (its `magaug` equals its `magmax` for every
                 # SR5-core metatype) -- see `Character.natural_attribute_value`'s own docstring.
                 "natural": display.attribute_value("MAG"),
@@ -189,7 +198,11 @@ def _attribute_allocation_context(
                     attribute_points.get("EDG", 0),
                 )
             create_karma_attribute_points(
-                replace(character, attribute_points=MappingProxyType(dict(attribute_points))),
+                replace(
+                    character,
+                    attribute_points=MappingProxyType(dict(attribute_points)),
+                    magic_attribute_points=magic_points,
+                ),
                 karma_points,
                 karma_budget,
             )
@@ -228,6 +241,9 @@ async def submit_attributes(request: Request) -> HTMLResponse:
         # `karma_attr_{code}` fields, same `ALLOCATABLE_ATTRIBUTES` set (MAG excluded).
         karma_points = parse_points(form, ALLOCATABLE_ATTRIBUTES, "karma_attr_")
         previous = session.character
+        # WP123: and Magic, for a magic user.
+        if previous.magic_type is not None:
+            karma_points.update(parse_points(form, ("MAG",), "karma_attr_"))
         # Post-WP29 correction: MAG's own points (when allocatable at all -- see this section's
         # own comment below) are parsed and validated separately from `attribute_points`, since
         # `create_character` only ever validates `ALLOCATABLE_ATTRIBUTES` -- see `chummer5
@@ -282,7 +298,12 @@ async def submit_attributes(request: Request) -> HTMLResponse:
                     previous.special_attribute_points,
                     attribute_points.get("EDG", 0),
                 )
-            character = replace(previous, attribute_points=MappingProxyType(dict(attribute_points)))
+            # WP123: with this submission's MAG points too -- a Karma raise of Magic starts there.
+            character = replace(
+                previous,
+                attribute_points=MappingProxyType(dict(attribute_points)),
+                magic_attribute_points=magic_points,
+            )
             karma_attribute_selection = create_karma_attribute_points(
                 character, karma_points, karma_budget
             )

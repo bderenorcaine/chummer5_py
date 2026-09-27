@@ -1746,3 +1746,13 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   its own field. Both are saved.
 - **Eagle's Allergy is granted, not bought.** It sits on the mentor pick (`granted_qualities`), is
   listed on the sheet, and carries the Allergy's registry note. It is outside both 25-Karma caps.
+
+## 2026-09-27 — WP123: Karma may raise Magic
+
+- **`KarmaAttributeSelection` accepts "MAG" for any magic user** (Magician, Adept, Aspected
+  Magician). The raise starts from the current, Essence-reduced rating and stops at the reduced
+  maximum (p. 278). Exceptional Attribute (MAG) lifts that maximum as usual. The cost is the p. 106
+  formula. `Character.magic_before_karma()` is the starting rating.
+- **Legacy import still blocks a legacy MAG `<karma>` spend** (WP52's block, unchanged). Lifting it
+  means checking how legacy records Karma-raised Magic next to Essence loss, and no corpus file
+  exercises that. Left as is.

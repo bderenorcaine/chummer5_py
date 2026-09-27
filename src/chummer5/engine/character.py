@@ -634,9 +634,29 @@ class Character:
         """
         if self.magic_type is None:
             return 0
+        return min(
+            self._magic_points_total() + self.karma_magic_points, self.attribute_maximum("MAG")
+        )
+
+    def _magic_points_total(self) -> int:
+        """Talent rating + Special Attribute Points + Σ `ATTRIBUTE` improvements on MAG, uncapped
+        and without Karma (WP123)."""
         bonus = self.improvements.resolve(ImprovementType.ATTRIBUTE, "MAG")
-        total = self.magic_rating + self.magic_attribute_points + bonus
-        return min(total, self.attribute_maximum("MAG"))
+        return self.magic_rating + self.magic_attribute_points + bonus
+
+    @property
+    def karma_magic_points(self) -> int:
+        """WP123: Magic raised with Step Seven Karma (`karma_attribute_selection`'s "MAG")."""
+        selection = self.karma_attribute_selection
+        return selection.points.get("MAG", 0) if selection is not None else 0
+
+    def magic_before_karma(self) -> int:
+        """WP123: the current Magic rating with no Karma spent on it -- Essence loss included, the
+        rating a Karma raise starts from."""
+        if self.magic_type is None:
+            return 0
+        capped = min(self._magic_points_total(), self.attribute_maximum("MAG"))
+        return max(capped - self.magic_essence_loss, 0)
 
     @property
     def magic_essence_loss(self) -> int:
@@ -790,20 +810,33 @@ class KarmaAttributeSelection:
     `create_bound_spirit_selection`, ...): a resubmission is a complete re-declaration of every
     Karma-funded attribute point, not a diff against what was there before.
 
-    Deliberately **excludes MAG/RES** even though `ALLOCATABLE_ATTRIBUTES` is the only set checked
-    here -- MAG has its own, already-built Karma-free mechanism for growing past its Talent-granted
-    starting rating (`create_magic_attribute_points`, spending *Special Attribute Points*, not
-    Karma), and RES stays out of scope entirely per the Project Overview. The core rulebook's own
-    Karma Advancement Table (p.106) does list Magic/Resonance under the same `new Rating x 5`
-    formula this class uses for Mental/Physical/Edge, so a future WP *could* extend
-    `ALLOCATABLE_ATTRIBUTES`-style Karma spend to MAG -- deliberately not attempted here, since it
-    would also need to interact with WP35's Essence-driven Magic-loss formula
-    (`Character.magic_essence_loss`) in a way no current fixture exercises, mirroring this
-    project's "don't build past what's asked or verified" discipline.
+    **MAG since WP123** (RES stays out of scope). MAG also has its Karma-free Special Attribute
+    Point mechanism (`create_magic_attribute_points`); on top of that, the Karma Advancement
+    Table (p. 106) prices Magic like any attribute, `new Rating x 5`. A Karma raise starts from the
+    *current* rating, after WP35's Essence loss, and stops at the reduced maximum (p. 278) -- see
+    `_karma_magic_cost`.
     """
 
     points: MappingProxyType[str, int]
     karma_cost: int
+
+
+def _karma_magic_cost(character: Character, points: int) -> int:
+    """WP123: Karma for raising Magic by `points`. p. 278: Essence loss lowers "both your current
+    Magic Attribute and your maximum Magic Rating [...] (but you can still raise the attribute with
+    Karma [...])" -- so the raise starts from the *reduced* current rating, at new rating x 5, and
+    stops at the reduced maximum. A reduced maximum of 0 is burnout ("You are mundane forever")."""
+    maximum = character.attribute_maximum("MAG")
+    reduced_maximum = maximum - character.magic_essence_loss
+    if reduced_maximum <= 0:
+        raise ValueError("MAG: Essence loss has burned out the character's Magic")
+    start = character.magic_before_karma()
+    if start + points > reduced_maximum:
+        raise ValueError(
+            f"MAG: {start + points} (current + Karma) exceeds the maximum of {reduced_maximum}"
+            + (" after Essence loss" if character.magic_essence_loss else "")
+        )
+    return karma_advancement_cost(start, points, ATTRIBUTE_KARMA_PER_RATING)
 
 
 def create_karma_attribute_points(
@@ -845,7 +878,13 @@ def create_karma_attribute_points(
     priority points alone -- see this function's own tests for the synthetic regression case that
     pins this behavior down directly.
     """
-    unknown = set(karma_points) - set(ALLOCATABLE_ATTRIBUTES)
+    # WP123: Magic too, for a magic user (p. 106: "new Rating x 5", like every attribute).
+    allowed = (
+        (*ALLOCATABLE_ATTRIBUTES, "MAG")
+        if character.magic_type is not None
+        else (ALLOCATABLE_ATTRIBUTES)
+    )
+    unknown = set(karma_points) - set(allowed)
     if unknown:
         raise ValueError(f"not allocatable in MVP scope: {sorted(unknown)}")
 
@@ -854,6 +893,9 @@ def create_karma_attribute_points(
     for code, points in nonzero_points.items():
         if points < 0:
             raise ValueError(f"{code}: Karma-funded points must not be negative, got {points}")
+        if code == "MAG":
+            cost += _karma_magic_cost(character, points)
+            continue
         attribute_range = character.attribute_range(code)
         start_rating = attribute_range.minimum + character.attribute_points.get(code, 0)
         total = start_rating + points
