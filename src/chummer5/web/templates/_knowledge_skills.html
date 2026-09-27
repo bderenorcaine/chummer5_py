@@ -12,6 +12,7 @@
 
   <p>
     {{ _("Web_Knowledge_FreeRemaining", remaining=knowledge_free_points - knowledge_points_spent, budget=knowledge_free_points) }}
+    {{ _("Web_Knowledge_ActivePointsUsed", used=knowledge_active_points_used, available=knowledge_active_points_available) }}
     {{ _("Web_Knowledge_NativeLimit", limit=native_language_limit) }}
     {{ _("Web_Knowledge_KarmaRemaining", remaining=knowledge_karma_remaining, budget=knowledge_karma_budget) }}
   </p>
@@ -30,6 +31,7 @@
       {% endfor %}
     </p>
     <p>{{ _("Web_Knowledge_KarmaHelp") }}</p>
+    <p>{{ _("Web_Knowledge_ActivePointsHelp") }}</p>
     <table>
       <thead>
         <tr>
@@ -37,6 +39,8 @@
           <th>{{ _("Web_Qualities_ColCategory") }}</th>
           <th>{{ _("String_Rating") }}</th>
           <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
+          <th>{{ _("Web_Skills_ColSpecialization") }}</th>
+          <th>{{ _("Web_Skills_ColKarmaSpec") }}</th>
           <th>{{ _("Web_Skills_ColPool") }}</th>
         </tr>
       </thead>
@@ -74,7 +78,23 @@
               max="{{ max_skill_rating }}"
             />
           </td>
-          <td>{% if row.pool is not none %}{{ row.pool }}{% endif %}</td>
+          <td>
+            <input
+              type="text"
+              name="knowledge_spec_{{ row.index }}"
+              value="{{ row.specialization }}"
+              placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
+            />
+          </td>
+          <td>
+            <input
+              type="text"
+              name="knowledge_karma_spec_{{ row.index }}"
+              value="{{ row.karma_specialization }}"
+              placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
+            />
+          </td>
+          <td>{% if row.pool is not none %}{{ row.pool }}{% if row.pool_specialized is not none %} ({{ row.pool_specialized }}){% endif %}{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -89,6 +109,8 @@
           <th>{{ _("String_Rating") }}</th>
           <th>{{ _("Web_Knowledge_ColNative") }}</th>
           <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
+          <th>{{ _("Web_Skills_ColSpecialization") }}</th>
+          <th>{{ _("Web_Skills_ColKarmaSpec") }}</th>
           <th>{{ _("Web_Skills_ColPool") }}</th>
         </tr>
       </thead>
@@ -123,7 +145,23 @@
               max="{{ max_skill_rating }}"
             />
           </td>
-          <td>{% if row.native %}{{ _("Web_Knowledge_NativeMarker") }}{% elif row.pool is not none %}{{ row.pool }}{% endif %}</td>
+          <td>
+            <input
+              type="text"
+              name="language_spec_{{ row.index }}"
+              value="{{ row.specialization }}"
+              placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
+            />
+          </td>
+          <td>
+            <input
+              type="text"
+              name="language_karma_spec_{{ row.index }}"
+              value="{{ row.karma_specialization }}"
+              placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
+            />
+          </td>
+          <td>{% if row.native %}{{ _("Web_Knowledge_NativeMarker") }}{% elif row.pool is not none %}{{ row.pool }}{% if row.pool_specialized is not none %} ({{ row.pool_specialized }}){% endif %}{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>

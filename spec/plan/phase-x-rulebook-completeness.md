@@ -394,7 +394,7 @@ the rules it checks.
   Acceptance: a character with Exotic Ranged Weapon (Flamethrower) 3 and Exotic Ranged Weapon
   (Harpoon Gun) 2 round-trips.
 
-- [ ] **WP125 — Knowledge and Language completion.**
+- [x] **WP125 — Knowledge and Language completion.**
   Goal: the three Knowledge/Language gaps.
   Deliverables:
   - Active-skill priority points may fund Knowledge/Language ranks (p. 88), from the one shared

@@ -1302,10 +1302,20 @@ def test_build_character_applies_knowledge_selection() -> None:
     }
 
 
-def test_build_character_rejects_knowledge_spend_exceeding_the_free_budget() -> None:
+def test_build_character_pays_knowledge_spend_past_the_free_budget_from_active_points() -> None:
+    """WP125, p. 88: a spend past the free pool draws on the Active skill points."""
     save = _mundane_save_with_knowledge(
         knowledge_skill_picks=(("Corporations", "Street", 6),),
         attribute_points={"INT": 0, "LOG": 0},  # (1+1)*2 = 4-point budget
+    )
+    character = _build_mundane(save)
+    assert character.knowledge_selection.active_points_used == 2  # type: ignore[attr-defined]
+
+
+def test_build_character_rejects_knowledge_spend_exceeding_free_and_active_points() -> None:
+    save = _mundane_save_with_knowledge(
+        knowledge_skill_picks=tuple((f"K{i}", "Street", 6) for i in range(4)),
+        attribute_points={"INT": 0, "LOG": 0},  # 4 free + Skills E's 18 < 24
     )
     with pytest.raises(ValueError, match="exceeds the free budget"):
         _build_mundane(save)

@@ -290,6 +290,15 @@ def _conditional_limit_rows(character: Character) -> list[dict[str, Any]]:
     return rows
 
 
+def _knowledge_specialization(character: Character, name: str) -> str:
+    """A Knowledge/Language pick's specialization, point- or Karma-funded (WP125), or ""."""
+    selection = character.knowledge_selection
+    karma = character.karma_knowledge_selection
+    return (selection.specializations.get(name) if selection is not None else None) or (
+        karma.specializations.get(name, "") if karma is not None else ""
+    )
+
+
 def _mentor_pool_rows(character: Character) -> list[dict[str, Any]]:
     """WP122: a mentor's conditional dice ("+2 dice for Health spells, preparations and rituals"),
     as the pool each affected skill the character has would roll for such a test."""
@@ -696,6 +705,7 @@ def _character_sheet_context(
                     "name": pick.name,
                     "category": pick.category,
                     "rating": pick.rating + karma_knowledge_points.get(pick.name, 0),
+                    "specialization": _knowledge_specialization(character, pick.name),  # WP125
                 }
                 for pick in character.knowledge_selection.knowledge_skills
             ]
@@ -708,6 +718,7 @@ def _character_sheet_context(
                     "name": pick.name,
                     "rating": pick.rating + karma_knowledge_points.get(pick.name, 0),
                     "native": pick.native,
+                    "specialization": _knowledge_specialization(character, pick.name),  # WP125
                 }
                 for pick in character.knowledge_selection.languages
             ]
@@ -934,6 +945,17 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
         ),
         karma_knowledge_points=(
             character.karma_knowledge_selection.points
+            if character.karma_knowledge_selection is not None
+            else {}
+        ),
+        # WP125
+        knowledge_specializations=(
+            character.knowledge_selection.specializations
+            if character.knowledge_selection is not None
+            else {}
+        ),
+        karma_knowledge_specializations=(
+            character.karma_knowledge_selection.specializations
             if character.karma_knowledge_selection is not None
             else {}
         ),

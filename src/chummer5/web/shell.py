@@ -529,7 +529,17 @@ def chargen_context(session: ChargenSession, priority_ctx: dict[str, Any]) -> di
         karma_knowledge_selection.points if karma_knowledge_selection is not None else {}
     )
     knowledge_ctx = _knowledge_selection_context(
-        character, knowledge_skills, languages, karma_knowledge_points
+        character,
+        knowledge_skills,
+        languages,
+        karma_knowledge_points,
+        knowledge_selection.specializations if knowledge_selection is not None else {},
+        (
+            karma_knowledge_selection.specializations
+            if karma_knowledge_selection is not None
+            else {}
+        ),
+        skills_letter=session.skills_letter,
     )
     quality_ctx = _quality_selection_context(character)
     contacts = (

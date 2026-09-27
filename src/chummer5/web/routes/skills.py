@@ -26,6 +26,7 @@ from chummer5.engine.skills import (
     dice_pool,
     exotic_instances,
     exotic_skill_key,
+    knowledge_active_points,
     natural_skill_rating,
     purchase_maximum,
     skill_point_budget,
@@ -194,6 +195,7 @@ def _skill_allocation_context(
                 group_points,
                 specializations,
                 rules,
+                knowledge_active_points(character),
             )
             create_karma_skill_selection(
                 replace(character, skill_allocation=allocation),
@@ -213,7 +215,8 @@ def _skill_allocation_context(
         "skills_budget": budget.skills,
         # WP117: Uncouth doubles a Social skill's points.
         "skills_remaining": budget.skills
-        - skill_points_spent(allocation.skill_points, allocation.specializations, SKILLS, rules),
+        - skill_points_spent(allocation.skill_points, allocation.specializations, SKILLS, rules)
+        - knowledge_active_points(character),  # WP125: Knowledge spend past its free pool
         "skill_budget_warning": budget_warning,
         "groups_budget": budget.skill_groups,
         "groups_remaining": budget.skill_groups - sum(allocation.group_points.values()),
@@ -328,6 +331,7 @@ async def submit_skills(request: Request) -> HTMLResponse:
                     group_points,
                     specializations,
                     skill_purchase_rules(previous),
+                    knowledge_active_points(previous),  # WP125
                 )
                 # WP51: this section's own currently-committed Karma-skill cost is added back onto
                 # `previous.karma_remaining` -- the same "exclude this section's own prior

@@ -239,6 +239,11 @@ and no version bump: the maps' shape is unchanged. A pre-WP124 save's bare exoti
 an "Unspecified" instance by `build_character`, and its exotic specialization, which the book never
 allowed, is dropped.
 
+**WP125** adds `knowledge_specializations` and `karma_knowledge_specializations`, pick name ->
+specialization, the same name-keyed shape as `karma_knowledge_points`. Additive, `{}` default, no
+bump. A Knowledge/Language pick may now be rated 0 (Karma buys it), and the Knowledge spend past
+its free pool is re-derived, not stored: `build_character` passes it to `create_skill_allocation`.
+
 **`format_version` is a real field from day one, not speculative scaffolding.** Unlike the
 "validate now, don't add hooks for hypothetical future rules" discipline used elsewhere in this
 project, a save *file* is data that outlives the code that wrote it by construction -- the legacy
@@ -326,6 +331,7 @@ from chummer5.engine.skills import (
     create_skill_allocation,
     drop_exotic_specializations,
     migrate_bare_exotic_keys,
+    skill_point_budget,
     skill_purchase_rules,
 )
 from chummer5.engine.spirits import create_bound_spirit_selection
@@ -463,6 +469,9 @@ class CharacterSave:
     # WP53: Karma-funded Knowledge/Language rating increases, keyed by pick name (see
     # chummer5.engine.knowledge.KarmaKnowledgeSelection). Defaults to {} -- "predates this field".
     karma_knowledge_points: MappingProxyType[str, int] = MappingProxyType({})
+    # WP125: Knowledge/Language specializations by pick name, point-funded and Karma-funded.
+    knowledge_specializations: MappingProxyType[str, str] = MappingProxyType({})
+    karma_knowledge_specializations: MappingProxyType[str, str] = MappingProxyType({})
     # WP66: Rating-priced starter-gear purchases, as (gear_name, rating) pairs (repeats = quantity)
     # -- kept separate from flat `gear_names` since a rating item's price depends on the chosen
     # rating. Defaults to () -- "predates this field", the identical shape every other optional
@@ -520,6 +529,8 @@ def create_character_save(
     karma_group_points: Mapping[str, int] = MappingProxyType({}),
     karma_specializations: Mapping[str, str] = MappingProxyType({}),
     karma_knowledge_points: Mapping[str, int] = MappingProxyType({}),
+    knowledge_specializations: Mapping[str, str] = MappingProxyType({}),
+    karma_knowledge_specializations: Mapping[str, str] = MappingProxyType({}),
     rating_gear_picks: Iterable[RatingGearPick] = (),
     vehicle_ids: Iterable[str] = (),
     unworn_armor: Iterable[str] = (),
@@ -574,6 +585,8 @@ def create_character_save(
         karma_group_points=MappingProxyType(dict(karma_group_points)),
         karma_specializations=MappingProxyType(dict(karma_specializations)),
         karma_knowledge_points=MappingProxyType(dict(karma_knowledge_points)),
+        knowledge_specializations=MappingProxyType(dict(knowledge_specializations)),
+        karma_knowledge_specializations=MappingProxyType(dict(karma_knowledge_specializations)),
         rating_gear_picks=tuple(rating_gear_picks),
         vehicle_ids=tuple(vehicle_ids),
         unworn_armor=tuple(sorted(set(unworn_armor))),
@@ -743,6 +756,8 @@ def _save_to_dict(save: CharacterSave) -> dict[str, Any]:
         "karma_group_points": dict(save.karma_group_points),
         "karma_specializations": dict(save.karma_specializations),
         "karma_knowledge_points": dict(save.karma_knowledge_points),
+        "knowledge_specializations": dict(save.knowledge_specializations),
+        "karma_knowledge_specializations": dict(save.karma_knowledge_specializations),
         "rating_gear_picks": [
             {"name": name, "rating": rating} for name, rating in save.rating_gear_picks
         ],
@@ -821,6 +836,8 @@ def _dict_to_save(data: Mapping[str, Any]) -> CharacterSave:
         karma_group_points=data.get("karma_group_points", {}),
         karma_specializations=data.get("karma_specializations", {}),
         karma_knowledge_points=data.get("karma_knowledge_points", {}),
+        knowledge_specializations=data.get("knowledge_specializations", {}),
+        karma_knowledge_specializations=data.get("karma_knowledge_specializations", {}),
         rating_gear_picks=((p["name"], p["rating"]) for p in data.get("rating_gear_picks", ())),
         vehicle_ids=data.get("vehicle_ids", ()),
         unworn_armor=data.get("unworn_armor", ()),
@@ -980,6 +997,10 @@ def build_character(
             LanguageSkillPick(name=name, rating=rating, native=native)
             for name, rating, native in save.language_skill_picks
         ),
+        save.knowledge_specializations,
+        # WP125: bounded by the whole Skills budget here; `create_skill_allocation` below counts
+        # `active_points_used` against what the Active skills actually left.
+        active_points_available=skill_point_budget(save.skills_letter, priorities).skills,
     )
 
     contact_selection = create_contact_selection(character, save.contacts)
@@ -1137,6 +1158,7 @@ def build_character(
         group_points=save.group_points,
         specializations=drop_exotic_specializations(save.specializations, skills),
         rules=skill_purchase_rules(replace(character, magic_type=magic_selection.magic_type)),
+        knowledge_active_points=knowledge_selection.active_points_used,  # WP125
     )
 
     character = replace(
@@ -1188,7 +1210,10 @@ def build_character(
     )
     character = replace(character, karma_skill_selection=karma_skill_selection)
     karma_knowledge_selection = create_karma_knowledge_selection(
-        character, save.karma_knowledge_points, character.karma_remaining
+        character,
+        save.karma_knowledge_points,
+        character.karma_remaining,
+        save.karma_knowledge_specializations,
     )
     character = replace(character, karma_knowledge_selection=karma_knowledge_selection)
 

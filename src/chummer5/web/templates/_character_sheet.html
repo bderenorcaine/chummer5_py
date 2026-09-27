@@ -60,11 +60,11 @@
     </thead>
     <tbody>
       {% for row in knowledge_skill_rows %}
-      <tr><td>{{ row.name }}</td><td>{{ row.category | dterm("skills.xml") }}</td><td>{{ row.rating }}</td></tr>
+      <tr><td>{{ row.name }}{% if row.specialization %} ({{ row.specialization }}){% endif %}</td><td>{{ row.category | dterm("skills.xml") }}</td><td>{{ row.rating }}</td></tr>
       {% endfor %}
       {% for row in language_rows %}
       <tr>
-        <td>{{ row.name }}</td>
+        <td>{{ row.name }}{% if row.specialization %} ({{ row.specialization }}){% endif %}</td>
         <td>{{ _("Web_Sheet_LanguageCategory") }}</td>
         <td>{% if row.native %}{{ _("Web_Knowledge_NativeMarker") }}{% else %}{{ row.rating }}{% endif %}</td>
       </tr>

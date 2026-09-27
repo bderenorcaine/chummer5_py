@@ -285,6 +285,14 @@
       <text>{category} ({attribute}: {examples})</text>
     </string>
     <string>
+      <key>Web_Knowledge_ActivePointsHelp</key>
+      <text>Past the free points, ranks and specializations are paid from the Active skill points. A skill at rating 0 is bought with Karma: new rating × 1 Karma. A specialization costs 1 point, or 7 Karma.</text>
+    </string>
+    <string>
+      <key>Web_Knowledge_ActivePointsUsed</key>
+      <text>Active skill points used: {used} / {available}.</text>
+    </string>
+    <string>
       <key>Web_Knowledge_ColNative</key>
       <text>Native (free)</text>
     </string>

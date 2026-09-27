@@ -157,7 +157,8 @@ def test_rejects_unknown_category() -> None:
         )
 
 
-@pytest.mark.parametrize("rating", [0, -1, MAX_SKILL_RATING_CREATE + 1])
+# WP125: 0 is legal now -- Karma buys the skill from scratch (test_knowledge_wp125.py).
+@pytest.mark.parametrize("rating", [-1, MAX_SKILL_RATING_CREATE + 1])
 def test_rejects_out_of_range_knowledge_rating(rating: int) -> None:
     character = _human_with_int_log(3, 2)
     with pytest.raises(ValueError, match="rating must be between"):
@@ -166,7 +167,8 @@ def test_rejects_out_of_range_knowledge_rating(rating: int) -> None:
         )
 
 
-@pytest.mark.parametrize("rating", [0, -1, MAX_SKILL_RATING_CREATE + 1])
+# WP125: 0 is legal now -- Karma buys the skill from scratch (test_knowledge_wp125.py).
+@pytest.mark.parametrize("rating", [-1, MAX_SKILL_RATING_CREATE + 1])
 def test_rejects_out_of_range_language_rating(rating: int) -> None:
     character = _human_with_int_log(3, 2)
     with pytest.raises(ValueError, match="rating must be between"):

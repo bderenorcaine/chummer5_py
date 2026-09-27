@@ -398,6 +398,12 @@ def purchase_maximum(skill: Skill, maximum_bonus: Mapping[str, int]) -> int:
     return MAX_SKILL_RATING_CREATE + maximum_bonus.get(skill.name, 0)
 
 
+def knowledge_active_points(character: Character) -> int:
+    """The Active skill points the character's Knowledge/Language spend uses (WP125)."""
+    selection = character.knowledge_selection
+    return selection.active_points_used if selection is not None else 0
+
+
 def skill_points_spent(
     skill_points: Mapping[str, int],
     specializations: Mapping[str, str],
@@ -456,6 +462,7 @@ def create_skill_allocation(
     group_points: Mapping[str, int],
     specializations: Mapping[str, str] = MappingProxyType({}),
     rules: SkillPurchaseRules = NO_PURCHASE_RULES,
+    knowledge_active_points: int = 0,
 ) -> SkillAllocation:
     """Build a `SkillAllocation`, validating the spend against the Skills-priority-letter budget.
 
@@ -479,6 +486,9 @@ def create_skill_allocation(
 
     WP124: an exotic skill is keyed per named item (`exotic_skill_key`); its catalog id may not be
     bought on its own, and none of its instances may be specialized.
+
+    WP125: `knowledge_active_points` -- the Knowledge/Language spend past its free pool
+    (`KnowledgeSelection.active_points_used`, p. 88) -- counts against the individual-skill budget.
     """
     _check_skill_keys([*skill_points, *specializations], {s.id: s for s in skills})
     skills = with_exotic_instances(skills, [*skill_points, *specializations])
@@ -539,10 +549,16 @@ def create_skill_allocation(
 
     budget = skill_point_budget(letter, priorities)
     skills_spent = skill_points_spent(skill_points, specializations, skills, rules)
-    if skills_spent > budget.skills:
+    if skills_spent + knowledge_active_points > budget.skills:
+        knowledge_part = (
+            f" and {knowledge_active_points} spent on Knowledge/Language skills"
+            if knowledge_active_points
+            else ""
+        )
         raise ValueError(
             f"skill point spend {skills_spent} (including {len(specializations)} "
-            f"specialization(s)) exceeds Skills priority {letter}'s budget of {budget.skills}"
+            f"specialization(s)){knowledge_part} exceeds Skills priority {letter}'s budget of "
+            f"{budget.skills}"
         )
     groups_spent = sum(group_points.values())
     if groups_spent > budget.skill_groups:

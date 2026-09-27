@@ -139,18 +139,24 @@ def test_pool_column_renders_dice_pools_for_knowledge_and_language() -> None:
     assert "<td>N</td>" in response.text  # native English: fluency "N", no numeric pool
 
 
+def _six_knowledge_skills_at_6() -> dict[str, str]:
+    names = ("Corporations", "Gangs", "Fixers", "Bars", "Clinics", "Docks")
+    data: dict[str, str] = {}
+    for i, name in enumerate(names):
+        data |= {
+            f"knowledge_name_{i}": name,
+            f"knowledge_category_{i}": "Street",
+            f"knowledge_rating_{i}": "6",
+        }
+    return data
+
+
 def test_submitting_over_budget_knowledge_is_rejected_and_state_unchanged() -> None:
     client = TestClient(create_app())
     _confirm_human(client)  # 4-point budget
 
-    response = client.post(
-        "/ui/knowledge",
-        data={
-            "knowledge_name_0": "Corporations",
-            "knowledge_category_0": "Street",
-            "knowledge_rating_0": "6",
-        },
-    )
+    # WP125: past the 4 free points, Skills C's 28 Active points pay too -- 36 exceeds both.
+    response = client.post("/ui/knowledge", data=_six_knowledge_skills_at_6())
 
     assert response.status_code == 200
     assert "exceeds the free budget" in response.text
@@ -208,14 +214,8 @@ def test_reconfirming_a_lower_attributes_budget_flags_the_existing_knowledge_spe
     # Raise INT so the free-point budget is large enough to spend more than the Human-minimum
     # 4-point floor.
     client.post("/ui/attributes", data={"attr_INT": "3"})
-    client.post(
-        "/ui/knowledge",
-        data={
-            "knowledge_name_0": "Corporations",
-            "knowledge_category_0": "Street",
-            "knowledge_rating_0": "6",
-        },
-    )
+    # WP125: 36 points fit 10 free + 28 Active, and stop fitting when the free pool drops to 4.
+    client.post("/ui/knowledge", data=_six_knowledge_skills_at_6())
 
     # Lower INT back to 0 -- the knowledge spend no longer fits the shrunk budget. The attributes
     # POST response itself only re-renders `_attribute_allocation.html`, not every section -- the

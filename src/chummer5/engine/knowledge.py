@@ -21,13 +21,24 @@ budget to be spent" precedent (see that module's docstring) rather than the rule
 skill and skill-group points must be spent" line, which this project already didn't enforce for the
 sibling Active-skill budget either.
 
-**Deliberately not modeled: Active-skill points funding Knowledge/Language spend.** The rulebook
-allows unspent Active-skill priority points to be redirected into Knowledge/Language ("These skill
-points are generally used to purchase Active skills, though they can be used for Knowledge and
-Language skills too," p. 88) -- this WP only implements the separate, unconditional `(INT+LOG)*2`
-free-point pool every character gets regardless, not that cross-funding path. A real, deliberate
-scope cut (mirrors `chummer5.engine.skills`'s own "Karma-bought skill points are out of scope" cut),
-not an oversight.
+**WP125: Active-skill points fund Knowledge/Language spend past the free pool.** p. 88: "These
+skill points are generally used to purchase Active skills, though they can be used for Knowledge and
+Language skills too." The free `(INT+LOG)*2` pool is spent first; whatever the spend exceeds it by
+is `KnowledgeSelection.active_points_used`, drawn from the Skills priority's individual-skill pool.
+`create_knowledge_selection` checks it against the Active points the caller says are left, and
+`chummer5.engine.skills.create_skill_allocation(knowledge_active_points=)` counts it against the
+Skills budget, so whichever step is submitted second sees the first.
+
+**WP125: Karma can buy a new Knowledge/Language skill from rating 0.** A non-native pick may have
+rating 0, meaning no points bought it; `create_karma_knowledge_selection` then requires Karma to
+raise it to at least 1 (`new Rating x 1`, p. 107: a new one at rating 1 costs 1 Karma).
+
+**WP125: specializations.** p. 148 ("Knowledge Skill Specializations") and p. 150 (Language:
+"Specializations: Read/Write, Speak, by dialect, by lingo"). One per skill, as for Active skills
+(p. 88). A point-funded one costs 1 free-pool point (p. 88: "A specialization costs 1 skill point");
+a Step Seven one costs `chummer5.engine.skills.KARMA_SPECIALIZATION_COST` (7). Both are keyed by the
+pick's name, like `KarmaKnowledgeSelection.points`. A native language may be specialized (a native
+speaker plainly "has" the skill, p. 129's only precondition); any other pick needs a rating of 1+.
 
 **Native language: one free, cost 0, plus one more per `Bilingual`'s
 `ImprovementType.NATIVE_LANGUAGE_LIMIT` bonus** (p. 89-90: "your character receives one language
@@ -80,7 +91,11 @@ from chummer5.data.knowledge import (
 )
 from chummer5.engine.character import Character, karma_advancement_cost
 from chummer5.engine.improvements import ImprovementType
-from chummer5.engine.skills import MAX_SKILL_RATING_CREATE, skill_purchase_rules
+from chummer5.engine.skills import (
+    KARMA_SPECIALIZATION_COST,
+    MAX_SKILL_RATING_CREATE,
+    skill_purchase_rules,
+)
 
 # Core rulebook p. 89: "Characters receive free Knowledge and Language skills points equal to
 # (Intuition rating + Logic rating) x 2."
@@ -107,7 +122,7 @@ class KnowledgeSkillPick:
 
     name: str
     category: str
-    rating: int
+    rating: int  # WP125: 0 means Karma-bought from scratch
 
 
 @dataclass(frozen=True)
@@ -130,6 +145,10 @@ class KnowledgeSelection:
     free_points: int
     points_spent: int
     native_language_limit: int
+    # WP125: pick name -> specialization, 1 point each (counted in `points_spent`).
+    specializations: Mapping[str, str] = MappingProxyType({})
+    # WP125: the part of `points_spent` past `free_points`, paid from the Active skill points.
+    active_points_used: int = 0
 
 
 def native_language_limit(character: Character) -> int:
@@ -179,14 +198,71 @@ def language_dice_pool(character: Character, rating: int) -> int:
     return character.attribute_value(LANGUAGE_LINKED_ATTRIBUTE) + rating
 
 
+def knowledge_points_spent(
+    knowledge_skills: Iterable[KnowledgeSkillPick],
+    languages: Iterable[LanguageSkillPick],
+    specializations: Mapping[str, str] = MappingProxyType({}),
+) -> int:
+    """Points a Knowledge/Language spend costs: a point per rank, and one per specialization."""
+    return (
+        sum(pick.rating for pick in knowledge_skills)
+        + sum(pick.rating for pick in languages if not pick.native)
+        + len(specializations)
+    )
+
+
+@dataclass(frozen=True)
+class _NamedPick:
+    rating: int
+    category: str | None  # None for a language
+    native: bool
+
+
+def _named_picks(
+    knowledge_skills: Iterable[KnowledgeSkillPick], languages: Iterable[LanguageSkillPick]
+) -> dict[str, list[_NamedPick]]:
+    picks: dict[str, list[_NamedPick]] = {}
+    for k in knowledge_skills:
+        picks.setdefault(k.name, []).append(_NamedPick(k.rating, k.category, False))
+    for la in languages:
+        picks.setdefault(la.name, []).append(_NamedPick(la.rating, None, la.native))
+    return picks
+
+
+def _resolve_name(picks: Mapping[str, list[_NamedPick]], name: str) -> _NamedPick:
+    """The one committed pick called `name`. A name shared by a Knowledge pick and a Language pick
+    (each list is only unique within itself) is rejected rather than guessed at."""
+    matches = picks.get(name, [])
+    if not matches:
+        raise ValueError(f"{name!r} is not a committed knowledge/language skill")
+    if len(matches) > 1:
+        raise ValueError(
+            f"{name!r} ambiguously matches more than one committed knowledge/language skill"
+        )
+    return matches[0]
+
+
+def _check_specialization(name: str, specialization: str, pick: _NamedPick, rating: int) -> None:
+    if not specialization.strip():
+        raise ValueError(f"{name!r}: a specialization's name must not be blank")
+    if not pick.native and rating < 1:
+        raise ValueError(f"{name!r}: cannot add a specialization without at least rating 1")
+
+
 def create_knowledge_selection(
     character: Character,
     knowledge_skills: Iterable[KnowledgeSkillPick],
     languages: Iterable[LanguageSkillPick],
+    specializations: Mapping[str, str] = MappingProxyType({}),
+    active_points_available: int = 0,
 ) -> KnowledgeSelection:
-    """Build a `KnowledgeSelection`, validating names/categories/ratings and the free-point budget.
+    """Build a `KnowledgeSelection`, validating names/categories/ratings and the point budget.
 
     Does not require the full budget to be spent (see module docstring).
+
+    **WP125**: a non-native pick may be rated 0 (Karma will buy it). `specializations` (pick name
+    -> name) costs a point each; its pick must be rated 1+ or native. A spend past the free pool
+    draws on `active_points_available`, the Active skill points the Skills step left unspent.
     """
     knowledge_t = tuple(knowledge_skills)
     languages_t = tuple(languages)
@@ -204,9 +280,9 @@ def create_knowledge_selection(
                 f"{name}: not a knowledge-skill category: {pick.category!r} (expected one of "
                 f"{KNOWLEDGE_CATEGORY_NAMES})"
             )
-        if not 1 <= pick.rating <= MAX_SKILL_RATING_CREATE:
+        if not 0 <= pick.rating <= MAX_SKILL_RATING_CREATE:
             raise ValueError(
-                f"{name}: rating must be between 1 and {MAX_SKILL_RATING_CREATE}, got {pick.rating}"
+                f"{name}: rating must be between 0 and {MAX_SKILL_RATING_CREATE}, got {pick.rating}"
             )
 
     seen_language_names: set[str] = set()
@@ -224,9 +300,9 @@ def create_knowledge_selection(
                 raise ValueError(
                     f"{name}: a native language's rating must be 0, got {language_pick.rating}"
                 )
-        elif not 1 <= language_pick.rating <= MAX_SKILL_RATING_CREATE:
+        elif not 0 <= language_pick.rating <= MAX_SKILL_RATING_CREATE:
             raise ValueError(
-                f"{name}: rating must be between 1 and {MAX_SKILL_RATING_CREATE}, got "
+                f"{name}: rating must be between 0 and {MAX_SKILL_RATING_CREATE}, got "
                 f"{language_pick.rating}"
             )
 
@@ -234,14 +310,18 @@ def create_knowledge_selection(
     if native_count > limit:
         raise ValueError(f"at most {limit} language(s) may be marked native, got {native_count}")
 
+    picks = _named_picks(knowledge_t, languages_t)
+    for name, specialization in specializations.items():
+        named = _resolve_name(picks, name)
+        _check_specialization(name, specialization, named, named.rating)
+
     free_points = free_knowledge_points(character)
-    points_spent = sum(pick.rating for pick in knowledge_t) + sum(
-        pick.rating for pick in languages_t if not pick.native
-    )
-    if points_spent > free_points:
+    points_spent = knowledge_points_spent(knowledge_t, languages_t, specializations)
+    active_points_used = max(0, points_spent - free_points)
+    if active_points_used > active_points_available:
         raise ValueError(
             f"knowledge/language point spend {points_spent} exceeds the free budget of "
-            f"{free_points}"
+            f"{free_points} plus the {active_points_available} Active skill point(s) left"
         )
 
     return KnowledgeSelection(
@@ -250,6 +330,8 @@ def create_knowledge_selection(
         free_points=free_points,
         points_spent=points_spent,
         native_language_limit=limit,
+        specializations=MappingProxyType(dict(specializations)),
+        active_points_used=active_points_used,
     )
 
 
@@ -261,15 +343,20 @@ class KarmaKnowledgeSelection:
     `points` is keyed by pick *name* (not a catalog id -- see module docstring), resolved against
     whatever `character.knowledge_selection` already has committed. Always the full resulting
     state, not an incremental delta -- the same "recompute wholesale" shape
-    `KarmaAttributeSelection`/`KarmaSkillSelection` already established.
+    `KarmaAttributeSelection`/`KarmaSkillSelection` already established. WP125 adds
+    `specializations`, name -> specialization, 7 Karma each.
     """
 
     points: MappingProxyType[str, int]
     karma_cost: int
+    specializations: Mapping[str, str] = MappingProxyType({})
 
 
 def create_karma_knowledge_selection(
-    character: Character, karma_points: Mapping[str, int], karma_budget: int
+    character: Character,
+    karma_points: Mapping[str, int],
+    karma_budget: int,
+    karma_specializations: Mapping[str, str] = MappingProxyType({}),
 ) -> KarmaKnowledgeSelection:
     """Validate and build a `KarmaKnowledgeSelection`.
 
@@ -288,44 +375,60 @@ def create_karma_knowledge_selection(
 
     **WP117**: a knowledge skill's cost is raised by its category's Karma cost percent -- Uneducated
     doubles Academic and Professional knowledge (p. 87). Languages have no category.
+
+    **WP125**: a pick committed at rating 0 must be raised to 1+ here -- that is Karma buying a
+    new skill. `karma_specializations` buys a specialization for 7 Karma (the same Uneducated
+    percent applies, as for Active skills); the pick must not already have a point-funded one, and
+    must be native or rated 1+ after this selection's Karma.
     """
     knowledge_selection = character.knowledge_selection
     cost_percent = skill_purchase_rules(character).karma_cost_percent
+    specialization_percent = skill_purchase_rules(character).specialization_karma_cost_percent
+    picks = (
+        _named_picks(knowledge_selection.knowledge_skills, knowledge_selection.languages)
+        if knowledge_selection is not None
+        else {}
+    )
+    existing_specializations = (
+        knowledge_selection.specializations if knowledge_selection is not None else {}
+    )
 
-    def _current_rating(name: str) -> tuple[int, str | None]:
-        if knowledge_selection is None:
-            raise ValueError(f"{name!r} is not a committed knowledge/language skill")
-        matches: list[tuple[int, str | None]] = [
-            (p.rating, p.category) for p in knowledge_selection.knowledge_skills if p.name == name
-        ]
-        matches += [
-            (p.rating, None)
-            for p in knowledge_selection.languages
-            if p.name == name and not p.native
-        ]
-        if not matches:
-            raise ValueError(f"{name!r} is not a committed, non-native knowledge/language skill")
-        if len(matches) > 1:
-            raise ValueError(
-                f"{name!r} ambiguously matches more than one committed knowledge/language skill"
-            )
-        return matches[0]
+    def _with_percent(amount: int, category: str | None, percents: Mapping[str, int]) -> int:
+        percent = percents.get(category, 0) if category is not None else 0
+        return (amount * (100 + percent) + 50) // 100
 
     nonzero_points = MappingProxyType({name: pts for name, pts in karma_points.items() if pts})
     cost = 0
     for name, points in nonzero_points.items():
         if points < 0:
             raise ValueError(f"{name!r}: Karma-funded points must not be negative, got {points}")
-        start_rating, category = _current_rating(name)
-        total = start_rating + points
+        pick = _resolve_name(picks, name)
+        if pick.native:
+            raise ValueError(f"{name!r} is not a committed, non-native knowledge/language skill")
+        total = pick.rating + points
         if total > MAX_SKILL_RATING_CREATE:
             raise ValueError(
                 f"{name!r}: {total} exceeds the chargen skill rating maximum of "
                 f"{MAX_SKILL_RATING_CREATE}"
             )
-        step_cost = karma_advancement_cost(start_rating, points, KARMA_KNOWLEDGE_PER_RATING)
-        percent = cost_percent.get(category, 0) if category is not None else 0
-        cost += (step_cost * (100 + percent) + 50) // 100
+        step_cost = karma_advancement_cost(pick.rating, points, KARMA_KNOWLEDGE_PER_RATING)
+        cost += _with_percent(step_cost, pick.category, cost_percent)
+
+    for name, name_picks in picks.items():
+        for pick in name_picks:
+            if not pick.native and pick.rating == 0 and nonzero_points.get(name, 0) == 0:
+                raise ValueError(
+                    f"{name!r}: a knowledge/language skill at rating 0 needs Karma to buy it"
+                )
+
+    for name, specialization in karma_specializations.items():
+        pick = _resolve_name(picks, name)
+        if name in existing_specializations:
+            raise ValueError(
+                f"{name!r}: already has a specialization ({existing_specializations[name]!r})"
+            )
+        _check_specialization(name, specialization, pick, pick.rating + nonzero_points.get(name, 0))
+        cost += _with_percent(KARMA_SPECIALIZATION_COST, pick.category, specialization_percent)
 
     if cost > karma_budget:
         raise ValueError(
@@ -333,4 +436,8 @@ def create_karma_knowledge_selection(
             f"{karma_budget}"
         )
 
-    return KarmaKnowledgeSelection(points=nonzero_points, karma_cost=cost)
+    return KarmaKnowledgeSelection(
+        points=nonzero_points,
+        karma_cost=cost,
+        specializations=MappingProxyType(dict(karma_specializations)),
+    )
