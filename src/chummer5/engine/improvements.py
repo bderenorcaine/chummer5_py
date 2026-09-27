@@ -174,6 +174,10 @@ class ImprovementType(Enum):
     # skill name means its specialization bonus doesn't apply (Loss of Confidence).
     SKILL_POOL = auto()
     SKILL_CATEGORY_POOL = auto()
+    # WP128: a dice-pool modifier to every skill of one skill group (Synthacardium's Athletics).
+    # `SKILL_CATEGORY_POOL` also reaches Knowledge categories and "Language" since WP128 (Mnemonic
+    # Enhancer), through `chummer5.engine.knowledge`'s two pool functions.
+    SKILL_GROUP_POOL = auto()
     SPECIALIZATION_DISABLED = auto()
     # WP116: raises one skill's purchase cap (6 at creation) and its rating ceiling (12) --
     # Aptitude, target: the skill name. Legacy folds the same thing into `Skill.RatingMaximum`.

@@ -236,10 +236,20 @@ def test_control_rig_is_registered_despite_carrying_no_bonus_node() -> None:
 
 
 def test_no_bioware_row_carries_a_note_and_reflex_recorder_is_modeled_instead() -> None:
-    # `chummer5.data.bioware`'s own mirror is deliberately empty: no bioware row is in the registry,
-    # and `Reflex Recorder` specifically must never be added to it -- WP80 models it, which is the
-    # remedy the policy asks for, and a note would launder that fix into an accepted gap.
-    assert all(b.unmodeled_effect_note is None for b in BIOWARE)
+    # `Reflex Recorder` must never be in the registry -- WP80 models it, which is the remedy the
+    # policy asks for, and a note would launder that fix into an accepted gap. WP128 registered
+    # the rated rows whose printed effect is an in-play test; every flat row still has none.
+    noted = {b.name for b in BIOWARE if b.unmodeled_effect_note is not None}
+    assert noted == {
+        "Adrenaline Pump",
+        "Bone Density Augmentation",
+        "Pathogenic Defense",
+        "Symbiotes",
+        "Tailored Pheromones",
+        "Toxin Extractor",
+        "Tracheal Filter",
+    }
+    assert all(b.is_rated for b in BIOWARE if b.name in noted)
     reflex_recorder = next(b for b in BIOWARE if b.name == "Reflex Recorder")
     assert reflex_recorder.unmodeled_effect_note is None
     assert reflex_recorder.bonus_support is BonusSupport.SELECT_SKILL

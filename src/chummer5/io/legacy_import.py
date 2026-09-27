@@ -401,7 +401,7 @@ def _augmentation_reasons(
             elif bioware_by_name.get(item.name) is None:
                 reasons.append(
                     f"cannot import {item.name!r} ({item.grade or 'unknown'} grade): "
-                    "rating-scaled, high-Availability, or non-SR5 bioware is out of scope"
+                    "high-Availability or non-SR5 bioware is out of scope"
                 )
             elif item.grade not in IMPORTABLE_GRADES:
                 reasons.append(_grade_reason(item, where))
@@ -668,6 +668,8 @@ def import_legacy_character(
                 item.extra if bioware_by_name[item.name].select_skill_bonus is not None else None
             ),
             grade=item.grade,  # WP127
+            # WP128: a rated row's stored rating; legacy stores 0 for an unrated one.
+            rating=item.rating if bioware_by_name[item.name].is_rated and item.rating > 0 else 1,
         )
         for item in legacy.cyberware
         if item.improvement_source == BIOWARE_IMPROVEMENT_SOURCE

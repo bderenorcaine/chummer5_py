@@ -189,6 +189,7 @@ def test_every_target_kind_the_loader_produces_has_an_improvement_type() -> None
     # The same pin as above, for the other string -> enum map. WP78 is the WP that made this map
     # grow for the first time since WP40, so an unmapped `target_kind` is now a live failure mode
     # rather than a theoretical one: it would raise a KeyError deep inside a purchase.
+    from chummer5.data.bioware import load_bioware
     from chummer5.data.cyberware import load_cyberware
     from chummer5.data.cyberware_subsystems import load_cyberware_entries
     from chummer5.engine.cyberware import _TARGET_KIND_TO_IMPROVEMENT_TYPE
@@ -199,6 +200,8 @@ def test_every_target_kind_the_loader_produces_has_an_improvement_type() -> None
         for item in catalog
         for bonus in (*item.flat_bonuses, *item.conditional_bonuses)
     }
+    # WP128: rated bioware goes through the same classifier and translator.
+    produced |= {bonus.target_kind for item in load_bioware() for bonus in item.rated_bonuses}
     assert produced <= set(_TARGET_KIND_TO_IMPROVEMENT_TYPE)
     # Every kind the maps carry is one real SR5 content actually uses -- no dead entries.
     assert produced == set(_TARGET_KIND_TO_IMPROVEMENT_TYPE)

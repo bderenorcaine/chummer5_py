@@ -108,6 +108,19 @@ computable by this engine, which WP77 classified as a live policy violation for 
 than an accepted gap (and WP80 did: it is modeled now). Registering it would have laundered the one
 into the other. The field and the dict exist so that a future bioware row that *is* registry
 material is a one-line data change here, matching the other two augmentation catalogs.
+
+**WP128: the 15 rated rows are offered.** Every one prices both cost and Essence as `Rating * N`
+(pp. 459-461 print them the same way), so `_parse_rated_bioware` stores the two
+`chummer5.data.cyberware_formula` formulas and resolves them per purchase (`cost_at`, `essence_at`).
+Its `<avail>` is kept raw for WP126's cap (`availability_at`). Their `<bonus>` nodes go through
+cyberware's shared `classify_bonus`, not this module's flat classifier: they are Rating-valued and
+carry the same `unique`/`precedence` dedup groups (Muscle Toner's `unique="muscle"`, the Synaptic
+Booster's `precedence="0"`, Orthoskin's `group="0"`). The in-play halves -- toxin and disease
+resistance, healing, unarmed damage, the pheromones' smell-range dice, the adrenaline pump -- are
+registry rows (`_UNMODELED_EFFECT_NOTES`), and their `<bonus>` children are stripped as
+`REGISTERED_UNMODELED_BONUS_TAGS`. `incompatible_names` joins each row's `<forbidden>` with the
+book's own "cannot be combined" rules (`_INCOMPATIBLE_NAMES`). Pain Editor (18F) and Suprathyroid
+Gland (20R) stay out: flat, and over Availability 12, which WP126's ruling leaves alone.
 """
 
 from __future__ import annotations
@@ -120,7 +133,18 @@ from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
-from chummer5.data.cyberware import BonusSupport
+from chummer5.data.cyberware import (
+    CONDITIONAL_SKILL_GROUP,
+    BonusSupport,
+    CyberwareFlatBonus,
+    classify_bonus,
+)
+from chummer5.data.cyberware_formula import (
+    CyberwareFormula,
+    FormulaKind,
+    parse_cyberware_formula,
+)
+from chummer5.data.gear import availability_at_rating
 
 # legacy/Chummer/data/bioware.xml, resolved relative to this file (not cwd).
 DEFAULT_BIOWARE_PATH = (
@@ -159,10 +183,66 @@ _LIMIT_BONUS_TAGS = {
     "sociallimit": "social_limit",
 }
 
-# WP79: this file's by-name mirror of the Project Overview's "Unmodeled real effects" rows --
-# deliberately empty, see the module docstring for why (no bioware row is in that table, and
-# `Reflex Recorder` specifically must not be added to it).
-_UNMODELED_EFFECT_NOTES: Mapping[str, str] = {}
+# WP79: this file's by-name mirror of the Project Overview's "Unmodeled real effects" rows. Empty
+# until WP128 offered the rated rows (and `Reflex Recorder` must still never be in it). Each entry
+# condenses the printed effect (pp. 459-461) this engine has no test or state for.
+_UNMODELED_EFFECT_NOTES: Mapping[str, str] = {
+    "Adrenaline Pump": (
+        "When triggered (a Free Action, or a failed Composure Test): ignore injury modifiers and "
+        "Stun unconsciousness, and add its Rating to STR/AGI/REA/WIL for Rating x 1D6 Combat "
+        "Turns, then take that many boxes of Stun; 1 hour to recharge (p. 459)."
+    ),
+    "Bone Density Augmentation": (
+        "Unarmed attacks deal Physical damage, (STR + Rating - 1)P (p. 460 table). Its Body dice "
+        "for damage resistance are computed."
+    ),
+    "Pathogenic Defense": "Adds its Rating to Disease Resistance Tests (p. 459).",
+    "Symbiotes": (
+        "Adds its Rating to healing tests (Physical and Stun); needs (Rating x 200)¥ a month of "
+        "special food unless the Lifestyle is High or better (p. 460)."
+    ),
+    "Tailored Pheromones": (
+        "Adds its Rating to Acting and Influence skill-group tests, only against someone within "
+        "conversation range who can smell you (p. 460). Its Social limit bonus is computed."
+    ),
+    "Toxin Extractor": "Adds its Rating to all Toxin Resistance Tests (p. 460).",
+    "Tracheal Filter": (
+        "Adds its Rating to Toxin Resistance Tests against inhalation vectors (p. 460)."
+    ),
+}
+
+# WP128: the `<bonus>` children the registry rows above cover, stripped before classification so
+# the computed siblings can apply (the same device as `chummer5.data.cyberware
+# .REGISTERED_UNMODELED_BONUS_TAGS`). A test pins that each row carrying one has a note.
+REGISTERED_UNMODELED_BONUS_TAGS = frozenset(
+    {
+        "unarmeddv",
+        "unarmeddvphysical",
+        "pathogencontactresist",
+        "pathogeningestionresist",
+        "pathogeninhalationresist",
+        "pathogeninjectionresist",
+        "toxincontactresist",
+        "toxiningestionresist",
+        "toxininhalationresist",
+        "toxininjectionresist",
+        "stuncmrecovery",
+        "physicalcmrecovery",
+        CONDITIONAL_SKILL_GROUP,
+    }
+)
+
+# WP128: what the book says each rated row can't be combined with, beyond its own `<forbidden>`
+# (which covers Bone Density vs. Bone Lacing, Orthoskin vs. Dermal Plating, and Damage
+# Compensators vs. High Pain Tolerance). p. 459: Muscle Augmentation and Muscle Toner are each
+# "incompatible with augmentations that increase" their attribute, "including the muscle
+# replacements cyberware" -- not with each other. p. 461: the Synaptic Booster "cannot be combined
+# with any other form of Reaction or Initiative enhancement".
+_INCOMPATIBLE_NAMES: Mapping[str, tuple[str, ...]] = {
+    "Muscle Augmentation": ("Muscle Replacement",),
+    "Muscle Toner": ("Muscle Replacement",),
+    "Synaptic Booster": ("Wired Reflexes", "Reaction Enhancers", "Improved Reflexes"),
+}
 
 
 @dataclass(frozen=True)
@@ -209,9 +289,38 @@ class Bioware:
     # WP80: populated only when bonus_support is SELECT_SKILL -- the purchase-time skill pick this
     # item requires, and the filter that pick must satisfy. None for every other row.
     select_skill_bonus: BiowareSelectSkillBonus | None = None
-    # WP79: this item's real, unmodeled SR5 effect, from _UNMODELED_EFFECT_NOTES -- None for every
-    # SR5 bioware row today, deliberately. See module docstring.
+    # WP79: this item's real, unmodeled SR5 effect, from _UNMODELED_EFFECT_NOTES.
     unmodeled_effect_note: str | None = None
+    # WP128: a rated row. `cost`/`essence_cost`/`availability` above then hold its rating-1
+    # values; read `cost_at`/`essence_at`/`availability_at` for a purchase. `rated_bonuses` are its
+    # Rating-valued bonuses (the cyberware shape, resolved at the purchased rating).
+    max_rating: int | None = None
+    cost_formula: CyberwareFormula | None = None
+    essence_formula: CyberwareFormula | None = None
+    raw_availability: str | None = None
+    rated_bonuses: tuple[CyberwareFlatBonus, ...] = ()
+    # WP128: cyberware, quality and power names this row can't be combined with.
+    incompatible_names: tuple[str, ...] = ()
+
+    @property
+    def is_rated(self) -> bool:
+        return self.max_rating is not None
+
+    def cost_at(self, rating: int) -> int:
+        if self.cost_formula is None:
+            return self.cost
+        return int(self.cost_formula.resolve(rating=rating))
+
+    def essence_at(self, rating: int) -> Decimal:
+        if self.essence_formula is None:
+            return self.essence_cost
+        return self.essence_formula.resolve(rating=rating)
+
+    def availability_at(self, rating: int) -> int:
+        if self.raw_availability is None:
+            return self.availability
+        value = availability_at_rating(self.raw_availability, rating)
+        return self.availability if value is None else value
 
 
 def _is_flat_cost(text: str | None) -> bool:
@@ -330,9 +439,68 @@ def _parse_bioware(elem: ET.Element, availability: int) -> Bioware:
     )
 
 
+def _rating_times(text: str | None) -> CyberwareFormula | None:
+    formula = parse_cyberware_formula(text or "")
+    return formula if formula is not None and formula.kind is FormulaKind.RATING_TIMES else None
+
+
+def _forbidden_names(elem: ET.Element) -> tuple[str, ...]:
+    return tuple(
+        node.text.strip()
+        for node in elem.findall("forbidden/oneof/*")
+        if node.tag in ("cyberware", "bioware", "quality") and node.text
+    )
+
+
+def _parse_rated_bioware(elem: ET.Element) -> Bioware | None:
+    """WP128: a `<rating>` row whose cost and Essence are both `Rating * N`, or `None`. Every one of
+    the 15 SR5 rated rows is that shape (pp. 459-461 print them the same way)."""
+    cost = _rating_times(elem.findtext("cost"))
+    essence = _rating_times(elem.findtext("ess"))
+    raw_availability = elem.findtext("avail")
+    max_rating = elem.findtext("rating")
+    if cost is None or essence is None or raw_availability is None or max_rating is None:
+        return None
+    availability = availability_at_rating(raw_availability, 1)
+    if availability is None or availability > MAX_AVAILABILITY:
+        return None
+    bonus_elem = elem.find("bonus")
+    support, rated_bonuses, conditional = classify_bonus(
+        bonus_elem, registered_tags=REGISTERED_UNMODELED_BONUS_TAGS
+    )
+    if conditional:
+        return None  # no rated SR5 row has one; refuse rather than drop it
+    name = elem.findtext("name", "")
+    return Bioware(
+        id=elem.findtext("id", ""),
+        name=name,
+        category=elem.findtext("category", ""),
+        cost=int(cost.resolve(rating=1)),
+        essence_cost=essence.resolve(rating=1),
+        availability=availability,
+        source=elem.findtext("source", ""),
+        page=int(elem.findtext("page", "0")),
+        bonus_support=support,
+        flat_bonuses=(),
+        raw_bonus=(
+            ET.tostring(bonus_elem, encoding="unicode").strip() if bonus_elem is not None else None
+        ),
+        unmodeled_effect_note=_UNMODELED_EFFECT_NOTES.get(name),
+        max_rating=int(max_rating),
+        cost_formula=cost,
+        essence_formula=essence,
+        raw_availability=raw_availability,
+        rated_bonuses=rated_bonuses,
+        incompatible_names=_forbidden_names(elem) + _INCOMPATIBLE_NAMES.get(name, ()),
+    )
+
+
 def load_bioware(xml_path: Path = DEFAULT_BIOWARE_PATH) -> tuple[Bioware, ...]:
     """Parse `bioware.xml`, restricted to `source == "SR5"` AND flat cost AND flat Essence AND
     Availability <= 12 (6 of 23 SR5 entries; see module docstring) -- Standard grade only.
+
+    **WP128** adds the 15 rated SR5 rows (`_parse_rated_bioware`), after the flat ones: all 21
+    offerable rows. (Pain Editor and Suprathyroid Gland stay out: flat, and over Availability 12.)
     """
     root = ET.parse(xml_path).getroot()
     biowares_elem = root.find("biowares")
@@ -341,6 +509,11 @@ def load_bioware(xml_path: Path = DEFAULT_BIOWARE_PATH) -> tuple[Bioware, ...]:
     result = []
     for b in biowares_elem.findall("bioware"):
         if b.findtext("source") != CORE_RULEBOOK_SOURCE:
+            continue
+        if b.find("rating") is not None:
+            rated = _parse_rated_bioware(b)
+            if rated is not None:
+                result.append(rated)
             continue
         if not (_is_flat_cost(b.findtext("cost")) and _is_flat_essence(b.findtext("ess"))):
             continue

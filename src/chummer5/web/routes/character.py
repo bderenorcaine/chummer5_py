@@ -488,9 +488,14 @@ def _character_sheet_context(
     ]
     # WP103: tallied by (name, chosen skill) rather than a pre-joined "Name (Skill)" label, so the
     # sheet can translate each half for display on its own.
-    bioware_counts: dict[tuple[str, str | None, str], int] = {}
+    bioware_counts: dict[tuple[str, str | None, str, int | None], int] = {}
     for purchase in bioware_selection.purchases if bioware_selection is not None else ():
-        key = (purchase.item.name, purchase.chosen_skill, purchase.grade)  # WP127: by grade too
+        key = (  # WP127: by grade too; WP128: and by rating, for a rated row
+            purchase.item.name,
+            purchase.chosen_skill,
+            purchase.grade,
+            purchase.rating if purchase.item.is_rated else None,
+        )
         bioware_counts[key] = bioware_counts.get(key, 0) + 1
 
     return {
@@ -672,10 +677,12 @@ def _character_sheet_context(
                 "name": name,
                 "skill": skill,
                 "grade": grade if grade != STANDARD_GRADE else None,
+                "rating": rating,
                 "quantity": quantity,
             }
-            for (name, skill, grade), quantity in sorted(
-                bioware_counts.items(), key=lambda kv: (kv[0][0], kv[0][1] or "", kv[0][2])
+            for (name, skill, grade, rating), quantity in sorted(
+                bioware_counts.items(),
+                key=lambda kv: (kv[0][0], kv[0][1] or "", kv[0][2], kv[0][3] or 0),
             )
         ],
         # WP93: purchased vehicles/drones -- the full printed stat block plus the one derived

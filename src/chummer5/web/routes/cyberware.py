@@ -58,8 +58,10 @@ from chummer5.engine.bioware import (
     BiowarePurchaseRequest,
     BiowareSelection,
     apply_bioware_improvements,
+    augmentation_names,
     bioware_disabled,
     bioware_grade_offered,
+    bioware_rating_maximum,
     create_bioware_selection,
     purchased_grades,
     select_skill_choices,
@@ -307,6 +309,11 @@ def _parse_bioware(
                     item_id=item.id,
                     chosen_skill=str(chosen) if chosen else None,
                     grade=_parse_grade(form, f"bioware_grade_{item.id}_{index}"),  # WP127
+                    rating=(  # WP128: a rated row's per-unit rating
+                        _form_int(form, f"bioware_rating_{item.id}_{index}") or 1
+                        if item.is_rated
+                        else 1
+                    ),
                 )
             )
     return tuple(requests)
@@ -505,9 +512,11 @@ def _bioware_groups(
     """
     picks: dict[str, list[str | None]] = {}
     grades: dict[str, list[str]] = {}
+    ratings: dict[str, list[int]] = {}
     for request in requests:
         picks.setdefault(request.item_id, []).append(request.chosen_skill)
         grades.setdefault(request.item_id, []).append(request.grade)
+        ratings.setdefault(request.item_id, []).append(request.rating)
     groups = _catalog_groups(tuple(r.item_id for r in requests), _BIOWARE_BY_CATEGORY, by_id)
     for group in groups:
         for row in group["rows"]:
@@ -519,8 +528,21 @@ def _bioware_groups(
             row["grade_options"] = tuple(
                 g for g in CHARGEN_GRADE_NAMES if bioware_grade_offered(item, g)
             )
+            # WP128: a rated row's per-unit rating, offered up to its Availability cap at the
+            # unit's grade (widened to the rating it already has).
+            row["chosen_ratings"] = ratings.get(item.id, [])
+            row["rating_options"] = [
+                list(
+                    range(
+                        1,
+                        max(bioware_rating_maximum(item, _grade_or_standard(g).name), r) + 1,
+                    )
+                )
+                for g, r in zip(row["chosen_grades"], row["chosen_ratings"], strict=True)
+            ]
             row["subtotal"] = sum(
-                _grade_or_standard(g).nuyen(item.cost) for g in row["chosen_grades"]
+                _grade_or_standard(g).nuyen(item.cost_at(r))
+                for g, r in zip(row["chosen_grades"], row["chosen_ratings"], strict=True)
             )
     return groups
 
@@ -597,7 +619,7 @@ def _cyberware_context(
     )
     bioware_essence_spent = sum(
         (
-            bioware_by_id[request.item_id].essence_cost
+            bioware_by_id[request.item_id].essence_at(request.rating)
             * _grade_or_standard(request.grade).essence_multiplier
             for request in bioware_requests
         ),
@@ -621,6 +643,9 @@ def _cyberware_context(
                 other_essence_spent=cyberware_selection.essence_spent,
                 skills=SKILLS,
                 bioware_disabled=bioware_disabled(character),
+                other_augmentations=augmentation_names(
+                    character, (node.item.name for node in cyberware_selection.walk())
+                ),
             )
         except ValueError as exc:
             budget_warning = Message.of("Web_Stale_Cyberware", error=str(exc))
@@ -691,6 +716,9 @@ async def submit_cyberware(request: Request) -> HTMLResponse:
                 other_essence_spent=selection.essence_spent,
                 skills=SKILLS,
                 bioware_disabled=bioware_disabled(session.character),
+                other_augmentations=augmentation_names(  # WP128
+                    session.character, (node.item.name for node in selection.walk())
+                ),
                 # WP127: a new pick's grade within Availability 12; what was bought stays.
                 availability_exempt=purchased_grades(session.character.bioware_selection),
             )

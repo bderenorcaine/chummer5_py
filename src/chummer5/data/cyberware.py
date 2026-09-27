@@ -231,7 +231,23 @@ REGISTERED_UNMODELED_BONUS_TAGS = frozenset({"unarmeddv", "unarmeddvphysical"})
 # WP109: the character-wide bare-leaf bonuses, `<tag>N</tag>` or `<tag>Rating</tag>` ->
 # `CyberwareFlatBonus.target_kind`. `<armor>` may carry `group="0"` (Dermal Plating), which legacy
 # turns into the dedup group "group0" -- see `_unique_name`.
-_GLOBAL_LEAF_TARGET_KINDS = {"armor": "armor", "damageresistance": "damage_resistance"}
+_GLOBAL_LEAF_TARGET_KINDS = {
+    "armor": "armor",
+    "damageresistance": "damage_resistance",
+    # WP128: rated bioware (Mnemonic Enhancer, Tailored Pheromones). No SR5 cyberware row carries
+    # these three, so adding them changes no cyberware classification.
+    "mentallimit": "mental_limit",
+    "sociallimit": "social_limit",
+    "memory": "memory",
+}
+
+# WP128: `<skillgroup>` / `<skillcategory>` with `<name>` and `<bonus>` -> a dice-pool bonus to each
+# skill of that group (Synthacardium's Athletics) or category (Mnemonic Enhancer's knowledge
+# categories and Language). A `<skillgroup>` that also carries a `<condition>` (Tailored Pheromones:
+# "People who can smell you") is a situational pool; a caller that registers it under
+# `CONDITIONAL_SKILL_GROUP` has it skipped, otherwise it is unsupported.
+_POOL_TARGET_KINDS = {"skillgroup": "skill_group_pool", "skillcategory": "skill_category_pool"}
+CONDITIONAL_SKILL_GROUP = "skillgroup@condition"
 
 # <limitmodifier><limit>X</limit> -> CyberwareConditionalBonus.target_kind. Only Mental and
 # Physical occur in the SR5 cyberware rows (verified by enumeration); a `Social` one would fall
@@ -618,6 +634,7 @@ def _parse_conditional_limit_bonus(elem: ET.Element) -> CyberwareConditionalBonu
 
 def classify_bonus(
     bonus_elem: ET.Element | None,
+    registered_tags: frozenset[str] = REGISTERED_UNMODELED_BONUS_TAGS,
 ) -> tuple[BonusSupport, tuple[CyberwareFlatBonus, ...], tuple[CyberwareConditionalBonus, ...]]:
     """Classify a `<bonus>` node, extracting flat and conditional bonuses when every remaining
     child is a supported shape. `<disablequality>` children are stripped first (see module
@@ -640,6 +657,11 @@ def classify_bonus(
     may carry several (Muscle Replacement carries two `<specificattribute>` children, Wired
     Reflexes one of those plus an `<initiativepass>`), and every recognized one is collected.
 
+    **WP128**: `chummer5.data.bioware` reuses this for its rated rows, passing its own
+    `registered_tags` (the children its registry rows cover). New shapes: the Mental/Social limit
+    and Memory leaves, `<conditionmonitor><sharedthresholdoffset>` (Damage Compensators), and the
+    `<skillgroup>`/`<skillcategory>` dice-pool bonuses.
+
     Public (unlike `chummer5.data.qualities`/`powers`/`mentors`' identically-named private
     classifiers) because WP37's `chummer5.data.cyberware_subsystems` reads the *same* rows out of
     the *same* file and so shares this grammar verbatim -- see that module's docstring for why it
@@ -652,7 +674,12 @@ def classify_bonus(
         child
         for child in bonus_elem
         if child.tag not in _VERIFIED_INERT_BONUS_TAGS
-        and child.tag not in REGISTERED_UNMODELED_BONUS_TAGS
+        and child.tag not in registered_tags
+        and not (
+            child.tag == "skillgroup"
+            and child.find("condition") is not None
+            and CONDITIONAL_SKILL_GROUP in registered_tags
+        )
     ]
     if not children:
         return BonusSupport.NO_EFFECT, (), ()
@@ -661,6 +688,29 @@ def classify_bonus(
     conditional_bonuses = []
     for child in children:
         unique_name = _unique_name(bonus_elem, child)
+        if child.tag == "conditionmonitor" and {c.tag for c in child} == {"sharedthresholdoffset"}:
+            recognized, value = _parse_rating_or_literal(child.findtext("sharedthresholdoffset"))
+            if recognized:
+                flat_bonuses.append(
+                    CyberwareFlatBonus(
+                        target_kind="cm_shared_threshold_offset",
+                        value=value,
+                        unique_name=unique_name,
+                    )
+                )
+                continue
+        if child.tag in _POOL_TARGET_KINDS and {c.tag for c in child} == {"name", "bonus"}:
+            recognized, value = _parse_rating_or_literal(child.findtext("bonus"))
+            if recognized:
+                flat_bonuses.append(
+                    CyberwareFlatBonus(
+                        target_kind=_POOL_TARGET_KINDS[child.tag],
+                        value=value,
+                        target_name=child.findtext("name", ""),
+                        unique_name=unique_name,
+                    )
+                )
+                continue
         if child.tag == "conditionmonitor" and _is_flat_physical_cm_bonus(child):
             flat_bonuses.append(
                 CyberwareFlatBonus(

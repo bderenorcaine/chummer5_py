@@ -23,7 +23,9 @@ def test_loads_exactly_the_confirmed_flat_low_availability_count() -> None:
     # legacy/Chummer/data/bioware.xml has 213 <bioware> entries total; 23 are source == "SR5"; of
     # those, 8 have both a bare-integer <cost> and a bare-decimal <ess>; of those 8, 2 exceed
     # Availability 12 (Pain Editor 18F, Suprathyroid Gland 20R) -- see module docstring.
-    assert len(BIOWARE) == 6
+    # WP128: plus all 15 rated SR5 rows, each within Availability 12 at rating 1.
+    assert len([b for b in BIOWARE if not b.is_rated]) == 6
+    assert len(BIOWARE) == 21
     assert all(b.source == "SR5" for b in BIOWARE)
     assert all(b.availability <= 12 for b in BIOWARE)
 
@@ -35,12 +37,13 @@ def test_no_duplicate_ids_or_names() -> None:
     assert len(names) == len(set(names))
 
 
-def test_excludes_rating_scaled_items() -> None:
-    # Mnemonic Enhancer/Cerebral Booster/etc. all have a "Rating * N" cost/Essence formula.
-    names = {b.name for b in BIOWARE}
-    assert "Mnemonic Enhancer" not in names
-    assert "Cerebral Booster" not in names
-    assert "Muscle Toner" not in names
+def test_includes_rating_scaled_items() -> None:
+    # WP128: Mnemonic Enhancer/Cerebral Booster/etc. carry a "Rating * N" cost/Essence formula,
+    # resolved per purchase. (WP45 excluded them.)
+    rated = {b.name: b for b in BIOWARE if b.is_rated}
+    assert {"Mnemonic Enhancer", "Cerebral Booster", "Muscle Toner"} <= set(rated)
+    assert rated["Cerebral Booster"].cost_at(2) == 63000
+    assert rated["Cerebral Booster"].essence_at(3) == Decimal("0.6")
 
 
 def test_excludes_high_availability_items() -> None:
@@ -116,13 +119,14 @@ def test_reflex_recorder_is_the_only_select_skill_row() -> None:
 
 def test_supported_vs_unsupported_counts_are_visible() -> None:
     # FLAT_BONUS: Enhanced Articulation. SELECT_SKILL: Reflex Recorder (WP80; NOT_YET_SUPPORTED
-    # before that). NO_EFFECT: the other 4 -- no row is unsupported at all any more.
+    # before that). NO_EFFECT: the other 4 -- no row is unsupported at all any more. WP128's rated
+    # rows: 10 FLAT_BONUS, and 5 NO_EFFECT once their registered children are stripped.
     counts = count_by_support(BIOWARE)
-    assert counts[BonusSupport.FLAT_BONUS] == 1
+    assert counts[BonusSupport.FLAT_BONUS] == 1 + 10
     assert counts[BonusSupport.SELECT_SKILL] == 1
     assert counts[BonusSupport.NOT_YET_SUPPORTED] == 0
-    assert counts[BonusSupport.NO_EFFECT] == 4
-    assert sum(counts.values()) == 6
+    assert counts[BonusSupport.NO_EFFECT] == 4 + 5
+    assert sum(counts.values()) == 21
 
 
 def test_bioware_fields_hand_checked_against_the_raw_xml() -> None:

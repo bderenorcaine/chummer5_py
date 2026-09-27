@@ -184,6 +184,21 @@
                 {% endfor %}
               </div>
               {% endif %}
+              {# WP128: one rating per bought unit of a rated row. #}
+              {% if row.item.is_rated and row.quantity %}
+              <div class="bioware-rating-picks">
+                {% for index in range(row.quantity) %}
+                <label>
+                  {% if row.quantity > 1 %}{{ _("Web_Cyberware_RatingNumbered", number=index + 1) }}{% else %}{{ _("Web_Cyberware_RatingLabel") }}{% endif %}
+                  <select name="bioware_rating_{{ row.item.id }}_{{ index }}">
+                    {% for value in row.rating_options[index] %}
+                    <option value="{{ value }}" {% if row.chosen_ratings[index] == value %}selected{% endif %}>{{ value }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                {% endfor %}
+              </div>
+              {% endif %}
               {# WP127: one grade per bought unit. #}
               {% if row.grade_options | length > 1 and row.quantity %}
               <div class="bioware-grade-picks">
@@ -200,8 +215,8 @@
               </div>
               {% endif %}
             </td>
-            <td>{{ row.item.cost }}</td>
-            <td>{{ row.item.essence_cost }}</td>
+            <td>{% if row.item.is_rated %}{{ _("Web_Cyberware_PerRating", value=row.item.cost) }}{% else %}{{ row.item.cost }}{% endif %}</td>
+            <td>{% if row.item.is_rated %}{{ _("Web_Cyberware_PerRating", value=row.item.essence_cost) }}{% else %}{{ row.item.essence_cost }}{% endif %}</td>
             <td>
               <input
                 type="number"

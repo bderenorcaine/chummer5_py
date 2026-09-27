@@ -159,6 +159,14 @@
       <text>Grade #{number}:</text>
     </string>
     <string>
+      <key>Web_Cyberware_PerRating</key>
+      <text>{value} per rating</text>
+    </string>
+    <string>
+      <key>Web_Cyberware_RatingNumbered</key>
+      <text>Rating #{number}:</text>
+    </string>
+    <string>
       <key>Web_Cyberware_RatingLabel</key>
       <text>Rating:</text>
     </string>

@@ -340,7 +340,8 @@ def test_unmodeled_effect_notes_walks_other_selection_kinds_without_crashing() -
     # pins down that the generic getattr-based walk tolerates that (no crash, no false entries)
     # rather than assuming every kind it visits already has the field.
     cyberware = next(iter(load_cyberware_entries()))
-    bioware = next(iter(load_bioware()))
+    # WP128: the first loaded row is now a registered one (Adrenaline Pump); take a noteless one.
+    bioware = next(b for b in load_bioware() if b.unmodeled_effect_note is None)
     power = next(p for p in load_powers() if p.unmodeled_effect_note is None)
     focus = next(iter(load_foci()))
     lifestyle_tier = next(iter(load_lifestyles()))

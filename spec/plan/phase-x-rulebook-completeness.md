@@ -438,7 +438,7 @@ the rules it checks.
   Acceptance: an Alphaware Datajack costs 0.08 Essence and 1,200¥; a Used one costs 0.125 Essence and
   750¥; a Bone Lacing (Titanium) offers Standard only.
 
-- [ ] **WP128 — Rating-scaled bioware.**
+- [x] **WP128 — Rating-scaled bioware.**
   Goal: offer the 15 rating-scaled core bioware items, reusing `chummer5.data.cyberware_formula` for
   cost, Essence and Availability.
   Deliverables:

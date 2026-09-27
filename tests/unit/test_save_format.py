@@ -494,8 +494,8 @@ def test_json_round_trip_preserves_bioware_purchases() -> None:
     assert from_json(to_json(save)) == save
     # WP80: bare ids are accepted as "no player choice" and stored as full requests.
     assert json.loads(to_json(save))["bioware_purchases"] == [
-        {"item_id": "bio-cats-eyes", "chosen_skill": None, "grade": "Standard"},
-        {"item_id": "bio-cats-eyes", "chosen_skill": None, "grade": "Standard"},
+        {"item_id": "bio-cats-eyes", "chosen_skill": None, "grade": "Standard", "rating": 1},
+        {"item_id": "bio-cats-eyes", "chosen_skill": None, "grade": "Standard", "rating": 1},
     ]
 
 

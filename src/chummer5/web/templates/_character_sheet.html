@@ -249,7 +249,7 @@
   {% if bioware_rows %}
   <ul>
     {% for row in bioware_rows %}
-    <li>{{ row.name | dterm("bioware.xml") }}{% if row.skill %} ({{ row.skill | dterm("skills.xml") }}){% endif %}{% if row.grade %} [{{ row.grade | dterm("cyberware.xml") }}]{% endif %} × {{ row.quantity }}</li>
+    <li>{{ row.name | dterm("bioware.xml") }}{% if row.rating %} {{ _("Web_Sheet_RatingSuffix", rating=row.rating) }}{% endif %}{% if row.skill %} ({{ row.skill | dterm("skills.xml") }}){% endif %}{% if row.grade %} [{{ row.grade | dterm("cyberware.xml") }}]{% endif %} × {{ row.quantity }}</li>
     {% endfor %}
   </ul>
   {% else %}

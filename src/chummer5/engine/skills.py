@@ -908,6 +908,9 @@ def dice_pool(
     modifier = index.resolve(ImprovementType.SKILL_POOL, skill.name) + index.resolve(
         ImprovementType.SKILL_CATEGORY_POOL, skill.category
     )
+    if skill.skill_group is not None:
+        # WP128: Synthacardium's dice to every Athletics skill.
+        modifier += index.resolve(ImprovementType.SKILL_GROUP_POOL, skill.skill_group)
     rating = skill_rating(character, allocation, skill)
     attribute_value = character.attribute_value(skill.attribute)
     if rating > 0:

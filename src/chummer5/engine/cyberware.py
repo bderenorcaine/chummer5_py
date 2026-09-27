@@ -49,6 +49,12 @@ _TARGET_KIND_TO_IMPROVEMENT_TYPE = {
     # WP109: Bone Lacing, Dermal Plating and the cyberlimb Armor enhancement.
     "armor": ImprovementType.ARMOR,
     "damage_resistance": ImprovementType.DAMAGE_RESISTANCE,
+    # WP128: rated bioware's shapes, through the same classifier.
+    "social_limit": ImprovementType.SOCIAL_LIMIT,
+    "memory": ImprovementType.MEMORY,
+    "cm_shared_threshold_offset": ImprovementType.CM_SHARED_THRESHOLD_OFFSET,
+    "skill_group_pool": ImprovementType.SKILL_GROUP_POOL,
+    "skill_category_pool": ImprovementType.SKILL_CATEGORY_POOL,
 }
 
 # The legacy <condition> key -> WP39's compiled predicate. One entry per member of

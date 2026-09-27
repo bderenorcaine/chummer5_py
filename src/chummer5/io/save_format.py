@@ -243,6 +243,9 @@ allowed, is dropped.
 `"Alphaware"` or `"Used"`). Additive: an older save's missing key reads as Standard, which is all
 it could have bought. A plugin's stored grade is its parent's; the engine ignores it and inherits.
 
+**WP128** adds `rating` to each bioware purchase, for the rated rows it offers. Additive, default 1
+(every flat row's only rating).
+
 **WP125** adds `knowledge_specializations` and `karma_knowledge_specializations`, pick name ->
 specialization, the same name-keyed shape as `karma_knowledge_points`. Additive, `{}` default, no
 bump. A Knowledge/Language pick may now be rated 0 (Karma buys it), and the Knowledge spend past
@@ -282,6 +285,7 @@ from chummer5.data.vehicles import Vehicle
 from chummer5.engine.bioware import (
     BiowarePurchaseRequest,
     apply_bioware_improvements,
+    augmentation_names,
     bioware_disabled,
     create_bioware_selection,
 )
@@ -638,6 +642,7 @@ def _bioware_purchase_to_dict(purchase: BiowarePurchaseRequest) -> dict[str, Any
         "item_id": purchase.item_id,
         "chosen_skill": purchase.chosen_skill,
         "grade": purchase.grade,  # WP127
+        "rating": purchase.rating,  # WP128
     }
 
 
@@ -654,6 +659,7 @@ def _bioware_purchases_from_dict(data: Mapping[str, Any]) -> tuple[BiowarePurcha
                 item_id=purchase["item_id"],
                 chosen_skill=purchase.get("chosen_skill"),
                 grade=purchase.get("grade", STANDARD_GRADE),
+                rating=purchase.get("rating", 1),
             )
             for purchase in data["bioware_purchases"]
         )
@@ -1061,6 +1067,10 @@ def build_character(
         # WP80: re-validates a persisted skill pick against the same filter the purchase did.
         skills=skills,
         bioware_disabled=bioware_disabled(character),  # WP117: Sensitive System
+        # WP128: Orthoskin with Dermal Plating, a Synaptic Booster with Wired Reflexes, ...
+        other_augmentations=augmentation_names(
+            character, (node.item.name for node in cyberware_selection.walk())
+        ),
     )
     apply_bioware_improvements(character, bioware_selection)
 

@@ -110,6 +110,9 @@ KARMA_KNOWLEDGE_PER_RATING = 1
 # this is the fixed base every character gets regardless.
 BASE_NATIVE_LANGUAGE_LIMIT = 1
 
+# WP128: the `<skillcategory>` name `bioware.xml` gives Language skills (Mnemonic Enhancer).
+LANGUAGE_CATEGORY = "Language"
+
 _GLOBAL_TARGET = ""
 
 
@@ -186,7 +189,9 @@ def knowledge_dice_pool(character: Character, category: str, rating: int) -> int
     nothing in scope augments INT/LOG.
     """
     linked = knowledge_category(category).linked_attribute
-    return character.attribute_value(linked) + rating
+    # WP128: `SKILL_CATEGORY_POOL` dice for the category (Mnemonic Enhancer's Rating).
+    bonus = character.improvements.resolve(ImprovementType.SKILL_CATEGORY_POOL, category)
+    return character.attribute_value(linked) + rating + bonus
 
 
 def language_dice_pool(character: Character, rating: int) -> int:
@@ -195,7 +200,8 @@ def language_dice_pool(character: Character, rating: int) -> int:
     language has no numeric rating (fluency "N"), so it has no meaningful dice pool -- callers
     should not invoke this for a native pick.
     """
-    return character.attribute_value(LANGUAGE_LINKED_ATTRIBUTE) + rating
+    bonus = character.improvements.resolve(ImprovementType.SKILL_CATEGORY_POOL, LANGUAGE_CATEGORY)
+    return character.attribute_value(LANGUAGE_LINKED_ATTRIBUTE) + rating + bonus
 
 
 def knowledge_points_spent(

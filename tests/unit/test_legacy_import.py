@@ -461,29 +461,55 @@ def test_an_alphaware_implant_imports_with_its_grade() -> None:
 
 
 def test_rejects_unsupported_bioware_item() -> None:
-    """WP45 resolves a Bioware entry the identical way a Cyberware entry already was, against
-    `chummer5.data.bioware.load_bioware`'s own flat catalog -- a rating-scaled item (Mnemonic
-    Enhancer's real cost is `Rating * 9000`, not a bare literal) is rejected by name, not with a
-    generic "is Bioware" message.
-    """
-    with pytest.raises(
-        UnsupportedLegacyCharacterError, match=r"'Mnemonic Enhancer'.*rating-scaled"
-    ):
+    """WP45 resolves a Bioware entry against `chummer5.data.bioware.load_bioware`'s catalog, and
+    an item it doesn't offer is rejected by name, not with a generic "is Bioware" message. WP128
+    offers the rated rows, so the example is now an over-Availability one (Pain Editor, 18F)."""
+    with pytest.raises(UnsupportedLegacyCharacterError, match=r"'Pain Editor'.*high-Availability"):
         _import(
             _legacy_character(
                 cyberware=(
                     _legacy_cyberware(
-                        "Mnemonic Enhancer",
+                        "Pain Editor",
                         category="Cultured",
                         grade="Standard",
                         source="SR5",
                         improvement_source="Bioware",
-                        cost="Rating * 9000",
-                        essence="Rating * 0.1",
+                        cost="48000",
+                        essence="0.3",
                     ),
                 )
             )
         )
+
+
+def test_a_rated_bioware_item_imports_at_its_rating() -> None:
+    """WP128: Mnemonic Enhancer 2 imports at rating 2 (legacy's `<rating>`), costs recomputed."""
+    result = import_legacy_character(
+        _legacy_character(
+            cyberware=(
+                _legacy_cyberware(
+                    "Mnemonic Enhancer",
+                    category="Cultured",
+                    grade="Standard",
+                    source="SR5",
+                    improvement_source="Bioware",
+                    cost="Rating * 9000",
+                    essence="Rating * 0.1",
+                    rating=2,
+                ),
+            )
+        ),
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        bioware=BIOWARE,
+    )
+    assert [p.rating for p in result.save.bioware_purchases] == [2]
+    selection = result.built.bioware_selection
+    assert selection is not None
+    assert (selection.nuyen_spent, selection.essence_spent) == (18000, Decimal("0.2"))
 
 
 def test_a_used_grade_bioware_item_imports_with_its_grade() -> None:

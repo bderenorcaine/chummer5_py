@@ -71,13 +71,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from collections.abc import Set as AbstractSet
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 
 from chummer5.data.bioware import Bioware
 from chummer5.data.grades import STANDARD_GRADE, implant_grade
 from chummer5.data.skills import Skill
 from chummer5.engine.character import Character
+from chummer5.engine.cyberware import cyberware_bonus_improvements
 from chummer5.engine.derived import BASE_ESSENCE
 from chummer5.engine.improvements import Improvement, ImprovementSource, ImprovementType
 from chummer5.engine.resources import MAX_AVAILABILITY
@@ -114,6 +115,7 @@ class BiowarePurchaseRequest:
     item_id: str
     chosen_skill: str | None = None
     grade: str = STANDARD_GRADE  # WP127: Standard, Alphaware or Used (p. 451)
+    rating: int = 1  # WP128: a rated row's purchased rating; 1 for every flat row
 
 
 @dataclass(frozen=True)
@@ -127,14 +129,15 @@ class BiowarePurchase:
     item: Bioware
     chosen_skill: str | None = None
     grade: str = STANDARD_GRADE
+    rating: int = 1  # WP128
 
     @property
     def nuyen_cost(self) -> int:
-        return implant_grade(self.grade).nuyen(self.item.cost)
+        return implant_grade(self.grade).nuyen(self.item.cost_at(self.rating))
 
     @property
     def essence_cost(self) -> Decimal:
-        return self.item.essence_cost * implant_grade(self.grade).essence_multiplier
+        return self.item.essence_at(self.rating) * implant_grade(self.grade).essence_multiplier
 
 
 @dataclass(frozen=True)
@@ -165,7 +168,10 @@ class BiowareSelection:
         `chummer5.engine.cyberware_subsystems.CyberwareTreeSelection.to_requests`."""
         return tuple(
             BiowarePurchaseRequest(
-                item_id=purchase.item.id, chosen_skill=purchase.chosen_skill, grade=purchase.grade
+                item_id=purchase.item.id,
+                chosen_skill=purchase.chosen_skill,
+                grade=purchase.grade,
+                rating=purchase.rating,
             )
             for purchase in self.purchases
         )
@@ -193,6 +199,18 @@ def select_skill_choices(item: Bioware, skills: Iterable[Skill]) -> tuple[Skill,
     )
 
 
+def augmentation_names(character: Character, cyberware_names: Iterable[str] = ()) -> frozenset[str]:
+    """The names a bioware row's `incompatible_names` is checked against (WP128): `cyberware_names`
+    (the cyberware tree being committed with it), plus the character's qualities and adept
+    powers."""
+    names = set(cyberware_names)
+    if character.quality_selection is not None:
+        names |= {pick.quality.name for pick in character.quality_selection.qualities}
+    if character.power_selection is not None:
+        names |= {pick.power.name for pick in character.power_selection.picks}
+    return frozenset(names)
+
+
 def purchased_grades(selection: BiowareSelection | None) -> frozenset[tuple[str, str]]:
     """Every `(item id, grade)` the character already has (WP127) -- `availability_exempt`."""
     if selection is None:
@@ -202,10 +220,33 @@ def purchased_grades(selection: BiowareSelection | None) -> frozenset[tuple[str,
 
 def bioware_grade_offered(item: Bioware, grade: str) -> bool:
     """Whether `item` may be newly bought at `grade` (WP127): its Availability, shifted by the
-    grade, stays within 12. The offered catalog is already within 12 at Standard grade."""
+    grade, stays within 12 (at rating 1, for a rated row). The offered catalog is already within
+    12 at Standard grade."""
     if grade == STANDARD_GRADE:
         return True
     return item.availability + implant_grade(grade).availability_modifier <= MAX_AVAILABILITY
+
+
+def bioware_rating_maximum(item: Bioware, grade: str = STANDARD_GRADE) -> int:
+    """The highest rating `item` may be newly bought at (WP128): its printed maximum, lowered to
+    stay within Availability 12 at `grade` (WP126's cap) -- Muscle Toner `(Rating x 5)R` stops at
+    2. 1 for a flat row."""
+    if item.max_rating is None:
+        return 1
+    modifier = implant_grade(grade).availability_modifier
+    fitting = [
+        rating
+        for rating in range(1, item.max_rating + 1)
+        if item.availability_at(rating) + modifier <= MAX_AVAILABILITY
+    ]
+    return max(fitting, default=1)
+
+
+def _checked_rating(item: Bioware, rating: int) -> int:
+    maximum = item.max_rating or 1
+    if not 1 <= rating <= maximum:
+        raise ValueError(f"{item.name}: rating {rating} is outside its range 1-{maximum}")
+    return rating
 
 
 def _as_request(purchase: str | BiowarePurchaseRequest) -> BiowarePurchaseRequest:
@@ -260,6 +301,7 @@ def create_bioware_selection(
     skills: Iterable[Skill] = (),
     bioware_disabled: bool = False,
     availability_exempt: AbstractSet[tuple[str, str]] | None = None,
+    other_augmentations: AbstractSet[str] = frozenset(),
 ) -> BiowareSelection:
     """Build a `BiowareSelection`, validating nuyen spend and the (shared) Essence floor together.
 
@@ -287,6 +329,12 @@ def create_bioware_selection(
     already has), a new pick whose grade's Availability shift takes the item over 12 is rejected
     -- an Alphaware row printed at 11. `None` (save loading, legacy import) skips the check, as
     WP126's cyberware cap does.
+
+    **WP128**: a rated row's request names its `rating` (1 to the row's maximum, and within
+    Availability 12 at its grade for a new pick); a rated row is bought at most once -- a second
+    Cerebral Booster is a higher rating, not a second implant. `other_augmentations` is the
+    character's cyberware, quality and power names: a row whose `incompatible_names` meets it is
+    rejected (Orthoskin with Dermal Plating, a Synaptic Booster with Wired Reflexes, ...).
     """
     by_id = {item.id: item for item in catalog}
     requests = [_as_request(purchase) for purchase in purchases]
@@ -304,9 +352,21 @@ def create_bioware_selection(
             item=by_id[r.item_id],
             chosen_skill=_resolve_chosen_skill(by_id[r.item_id], r.chosen_skill, skills_by_name),
             grade=implant_grade(r.grade).name,
+            rating=_checked_rating(by_id[r.item_id], r.rating),
         )
         for r in requests
     )
+    rated_seen: set[str] = set()
+    names = {purchase.item.name for purchase in resolved}
+    for purchase in resolved:
+        item = purchase.item
+        if item.is_rated:
+            if item.id in rated_seen:
+                raise ValueError(f"{item.name} is bought once, at the rating wanted")
+            rated_seen.add(item.id)
+        clash = sorted(set(item.incompatible_names) & (set(other_augmentations) | names))
+        if clash:
+            raise ValueError(f"{item.name} can't be combined with {', '.join(clash)}")
     if availability_exempt is not None:
         for purchase in resolved:
             if (purchase.item.id, purchase.grade) in availability_exempt:
@@ -315,6 +375,12 @@ def create_bioware_selection(
                 raise ValueError(
                     f"{purchase.item.name}: {purchase.grade} grade is over Availability 12 at "
                     "character creation"
+                )
+            maximum = bioware_rating_maximum(purchase.item, purchase.grade)
+            if purchase.rating > maximum:
+                raise ValueError(
+                    f"{purchase.item.name}: rating {purchase.rating} is over Availability 12 at "
+                    f"character creation (the highest at {purchase.grade} grade is {maximum})"
                 )
 
     # p. 460: multiple recorders are legal, one per skill. Checked per (item, skill) rather than per
@@ -387,6 +453,16 @@ def apply_bioware_improvements(character: Character, selection: BiowareSelection
                     source_id=item.id,
                 )
             )
+        # WP128: a rated row's Rating-valued bonuses, through cyberware's translator (the same
+        # classifier produced them), re-sourced as bioware.
+        for improvement in cyberware_bonus_improvements(
+            item_id=item.id,
+            item_name=item.name,
+            flat_bonuses=item.rated_bonuses,
+            conditional_bonuses=(),
+            rating=purchase.rating,
+        ):
+            character.improvements.add(replace(improvement, source_type=ImprovementSource.BIOWARE))
         # WP80: the SELECT_SKILL bonus, aimed at the player's own pick. p. 460 says the recorder
         # "adds 1 to the Rating of a specific skill", so this is ImprovementType.SKILL (a rating
         # bonus), not a dice-pool modifier -- see chummer5.data.bioware's docstring.

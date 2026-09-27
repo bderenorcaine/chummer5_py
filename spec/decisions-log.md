@@ -1795,3 +1795,23 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   them from the catalog and the grade. Several corpus limbs (Bastion's, Blindfire's, Barrett's)
   that were rejected only for being Used grade now resolve. Only their non-SR5 children are still
   itemized.
+
+## 2026-09-27 — WP128: rated bioware, and where the book overrules the plan
+
+- **"Toner plus Augmentation is rejected" (the plan's acceptance) is wrong, and is not
+  implemented.** p. 459 makes each incompatible with augmentations to *its own* attribute,
+  "including the muscle replacements cyberware". Toner raises Agility and Augmentation Strength, so
+  they combine. Legacy's `unique="muscle"` de-duplicates per attribute, which agrees. What *is*
+  rejected is either one with Muscle Replacement.
+- **Incompatibilities are enforced at purchase, across catalogs.** A rated bioware row carries
+  `incompatible_names`: its `<forbidden>` (Bone Density vs. Bone Lacing, Orthoskin vs. Dermal
+  Plating, Damage Compensators vs. High Pain Tolerance) plus the book's "cannot be combined" rules
+  that the data lacks (Toner/Augmentation vs. Muscle Replacement; the Synaptic Booster vs. Wired
+  Reflexes, Reaction Enhancers and the Improved Reflexes power). `create_bioware_selection` checks
+  them against the character's cyberware, quality and power names. This is the first cross-catalog
+  rule the engine enforces. WP80 declined one (Reflex Recorder vs. Skillwires) because it had no
+  computable consequence. These all do (stacked Armor, REA, Initiative dice, wound offsets).
+- **A rated bioware row is bought once.** Two Cerebral Boosters would stack Logic. The book prices a
+  higher rating, not a second implant.
+- **Pain Editor and Suprathyroid Gland stay excluded.** They are flat and over Availability 12, and
+  were never offered, so WP126's "leave offered items alone" doesn't reach them.

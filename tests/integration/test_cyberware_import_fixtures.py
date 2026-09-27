@@ -142,7 +142,8 @@ def test_barretts_standard_grade_flat_bioware_is_not_itemized_as_rejected() -> N
     assert not any("'Reflex Recorder'" in r for r in reasons)
     assert not any("'Sleep Regulator'" in r for r in reasons)
     assert not any("'Platelet Factories'" in r for r in reasons)
-    assert any("'Mnemonic Enhancer'" in r and "rating-scaled" in r for r in reasons)
+    # WP128: rated bioware is offered now, so her Mnemonic Enhancer resolves too.
+    assert not any("'Mnemonic Enhancer'" in r for r in reasons)
 
 
 # --- WP41: nested <children> ----------------------------------------------------------------------
