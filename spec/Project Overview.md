@@ -84,7 +84,8 @@ test fixtures, it is a derivative work and is GPLv3 too. Not a decision point â€
   bonuses, quality bonuses, priority-derived bonuses). See [Improvement engine](#improvement-engine-design)
   below for why this can't be "zero."
 - Save/load in a new, native format (see [Data & save format](#data--save-format)).
-- Web UI (local, single-user, no auth) as the only supported interface.
+- Web UI as the only supported interface. (MVP: local, single-user, no auth. **Phase Y, ruled
+  2026-10-02**, adds a hosted multi-user mode alongside it; see the decisions log.)
 - ~~All user-facing strings routed through an i18n key layer from day one, even though only English
   ships.~~ **Corrected 2026-09-24 (WP101): this was never built during the MVP.** Every template and
   route message was plain English text until Phase W. The key layer itself landed in WP101: string
@@ -148,7 +149,9 @@ Implementation Plan's WP20.
   again here since it came up explicitly in the same ruling as the items above).
 - Plugins.
 - Localization content (structure only, per above; the structure itself arrived late, in Phase W).
-- Multi-user / hosted deployment, anything resembling ChummerHub.
+- ~~Multi-user / hosted deployment~~ â€” **reversed 2026-10-02** (Phase Y: invite-only accounts,
+  per-user stored characters). Anything resembling ChummerHub (sharing between users, a public
+  catalog) stays out.
 
 ## Unmodeled real effects
 

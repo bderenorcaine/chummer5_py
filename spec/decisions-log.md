@@ -1939,3 +1939,23 @@ Step Eight table and p. 159's chart. `chummer5.engine.derived.ASTRAL_INITIATIVE_
   Its over-cap contact is not reported, as ruled.
 - **Issue text is an i18n key.** A parameter named `*_key` is itself a key; the web translates it.
   The orphan-key test now also scans `engine/validation.py`.
+
+## 2026-10-02 — Phase Y, planning pass: hosted multi-user deployment reverses a standing non-goal
+
+The user wants the app reachable on the web from their own server (mail + Nextcloud behind Caddy),
+with accounts, a 100-character quota per account, a filterable character list, and JSON download /
+JSON-or-`.chum5` upload. `Project Overview.md` had listed "Multi-user / hosted deployment" as out of
+scope since the MVP; that line is now reversed. "Anything resembling ChummerHub" (sharing between
+users, a public catalog) stays out. The full plan is `spec/plan/phase-y-hosted-deployment.md`
+(WP136-142); what matters beyond it:
+
+- **User rulings.** Registration is invite-code only. Accounts are the app's own, not Nextcloud's
+  (linking Nextcloud for players' documents is a possible later phase). Nothing is stored before
+  the priority selection is confirmed. Uploads accept both native JSON and legacy `.chum5`.
+- **"No further dependencies" is a standing constraint for this phase.** Storage is stdlib
+  `sqlite3`, hashing is stdlib `scrypt`, and XML uploads are hardened by refusing DOCTYPE/ENTITY
+  rather than adding `defusedxml`.
+- **Local mode is preserved.** `CHUMMER5_MODE=local` (the default) keeps today's no-login behavior,
+  using the same storage with one implicit user.
+- **Single worker.** Chargen sessions stay in process memory (rebuilt from the stored save when
+  missing), so production runs one uvicorn worker. Moving them out of process is not scheduled.
