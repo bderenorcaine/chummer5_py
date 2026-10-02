@@ -4,7 +4,9 @@
     "dockerfile": "Containerfile",
     "context": ".."
   },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "workspaceFolder": "/workspace",
+  "runArgs": ["--security-opt", "label=disable"],
   "postCreateCommand": "uv sync",
   "customizations": {
     "vscode": {
