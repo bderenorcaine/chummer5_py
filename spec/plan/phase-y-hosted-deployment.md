@@ -118,7 +118,7 @@ it with an Opus `/code-review high`.
 
 ---
 
-- [ ] **WP136 — Storage layer.**
+- [x] **WP136 — Storage layer.**
   *Suggested model:* Sonnet. Plain SQLite with a fully specified schema and unit-testable acceptance.
   Goal: a headless persistence module that everything else in this phase builds on.
   Deliverables:
