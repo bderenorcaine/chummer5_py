@@ -1,6 +1,6 @@
 {% extends "_auth_layout.html" %}
 {% block content %}
-<form method="post" action="/login" class="auth-form__fields">
+<form method="post" action="{{ url_for('login') }}" class="auth-form__fields">
   <label class="auth-form__field">
     {{ _("Web_Auth_Username") }}
     <input type="text" name="username" value="{{ username }}" maxlength="{{ max_username }}"
@@ -14,6 +14,6 @@
   <button type="submit">{{ _("Web_Auth_LoginButton") }}</button>
 </form>
 <p class="auth-form__alt">
-  {{ _("Web_Auth_NoAccount") }} <a href="/register">{{ _("Web_Auth_RegisterLink") }}</a>
+  {{ _("Web_Auth_NoAccount") }} <a href="{{ url_for('register_page') }}">{{ _("Web_Auth_RegisterLink") }}</a>
 </p>
 {% endblock %}

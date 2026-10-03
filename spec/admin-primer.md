@@ -37,10 +37,14 @@ Notes:
   may have been stolen. The temporary password works once: after logging in with it, the player
   has to choose a new one before anything else.
 - **Usernames** are case-insensitive (`Alice` and `alice` are the same account): 3-32 letters,
-  digits, `.`, `-` or `_`. **Passwords**: at least 10 characters, no other rules.
+  digits, `.`, `-` or `_`. `local` is reserved for local mode. **Passwords**: at least 10
+  characters, no other rules.
 - Players change their own password from the title bar (click the username → `/account/password`).
   That logs out their other devices.
-- Login sessions last 30 days from the last use (`CHUMMER5_SESSION_DAYS` changes that).
+- Login sessions last 30 days from the last use (`CHUMMER5_SESSION_DAYS` changes that, up to
+  3650; an invalid value stops the server from starting).
+- At most two password checks run at once, since each uses 128 MiB. Under a burst of logins, a
+  player can see "The server is busy" and should simply retry.
 
 Typical flows:
 

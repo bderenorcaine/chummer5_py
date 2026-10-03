@@ -226,7 +226,7 @@ def test_login_renders_shell_and_logout_ends_the_session(alice: TestClient, stor
     assert response.status_code == 303 and response.headers["location"] == "/"
     page = alice.get("/")
     assert page.status_code == 200
-    assert "alice" in page.text and 'action="/logout"' in page.text
+    assert "alice" in page.text and '/logout"' in page.text
 
     old_token = alice.cookies[AUTH_COOKIE_NAME]
     out = alice.post("/logout")
@@ -463,7 +463,7 @@ def test_local_mode_has_no_login(tmp_path: Path) -> None:
         assert c.get("/").status_code == 200
         assert c.get("/login").status_code == 404
         assert c.post("/logout").status_code == 404
-        assert 'action="/logout"' not in c.get("/").text
+        assert '/logout"' not in c.get("/").text
     local = store.get_user_by_name(accounts.LOCAL_USERNAME)
     assert local is not None
     assert not accounts.verify_password("", local.password_hash)
@@ -476,3 +476,143 @@ def test_mode_comes_from_the_environment(monkeypatch: pytest.MonkeyPatch, tmp_pa
     monkeypatch.setenv("CHUMMER5_MODE", "public")
     with pytest.raises(ValueError):
         create_app()
+
+
+# --- review fixes (2026-10-03) -------------------------------------------------------------------
+
+
+def test_hashing_runs_at_most_two_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    import hashlib
+    import time
+
+    real = hashlib.scrypt
+    lock = threading.Lock()
+    running = peak = 0
+
+    def slow_scrypt(*args: object, **kwargs: object) -> bytes:
+        nonlocal running, peak
+        with lock:
+            running += 1
+            peak = max(peak, running)
+        time.sleep(0.05)
+        with lock:
+            running -= 1
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(accounts.hashlib, "scrypt", slow_scrypt)
+    threads = [threading.Thread(target=accounts.hash_password, args=(PASSWORD,)) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert peak == accounts.MAX_CONCURRENT_HASHES == 2
+
+
+def test_no_free_hashing_slot_answers_busy(
+    alice: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alice.post("/logout")
+    full = threading.BoundedSemaphore(1)
+    full.acquire()
+    monkeypatch.setattr(accounts, "_hash_slots", full)
+    monkeypatch.setattr(accounts, "HASH_WAIT_SECONDS", 0.01)
+    response = login(alice)
+    assert response.status_code == 503
+    assert "The server is busy." in response.text
+
+
+def _no_hashing(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(password: str) -> str:
+        raise AssertionError("hashed a password for a registration that was always going to fail")
+
+    monkeypatch.setattr(accounts, "hash_password", refuse)
+
+
+def test_bogus_invite_is_refused_before_any_hashing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _no_hashing(monkeypatch)
+    response = register(client, "AAAA-BBBB-CCCC-DDDD")
+    assert response.status_code == 400 and "That invite code is not valid" in response.text
+
+
+def test_taken_username_is_refused_before_any_hashing(
+    client: TestClient, store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store.create_user("alice", "x")
+    code = invite(store)
+    _no_hashing(monkeypatch)
+    assert "That username is taken." in register(client, code).text
+    assert len(store.list_open_invites()) == 1
+
+
+def test_the_local_username_is_reserved(client: TestClient, store: Store) -> None:
+    code = invite(store)
+    for name in ("local", "LOCAL"):
+        assert "That username is taken." in register(client, code, username=name).text
+    assert store.get_user_by_name("local") is None
+
+
+def test_login_to_an_unusable_account_costs_a_full_hash(
+    client: TestClient, store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    accounts.ensure_local_user(store)
+    burned: list[str] = []
+    monkeypatch.setattr(accounts, "_burn_password_check", burned.append)
+    response = login(client, username="local", password="anything at all")
+    assert response.status_code == 401
+    assert burned == ["anything at all"]
+
+
+def test_local_mode_refuses_to_adopt_a_real_account(store: Store) -> None:
+    store.create_user("local", accounts.hash_password(PASSWORD))
+    with pytest.raises(RuntimeError, match="real account"):
+        accounts.ensure_local_user(store)
+
+
+@pytest.mark.parametrize("value", ["30d", "0", "-1", "nan", "inf", "99999"])
+def test_bad_session_days_stop_a_hosted_start(
+    value: str, monkeypatch: pytest.MonkeyPatch, store: Store
+) -> None:
+    monkeypatch.setenv("CHUMMER5_SESSION_DAYS", value)
+    with pytest.raises(ValueError, match="CHUMMER5_SESSION_DAYS"):
+        create_app(mode="hosted", store=store)
+    create_app(mode="local", store=store)  # local mode never reads it
+
+
+def test_password_change_is_not_a_login(alice: TestClient, store: Store) -> None:
+    with sqlite3.connect(store.path) as db:
+        db.execute("UPDATE users SET last_login = '2026-01-01T00:00:00.000000+00:00'")
+    alice.post(
+        "/account/password",
+        data={"current": PASSWORD, "password": "new password 1", "confirm": "new password 1"},
+    )
+    user = store.get_user_by_name("alice")
+    assert user is not None and user.last_login == "2026-01-01T00:00:00.000000+00:00"
+
+
+def test_login_records_last_login_and_purges_expired_sessions(
+    alice: TestClient, store: Store
+) -> None:
+    with sqlite3.connect(store.path) as db:
+        db.execute("UPDATE users SET last_login = NULL")
+        db.execute(
+            "INSERT INTO auth_sessions VALUES "
+            "('stale', 1, '2000-01-01', '2000-01-02', '2000-01-01')"
+        )
+    alice.post("/logout")
+    login(alice)
+    with sqlite3.connect(store.path) as db:
+        hashes = [row[0] for row in db.execute("SELECT token_hash FROM auth_sessions")]
+    assert "stale" not in hashes and len(hashes) == 1
+    user = store.get_user_by_name("alice")
+    assert user is not None and user.last_login is not None
+
+
+def test_stamp_is_utc_whatever_the_input_zone() -> None:
+    from datetime import timezone
+
+    from chummer5.store import stamp
+
+    moment = datetime(2026, 10, 3, 22, 0, tzinfo=timezone(timedelta(hours=2)))
+    assert stamp(moment) == "2026-10-03T20:00:00.000000+00:00"

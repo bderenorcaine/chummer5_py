@@ -78,8 +78,8 @@
         {# WP137: hosted mode's account links. A plain form, not htmx: logging out leaves the app. #}
         {% if current_user %}
         <div class="app-shell__account">
-          <a href="/account/password" title="{{ _('Web_Auth_PasswordTitle') }}">{{ current_user.username }}</a>
-          <form method="post" action="/logout">
+          <a href="{{ url_for('password_page') }}" title="{{ _('Web_Auth_PasswordTitle') }}">{{ current_user.username }}</a>
+          <form method="post" action="{{ url_for('logout') }}">
             <button type="submit">{{ _("Web_Auth_Logout") }}</button>
           </form>
         </div>

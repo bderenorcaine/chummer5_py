@@ -233,7 +233,9 @@ it with an Opus `/code-review high`.
     - Nothing switches until the user clicks OK. Cancel leaves everything as it was.
   - **Chargen session lifecycle:**
     - The in-memory store evicts sessions idle longer than a configurable timeout (default 2
-      hours).
+      hours). Since WP137, hosted chargen sessions are keyed by the login's token hash. One whose
+      login ended other than by logout (expiry, an admin reset, a password change on another
+      device) is otherwise never freed, so eviction must cover those too (WP137 review, 2026-10-03).
     - An evicted or missing chargen session for a valid login is rebuilt from the user's
       last-opened character, which is remembered on the user row.
   - The title bar shows the open character's name (or "New character") and links to the list

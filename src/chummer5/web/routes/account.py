@@ -19,6 +19,7 @@ from chummer5.web.auth import (
     AUTH_COOKIE_NAME,
     LOGIN_PATH,
     PASSWORD_PATH,
+    REGISTER_PATH,
     app_store,
     clear_auth_cookie,
     current_user,
@@ -69,6 +70,11 @@ def _form_page(
     return templates.TemplateResponse(request, template, context, status_code=status_code)
 
 
+def _status(error: accounts.AccountError, default: int) -> int:
+    # Every hashing slot busy is the server's problem, not the form's.
+    return 503 if isinstance(error, accounts.ServerBusyError) else default
+
+
 def _chargen_sessions(request: Request) -> SessionStore:
     sessions: SessionStore = request.app.state.sessions
     return sessions
@@ -111,7 +117,7 @@ def login(request: Request, username: str = Form(""), password: str = Form("")) 
             "login.html",
             title_key="Web_Auth_LoginTitle",
             error=error,
-            status_code=401,
+            status_code=_status(error, 401),
             username=username[: accounts.MAX_USERNAME_LENGTH],
         )
     return _log_in(request, user)
@@ -120,7 +126,7 @@ def login(request: Request, username: str = Form(""), password: str = Form("")) 
 # --- registration --------------------------------------------------------------------------------
 
 
-@router.get("/register", response_class=HTMLResponse)
+@router.get(REGISTER_PATH, response_class=HTMLResponse)
 def register_page(request: Request) -> Response:
     _hosted_or_404(request)
     if current_user(request) is not None:
@@ -130,7 +136,7 @@ def register_page(request: Request) -> Response:
     )
 
 
-@router.post("/register", response_class=HTMLResponse)
+@router.post(REGISTER_PATH, response_class=HTMLResponse)
 def register(
     request: Request,
     username: str = Form(""),
@@ -147,7 +153,7 @@ def register(
             "register.html",
             title_key="Web_Auth_RegisterTitle",
             error=error,
-            status_code=400,
+            status_code=_status(error, 400),
             username=username[: accounts.MAX_USERNAME_LENGTH],
             invite=invite[:64],
         )
@@ -198,7 +204,7 @@ def change_password(
             "password.html",
             title_key="Web_Auth_PasswordTitle",
             error=error,
-            status_code=400,
+            status_code=_status(error, 400),
         )
     # Every older session just ended; this browser carries on in the new one, character included.
     old_key = getattr(request.state, CHARGEN_KEY_STATE, None)

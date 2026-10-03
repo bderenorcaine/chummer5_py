@@ -65,6 +65,10 @@
       <text>Back to the character creator</text>
     </string>
     <string>
+      <key>Web_Auth_Busy</key>
+      <text>The server is busy. Please try again in a moment.</text>
+    </string>
+    <string>
       <key>Web_Auth_ChangePasswordButton</key>
       <text>Change password</text>
     </string>

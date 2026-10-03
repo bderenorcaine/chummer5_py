@@ -2031,3 +2031,16 @@ The user reviewed `spec/plan/phase-y-hosted-deployment.md` before any of WP136-1
   in `tests/`: with a `tests/conftest.py` the suite's `from tests.fixtures ...` imports stopped
   resolving (`ModuleNotFoundError: No module named 'tests'`), while a root one puts the repository
   root on `sys.path`.
+
+## 2026-10-03 — WP137 review: bounded password hashing
+
+- **scrypt stays at N=2^17, r=8, p=1** (128 MiB, about 0.3 s), OWASP's listed scrypt minimum. A
+  process-wide limit of **two concurrent hashes** caps the memory at 256 MiB. The review showed that
+  unbounded, about 40 concurrent anonymous logins would want 5 GiB. A request that waits more than
+  10 s for a slot is answered "server busy" (503). OWASP's equivalent N=2^15, p=3 (32 MiB) is the
+  fallback if the server's memory gets tight. Stored hashes carry their parameters, so switching
+  later needs no migration.
+- **Hosted chargen sessions orphaned by an ended login** (expiry, an admin reset, a password
+  change elsewhere) stay in memory until WP138's idle eviction, which now explicitly owns them
+  (phase file updated).
+- The other review fixes are listed in `worklogs/WP137.md` → "Review follow-up".

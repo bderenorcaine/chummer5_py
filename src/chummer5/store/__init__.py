@@ -15,6 +15,7 @@ from chummer5.store.repository import (
     UserExistsError,
     UserListing,
     UserRecord,
+    stamp,
 )
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "UserExistsError",
     "UserListing",
     "UserRecord",
+    "stamp",
 ]

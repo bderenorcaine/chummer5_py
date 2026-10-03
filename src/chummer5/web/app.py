@@ -97,6 +97,8 @@ def create_app(mode: Mode | None = None, store: Store | None = None) -> FastAPI:
     """
     resolved_mode = mode if mode is not None else app_mode()
     resolved_store = store if store is not None else Store()
+    if resolved_mode != LOCAL:
+        accounts.session_lifetime()  # a bad CHUMMER5_SESSION_DAYS stops startup, not every login
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

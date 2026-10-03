@@ -18,6 +18,7 @@ import hmac
 import os
 import re
 import secrets
+import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -29,7 +30,25 @@ from chummer5.store import (
     Store,
     UserExistsError,
     UserRecord,
+    stamp,
 )
+
+
+class AccountError(Exception):
+    """A request the player can fix. `key` is the i18n key of the message to show them."""
+
+    def __init__(self, key: str, **params: object) -> None:
+        super().__init__(key)
+        self.key = key
+        self.params = params
+
+
+class ServerBusyError(AccountError):
+    """Every password-hashing slot stayed taken for `HASH_WAIT_SECONDS`."""
+
+    def __init__(self) -> None:
+        super().__init__("Web_Auth_Busy")
+
 
 # --- configuration -------------------------------------------------------------------------------
 
@@ -49,17 +68,27 @@ def app_mode() -> Mode:
 
 
 DEFAULT_SESSION_DAYS = 30
+MAX_SESSION_DAYS = 3650
 # How stale `last_seen` may get before a request slides the session's expiry forward. Bounds the
 # database writes to one per session per interval, instead of one per request.
 SESSION_REFRESH_INTERVAL = timedelta(minutes=5)
 
 
 def session_lifetime() -> timedelta:
-    """`CHUMMER5_SESSION_DAYS`, else 30: how long a login lasts without being used."""
+    """`CHUMMER5_SESSION_DAYS`, else 30: how long a login lasts without being used. Read per use,
+    but `create_app` calls it once at startup in hosted mode, so a bad value stops the server
+    from starting instead of failing every login."""
     raw = os.environ.get("CHUMMER5_SESSION_DAYS", "").strip()
-    days = float(raw) if raw else DEFAULT_SESSION_DAYS
-    if days <= 0:
-        raise ValueError("CHUMMER5_SESSION_DAYS must be positive")
+    if not raw:
+        return timedelta(days=DEFAULT_SESSION_DAYS)
+    try:
+        days = float(raw)
+    except ValueError:
+        raise ValueError(f"CHUMMER5_SESSION_DAYS must be a number of days, got {raw!r}") from None
+    if not 0 < days <= MAX_SESSION_DAYS:  # also refuses nan and inf
+        raise ValueError(
+            f"CHUMMER5_SESSION_DAYS must be above 0 and at most {MAX_SESSION_DAYS}, got {raw!r}"
+        )
     return timedelta(days=days)
 
 
@@ -93,16 +122,31 @@ def _b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
 
+# At most this many hashes run at once, process-wide. Each one holds 128 MiB for about 0.3 s, and
+# the login/register handlers run in a thread pool of about 40: unbounded, 40 concurrent anonymous
+# POSTs would want 5 GiB. Two slots cap it at 256 MiB, and still hash about six logins a second. A
+# request that can't get a slot within `HASH_WAIT_SECONDS` is turned away with `ServerBusyError`
+# rather than holding a pool thread (which chargen GETs also need) indefinitely.
+MAX_CONCURRENT_HASHES = 2
+HASH_WAIT_SECONDS = 10.0
+_hash_slots = threading.BoundedSemaphore(MAX_CONCURRENT_HASHES)
+
+
 def _scrypt(password: str, salt: bytes, params: ScryptParams) -> bytes:
-    return hashlib.scrypt(
-        password.encode("utf-8"),
-        salt=salt,
-        n=params.n,
-        r=params.r,
-        p=params.p,
-        maxmem=params.maxmem,
-        dklen=_KEY_BYTES,
-    )
+    if not _hash_slots.acquire(timeout=HASH_WAIT_SECONDS):
+        raise ServerBusyError()
+    try:
+        return hashlib.scrypt(
+            password.encode("utf-8"),
+            salt=salt,
+            n=params.n,
+            r=params.r,
+            p=params.p,
+            maxmem=params.maxmem,
+            dklen=_KEY_BYTES,
+        )
+    finally:
+        _hash_slots.release()
 
 
 def hash_password(password: str) -> str:
@@ -110,6 +154,11 @@ def hash_password(password: str) -> str:
     salt = secrets.token_bytes(_SALT_BYTES)
     key = _scrypt(password, salt, params)
     return f"scrypt${params.n}${params.r}${params.p}${_b64(salt)}${_b64(key)}"
+
+
+def is_usable_hash(stored: str) -> bool:
+    """False for the local user's `!`, or anything else not a scrypt hash: nothing opens it."""
+    return stored.startswith("scrypt$")
 
 
 def verify_password(password: str, stored: str) -> bool:
@@ -146,13 +195,11 @@ MAX_USERNAME_LENGTH = 32
 _USERNAME = re.compile(r"[A-Za-z0-9_.-]+")
 
 
-class AccountError(Exception):
-    """A request the player can fix. `key` is the i18n key of the message to show them."""
-
-    def __init__(self, key: str, **params: object) -> None:
-        super().__init__(key)
-        self.key = key
-        self.params = params
+# Local mode's implicit user. Reserved, so no hosted account can take the name: the same database
+# opened in local mode would otherwise hand that person's account (and characters) to whoever runs
+# it locally.
+LOCAL_USERNAME = "local"
+RESERVED_USERNAMES = frozenset({LOCAL_USERNAME})
 
 
 def check_username(username: str) -> str:
@@ -163,6 +210,8 @@ def check_username(username: str) -> str:
         )
     if not _USERNAME.fullmatch(username):
         raise AccountError("Web_Auth_UsernameChars")
+    if username.lower() in RESERVED_USERNAMES:
+        raise AccountError("Web_Auth_UsernameTaken")
     return username
 
 
@@ -200,7 +249,7 @@ def mint_invite(store: Store, *, expires_days: float | None = None) -> InviteRec
     if expires_days is not None:
         if expires_days <= 0:
             raise ValueError("expires_days must be positive")
-        expires = _stamp(datetime.now(UTC) + timedelta(days=expires_days))
+        expires = stamp(datetime.now(UTC) + timedelta(days=expires_days))
     return store.create_invite(code, expires)
 
 
@@ -209,10 +258,6 @@ def revoke_invite(store: Store, code: str) -> bool:
 
 
 # --- sessions ------------------------------------------------------------------------------------
-
-
-def _stamp(moment: datetime) -> str:
-    return moment.isoformat(timespec="microseconds")
 
 
 def hash_token(token: str) -> str:
@@ -231,12 +276,13 @@ class LoginSession:
         return hash_token(self.token)
 
 
-def start_session(store: Store, user: UserRecord) -> LoginSession:
-    """Issue a brand-new token for `user` (never reusing one) and record the login."""
+def start_session(store: Store, user: UserRecord, *, record_login: bool = True) -> LoginSession:
+    """Issue a brand-new token for `user` (never reusing one). A login also stamps `last_login`;
+    a password change, which starts a session without being a login, passes `record_login=False`.
+    """
     token = secrets.token_urlsafe(32)
-    expires = _stamp(datetime.now(UTC) + session_lifetime())
-    store.create_auth_session(hash_token(token), user.id, expires)
-    store.record_login(user.id)
+    expires = stamp(datetime.now(UTC) + session_lifetime())
+    store.create_auth_session(hash_token(token), user.id, expires, record_login=record_login)
     return LoginSession(token, user)
 
 
@@ -259,7 +305,7 @@ def resolve_session(store: Store, token: str) -> ResolvedSession | None:
     now = datetime.now(UTC)
     if now - datetime.fromisoformat(record.last_seen) < SESSION_REFRESH_INTERVAL:
         return ResolvedSession(record, user, refreshed=False)
-    store.touch_auth_session(token_hash, _stamp(now + session_lifetime()))
+    store.touch_auth_session(token_hash, stamp(now + session_lifetime()))
     return ResolvedSession(record, user, refreshed=True)
 
 
@@ -273,12 +319,21 @@ def end_session(store: Store, token: str) -> None:
 def register(
     store: Store, username: str, password: str, confirm: str, invite_code: str
 ) -> UserRecord:
-    """Create an account with an invite. Raises `AccountError` with the message to show."""
+    """Create an account with an invite. Raises `AccountError` with the message to show.
+
+    The invite is checked before anything else costly, so that without a valid code no request can
+    make the server hash a password; and before the username, so that without one nobody can probe
+    which names exist. Both checks are repeated atomically by `register_user`."""
     username = check_username(username)
     check_new_password(password, confirm)
+    code = normalize_invite(invite_code)
+    if not store.invite_is_open(code):
+        raise AccountError("Web_Auth_InviteInvalid")
+    if store.get_user_by_name(username) is not None:
+        raise AccountError("Web_Auth_UsernameTaken")
     password_hash = hash_password(password)
     try:
-        return store.register_user(username, password_hash, normalize_invite(invite_code))
+        return store.register_user(username, password_hash, code)
     except InviteInvalidError:
         raise AccountError("Web_Auth_InviteInvalid") from None
     except UserExistsError:
@@ -291,12 +346,13 @@ def authenticate(store: Store, username: str, password: str) -> UserRecord:
     if len(password) > MAX_PASSWORD_LENGTH:
         raise AccountError("Web_Auth_LoginFailed")
     user = store.get_user_by_name(username.strip())
-    if user is None:
+    # An account no password opens (the local user's `!`) is checked like a missing one: rejecting
+    # it without a hash would answer faster, and so tell that the account exists.
+    if user is None or not is_usable_hash(user.password_hash):
         _burn_password_check(password)
         raise AccountError("Web_Auth_LoginFailed")
     if not verify_password(password, user.password_hash):
         raise AccountError("Web_Auth_LoginFailed")
-    store.purge_expired_sessions()
     return user
 
 
@@ -313,7 +369,7 @@ def change_password(
     store.set_password(user.id, hash_password(new))
     refreshed = store.get_user(user.id)
     assert refreshed is not None
-    return start_session(store, refreshed)
+    return start_session(store, refreshed, record_login=False)
 
 
 def reset_password(store: Store, username: str) -> str:
@@ -339,15 +395,20 @@ def delete_user(store: Store, username: str) -> UserRecord:
 
 # --- local mode ----------------------------------------------------------------------------------
 
-LOCAL_USERNAME = "local"
 # Not a scrypt hash, so `verify_password` never matches it: nobody can log in as the local user.
 UNUSABLE_PASSWORD_HASH = "!"
 
 
 def ensure_local_user(store: Store) -> UserRecord:
-    """Local mode's one implicit user, created the first time it is asked for."""
+    """Local mode's one implicit user, created the first time it is asked for. Refuses to adopt a
+    real account of that name (one with a usable password, from before the name was reserved)."""
     user = store.get_user_by_name(LOCAL_USERNAME)
     if user is not None:
+        if is_usable_hash(user.password_hash):
+            raise RuntimeError(
+                f"the database has a real account named {LOCAL_USERNAME!r}; rename or delete it "
+                "before running in local mode"
+            )
         return user
     try:
         return store.create_user(LOCAL_USERNAME, UNUSABLE_PASSWORD_HASH)

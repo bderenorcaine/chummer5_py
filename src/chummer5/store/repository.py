@@ -112,10 +112,14 @@ class CharacterRecord(CharacterSummary):
 _SUMMARY_COLUMNS = "id, owner_id, display_name, street_name, metatype, revision, created, updated"
 
 
+def stamp(moment: datetime) -> str:
+    """The one timestamp format every column uses: UTC ISO-8601 with microseconds. Expiry checks
+    compare these as strings in SQL, which is only correct while every writer uses this function."""
+    return moment.astimezone(UTC).isoformat(timespec="microseconds")
+
+
 def now() -> str:
-    """The timestamp format every column uses: UTC ISO-8601 with microseconds, which sorts
-    lexically."""
-    return datetime.now(UTC).isoformat(timespec="microseconds")
+    return stamp(datetime.now(UTC))
 
 
 def names_from_save(save_json: str) -> tuple[str, str, str]:
@@ -254,10 +258,6 @@ class Store:
             db.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
         return changed > 0
 
-    def record_login(self, user_id: int) -> None:
-        with self._write() as db:
-            db.execute("UPDATE users SET last_login = ? WHERE id = ?", (now(), user_id))
-
     def set_user_prefs(
         self, user_id: int, *, theme: str | None = None, locale: str | None = None
     ) -> None:
@@ -289,6 +289,17 @@ class Store:
             ).fetchall()
         return [InviteRecord(**dict(row)) for row in rows]
 
+    def invite_is_open(self, code: str) -> bool:
+        """A cheap pre-check (`register_user` still decides, atomically): lets registration refuse
+        a bogus code before paying for a password hash."""
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT 1 FROM invite_codes WHERE code = ? AND used_at IS NULL "
+                "AND (expires IS NULL OR expires > ?)",
+                (code, now()),
+            ).fetchone()
+        return row is not None
+
     def revoke_invite(self, code: str) -> bool:
         """Delete an unused invite. A used one stays, as the record of who it let in."""
         with self._write() as db:
@@ -318,14 +329,22 @@ class Store:
 
     # -- login sessions -----------------------------------------------------------------------
 
-    def create_auth_session(self, token_hash: str, user_id: int, expires: str) -> None:
+    def create_auth_session(
+        self, token_hash: str, user_id: int, expires: str, *, record_login: bool = True
+    ) -> None:
+        """Insert a login session in one write transaction that also drops expired sessions (of
+        anyone) and, for a real login, stamps the user's `last_login`. A password change starts a
+        session too, but is not a login (`record_login=False`)."""
         with self._write() as db:
-            stamp = now()
+            stamp_now = now()
+            db.execute("DELETE FROM auth_sessions WHERE expires <= ?", (stamp_now,))
             db.execute(
                 "INSERT INTO auth_sessions (token_hash, user_id, created, expires, last_seen) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (token_hash, user_id, stamp, expires, stamp),
+                (token_hash, user_id, stamp_now, expires, stamp_now),
             )
+            if record_login:
+                db.execute("UPDATE users SET last_login = ? WHERE id = ?", (stamp_now, user_id))
 
     def get_auth_session(self, token_hash: str) -> tuple[AuthSessionRecord, UserRecord] | None:
         """The unexpired session with this token hash, and its user."""
@@ -351,14 +370,6 @@ class Store:
     def delete_auth_session(self, token_hash: str) -> None:
         with self._write() as db:
             db.execute("DELETE FROM auth_sessions WHERE token_hash = ?", (token_hash,))
-
-    def delete_user_sessions(self, user_id: int) -> int:
-        with self._write() as db:
-            return db.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,)).rowcount
-
-    def purge_expired_sessions(self) -> int:
-        with self._write() as db:
-            return db.execute("DELETE FROM auth_sessions WHERE expires <= ?", (now(),)).rowcount
 
     # -- characters ---------------------------------------------------------------------------
 

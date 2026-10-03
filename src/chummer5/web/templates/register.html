@@ -1,7 +1,7 @@
 {% extends "_auth_layout.html" %}
 {% block content %}
 <p>{{ _("Web_Auth_RegisterIntro") }}</p>
-<form method="post" action="/register" class="auth-form__fields">
+<form method="post" action="{{ url_for('register') }}" class="auth-form__fields">
   <label class="auth-form__field">
     {{ _("Web_Auth_InviteCode") }}
     <input type="text" name="invite" value="{{ invite }}" maxlength="64"
@@ -27,6 +27,6 @@
   <button type="submit">{{ _("Web_Auth_RegisterButton") }}</button>
 </form>
 <p class="auth-form__alt">
-  {{ _("Web_Auth_HaveAccount") }} <a href="/login">{{ _("Web_Auth_LoginLink") }}</a>
+  {{ _("Web_Auth_HaveAccount") }} <a href="{{ url_for('login_page') }}">{{ _("Web_Auth_LoginLink") }}</a>
 </p>
 {% endblock %}
