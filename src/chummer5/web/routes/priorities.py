@@ -33,9 +33,9 @@ from chummer5.web.routes.contacts import _relink_contact_selection
 from chummer5.web.routes.qualities import _relink_metatype_qualities
 from chummer5.web.session import (
     PRIORITY_LETTERS,
-    SESSION_COOKIE_NAME,
     ChargenSession,
     resolve_session,
+    set_session_cookie,
 )
 from chummer5.web.shell import chargen_context
 
@@ -305,6 +305,5 @@ def submit_priorities(
         return shell_swap_response(request, session, "priorities", new_cookie)
     context = chargen_context(session, priority_ctx)
     response = templates.TemplateResponse(request, "_priority_form.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

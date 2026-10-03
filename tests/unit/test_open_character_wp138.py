@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
+from tests.fixtures.hosted import hosted_client
 
 from chummer5 import accounts
 from chummer5.engine.character import metatype_choices
@@ -99,7 +100,7 @@ def hosted_app(store: Store):  # type: ignore[no-untyped-def]
 
 
 def logged_in(app, store: Store, username: str = "alice") -> TestClient:  # type: ignore[no-untyped-def]
-    client = TestClient(app, follow_redirects=False)
+    client = hosted_client(app)
     if store.get_user_by_name(username) is None:
         code = accounts.mint_invite(store).code
         response = client.post(

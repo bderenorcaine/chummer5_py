@@ -45,7 +45,7 @@ from chummer5.web.forms import parse_points
 from chummer5.web.i18n import Message
 from chummer5.web.routes.contacts import _relink_contact_selection
 from chummer5.web.routes.qualities import _relink_metatype_qualities
-from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
+from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
@@ -341,6 +341,5 @@ async def submit_attributes(request: Request) -> HTMLResponse:
                 character, attribute_points, magic_points, karma_points
             )
     response = templates.TemplateResponse(request, "_attribute_allocation.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

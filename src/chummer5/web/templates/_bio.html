@@ -19,9 +19,9 @@
     <label class="bio-form__field{% if row.long %} bio-form__field--long{% endif %}">
       {{ _(row.label_key) }}
       {% if row.long %}
-      <textarea name="{{ row.field }}" rows="5">{{ row.value }}</textarea>
+      <textarea name="{{ row.field }}" rows="5" maxlength="{{ row.max_length }}">{{ row.value }}</textarea>
       {% else %}
-      <input type="text" name="{{ row.field }}" value="{{ row.value }}" />
+      <input type="text" name="{{ row.field }}" value="{{ row.value }}" maxlength="{{ row.max_length }}" />
       {% endif %}
     </label>
     {% endfor %}

@@ -27,7 +27,7 @@
     hx-post="/ui/resources"
     hx-target="#resources"
     hx-swap="outerHTML"
-    hx-trigger="change, input[event.target.type=='number'] delay:400ms"
+    hx-trigger="change, number-input delay:400ms"
   >
     <label>
       {{ _("Web_Resources_ConvertKarma", rate=karma_to_nuyen_rate | nuyen, max=max_karma_to_nuyen) }}
@@ -154,29 +154,6 @@
     {% endif %}
     <button type="submit">{{ _("Web_Resources_Update") }}</button>
   </form>
-  <script>
-    (function () {
-      var filterInput = document.getElementById("gear-filter");
-      if (!filterInput) return;
-      function applyFilter() {
-        var query = filterInput.value.trim().toLowerCase();
-        document.querySelectorAll("#gear-tables details").forEach(function (details) {
-          var anyVisible = false;
-          details.querySelectorAll("tr[data-gear-name]").forEach(function (row) {
-            var matches =
-              !query ||
-              row.dataset.gearName.includes(query) ||
-              row.dataset.gearCategory.includes(query);
-            row.hidden = !matches;
-            if (matches) anyVisible = true;
-          });
-          details.hidden = !anyVisible;
-          if (query && anyVisible) details.open = true;
-        });
-      }
-      filterInput.addEventListener("input", applyFilter);
-    })();
-  </script>
   </details>
   {% else %}
   <p>{{ _("Web_Resources_Placeholder") }}</p>

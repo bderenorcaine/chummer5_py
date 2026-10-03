@@ -9,7 +9,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ _("Web_App_WindowTitle", page=_("Web_Characters_ListTitle")) }}</title>
-    <meta name="htmx-config" content='{"historyCacheSize": 0}' />
+    {# WP141: the same CSP-safe htmx settings as base.html. #}
+    <meta
+      name="htmx-config"
+      content='{"historyCacheSize": 0, "allowEval": false, "allowScriptTags": false, "includeIndicatorStyles": false}'
+    />
     {% include "_theme_link.html" %}
     <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
     <script src="{{ url_for('static', path='vendor/htmx/htmx.min.js') }}"></script>

@@ -39,7 +39,11 @@ from chummer5.web.persistence import open_character_context
 from chummer5.web.prefs import THEMES, THEMES_BY_SLUG
 from chummer5.web.routes.character import _character_sheet_context
 from chummer5.web.routes.priorities import _session_priority_form_context
-from chummer5.web.session import SESSION_COOKIE_NAME, ChargenSession, resolve_session
+from chummer5.web.session import (
+    ChargenSession,
+    resolve_session,
+    set_session_cookie,
+)
 from chummer5.web.shell import (
     DEFAULT_PAGE,
     STEP_PAGES_BY_SLUG,
@@ -114,12 +118,11 @@ def _shell_context(
     return context
 
 
-def _respond(response: HTMLResponse, new_cookie: str | None) -> HTMLResponse:
+def _respond(request: Request, response: HTMLResponse, new_cookie: str | None) -> HTMLResponse:
     # The same URL answers with a fragment or a whole document depending on `HX-Request`, so a
     # cache must not hand one out for the other.
     response.headers["Vary"] = "HX-Request"
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response
 
 
@@ -136,7 +139,7 @@ def _render(request: Request, slug: str, *, fragment: bool, tab: str | None = No
         response = templates.TemplateResponse(request, "_page.html", {**context, "oob_nav": True})
     else:
         response = templates.TemplateResponse(request, "base.html", context)
-    return _respond(response, new_cookie)
+    return _respond(request, response, new_cookie)
 
 
 def shell_swap_response(
@@ -159,7 +162,7 @@ def shell_swap_response(
     response = templates.TemplateResponse(request, "_app_shell.html", context)
     response.headers["HX-Retarget"] = "#app-shell"
     response.headers["HX-Reswap"] = "outerHTML"
-    return _respond(response, new_cookie)
+    return _respond(request, response, new_cookie)
 
 
 def is_htmx_fragment_request(request: Request) -> bool:
@@ -201,7 +204,7 @@ def page_tabs(request: Request, slug: str) -> HTMLResponse:
     current = remembered if page.section(remembered) else resolve_tab(session, page)
     context = {"page": page, **tabs_context(session, page, chargen_ctx, current)}
     response = templates.TemplateResponse(request, "_page_tabs.html", context)
-    return _respond(response, new_cookie)
+    return _respond(request, response, new_cookie)
 
 
 @router.get("/character/sheet", response_class=HTMLResponse)
@@ -218,8 +221,7 @@ def step_nav(request: Request) -> HTMLResponse:
     response = templates.TemplateResponse(
         request, "_step_nav.html", nav_context(session, chargen_ctx)
     )
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response
 
 
@@ -230,7 +232,7 @@ def open_character_fragment(request: Request) -> HTMLResponse:
     response = templates.TemplateResponse(
         request, "_open_character.html", open_character_context(request, session)
     )
-    return _respond(response, new_cookie)
+    return _respond(request, response, new_cookie)
 
 
 @router.get("/ui/validation-status", response_class=HTMLResponse)
@@ -242,8 +244,7 @@ def validation_status(request: Request) -> HTMLResponse:
     response = templates.TemplateResponse(
         request, "_validation_status.html", validation_context(session, chargen_ctx)
     )
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response
 
 
@@ -256,8 +257,7 @@ def resource_panel(request: Request) -> HTMLResponse:
     response = templates.TemplateResponse(
         request, "_resource_panel.html", resource_panel_context(session, chargen_ctx)
     )
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response
 
 
@@ -278,8 +278,7 @@ def set_theme(request: Request, theme: str = Form(...)) -> HTMLResponse:
         "_theme_swap.html",
         {"theme": theme, "theme_fonts": THEMES_BY_SLUG[theme].fonts, "oob_theme": True},
     )
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response
 
 
@@ -297,6 +296,5 @@ def set_locale(request: Request, locale: str = Form(...)) -> HTMLResponse:
         app_store(request).set_user_prefs(user.id, locale=locale)
     response = HTMLResponse("")
     response.headers["HX-Refresh"] = "true"
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

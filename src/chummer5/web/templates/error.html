@@ -1,0 +1,28 @@
+<!doctype html>
+{# WP141: hosted mode's answer to any error -- the status and one translated sentence, never
+   exception text or a traceback (those go to the server log). Rendered by
+   chummer5.web.security.error_page with the default theme: it must not depend on a session or a
+   database, since either may be what failed. #}
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ _("Web_App_WindowTitle", page=status_code) }}</title>
+    {% include "_theme_link.html" %}
+    <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
+  </head>
+  <body>
+    <div class="auth-shell">
+      <header class="app-shell__titlebar">
+        <span class="app-shell__title">{{ _("Web_App_Title") }}</span>
+      </header>
+      <main class="auth-shell__main">
+        <section class="panel auth-form" role="alert">
+          <h1 class="panel__heading">{{ status_code }}</h1>
+          <p>{{ _(message_key) }}</p>
+          <p><a href="/">{{ _("Web_Error_Home") }}</a></p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

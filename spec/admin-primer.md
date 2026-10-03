@@ -45,6 +45,12 @@ Notes:
   3650; an invalid value stops the server from starting).
 - At most two password checks run at once, since each uses 128 MiB. Under a burst of logins, a
   player can see "The server is busy" and should simply retry.
+- After five wrong passwords in 15 minutes (for one account, or from one address), the login form
+  says "Too many failed attempts. Wait N s". The wait doubles with each further failure, up to 15
+  minutes. It clears by itself, and a restart clears it at once. There is no command for it.
+- Hosted mode needs `CHUMMER5_PUBLIC_URL` (the address players use, e.g.
+  `https://chummer.example.org`). Without it the server doesn't start. If it's wrong, every form
+  answers "That request was refused" (WP141).
 
 Typical flows:
 
@@ -127,3 +133,6 @@ What the browser says points at the broken link in browser → DNS → Caddy →
    `systemctl status caddy` and `journalctl -u caddy`.
 4. If it was down after a server reboot, the restart policy isn't wired to systemd. See
    `deployment.md` → "First deploy", step 3.
+5. If pages load but every login or form says "That request was refused", `CHUMMER5_PUBLIC_URL`
+   doesn't match the address in the browser's location bar (scheme and host). The container log
+   shows a `refused cross-site` line per refusal.

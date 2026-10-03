@@ -2135,3 +2135,44 @@ container that broke.
   "Cannot import: …". The importer itself should either refuse these cleanly
   (`UnsupportedLegacyCharacterError`) or drop zero-rated powers like other dropped content. Left
   for a future WP; no current WP covers it.
+
+## 2026-10-03 — WP141: security pass
+
+`spec/security.md` is the standing list. These are the decisions behind it:
+
+- **Strict CSP, no `'unsafe-inline'`/`'unsafe-eval'`, in both modes.** It took more than moving
+  `base.html`'s inline script:
+  - Three step fragments carried inline `<script>`s that htmx re-ran on each swap.
+  - Eleven forms used the htmx event filter `input[event.target.type=='number']`, which htmx
+    evaluates with `new Function`. Under the CSP every one of them would have stopped
+    autosubmitting.
+  - Now everything is in `static/app.js` as `document` listeners. The filter became a
+    `number-input` custom event that `app.js` dispatches from number inputs.
+  - `htmx-config` turns off `allowEval`, `allowScriptTags` and `includeIndicatorStyles`, so a
+    future template can't quietly reintroduce any of it. A template-wide test enforces the rest.
+- **Templates' `url_for` returns root-relative paths.** Starlette's absolute URL is built from the
+  request's scheme and host. Behind Caddy that is `http://` unless uvicorn trusts the proxy's
+  headers from the right peer address, and with rootless podman that address isn't necessarily
+  `127.0.0.1`. An `http://` stylesheet on an https page is blocked. Root-relative paths make the
+  question moot. `test-image.sh`'s "asset URLs follow X-Forwarded-Proto" check became "asset URLs
+  are root-relative".
+- **The cross-site check needs `CHUMMER5_PUBLIC_URL`, and hosted mode won't start without it.**
+  It compares origins (`origin_of`: lowercase, default port dropped), not hosts. It falls back to
+  `Referer` only when `Origin` is absent, and refuses a request with neither. It guards `/login`
+  and `/register` as well, against login CSRF. The alternative of comparing against the request's
+  own `Host` was rejected: `Host` is whatever the client sends.
+- **The throttle refuses, it doesn't sleep.** "A delay" is implemented as "refused until N
+  seconds after the last failure" (30 s, doubling). A sleeping request would hold one of the 40
+  pool threads, which turns the throttle into a denial-of-service tool. After ten failures:
+  refused until the oldest leaves the 15-minute window. A success clears the account's count, but
+  not the address's: one good account mustn't reset a spray across others. The password-change
+  form is throttled too (a stolen session shouldn't brute-force the current password).
+- **The client address:** `X-Forwarded-For`'s *last* entry, and only when the peer is in
+  `CHUMMER5_TRUSTED_PROXY`. Earlier entries are whatever the client claimed.
+- **`Secure` on the auth cookie always** (it only exists in hosted mode), and on the chargen
+  cookie in hosted mode. The hosted tests moved to an `https://testserver` client that sends an
+  `Origin` (`tests/fixtures/hosted.py`). The root `conftest.py` sets `CHUMMER5_PUBLIC_URL`.
+- **Bio's one-line fields are capped at 2000** (the long fields stay at 20000). A legacy save's
+  `concept` reaches 1021 characters, so 200 would have broken real imports.
+- **Non-upload bodies are capped at 1 MB, and chunked bodies are refused there (411).** A
+  Content-Length check suffices: uvicorn doesn't deliver more than the declared length.

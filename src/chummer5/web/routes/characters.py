@@ -48,7 +48,11 @@ from chummer5.web.routes.character import (
     switched_response,
 )
 from chummer5.web.routes.pages import is_htmx_fragment_request, prefs_context
-from chummer5.web.session import SESSION_COOKIE_NAME, ChargenSession, resolve_session
+from chummer5.web.session import (
+    ChargenSession,
+    resolve_session,
+    set_session_cookie,
+)
 from chummer5.web.uploads import (
     MAX_FILES,
     UploadedFile,
@@ -70,8 +74,7 @@ _MAX_SHOWN_FILENAME = 100
 
 def _respond(request: Request, new_cookie: str | None) -> Response:
     response = redirect(request, HOME_PATH)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response
 
 
@@ -152,8 +155,7 @@ def _list_response(
         context["max_filter"] = MAX_FILTER_LENGTH
         response = templates.TemplateResponse(request, "characters.html", context)
     response.headers["Vary"] = "HX-Request"
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response
 
 

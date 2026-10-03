@@ -19,7 +19,7 @@
     hx-post="/ui/vehicles"
     hx-target="#vehicles"
     hx-swap="outerHTML"
-    hx-trigger="change, input[event.target.type=='number'] delay:400ms"
+    hx-trigger="change, number-input delay:400ms"
   >
     {% for group in vehicle_groups %}
     <details data-details-key="vehicle:{{ group.category }}" {% if group.rows | selectattr("quantity", "gt", 0) | list %}open{% endif %}>

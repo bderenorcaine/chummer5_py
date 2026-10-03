@@ -22,7 +22,7 @@ from chummer5.engine.resources import (
     create_contact_selection,
 )
 from chummer5.web.catalogs import MAX_CONTACT_ROWS, templates
-from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
+from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
@@ -135,6 +135,5 @@ async def submit_contacts(request: Request) -> HTMLResponse:
             session.character = replace(session.character, contact_selection=selection)
             context = _contacts_context(session.character, contacts)
     response = templates.TemplateResponse(request, "_contacts.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

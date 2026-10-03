@@ -49,7 +49,7 @@ from chummer5.engine.weapon_accessories import (
 from chummer5.web.catalogs import PRIORITIES, templates
 from chummer5.web.forms import display_karma_to_nuyen
 from chummer5.web.i18n import Message, MessageJoin
-from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
+from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
@@ -663,6 +663,5 @@ async def submit_resources(request: Request) -> HTMLResponse:
                 addons=addons,
             )
     response = templates.TemplateResponse(request, "_resources.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

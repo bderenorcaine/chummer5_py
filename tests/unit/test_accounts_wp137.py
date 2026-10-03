@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.fixtures.hosted import hosted_client
 
 from chummer5 import accounts, admin
 from chummer5.store import InviteInvalidError, Store
@@ -35,13 +36,13 @@ def store(tmp_path: Path) -> Store:
 
 @pytest.fixture
 def client(store: Store) -> Iterator[TestClient]:
-    with TestClient(create_app(mode="hosted", store=store), follow_redirects=False) as c:
+    with hosted_client(create_app(mode="hosted", store=store)) as c:
         yield c
 
 
 def new_client(store: Store, client: TestClient) -> TestClient:
     """A second browser on the same server."""
-    return TestClient(client.app, follow_redirects=False)
+    return hosted_client(client.app)
 
 
 def invite(store: Store, **kwargs: float) -> str:

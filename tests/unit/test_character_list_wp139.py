@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.fixtures.hosted import hosted_client
 from tests.unit.test_open_character_wp138 import (
     ELF,
     PASSWORD,
@@ -79,7 +80,7 @@ def test_login_lands_on_the_list(hosted_app, store: Store) -> None:  # type: ign
 
 
 def test_anonymous_list_redirects_to_login(hosted_app) -> None:  # type: ignore[no-untyped-def]
-    client = TestClient(hosted_app, follow_redirects=False)
+    client = hosted_client(hosted_app)
     assert client.get("/characters").headers["location"] == "/login"
 
 

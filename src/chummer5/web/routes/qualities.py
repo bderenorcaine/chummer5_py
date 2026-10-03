@@ -49,7 +49,7 @@ from chummer5.web.catalogs import (
     templates,
 )
 from chummer5.web.routes.cyberware import _replace_committed_cyberware
-from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
+from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
@@ -502,6 +502,5 @@ async def submit_qualities(request: Request) -> HTMLResponse:
             session.character = _replace_committed_qualities(session.character, selection)
             context = _quality_selection_context(session.character)
     response = templates.TemplateResponse(request, "_quality_selection.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

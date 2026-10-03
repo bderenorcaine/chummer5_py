@@ -19,7 +19,7 @@ from chummer5.engine.magic import binds_spirits
 from chummer5.engine.spirits import create_bound_spirit_selection, offered_spirit_types
 from chummer5.web.catalogs import MAX_BOUND_SPIRIT_ROWS, templates
 from chummer5.web.i18n import Message
-from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
+from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
@@ -160,6 +160,5 @@ async def submit_spirits(request: Request) -> HTMLResponse:
             session.character = replace(character, bound_spirit_selection=selection)
             context = _spirit_selection_context(session.character, picks)
     response = templates.TemplateResponse(request, "_spirit_selection.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

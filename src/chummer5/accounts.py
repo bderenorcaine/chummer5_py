@@ -22,6 +22,7 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
+from urllib.parse import urlsplit
 
 from chummer5.store import (
     AuthSessionRecord,
@@ -111,6 +112,56 @@ def chargen_idle_seconds() -> float:
     if not 0 < minutes < float("inf"):
         raise ValueError(f"CHUMMER5_SESSION_IDLE_MINUTES must be above 0, got {raw!r}")
     return minutes * 60.0
+
+
+def origin_of(url: str) -> str | None:
+    """The origin (`scheme://host[:port]`, lowercase, default port dropped) of an absolute
+    http(s) URL, as a browser's `Origin` header spells it; None for anything else."""
+    try:
+        parts = urlsplit(url.strip())
+        port = parts.port
+    except ValueError:
+        return None
+    scheme = parts.scheme.lower()
+    if scheme not in ("http", "https") or not parts.hostname:
+        return None
+    host = parts.hostname.lower()
+    if ":" in host:  # an IPv6 literal keeps its brackets
+        host = f"[{host}]"
+    if port is None or port == {"http": 80, "https": 443}[scheme]:
+        return f"{scheme}://{host}"
+    return f"{scheme}://{host}:{port}"
+
+
+def public_origin() -> str:
+    """`CHUMMER5_PUBLIC_URL`'s origin: where players reach the app (`https://chummer.example.org`).
+    Hosted mode requires it, because WP141's cross-site request check compares every non-GET
+    request's `Origin` against it; `create_app` reads it at startup, so a missing or malformed
+    value stops the server instead of refusing every form."""
+    raw = os.environ.get("CHUMMER5_PUBLIC_URL", "").strip()
+    if not raw:
+        raise ValueError(
+            "CHUMMER5_PUBLIC_URL must be set in hosted mode (e.g. https://chummer.example.org)"
+        )
+    origin = origin_of(raw)
+    if origin is None:
+        raise ValueError(f"CHUMMER5_PUBLIC_URL must be an http(s) URL, got {raw!r}")
+    return origin
+
+
+DEFAULT_TRUSTED_PROXIES = ("127.0.0.1", "::1")
+
+
+def trusted_proxies() -> frozenset[str]:
+    """`CHUMMER5_TRUSTED_PROXY`: the comma-separated addresses of the reverse proxy (Caddy) whose
+    `X-Forwarded-For` names the real client, for WP141's login throttle. Default: localhost."""
+    raw = os.environ.get("CHUMMER5_TRUSTED_PROXY", "").strip()
+    if not raw:
+        return frozenset(DEFAULT_TRUSTED_PROXIES)
+    addresses = frozenset(part.strip() for part in raw.split(",") if part.strip())
+    if not addresses:
+        raise ValueError(f"CHUMMER5_TRUSTED_PROXY must list addresses, got {raw!r}")
+    return addresses
 
 
 # --- passwords -----------------------------------------------------------------------------------

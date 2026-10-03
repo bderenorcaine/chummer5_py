@@ -70,6 +70,13 @@ from chummer5.web.routes import (
     talent,
     vehicles,
 )
+from chummer5.web.security import (
+    Throttle,
+    check_origin,
+    install_error_pages,
+    limit_body,
+    security_headers,
+)
 from chummer5.web.session import SessionStore
 
 # The htmx event name `_step_nav.html` listens for (`hx-trigger="chargen-changed from:body"`).
@@ -99,8 +106,10 @@ def create_app(mode: Mode | None = None, store: Store | None = None) -> FastAPI:
     """
     resolved_mode = mode if mode is not None else app_mode()
     resolved_store = store if store is not None else Store()
+    public_origin: str | None = None
     if resolved_mode != LOCAL:
         accounts.session_lifetime()  # a bad CHUMMER5_SESSION_DAYS stops startup, not every login
+        public_origin = accounts.public_origin()  # WP141: likewise a missing CHUMMER5_PUBLIC_URL
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -115,6 +124,11 @@ def create_app(mode: Mode | None = None, store: Store | None = None) -> FastAPI:
     app.state.session_restorer = restore_session
     app.state.mode = resolved_mode
     app.state.store = resolved_store
+    # WP141: the cross-site check's expected origin, the proxy whose X-Forwarded-For is believed,
+    # and the login/registration throttle's in-process counters.
+    app.state.public_origin = public_origin
+    app.state.trusted_proxies = accounts.trusted_proxies()
+    app.state.throttle = Throttle()
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     # WP97: the application shell -- `GET /`, the nav's page/nav routes, and the Export page.
@@ -151,6 +165,15 @@ def create_app(mode: Mode | None = None, store: Store | None = None) -> FastAPI:
     # reaches the routes or the chargen-changed signal. A no-op in local mode.
     app.middleware("http")(require_login)
     app.include_router(account.router)
+
+    # WP141 (spec/security.md), outermost last: the cross-site check before the login gate (it
+    # guards /login and /register too), the body cap before anything reads a body, and the
+    # security headers around everything, refusals included.
+    app.middleware("http")(check_origin)
+    app.middleware("http")(limit_body(frozenset({characters.UPLOAD_PATH})))
+    app.middleware("http")(security_headers)
+    if resolved_mode != LOCAL:
+        install_error_pages(app)
 
     # WP62: one router per chargen step (see `chummer5.web.routes`'s own docstring); registration
     # order here is cosmetic (routes are matched by path/method, not declaration order) but mirrors

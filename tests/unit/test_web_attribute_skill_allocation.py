@@ -125,12 +125,17 @@ def test_skill_filter_state_survives_the_fragment_being_re_rendered() -> None:
     response = client.post("/ui/skills", data={f"skill_{skill.id}": "3"})
 
     assert response.status_code == 200
-    # Restored from a store that outlives the swapped subtree, not from the rendered markup.
-    assert "window.__skillFilterState" in response.text
-    assert "ratedOnly.checked = state.ratedOnly" in response.text
-    assert "filterInput.value = state.query" in response.text
-    # ...and re-applied immediately, so the freshly-rendered rows honour it without another click.
-    assert response.text.count("applyFilter();") == 1
+    assert 'id="skill-filter"' in response.text and 'id="skill-rated-only"' in response.text
+    # WP141: the restore/re-apply code moved from an inline <script> in the fragment (which the
+    # CSP forbids) to static/app.js, which runs once per page and restores after every swap.
+    assert "<script" not in response.text
+    script = client.get("/static/app.js").text
+    # Restored from a store that outlives the swapped subtree, not from the rendered markup...
+    assert "var skillFilter = {" in script
+    assert "rated.checked = skillFilter.ratedOnly" in script
+    assert "input.value = skillFilter.query" in script
+    # ...and re-applied as soon as new content lands, so the fresh rows honour it at once.
+    assert 'document.addEventListener("htmx:load", restoreSkillFilter)' in script
 
 
 def test_submitting_valid_attribute_points_matches_engine_output() -> None:
@@ -444,14 +449,18 @@ def test_character_sheet_shows_the_specialization_name() -> None:
 def test_section_forms_scope_input_trigger_to_number_inputs() -> None:
     """WP65: text inputs must submit on `change` (blur) only, not on the `input delay:400ms` that
     the number spinners want -- otherwise the outerHTML swap rebuilds a text field mid-typing and
-    drops focus. The trigger scopes `input` to number inputs via an htmx event filter."""
+    drops focus. WP141: the scoping moved from an htmx event filter (an expression htmx evaluates,
+    which the CSP forbids) to static/app.js, which re-dispatches `input` from number inputs only,
+    as `number-input`."""
     client = TestClient(create_app())
     _confirm_human(client)
 
     response = client.post("/ui/skills", data={})
 
-    assert "change, input[event.target.type=='number'] delay:400ms" in response.text
+    assert "change, number-input delay:400ms" in response.text
     assert "change, input delay:400ms" not in response.text
+    script = client.get("/static/app.js").text
+    assert 't.type === "number"' in script and 'new CustomEvent("number-input"' in script
 
 
 def test_skill_allocation_context_exposes_base_and_specialized_pool() -> None:

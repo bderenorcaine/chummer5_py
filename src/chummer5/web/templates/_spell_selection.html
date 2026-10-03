@@ -74,30 +74,6 @@
     </div>
     <button type="submit">{{ _("Web_Spells_Update") }}</button>
   </form>
-  <script>
-    (function () {
-      var knownFilter = document.getElementById("spell-known-filter");
-      if (!knownFilter) return;
-      function applyFilter() {
-        var mode = knownFilter.value;
-        document.querySelectorAll("#spell-tables details").forEach(function (details) {
-          var anyVisible = false;
-          details.querySelectorAll("tr[data-spell-selected]").forEach(function (row) {
-            var selected = row.dataset.spellSelected === "true";
-            var matches =
-              mode === "all" ||
-              (mode === "known" && selected) ||
-              (mode === "unknown" && !selected);
-            row.hidden = !matches;
-            if (matches) anyVisible = true;
-          });
-          details.hidden = !anyVisible;
-          if (mode !== "all" && anyVisible) details.open = true;
-        });
-      }
-      knownFilter.addEventListener("change", applyFilter);
-    })();
-  </script>
   </details>
   {% endif %}
 </div>

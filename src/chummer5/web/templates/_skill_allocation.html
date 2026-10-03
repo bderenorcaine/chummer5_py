@@ -29,7 +29,7 @@
     hx-post="/ui/skills"
     hx-target="#skill-allocation"
     hx-swap="outerHTML"
-    hx-trigger="change, input[event.target.type=='number'] delay:400ms"
+    hx-trigger="change, number-input delay:400ms"
   >
     <h3>{{ _("Label_SkillGroups") }}</h3>
     <p>{{ _("Web_Skills_GroupKarmaHelp") }}</p>
@@ -193,47 +193,6 @@
     {% endif %}
     <button type="submit">{{ _("Web_Skills_Update") }}</button>
   </form>
-  <script>
-    (function () {
-      var filterInput = document.getElementById("skill-filter");
-      var ratedOnly = document.getElementById("skill-rated-only");
-      if (!filterInput || !ratedOnly) return;
-      // This whole fragment -- inputs, rows, and this script -- is rebuilt from server-rendered
-      // HTML on every hx-post to /ui/skills, so both filter controls reset to their (unfiltered)
-      // rendered defaults whenever a rating changes, and this closure's own state dies with them.
-      // Exactly the problem WP64's <details> store solves for open/closed state, so it takes the
-      // same shape: state lives outside the swapped subtree (on `window`, since only this fragment
-      // reads it), the freshly-rendered controls are restored from it, and the filter is re-applied
-      // immediately so the rebuilt rows match what the player last asked for.
-      var state = window.__skillFilterState;
-      if (!state) {
-        state = window.__skillFilterState = { query: "", ratedOnly: false };
-      }
-      filterInput.value = state.query;
-      ratedOnly.checked = state.ratedOnly;
-      function applyFilter() {
-        var query = filterInput.value.trim().toLowerCase();
-        var onlyRated = ratedOnly.checked;
-        state.query = filterInput.value;
-        state.ratedOnly = onlyRated;
-        document.querySelectorAll("#skill-tables details").forEach(function (details) {
-          var anyVisible = false;
-          details.querySelectorAll("tr[data-skill-name]").forEach(function (row) {
-            var matchesName = !query || row.dataset.skillName.includes(query);
-            var matchesRated = !onlyRated || Number(row.dataset.skillRating) > 0;
-            var matches = matchesName && matchesRated;
-            row.hidden = !matches;
-            if (matches) anyVisible = true;
-          });
-          details.hidden = !anyVisible;
-          if ((query || onlyRated) && anyVisible) details.open = true;
-        });
-      }
-      filterInput.addEventListener("input", applyFilter);
-      ratedOnly.addEventListener("change", applyFilter);
-      applyFilter();
-    })();
-  </script>
   </details>
   {% else %}
   <p>{{ _("Web_Skills_Placeholder") }}</p>

@@ -105,7 +105,11 @@ from chummer5.web.routes.bio import _bio_context
 from chummer5.web.routes.priorities import _session_priority_form_context
 from chummer5.web.routes.resources import matrix_stat_block
 from chummer5.web.routes.vehicles import vehicle_stat_block
-from chummer5.web.session import SESSION_COOKIE_NAME, ChargenSession, resolve_session
+from chummer5.web.session import (
+    ChargenSession,
+    resolve_session,
+    set_session_cookie,
+)
 from chummer5.web.shell import chargen_context, validation_context
 
 router = APIRouter()
@@ -1165,8 +1169,7 @@ def download_save(request: Request) -> Response:
         media_type="application/json",
         headers={"Content-Disposition": 'attachment; filename="character.json"'},
     )
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response
 
 
@@ -1197,6 +1200,5 @@ def sheet_fragment(
     context = _character_sheet_context(session, error=error, info=info)
     context |= open_character_context(request, session)
     response = templates.TemplateResponse(request, "_character_sheet.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

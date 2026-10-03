@@ -30,7 +30,7 @@ from chummer5.web.i18n import Message
 from chummer5.web.routes.foci import _remove_foci_improvements
 from chummer5.web.routes.powers import _remove_adept_power_improvements
 from chummer5.web.routes.qualities import _strip_mentor_spirit_selection
-from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
+from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
@@ -244,6 +244,5 @@ async def submit_talent(request: Request) -> HTMLResponse:
                 aspect=selection.aspect,
             )
     response = templates.TemplateResponse(request, "_talent_selection.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

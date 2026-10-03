@@ -69,14 +69,15 @@ def set_auth_cookie(request: Request, response: Response, token: str) -> None:
         max_age=int(accounts.session_lifetime().total_seconds()),
         httponly=True,
         samesite="lax",
-        # WP141 settles `Secure` for good; until then, whenever the request itself came over TLS.
-        secure=request.url.scheme == "https",
+        # WP141: always -- the auth cookie exists only in hosted mode, which is served over TLS.
+        # (Browsers also accept a Secure cookie from http://localhost, for trying hosted mode out.)
+        secure=True,
     )
     setattr(request.state, _COOKIE_HANDLED_STATE, True)
 
 
 def clear_auth_cookie(request: Request, response: Response) -> None:
-    response.delete_cookie(AUTH_COOKIE_NAME, httponly=True, samesite="lax")
+    response.delete_cookie(AUTH_COOKIE_NAME, httponly=True, samesite="lax", secure=True)
     setattr(request.state, _COOKIE_HANDLED_STATE, True)
 
 

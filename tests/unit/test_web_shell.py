@@ -278,7 +278,9 @@ def test_step_panels_render_open_without_the_accordion_machinery() -> None:
     assert '<summary class="panel__heading">Talent</summary>' in html
     assert "section:" not in html
     assert "chargen-body" not in html
-    # ... while WP64's sub-category open-state store survives, keyed as before.
+    # ... while WP64's sub-category open-state store survives, keyed as before (WP141: in
+    # static/app.js, which every shell page loads).
     skills = client.get("/ui/page/skills").text
-    assert "htmx:afterSwap" in skills
+    assert "/static/app.js" in client.get("/").text
+    assert "htmx:afterSwap" in client.get("/static/app.js").text
     assert 'data-details-key="skillcat:' in skills

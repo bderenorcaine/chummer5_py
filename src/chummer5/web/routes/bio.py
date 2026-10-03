@@ -13,10 +13,16 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from chummer5.engine.biography import BIOGRAPHY_FIELDS, LONG_FIELDS, Biography, create_biography
+from chummer5.engine.biography import (
+    BIOGRAPHY_FIELDS,
+    LONG_FIELDS,
+    Biography,
+    create_biography,
+    max_length,
+)
 from chummer5.engine.character import Character
 from chummer5.web.catalogs import templates
-from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
+from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
@@ -56,6 +62,7 @@ def _bio_context(
                 "label_key": _LABEL_KEYS[field],
                 "value": getattr(shown, field),
                 "long": field in LONG_FIELDS,
+                "max_length": max_length(field),  # WP141
             }
             for field in BIOGRAPHY_FIELDS
         ],
@@ -81,6 +88,5 @@ async def submit_bio(request: Request) -> HTMLResponse:
             session.character = replace(session.character, biography=biography)
             context = _bio_context(session.character)
     response = templates.TemplateResponse(request, "_bio.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

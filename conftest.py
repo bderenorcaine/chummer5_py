@@ -15,3 +15,7 @@ def _isolated_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CHUMMER5_CHARACTER_QUOTA", raising=False)
     monkeypatch.delenv("CHUMMER5_SESSION_DAYS", raising=False)
     monkeypatch.delenv("CHUMMER5_SESSION_IDLE_MINUTES", raising=False)
+    monkeypatch.delenv("CHUMMER5_UPLOAD_MAX_MB", raising=False)
+    monkeypatch.delenv("CHUMMER5_TRUSTED_PROXY", raising=False)
+    # WP141: hosted mode needs a public URL; tests/fixtures/hosted.py's client matches it.
+    monkeypatch.setenv("CHUMMER5_PUBLIC_URL", "https://testserver")

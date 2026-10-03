@@ -21,7 +21,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from fastapi import Request
+from fastapi import Request, Response
 
 from chummer5 import accounts
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
@@ -30,6 +30,22 @@ from chummer5.web import prefs
 from chummer5.web.prefs import DEFAULT_LOCALE, DEFAULT_THEME
 
 SESSION_COOKIE_NAME = "chummer5_session"
+
+
+def set_session_cookie(request: Request, response: Response, value: str | None) -> None:
+    """Set the chargen-session cookie on `response`, if `resolve_session` minted one (`value`).
+    WP141: the one place it is set, so its flags can't drift between routes: `HttpOnly`,
+    `SameSite=Lax`, and `Secure` in hosted mode (served over TLS behind Caddy)."""
+    if value is None:
+        return
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        value,
+        httponly=True,
+        samesite="lax",
+        secure=request.app.state.mode == accounts.HOSTED,
+    )
+
 
 # WP137: in hosted mode the auth middleware (`chummer5.web.auth`) sets `request.state.chargen_key`
 # to the login session's token hash. The chargen session is then keyed by the login, not by its own

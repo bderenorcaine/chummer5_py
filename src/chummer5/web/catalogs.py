@@ -11,8 +11,12 @@ route module needs `templates` to render its own fragment.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from fastapi.templating import Jinja2Templates
+from jinja2 import pass_context
+from jinja2.runtime import Context
+from starlette.requests import Request
 
 from chummer5.data.bioware import load_bioware
 from chummer5.data.cyberware import load_cyberware
@@ -55,6 +59,19 @@ templates.env.filters["tr"] = jinja_render_message
 # WP103: `{{ skill | dterm("skills.xml") }}` -- a game-data term's display name, never its identity.
 templates.env.filters["dterm"] = jinja_data_term
 templates.env.filters["dtext"] = jinja_data_text  # WP103: `{{ mentor | dtext("advantage") }}`
+
+
+@pass_context
+def _root_relative_url_for(context: Context, name: str, /, **path_params: Any) -> str:
+    """WP141: `url_for` in templates gives a root-relative path (`/static/app.css`), not
+    Starlette's absolute URL. The absolute one is built from the request's own scheme and host,
+    which behind Caddy is `http://` unless uvicorn trusts the proxy's headers -- on an https page
+    that is mixed content the browser blocks, and outside the CSP's `'self'`."""
+    request: Request = context["request"]
+    return request.url_for(name, **path_params).path
+
+
+templates.env.globals["url_for"] = _root_relative_url_for
 
 # Static rules data: parsed once per process, not per request (Project Overview's "parsed once at
 # startup" rule for `chummer5.data` loaders).

@@ -332,7 +332,7 @@ it with an Opus `/code-review high`.
     refused without being fully read.
   - At 99 characters, uploading three files imports one and reports two quota errors.
 
-- [ ] **WP141 — Security pass.**
+- [x] **WP141 — Security pass.**
   *Suggested model:* **Opus.** The CSP will break things in non-obvious ways (`base.html`'s inline script). Origin checks and IP throttling behind a proxy are easy to get subtly wrong, and tests rarely catch it.
   Goal: protections suited to an internet-facing app, checked in one place.
   Deliverables:
@@ -359,6 +359,11 @@ it with an Opus `/code-review high`.
     cap for non-upload routes. (`POST /characters/upload` already caps its own body while reading,
     `chummer5.web.uploads`; WP140.)
   - A short `spec/` note listing what is protected and how, for future WPs to keep true.
+  **Outcome (WP141, 2026-10-03):** `spec/security.md` is the resulting list. Beyond the
+  deliverables above, the CSP needed htmx's event filters (`input[event.target.type=='number']`)
+  replaced by a custom `number-input` event, since htmx evaluates filters with `new Function`.
+  Templates' `url_for` now gives root-relative paths, so asset URLs no longer depend on uvicorn
+  trusting the proxy's headers.
   Depends on: WP137-140.
   Acceptance:
   - A cross-origin POST is refused.
@@ -381,6 +386,13 @@ it with an Opus `/code-review high`.
   - Configuration is entirely environment variables: `CHUMMER5_MODE=hosted`, `CHUMMER5_DB`,
     `CHUMMER5_PUBLIC_URL`, `CHUMMER5_TRUSTED_PROXY`, the quota, the timeouts, and the upload cap
     (`CHUMMER5_UPLOAD_MAX_MB`, WP140).
+    **From WP141:** hosted mode refuses to start without `CHUMMER5_PUBLIC_URL`, and refuses every
+    form if it doesn't match the browser's address. `CHUMMER5_TRUSTED_PROXY` must be the address
+    Caddy's connections arrive from *inside the container*. With rootless podman's port
+    forwarding that may not be `127.0.0.1`, so check it (log `request.client.host` once, or
+    compare the throttle across two clients). Getting it wrong lumps every player into one
+    address for the login throttle. It doesn't open a hole. `deploy/test-image.sh` already runs
+    its hosted container with a public URL and checks the 403.
   - An example `compose`/`podman run` setup with the port published to `127.0.0.1` only and a named
     volume for the database.
   - A Caddyfile site-block snippet (`reverse_proxy 127.0.0.1:<port>`) and an upload body-size limit

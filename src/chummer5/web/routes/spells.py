@@ -22,7 +22,7 @@ from chummer5.engine.magic import (
 )
 from chummer5.web.catalogs import PRIORITIES, SPELLS, templates
 from chummer5.web.i18n import Message
-from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
+from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
@@ -153,6 +153,5 @@ async def submit_spells(request: Request) -> HTMLResponse:
             session.character = replace(session.character, spell_selection=selection)
             context = _spell_selection_context(session.character, session.talent_letter, spell_ids)
     response = templates.TemplateResponse(request, "_spell_selection.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response

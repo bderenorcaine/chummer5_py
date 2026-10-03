@@ -10,9 +10,12 @@
        a Skills page missing the "no longer fits" warning a later priorities change caused. #}
     {# WP138: `responseHandling` is htmx 2's default plus one entry: 409 swaps. The tab guard's and
        the cross-device check's notices are 409s, and htmx swaps no 4xx by default. #}
+    {# WP141: under the CSP, htmx may not evaluate code (`allowEval`: no hx-on, no event-filter
+       expressions), run <script>s in swapped content (`allowScriptTags`), or inject its own
+       indicator <style> (`includeIndicatorStyles`). #}
     <meta
       name="htmx-config"
-      content='{"historyCacheSize": 0, "responseHandling": [{"code": "204", "swap": false}, {"code": "[23]..", "swap": true}, {"code": "409", "swap": true}, {"code": "[45]..", "swap": false, "error": true}]}'
+      content='{"historyCacheSize": 0, "allowEval": false, "allowScriptTags": false, "includeIndicatorStyles": false, "responseHandling": [{"code": "204", "swap": false}, {"code": "[23]..", "swap": true}, {"code": "409", "swap": true}, {"code": "[45]..", "swap": false, "error": true}]}'
     />
     {# WP100: the theme (token values only) first, then the structural sheet that reads them. #}
     {% include "_theme_link.html" %}
@@ -21,37 +24,10 @@
     <script src="{{ url_for('static', path='vendor/htmx/htmx.min.js') }}"></script>
     {# WP138: the switch warning's "is another tab of the app open?" check. #}
     <script src="{{ url_for('static', path='tabs.js') }}"></script>
-    <script>
-      // WP64, trimmed by WP97: keep a sub-category <details> (skill categories, gear groups,
-      // cyberware slots, ...) the way the player left it across htmx swaps. Each such <details>
-      // carries a stable data-details-key; the store lives here, outside every swap target, so it
-      // survives both a step's own fragment swap and a nav page swap. WP64's other half -- one-
-      // top-level-section-open-at-a-time exclusivity -- went with the accordion it served. In
-      // <head>, not <body>: a back/forward history restore swaps the whole body, which would re-run
-      // this and stack a second set of listeners over an empty store.
-      (function () {
-        var openState = {};
-
-        // `toggle` doesn't bubble, so listen in the capture phase to catch every <details>.
-        document.addEventListener(
-          "toggle",
-          function (e) {
-            var d = e.target;
-            if (!(d instanceof HTMLDetailsElement)) return;
-            var key = d.getAttribute("data-details-key");
-            if (key) openState[key] = d.open;
-          },
-          true
-        );
-
-        document.addEventListener("htmx:afterSwap", function () {
-          document.querySelectorAll("details[data-details-key]").forEach(function (d) {
-            var key = d.getAttribute("data-details-key");
-            if (key in openState) d.open = openState[key];
-          });
-        });
-      })();
-    </script>
+    {# WP141: the page's own behavior (details state, number-input autosubmit, table filters),
+       moved out of inline <script>s so the CSP needs no 'unsafe-inline'. In <head>: a history
+       restore swaps the whole body, which would re-run it and stack a second set of listeners. #}
+    <script src="{{ url_for('static', path='app.js') }}"></script>
   </head>
   <body>
     {% include "_app_shell.html" %}

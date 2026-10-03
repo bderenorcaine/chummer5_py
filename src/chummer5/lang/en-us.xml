@@ -173,6 +173,10 @@
       <text>Create an account</text>
     </string>
     <string>
+      <key>Web_Auth_Throttled</key>
+      <text>Too many failed attempts. Wait {seconds} s and try again.</text>
+    </string>
+    <string>
       <key>Web_Auth_Username</key>
       <text>Username</text>
     </string>
@@ -419,6 +423,31 @@
     <string>
       <key>Web_Cyberware_Update</key>
       <text>Update cyberware &amp; bioware</text>
+    </string>
+    <!-- Error pages, hosted mode (WP141) -->
+    <string>
+      <key>Web_Error_BadRequest</key>
+      <text>The server could not use that request.</text>
+    </string>
+    <string>
+      <key>Web_Error_Forbidden</key>
+      <text>That request was refused. If you were using the app normally, reload the page and try again.</text>
+    </string>
+    <string>
+      <key>Web_Error_Home</key>
+      <text>Back to the start page</text>
+    </string>
+    <string>
+      <key>Web_Error_NotFound</key>
+      <text>There is no page here.</text>
+    </string>
+    <string>
+      <key>Web_Error_Server</key>
+      <text>Something went wrong on the server. It has been logged; try again in a moment.</text>
+    </string>
+    <string>
+      <key>Web_Error_TooLarge</key>
+      <text>That request was too large.</text>
     </string>
     <!-- Export -->
     <string>

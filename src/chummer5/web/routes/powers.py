@@ -27,7 +27,7 @@ from chummer5.engine.magic import (
     power_target_options,
 )
 from chummer5.web.catalogs import MVP_POWERS, POWERS, SKILLS, templates
-from chummer5.web.session import SESSION_COOKIE_NAME, resolve_session
+from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
@@ -215,6 +215,5 @@ async def submit_powers(request: Request) -> HTMLResponse:
             session.character = _replace_committed_powers(session.character, selection)
             context = _power_selection_context(session.character, picks)
     response = templates.TemplateResponse(request, "_power_selection.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
+    set_session_cookie(request, response, new_cookie)
     return response
