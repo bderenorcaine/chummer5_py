@@ -1,0 +1,35 @@
+# Production image for Chummer5. Not the devcontainer (.devcontainer/Containerfile): no build tools,
+# no dev dependencies, runs as a non-root user. See spec/deployment.md.
+#
+# Built by deploy/deploy.sh from a `git archive` of one commit, NOT from the repo root: the root
+# .dockerignore excludes legacy/ (right for the devcontainer), but the app reads its game data and
+# legacy string catalogs from legacy/Chummer/{data,lang} at runtime (every loader resolves
+# `Path(__file__).parents[3] / "legacy" / ...`), so the image must reproduce that layout under /app.
+
+FROM python:3.12-slim AS build
+RUN pip install --no-cache-dir uv
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+WORKDIR /app
+# Dependencies first, so a code-only change reuses this layer.
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --frozen --no-dev --no-install-project
+COPY src ./src
+# Installs the project itself in editable mode: the venv points at /app/src, which keeps the
+# parents[3] == /app relationship the data loaders rely on.
+RUN uv sync --frozen --no-dev
+
+FROM python:3.12-slim
+RUN useradd --system --uid 10001 --no-create-home --home-dir /app chummer
+WORKDIR /app
+COPY --from=build /app /app
+COPY legacy/Chummer/data ./legacy/Chummer/data
+COPY legacy/Chummer/lang ./legacy/Chummer/lang
+USER chummer
+ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
+EXPOSE 8000
+# One worker: chargen sessions live in process memory (phase-y-hosted-deployment.md, Finding 4).
+# --proxy-headers makes url_for() build https:// URLs from Caddy's X-Forwarded-Proto. Trusting
+# every forwarder ("*") is only safe because the published port is bound to the host's 127.0.0.1,
+# so Caddy is the only thing that can reach it.
+CMD ["python", "-m", "uvicorn", "chummer5.web.app:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*"]

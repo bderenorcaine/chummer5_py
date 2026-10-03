@@ -1,0 +1,22 @@
+# Add this site block to the server's existing Caddyfile, then `systemctl reload caddy`
+# (or `caddy reload --config /etc/caddy/Caddyfile`). Caddy fetches the TLS certificate itself once
+# DNS for the name points at the server. See spec/deployment.md.
+
+chummer.example.org {
+	# INTERIM, until Phase Y's WP137 adds real accounts: the pre-Phase-Y app has no login at all,
+	# so Caddy asks for a password before anything reaches it. One line per player.
+	# Make a hash with:  caddy hash-password   (it prompts for the password)
+	# `basicauth` works on every Caddy 2.x (Debian 13 ships 2.6, which knows only this spelling).
+	# 2.8+ prefers `basic_auth` and logs a deprecation warning for this one; switch when convenient.
+	basicauth {
+		alice $2a$14$REPLACE_WITH_OUTPUT_OF_caddy_hash-password
+	}
+
+	# Matches WP140's per-file cap (5 MB) times a little headroom for multi-file uploads.
+	request_body {
+		max_size 25MB
+	}
+
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8005
+}
