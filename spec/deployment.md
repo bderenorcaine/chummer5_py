@@ -84,8 +84,20 @@ unprivileged on purpose, and podman can't build or run images inside it (decisio
 
 1. **DNS:** an `A` (and `AAAA`, if you have IPv6) record for `chummer.<domain>` pointing at the
    server.
-2. **Container runtime and curl on the server.** Check with `podman --version` (or
-   `docker --version`) and `curl --version`.
+2. **Container runtime, curl and gzip on the server.** `deploy.sh` checks all of this first,
+   before building, and says what is missing.
+   - **Rootless Podman** (the default: deploying as an unprivileged user) needs more than the
+     `podman` package. Debian/Ubuntu ship these as `podman`'s *recommended* packages, so they are
+     missing when it was installed with `--no-install-recommends`:
+     `sudo apt install podman uidmap slirp4netns fuse-overlayfs dbus-user-session catatonit`
+     (`slirp4netns` is podman 4's network helper; podman 5 uses `passt` instead).
+     The deploying user also needs subordinate ID ranges: if `grep <user> /etc/subuid
+     /etc/subgid` finds nothing, run `sudo usermod --add-subuids 100000-165535 --add-subgids
+     100000-165535 <user>`. Then, as that user, after logging in again: `podman system migrate`.
+     Every `sudo` step can be run by another admin account; the deploying user needs no sudo.
+   - **Docker:** the deploying user must be allowed to use the Docker socket (usually the
+     `docker` group, which is effectively root on that machine). Deploy with
+     `REMOTE_CONTAINER_CMD=docker`.
 3. **Restart after reboot.** `--restart unless-stopped` needs help from systemd under Podman:
    - rootful Podman: `sudo systemctl enable --now podman-restart.service`
    - rootless Podman (deploying as a normal user):

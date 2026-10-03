@@ -35,16 +35,38 @@ source "${SCRIPT_DIR}/lib.sh"
 remote() { ssh "${SERVER}" "$@"; }
 
 # ---------------------------------------------------------------- 0. can the server run it?
-# Checked first, so a missing tool fails in seconds instead of after the build and the copy. The
-# commands below run over a non-interactive ssh, which doesn't read the login profile: a tool
-# that works in an interactive session on the server can still be missing from this PATH.
-MISSING="$(remote "for tool in ${RCMD} curl; do command -v \"\$tool\" >/dev/null || echo \"\$tool\"; done")"
-if [[ -n "${MISSING}" ]]; then
-    echo "error: not found on ${SERVER} (over non-interactive ssh): ${MISSING//$'\n'/ }" >&2
-    echo "  check:  ssh ${SERVER} 'command -v podman docker curl; echo \"PATH=\$PATH\"'" >&2
-    echo "  if the server has Docker instead: REMOTE_CONTAINER_CMD=docker $0 ${SERVER}" >&2
-    echo "  if it's installed but not found: add its directory to PATH in the server's ~/.bashrc" >&2
-    echo "  (above any 'return if not interactive' line)" >&2
+# Checked first, so a server that can't run the container fails in seconds, not after the build
+# and the copy. Runs over a non-interactive ssh, which doesn't read the login profile: a tool that
+# works in an interactive session on the server can still be missing from this PATH. Each check
+# below is one a first deploy actually tripped over (spec/deployment.md, "First deploy", step 2).
+# POSIX sh on purpose: it runs in whatever login shell the server's user has.
+PREFLIGHT='
+missing=""
+for tool in RCMD curl gunzip; do
+    command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+done
+if [ -n "$missing" ]; then
+    echo "not installed, or not on the PATH of a non-interactive ssh:$missing"
+    exit 0
+fi
+if ! problem="$(RCMD info 2>&1 >/dev/null)"; then
+    echo "\"RCMD info\" fails: $problem"
+    exit 0
+fi
+if [ RCMD = podman ] && [ "$(podman info --format "{{.Host.Security.Rootless}}" 2>/dev/null)" = true ]; then
+    user="$(id -un)"
+    grep -q "^$user:" /etc/subuid 2>/dev/null && grep -q "^$user:" /etc/subgid 2>/dev/null \
+        || echo "rootless podman: $user has no range in /etc/subuid and /etc/subgid"
+    command -v slirp4netns >/dev/null 2>&1 || command -v pasta >/dev/null 2>&1 \
+        || echo "rootless podman: no network helper (slirp4netns, or pasta from passt)"
+fi
+'
+PROBLEMS="$(remote "${PREFLIGHT//RCMD/${RCMD}}")"
+if [[ -n "${PROBLEMS}" ]]; then
+    echo "error: ${SERVER} can't run the container yet:" >&2
+    while IFS= read -r line; do echo "  - ${line}" >&2; done <<< "${PROBLEMS}"
+    echo "Server setup, including the packages rootless podman needs: spec/deployment.md," >&2
+    echo "\"First deploy\". If the server has Docker instead: REMOTE_CONTAINER_CMD=docker $0 ${SERVER}" >&2
     exit 1
 fi
 
