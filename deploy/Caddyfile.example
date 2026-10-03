@@ -3,14 +3,9 @@
 # DNS for the name points at the server. See spec/deployment.md.
 
 chummer.example.org {
-	# INTERIM, until Phase Y's WP137 adds real accounts: the pre-Phase-Y app has no login at all,
-	# so Caddy asks for a password before anything reaches it. One line per player.
-	# Make a hash with:  caddy hash-password   (it prompts for the password)
-	# `basicauth` works on every Caddy 2.x (Debian 13 ships 2.6, which knows only this spelling).
-	# 2.8+ prefers `basic_auth` and logs a deprecation warning for this one; switch when convenient.
-	basicauth {
-		alice $2a$14$REPLACE_WITH_OUTPUT_OF_caddy_hash-password
-	}
+	# The app has its own accounts in hosted mode (WP137), so Caddy asks for nothing. A server still
+	# running the pre-hosted app (no ~/chummer5/chummer5.env) needs the old `basicauth { ... }` block
+	# here instead; remove it once hosted mode runs (spec/deployment.md, "Switching to hosted mode").
 
 	# Just above the app's own cap for one upload request (20 files of up to 10 MB each, WP140),
 	# so an oversized upload is answered by the app with a readable message, not by Caddy with a
@@ -20,5 +15,7 @@ chummer.example.org {
 	}
 
 	encode zstd gzip
+	# Caddy sets X-Forwarded-For to the client's address (replacing whatever the client sent) and
+	# X-Forwarded-Proto to https; the app uses the first for its login throttle (WP141).
 	reverse_proxy 127.0.0.1:8005
 }

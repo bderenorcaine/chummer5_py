@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase Y — Post-MVP: hosted multi-user deployment (WP136-142)
+### Phase Y — Post-MVP: hosted multi-user deployment (WP136-142) — done
 
 **Why now.** Raised 2026-10-02. The user wants the character creator reachable on the web, on a
 cloud server they already run (a mail server and Nextcloud, both behind Caddy, with a domain set
@@ -371,7 +371,7 @@ it with an Opus `/code-review high`.
   - Every theme renders under the CSP with no console violations.
   - A forced 500 shows a generic page.
 
-- [ ] **WP142 — Production container, Caddy, backups, runbook.**
+- [x] **WP142 — Production container, Caddy, backups, runbook.**
   *Suggested model:* Sonnet. Mostly done already (`deploy/`). What remains is the backup script, the runbook and `test-image.sh` checks.
   Goal: run it on the user's server.
   **Head start (2026-10-03):** `deploy/` already has a production `Containerfile`, `deploy.sh` and
@@ -393,6 +393,8 @@ it with an Opus `/code-review high`.
     compare the throttle across two clients). Getting it wrong lumps every player into one
     address for the login throttle. It doesn't open a hole. `deploy/test-image.sh` already runs
     its hosted container with a public URL and checks the 403.
+    *(Settled by WP142: the image's uvicorn already takes the client address from Caddy's
+    header, so `CHUMMER5_TRUSTED_PROXY` doesn't matter there. See the decisions log.)*
   - An example `compose`/`podman run` setup with the port published to `127.0.0.1` only and a named
     volume for the database.
   - A Caddyfile site-block snippet (`reverse_proxy 127.0.0.1:<port>`) and an upload body-size limit
@@ -415,6 +417,14 @@ it with an Opus `/code-review high`.
     - Image-level checks (build, fresh volume serves `/login`, backup restores into a working
       container) go into `deploy/test-image.sh`. The user runs that on the host, because podman
       can't run inside the unprivileged devcontainer.
+  **Outcome (WP142, 2026-10-03):** backup and restore are admin CLI commands (`backup`,
+  `restore`, on `chummer5.store.backup`), run inside the container, because the server has no
+  Python or sqlite3 of its own. `deploy.sh` mounts `chummer5-data`, passes
+  `~/chummer5/chummer5.env` with `--env-file` (no file means local mode), and backs up before
+  every swap. `deploy/backup.sh` copies a backup off the server. A systemd user timer, given in
+  the runbook, does the nightly one. Verified here: hosted uvicorn behind a Caddy built from
+  `Caddyfile.example` (with `tls internal`), and a backup under live writes restored into a
+  second instance. The image-level checks are in `deploy/test-image.sh` for the user's host.
   Depends on: WP141.
   Acceptance: the image builds; started with a fresh volume it serves `/login`; an invite minted via
   `podman exec ... python -m chummer5.admin invite` registers a user end to end through Caddy; a

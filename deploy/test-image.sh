@@ -7,8 +7,9 @@
 #   deploy/test-image.sh            # build HEAD, start it on a free loopback port, run the checks
 #   KEEP=1 deploy/test-image.sh     # leave the container running afterwards, to poke at it
 #
-# Phase Y WPs extend the checks below (WP137: hosted mode's login gate and admin CLI; WP141: the
-# CSP, the cross-site check, root-relative asset URLs; WP142: data volume, backup and restore). Each check prints PASS or FAIL; the script exits non-zero if any failed.
+# Phase Y WPs extended the checks below (WP137: hosted mode's login gate and admin CLI; WP141: the
+# CSP, the cross-site check, root-relative asset URLs; WP142: data volume, backup and restore).
+# Uses loopback ports CHUMMER5_TEST_PORT (default 18005) to +2. Each check prints PASS or FAIL; the script exits non-zero if any failed.
 
 set -euo pipefail
 
@@ -19,6 +20,11 @@ source "${SCRIPT_DIR}/lib.sh"
 
 CONTAINER="chummer5-imagetest"
 HOSTED_CONTAINER="chummer5-imagetest-hosted"
+RESTORED_CONTAINER="chummer5-imagetest-restored"
+# WP142: hosted mode runs on a fresh named volume, like deploy.sh's chummer5-data; a backup of it
+# is restored into a second volume and served from there.
+VOLUME="chummer5-imagetest-data"
+RESTORED_VOLUME="chummer5-imagetest-restored"
 PORT="${CHUMMER5_TEST_PORT:-18005}"
 HOSTED_PORT=$((PORT + 1))
 FAILED=0
@@ -33,9 +39,14 @@ check() {   # check "description" command...
     fi
 }
 
+remove_all() {
+    podman rm -f "${CONTAINER}" "${HOSTED_CONTAINER}" "${RESTORED_CONTAINER}" >/dev/null 2>&1 || true
+    podman volume rm -f "${VOLUME}" "${RESTORED_VOLUME}" >/dev/null 2>&1 || true
+}
+
 cleanup() {
     if [[ -z "${KEEP:-}" ]]; then
-        podman rm -f "${CONTAINER}" "${HOSTED_CONTAINER}" >/dev/null 2>&1 || true
+        remove_all
     else
         echo "==> Left running: http://127.0.0.1:${PORT}/  (podman rm -f ${CONTAINER} when done)"
     fi
@@ -45,14 +56,14 @@ TAG="$(image_tag)"
 echo "==> Building ${IMAGE}:${TAG}"
 build_image "${TAG}"
 
-podman rm -f "${CONTAINER}" "${HOSTED_CONTAINER}" >/dev/null 2>&1 || true
+remove_all
 trap cleanup EXIT
 echo "==> Starting it on 127.0.0.1:${PORT} (local mode) and 127.0.0.1:${HOSTED_PORT} (hosted mode)"
 podman run -d --name "${CONTAINER}" -p "127.0.0.1:${PORT}:8000" "${IMAGE}:${TAG}" >/dev/null
 # WP141: hosted mode needs its public URL (the cross-site check compares every POST's Origin).
+HOSTED_ENV=(-e CHUMMER5_MODE=hosted -e "CHUMMER5_PUBLIC_URL=http://127.0.0.1:${HOSTED_PORT}")
 podman run -d --name "${HOSTED_CONTAINER}" -p "127.0.0.1:${HOSTED_PORT}:8000" \
-    -e CHUMMER5_MODE=hosted -e "CHUMMER5_PUBLIC_URL=http://127.0.0.1:${HOSTED_PORT}" \
-    "${IMAGE}:${TAG}" >/dev/null
+    -v "${VOLUME}:/data" "${HOSTED_ENV[@]}" "${IMAGE}:${TAG}" >/dev/null
 
 for port in "${PORT}" "${HOSTED_PORT}"; do
     for _ in $(seq 1 30); do
@@ -100,10 +111,33 @@ check "hosted: registering with it logs in and the shell renders" \
 check "hosted: the admin CLI lists the new user" \
     bash -c "podman exec ${HOSTED_CONTAINER} python -m chummer5.admin users | grep -q '^imagetest '"
 
+# WP142: the database is on the volume, a backup can be taken while the app runs, and that backup
+# restores into a working instance (the restore procedure from spec/deployment.md, "Backups").
+check "hosted: the database is on the volume" \
+    bash -c "podman exec ${HOSTED_CONTAINER} test -s /data/chummer5.db"
+BACKUP="$(podman exec "${HOSTED_CONTAINER}" python -m chummer5.admin backup --keep 3 2>/dev/null || true)"
+check "hosted: a backup is taken while the app runs" \
+    bash -c "[[ -n '${BACKUP}' ]] && podman exec ${HOSTED_CONTAINER} test -s '${BACKUP}'"
+check "hosted: the backup restores into a fresh volume" \
+    bash -c "podman exec ${HOSTED_CONTAINER} cat '${BACKUP}' \
+        | podman run --rm -i -v ${RESTORED_VOLUME}:/data ${IMAGE}:${TAG} \
+            sh -c 'cat > /data/incoming.db && python -m chummer5.admin restore --yes /data/incoming.db'"
+podman run -d --name "${RESTORED_CONTAINER}" -p "127.0.0.1:$((PORT + 2)):8000" \
+    -v "${RESTORED_VOLUME}:/data" "${HOSTED_ENV[@]}" "${IMAGE}:${TAG}" >/dev/null 2>&1 || true
+for _ in $(seq 1 30); do
+    curl -fsS -o /dev/null "http://127.0.0.1:$((PORT + 2))/login" && break
+    sleep 1
+done
+check "restored: it serves /login" \
+    curl -fsS -o /dev/null "http://127.0.0.1:$((PORT + 2))/login"
+check "restored: the user registered before the backup is there" \
+    bash -c "podman exec ${RESTORED_CONTAINER} python -m chummer5.admin users | grep -q '^imagetest '"
+
 if [[ ${FAILED} -ne 0 ]]; then
     echo "==> Some checks failed. Container logs:" >&2
     podman logs --tail 40 "${CONTAINER}" >&2 || true
     podman logs --tail 40 "${HOSTED_CONTAINER}" >&2 || true
+    podman logs --tail 40 "${RESTORED_CONTAINER}" >&2 || true
     exit 1
 fi
 echo "==> All checks passed for ${IMAGE}:${TAG}."

@@ -10,10 +10,12 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import TextIO
 
 from chummer5 import accounts
 from chummer5.store import Store
+from chummer5.store.backup import BackupError, backup, restore
 
 
 def cmd_invite(store: Store, args: argparse.Namespace, out: TextIO) -> int:
@@ -95,10 +97,43 @@ def cmd_delete_user(store: Store, args: argparse.Namespace, out: TextIO) -> int:
     return 0
 
 
+def cmd_backup(store: Store, args: argparse.Namespace, out: TextIO) -> int:
+    directory = Path(args.directory) if args.directory else store.path.parent / "backups"
+    try:
+        path = backup(store, directory, keep=args.keep)
+    except BackupError as exc:
+        print(f"backup failed: {exc}", file=sys.stderr)
+        return 1
+    print(path, file=out)
+    return 0
+
+
+def cmd_restore(store: Store, args: argparse.Namespace, out: TextIO) -> int:
+    source = Path(args.file)
+    if not args.yes:
+        print(
+            f"This replaces everything in {store.path} with {source}. Every account, character "
+            "and login since that backup is lost. Stop the server first.",
+            file=sys.stderr,
+        )
+        if input("Type restore to confirm: ").strip() != "restore":
+            print("not restored", file=sys.stderr)
+            return 1
+    try:
+        version = restore(store, source)
+    except BackupError as exc:
+        print(f"restore failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"restored {source} (schema version {version})", file=out)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m chummer5.admin",
-        description="Manage Chummer5 accounts and invites. Uses the database in CHUMMER5_DB.",
+        description=(
+            "Manage Chummer5 accounts, invites and backups. Uses the database in CHUMMER5_DB."
+        ),
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -128,6 +163,24 @@ def build_parser() -> argparse.ArgumentParser:
     delete.add_argument("username")
     delete.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     delete.set_defaults(func=cmd_delete_user)
+
+    take = commands.add_parser(
+        "backup", help="write a consistent copy of the database (safe while the server runs)"
+    )
+    take.add_argument(
+        "directory",
+        nargs="?",
+        help="where to write it (default: a backups/ folder beside the database)",
+    )
+    take.add_argument("--keep", type=int, metavar="N", help="then delete all but the newest N")
+    take.set_defaults(func=cmd_backup)
+
+    back = commands.add_parser(
+        "restore", help="replace the database with a backup (stop the server first)"
+    )
+    back.add_argument("file")
+    back.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    back.set_defaults(func=cmd_restore)
     return parser
 
 

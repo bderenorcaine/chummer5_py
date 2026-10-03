@@ -2176,3 +2176,33 @@ container that broke.
   `concept` reaches 1021 characters, so 200 would have broken real imports.
 - **Non-upload bodies are capped at 1 MB, and chunked bodies are refused there (411).** A
   Content-Length check suffices: uvicorn doesn't deliver more than the declared length.
+
+## 2026-10-03 — WP142: production container, backups, runbook
+
+- **Backup and restore live in the admin CLI, not in a host-side script around `sqlite3`.** The
+  server has neither Python nor necessarily `sqlite3`, and "the server holds no source code"
+  (`deployment.md`). `python -m chummer5.admin backup` uses SQLite's online backup API, the same
+  as the shell's `.backup`, inside the container. `restore` copies back through the same API, so
+  no `-wal`/`-shm` files need deleting by hand. It refuses an unsound file, a non-Chummer5
+  database, or a newer schema. `deploy/backup.sh` (on the user's machine) only drives them over
+  ssh and streams the file out with `podman exec … cat`.
+- **The app's settings are a file on the server, `~/chummer5/chummer5.env`**, passed with
+  `--env-file`. They are not flags in `deploy.sh`, and not baked into the image. With no file,
+  the app deploys in local mode, with a clear message. That keeps the current
+  basicauth-guarded deployment working until the user switches (`deployment.md` → "Switching to
+  hosted mode").
+- **Every deploy backs up first**, online, into the volume (`--keep 30`, shared with the nightly
+  backups). Rolling back across a schema migration needs exactly that file. `deploy.sh`'s
+  automatic rollback can't restore it by itself, since it can't tell whether the new version
+  migrated. The runbook says what to do when the old version refuses a newer schema.
+- **Nightly backups are a systemd user timer**, given in the runbook. Rootless podman under cron
+  needs `XDG_RUNTIME_DIR` set by hand, and lingering is already required, so the user manager
+  is there anyway.
+- **`CHUMMER5_TRUSTED_PROXY` is moot with the image.** Its uvicorn runs `--proxy-headers
+  --forwarded-allow-ips '*'` (safe: the port is bound to the host's loopback, and Caddy replaces
+  any client-sent `X-Forwarded-For`). The peer the app sees is therefore already the player's
+  address, whatever address rootless podman's port forwarding uses. Verified behind a real Caddy:
+  a spoofed `X-Forwarded-For` doesn't escape the login throttle. This settles the open question
+  WP141 left for WP142.
+- **No version bump here.** `deployment.md` suggests 1.0.0 for the first hosted release. Cutting
+  it is the user's call when they deploy.

@@ -13,11 +13,16 @@
 #   REMOTE_CONTAINER_CMD  container CLI on the server: podman (default) or docker
 #   CHUMMER5_HOST_PORT    loopback port on the server that Caddy proxies to (default 8005)
 #   BUILD_PLATFORM        e.g. linux/arm64 if the server's CPU differs from this machine's
+#
+# On the server (WP142): the app's own settings live in ~/chummer5/chummer5.env (CHUMMER5_MODE,
+# CHUMMER5_PUBLIC_URL, ...), passed to the container as-is; without that file it runs in local
+# mode. The database lives in the named volume chummer5-data, and every deploy first backs it up
+# into the volume's backups/ folder.
 
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
-    sed -n '2,15p' "$0" >&2
+    sed -n '2,20p' "$0" >&2
     exit 2
 fi
 
@@ -25,7 +30,11 @@ SERVER="$1"
 RCMD="${REMOTE_CONTAINER_CMD:-podman}"
 HOST_PORT="${CHUMMER5_HOST_PORT:-8005}"
 CONTAINER="chummer5"
+VOLUME="chummer5-data"        # the database (WP142); survives every container swap
 STATE_DIR='$HOME/chummer5'   # on the server; single-quoted so the server's shell expands it
+ENV_FILE="${STATE_DIR}/chummer5.env"
+# Backups kept in the volume by the pre-deploy backup (deploy/backup.sh copies one off the server).
+KEEP_BACKUPS=30
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -76,6 +85,17 @@ if [[ -n "${PROBLEMS}" ]]; then
     exit 1
 fi
 
+# Hosted mode or local mode is the server's settings file's business, not this script's.
+if remote "test -f ${ENV_FILE}"; then
+    MODE="$(remote "sed -n 's/^CHUMMER5_MODE=//p' ${ENV_FILE} | tail -1")"
+    echo "==> Settings: ${ENV_FILE} (mode: ${MODE:-local})"
+    ENV_ARG="--env-file ${ENV_FILE}"
+else
+    echo "==> No ${ENV_FILE} on the server: deploying in LOCAL mode (no logins; keep Caddy's"
+    echo "    basicauth). See spec/deployment.md, \"Switching to hosted mode\"."
+    ENV_ARG=""
+fi
+
 # ---------------------------------------------------------------- 1. which version is this?
 if [[ -n "${CHUMMER5_TAG:-}" ]]; then
     TAG="${CHUMMER5_TAG}"
@@ -94,13 +114,22 @@ else
     podman save "${IMAGE}:${TAG}" | gzip | remote "gunzip | ${RCMD} load"
 fi
 
-# ---------------------------------------------------------------- 4. swap the container
+# ---------------------------------------------------------------- 4. back up, swap the container
 PREVIOUS="$(remote "cat ${STATE_DIR}/current-tag 2>/dev/null || true")"
+# A backup from just before the new version's migrations run: rolling back across a schema change
+# restores this (spec/deployment.md, "Rolling back"). Online, so the old container keeps serving.
+# Images from before WP142 have no `backup` command; their database isn't on a volume anyway.
+if BACKUP="$(remote "${RCMD} exec ${CONTAINER} python -m chummer5.admin backup --keep ${KEEP_BACKUPS}" 2>/dev/null)"; then
+    echo "==> Backed up the database: ${BACKUP} (in volume ${VOLUME})"
+else
+    echo "==> No backup taken (no running container with a database to back up)"
+fi
 echo "==> Restarting (previous: ${PREVIOUS:-none})"
 # Publishing on 127.0.0.1 only: the app is reachable through Caddy and nothing else.
 remote "${RCMD} rm -f ${CONTAINER} >/dev/null 2>&1 || true
         ${RCMD} run -d --name ${CONTAINER} --restart unless-stopped \
-            -p 127.0.0.1:${HOST_PORT}:8000 ${IMAGE}:${TAG} >/dev/null"
+            -p 127.0.0.1:${HOST_PORT}:8000 -v ${VOLUME}:/data ${ENV_ARG} \
+            ${IMAGE}:${TAG} >/dev/null"
 
 # ---------------------------------------------------------------- 5. health check
 echo "==> Waiting for the app to answer on 127.0.0.1:${HOST_PORT}"

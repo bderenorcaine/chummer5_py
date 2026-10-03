@@ -3,8 +3,7 @@
 Every command needed to run the hosted app, in one place. **Keep this file true:** any WP that adds,
 renames or removes an admin command updates it in the same commit.
 
-The **Since** column says which WP makes a command real. Commands marked *planned* don't exist yet.
-Their syntax is the plan's (`plan/phase-y-hosted-deployment.md`) and may still shift slightly.
+The **Since** column says which WP made a command real.
 
 All server commands assume rootless or rootful **Podman** and the container name `chummer5`. With
 Docker, replace `podman` with `docker`. Deployment itself (building, shipping, first-time setup) is
@@ -28,6 +27,8 @@ podman exec -it chummer5 python -m chummer5.admin <command> [options]
 | Reset a password (prints a one-time temporary password) | `reset-password USERNAME` | WP137 |
 | Delete an account and all its characters (asks you to type the name) | `delete-user USERNAME` | WP137 |
 | … without the prompt, for scripts | `delete-user USERNAME --yes` | WP137 |
+| Back up the database while running (prints the file's path) | `backup [DIR] [--keep N]` | WP142 |
+| Restore a backup (asks you to type `restore`; **stop the server first**) | `restore FILE [--yes]` | WP142 |
 
 Notes:
 
@@ -59,19 +60,17 @@ Typical flows:
 - **Forgotten password.** Run `reset-password NAME` and give them the temporary password over a
   channel you trust. There is no email reset, by design.
 
-**Until the server runs in hosted mode** (`CHUMMER5_MODE=hosted`, wired up by WP142), access is Caddy `basicauth` instead (see `deploy/Caddyfile.example`):
-
-| Task | Command |
-|---|---|
-| Hash a password for a new player | `caddy hash-password` (on the server; prompts) |
-| Add, change or remove a player | edit the `basicauth { … }` lines in the Caddyfile |
-| Apply the change | `sudo systemctl reload caddy` |
+**A server still in local mode** (no `~/chummer5/chummer5.env`) has no accounts. Caddy
+`basicauth` guards it instead (`caddy hash-password`, then edit the Caddyfile and `sudo systemctl
+reload caddy`). `deployment.md` → "Switching to hosted mode" retires that.
 
 ## Deploying and rolling back (from your machine)
 
 | Task | Command |
 |---|---|
-| Deploy the current commit | `deploy/deploy.sh user@server` |
+| Deploy the current commit (backs up first) | `deploy/deploy.sh user@server` |
+| Copy a fresh backup to this machine | `deploy/backup.sh user@server [dir]` |
+| Check an image before deploying it | `deploy/test-image.sh` |
 | Roll back / redeploy a version the server has | `CHUMMER5_TAG=0.1.0 deploy/deploy.sh user@server` |
 | Cut a release before deploying | see `deployment.md` → "Cutting a release" |
 
@@ -91,7 +90,7 @@ Typical flows:
 
 | Task | Command |
 |---|---|
-| Restart (loses in-memory chargen sessions, see below) | `podman restart chummer5` |
+| Restart (loses nothing stored, see below) | `podman restart chummer5` |
 | Stop / start | `podman stop chummer5` / `podman start chummer5` |
 | List the versions kept on the server | `podman images chummer5` |
 | Delete one old version | `podman rmi chummer5:0.1.0` |
@@ -100,17 +99,22 @@ Typical flows:
 **What a restart loses.** At most a character whose priorities were never confirmed. From the
 priority confirmation onward, every change is saved to the database as it happens (WP138), and the
 next login (or, in local mode, the same browser) reopens the last character. The same goes for the
-in-memory sessions the app drops after 2 hours idle (`CHUMMER5_SESSION_IDLE_MINUTES`). Until WP142
-mounts a data volume, the database itself lives in the container, so a **redeploy** (new
-container) still loses it.
+in-memory sessions the app drops after 2 hours idle (`CHUMMER5_SESSION_IDLE_MINUTES`). The
+database is on the volume `chummer5-data`, so a **redeploy** (a new container) keeps it too.
+Never `podman volume rm chummer5-data`: that is the database.
 
-## Database and backups (planned)
+## Database and backups (on the server)
 
-| Task | Command | Since |
-|---|---|---|
-| Back up while running (SQLite online backup) | backup script, path TBD | planned, WP142 |
-| Restore a backup | procedure in `deployment.md` | planned, WP142 |
-| Where the database lives | `/data/chummer5.db` in the container (`CHUMMER5_DB`); WP142 mounts a named volume on `/data` | WP137 (path), planned WP142 (volume) |
+| Task | Command |
+|---|---|
+| Where the database lives | `/data/chummer5.db` in the container, on the volume `chummer5-data` |
+| Back up now (prints the path; safe while running) | `podman exec chummer5 python -m chummer5.admin backup` |
+| List the backups in the volume | `podman exec chummer5 ls -l /data/backups` |
+| When did the nightly backup last run? | `systemctl --user list-timers chummer5-backup.timer` |
+| Restore one | `deployment.md` → "Restoring" (stop, `restore`, start) |
+
+Backups are taken automatically before every deploy and, once the timer is set up, nightly. The
+volume keeps the newest 30. `deploy/backup.sh` copies one off the server.
 
 ## If the site is down
 

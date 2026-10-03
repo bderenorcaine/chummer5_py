@@ -25,15 +25,18 @@ COPY --from=build /app /app
 COPY legacy/Chummer/data ./legacy/Chummer/data
 COPY legacy/Chummer/lang ./legacy/Chummer/lang
 # WP136/137: the SQLite database. The app creates it at startup, in local mode too, and /app is
-# root-owned, so it needs a directory of its own the app user can write. WP142 mounts the data
-# volume here; without one, the database lives and dies with the container.
+# root-owned, so it needs a directory of its own the app user can write. deploy.sh mounts the
+# named volume chummer5-data here (WP142); a new, empty volume takes this directory's owner.
 RUN mkdir /data && chown chummer /data
 USER chummer
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 CHUMMER5_DB=/data/chummer5.db
 EXPOSE 8000
 # One worker: chargen sessions live in process memory (phase-y-hosted-deployment.md, Finding 4).
-# --proxy-headers makes url_for() build https:// URLs from Caddy's X-Forwarded-Proto. Trusting
+# --proxy-headers makes the client address uvicorn reports Caddy's X-Forwarded-For, which the
+# login throttle counts by (WP141; asset URLs are root-relative and don't depend on it). Trusting
 # every forwarder ("*") is only safe because the published port is bound to the host's 127.0.0.1,
-# so Caddy is the only thing that can reach it.
+# so Caddy is the only thing that can reach it -- and Caddy replaces any X-Forwarded-For a client
+# sends. Under rootless podman the peer isn't 127.0.0.1 inside the container, which is why it is
+# "*" and not a list.
 CMD ["python", "-m", "uvicorn", "chummer5.web.app:app", "--host", "0.0.0.0", "--port", "8000", \
      "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*"]
