@@ -1,7 +1,8 @@
 {# WP138: the open character's name in the title bar ("New character" until the first priority
-   confirmation stores one), re-fetched on `chargen-changed` so a Bio edit shows at once. WP139
-   links it to the character list. "New character" is a switch: it carries the switch warning,
-   which static/tabs.js shows only when another tab of the app is open in this browser. #}
+   confirmation stores one), re-fetched on `chargen-changed` so a Bio edit shows at once, and
+   WP139's link to the character list (a plain link: the list is a page of its own). "New
+   character" is a switch: it carries the switch warning, which static/tabs.js shows only when
+   another tab of the app is open in this browser. #}
 <span
   id="open-character"
   class="open-character"
@@ -16,6 +17,7 @@
     {{ _("Web_Characters_New") }}
     {%- endif -%}
   </span>
+  <a class="open-character__list" href="/characters">{{ _("Web_Characters_ListLink") }}</a>
   {% if open_character.stored %}
   <button
     type="button"

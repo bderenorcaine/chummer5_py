@@ -36,6 +36,7 @@ from chummer5 import accounts
 from chummer5.io.save_format import from_json, to_json
 from chummer5.store import CharacterRecord, QuotaExceededError, RevisionConflictError
 from chummer5.web.auth import (
+    CHARACTERS_PATH,
     LOGIN_PATH,
     LOGOUT_PATH,
     PASSWORD_PATH,
@@ -57,14 +58,17 @@ logger = logging.getLogger(__name__)
 
 CHARACTER_ID_HEADER = "X-Character-Id"
 NEW_CHARACTER_TOKEN = "new"
-# Switching characters (WP138's open/new, WP139's list, WP140's upload) lives here: these routes
+# Switching characters (WP138's open/new, WP139's delete, WP140's upload) lives here: these routes
 # change the open character on purpose, behind their own confirmation, so the tab guard doesn't
 # apply, and they store what they need themselves, so the autosave doesn't either.
 CHARACTERS_PREFIX = "/characters/"
 # Display preferences: not the character (see `chummer5.web.prefs`).
 PREFS_PREFIX = "/ui/prefs/"
 _UNGUARDED_PREFIXES = (STATIC_PREFIX, PREFS_PREFIX, CHARACTERS_PREFIX)
-_UNGUARDED_PATHS = frozenset({LOGIN_PATH, REGISTER_PATH, LOGOUT_PATH, PASSWORD_PATH})
+# The list (WP139) is a page of its own, outside the chargen shell.
+_UNGUARDED_PATHS = frozenset(
+    {LOGIN_PATH, REGISTER_PATH, LOGOUT_PATH, PASSWORD_PATH, CHARACTERS_PATH}
+)
 
 
 # --- who and what --------------------------------------------------------------------------------

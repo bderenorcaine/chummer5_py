@@ -201,10 +201,54 @@
       <key>Web_BuildMethod_SumtoTen</key>
       <text>Sum-to-Ten</text>
     </string>
-    <!-- Characters: the open character, storing and switching (WP138) -->
+    <!-- Characters: the open character, storing and switching (WP138), the list (WP139) -->
+    <string>
+      <key>Web_Characters_BackTo</key>
+      <text>← Back to “{name}”</text>
+    </string>
+    <string>
+      <key>Web_Characters_BackToChargen</key>
+      <text>← Back to character creation</text>
+    </string>
     <string>
       <key>Web_Characters_ChangedElsewhere</key>
       <text>This character was changed on another device since this page loaded, so your last change was not saved. Reload to get the latest version.</text>
+    </string>
+    <string>
+      <key>Web_Characters_ColActions</key>
+      <text>Actions</text>
+    </string>
+    <string>
+      <key>Web_Characters_ColUpdated</key>
+      <text>Last changed</text>
+    </string>
+    <string>
+      <key>Web_Characters_Continue</key>
+      <text>Continue</text>
+    </string>
+    <string>
+      <key>Web_Characters_DeleteConfirm</key>
+      <text>Delete “{name}”? This cannot be undone.</text>
+    </string>
+    <string>
+      <key>Web_Characters_DeleteOpenTabs</key>
+      <text>It is the character open in this browser. Other tabs of this app will stop working until you reload them.</text>
+    </string>
+    <string>
+      <key>Web_Characters_Empty</key>
+      <text>No characters yet. Start one with “New character”.</text>
+    </string>
+    <string>
+      <key>Web_Characters_Filter</key>
+      <text>Filter by name</text>
+    </string>
+    <string>
+      <key>Web_Characters_ListLink</key>
+      <text>My characters</text>
+    </string>
+    <string>
+      <key>Web_Characters_ListTitle</key>
+      <text>My characters</text>
     </string>
     <string>
       <key>Web_Characters_New</key>
@@ -213,6 +257,14 @@
     <string>
       <key>Web_Characters_NewButton</key>
       <text>New character</text>
+    </string>
+    <string>
+      <key>Web_Characters_NoMatch</key>
+      <text>No character’s name or street name contains “{filter}”.</text>
+    </string>
+    <string>
+      <key>Web_Characters_OpenBadge</key>
+      <text>open</text>
     </string>
     <string>
       <key>Web_Characters_QuotaReached</key>
@@ -233,6 +285,14 @@
     <string>
       <key>Web_Characters_Unnamed</key>
       <text>Unnamed</text>
+    </string>
+    <string>
+      <key>Web_Characters_UpdatedUtc</key>
+      <text>{time} UTC</text>
+    </string>
+    <string>
+      <key>Web_Characters_Usage</key>
+      <text>{count} / {quota} characters</text>
     </string>
     <!-- Contacts -->
     <string>

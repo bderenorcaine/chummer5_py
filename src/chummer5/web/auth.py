@@ -33,6 +33,8 @@ LOGIN_PATH = "/login"
 REGISTER_PATH = "/register"
 LOGOUT_PATH = "/logout"
 PASSWORD_PATH = "/account/password"
+# WP139: the character list, where a login or a registration lands.
+CHARACTERS_PATH = "/characters"
 # Reachable without a login.
 PUBLIC_PATHS = frozenset({LOGIN_PATH, REGISTER_PATH})
 STATIC_PREFIX = "/static/"

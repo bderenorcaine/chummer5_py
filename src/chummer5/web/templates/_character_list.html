@@ -1,0 +1,66 @@
+{# WP139: the list itself, with the New button and usage that a delete changes. Re-fetched by the
+   filter box (GET /characters) and returned by a delete, both into #character-list. Delete always
+   asks (`data-confirm="always"`); Open and New ask only when another tab of the app is open
+   (static/tabs.js), and not at all when nothing would switch. #}
+<div class="character-list__toolbar">
+  <button
+    type="button"
+    hx-post="/characters/new"
+    hx-swap="none"
+    {% if open_character.stored %}hx-confirm="{{ open_character.switch_question }}"{% endif %}
+    {% if at_quota %}disabled aria-describedby="character-quota-reason"{% endif %}
+  >{{ _("Web_Characters_NewButton") }}</button>
+  <span class="character-list__usage">{{ _("Web_Characters_Usage", count=count, quota=quota) }}</span>
+</div>
+{% if at_quota %}
+<p id="character-quota-reason" class="info">{{ _("Web_Characters_QuotaReached", quota=quota) }}</p>
+{% endif %}
+{% if rows %}
+<table class="character-list__table">
+  <thead>
+    <tr>
+      <th scope="col">{{ _("String_Name") }}</th>
+      <th scope="col">{{ _("String_Metatype") }}</th>
+      <th scope="col">{{ _("Web_Characters_ColUpdated") }}</th>
+      <th scope="col">{{ _("Web_Characters_ColActions") }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr {% if row.is_open %}class="character-list__open"{% endif %}>
+      <td>
+        {{ row.name or _("Web_Characters_Unnamed") }}
+        {% if row.is_open %}<span class="character-list__badge">{{ _("Web_Characters_OpenBadge") }}</span>{% endif %}
+      </td>
+      <td>{{ row.metatype | dterm("metatypes.xml") }}</td>
+      <td><time datetime="{{ row.updated_iso }}">{{ _("Web_Characters_UpdatedUtc", time=row.updated) }}</time></td>
+      <td class="character-list__actions">
+        {% if row.is_open %}
+        <a href="/">{{ _("Web_Characters_Continue") }}</a>
+        {% else %}
+        <button
+          type="button"
+          hx-post="/characters/{{ row.id }}/open"
+          hx-swap="none"
+          {% if open_character.stored %}hx-confirm="{{ open_character.switch_question }}"{% endif %}
+        >{{ _("Label_Open") }}</button>
+        {% endif %}
+        <button
+          type="button"
+          hx-post="/characters/{{ row.id }}/delete"
+          hx-target="#character-list"
+          hx-include="#character-filter"
+          hx-confirm="{{ row.delete_question }}"
+          data-confirm="always"
+          {% if row.delete_tabs_warning %}data-confirm-tabs="{{ row.delete_tabs_warning }}"{% endif %}
+        >{{ _("String_Delete") }}</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% elif name_filter.strip() %}
+<p>{{ _("Web_Characters_NoMatch", filter=name_filter.strip()) }}</p>
+{% else %}
+<p>{{ _("Web_Characters_Empty") }}</p>
+{% endif %}

@@ -459,18 +459,23 @@ details[open] > .panel__heading {
   background: var(--info-bg);
 }
 
-/* Just enough table styling that a panel's rows read as rows against the panel tint. */
-.page table {
+/* Just enough table styling that a panel's rows read as rows against the panel tint. WP139: the
+   character list's table too. */
+.page table,
+.character-list table {
   border-collapse: collapse;
 }
 
 .page th,
-.page td {
+.page td,
+.character-list th,
+.character-list td {
   padding: 0.15rem 0.4rem;
   text-align: left;
 }
 
-.page thead th {
+.page thead th,
+.character-list thead th {
   border-bottom: 1px solid var(--rule);
   color: var(--table-head-fg);
   background: var(--table-head-bg);
@@ -479,11 +484,13 @@ details[open] > .panel__heading {
 /* Body-row banding (SR4's alternating green rows); `transparent` in themes that don't band. Only a
    background -- never `display` on a `tr` (WP84). A filtered-out (hidden) row still counts toward
    `nth-child`, so banding under an active filter can show two like rows together. */
-.page tbody tr:nth-child(odd) {
+.page tbody tr:nth-child(odd),
+.character-list tbody tr:nth-child(odd) {
   background: var(--table-row-bg-a);
 }
 
-.page tbody tr:nth-child(even) {
+.page tbody tr:nth-child(even),
+.character-list tbody tr:nth-child(even) {
   background: var(--table-row-bg-b);
 }
 
@@ -574,6 +581,64 @@ details[open] > .panel__heading {
   font-weight: 600;
 }
 
+.open-character__list {
+  color: inherit;
+}
+
 .stale-notice__reload {
   font-weight: 600;
+}
+
+/* WP139: the character list -- the shell's title bar over one panel, no step nav. Table, button
+   and panel looks come from the theme, as on every step page. */
+.list-shell {
+  min-height: 100vh;
+}
+
+.list-shell__main {
+  padding: 1.5rem 1.25rem;
+  background: var(--main-bg);
+}
+
+.list-shell__back {
+  color: inherit;
+  font-size: 0.9rem;
+}
+
+.character-list .panel__heading {
+  cursor: default;
+  margin: 0 0 0.75rem;
+}
+
+.character-list__filter input {
+  margin-left: 0.4rem;
+}
+
+.character-list__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.character-list__table {
+  width: 100%;
+}
+
+.character-list__badge {
+  margin-left: 0.4rem;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.character-list__open td:first-child {
+  font-weight: 600;
+}
+
+.character-list__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }

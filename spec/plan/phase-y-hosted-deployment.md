@@ -254,7 +254,7 @@ it with an Opus `/code-review high`.
     other tab keeps working. With no other tab, there is no prompt.
   - Prefs POSTs never trigger an autosave.
 
-- [ ] **WP139 — The character list page.**
+- [x] **WP139 — The character list page.**
   *Suggested model:* Sonnet. A standard list page in the existing shell's style.
   Goal: the landing page after login. It lists the player's characters, filtered by name.
   Deliverables:
@@ -312,6 +312,13 @@ it with an Opus `/code-review high`.
     The game data XML under `legacy/` is trusted and keeps stdlib parsing.
   - `import_chum5` takes bytes (or a file object) in addition to a `Path`, which retires the temp-file
     workaround in `import_chum5_route`.
+  **From WP139 (2026-10-03):** the list page has no Download link and no Upload control yet;
+  both are this WP's. Download goes in each row's actions cell (`_character_list.html`, beside
+  Open/Continue and Delete). Upload goes in `.character-list__toolbar` next to New, is disabled
+  with the same `at_quota` reason, and carries the switch warning
+  (`open_character.switch_question`, only when `open_character.stored`, like New). Since the list
+  is outside `#app-shell`, an upload from it should end in a full navigation to `/` (as Open does),
+  not `pages.shell_swap_response`.
   Depends on: WP138, WP139.
   Acceptance:
   - A download → upload round trip produces an equal save.

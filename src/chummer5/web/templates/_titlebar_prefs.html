@@ -1,0 +1,23 @@
+{# WP100/WP101: display preferences. Changing one is not a chargen change (see
+   chummer5.web.prefs): the theme swaps only its own <link>, out of band; the language reloads the
+   page, since every string on it changes. WP139: shared by the chargen shell and the character
+   list (context: `pages.prefs_context`). #}
+<div class="app-shell__prefs">
+  <label class="app-shell__pref">
+    {{ _("Web_Prefs_Theme") }}
+    <select name="theme" hx-post="/ui/prefs/theme" hx-trigger="change" hx-swap="none">
+      {% for option in themes %}
+      <option value="{{ option.slug }}" {% if option.slug == theme %}selected{% endif %}>{{ _(option.label_key) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% include "_font_hint.html" %}
+  <label class="app-shell__pref">
+    {{ _("Web_Prefs_Language") }}
+    <select name="locale" hx-post="/ui/prefs/locale" hx-trigger="change" hx-swap="none">
+      {% for option in locales %}
+      <option value="{{ option.tag }}" lang="{{ option.html_lang }}" {% if option.tag == locale %}selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</div>

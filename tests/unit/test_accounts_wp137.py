@@ -144,7 +144,7 @@ def test_registration_logs_in_and_a_used_code_fails_the_second_time(
 ) -> None:
     code = invite(store)
     response = register(client, code)
-    assert response.status_code == 303 and response.headers["location"] == "/"
+    assert response.status_code == 303 and response.headers["location"] == "/characters"
     assert client.cookies.get(AUTH_COOKIE_NAME)
     user = store.get_user_by_name("alice")
     assert user is not None
@@ -223,7 +223,7 @@ def test_login_renders_shell_and_logout_ends_the_session(alice: TestClient, stor
     alice.post("/logout")
     assert alice.get("/").headers["location"] == "/login"
     response = login(alice)
-    assert response.status_code == 303 and response.headers["location"] == "/"
+    assert response.status_code == 303 and response.headers["location"] == "/characters"
     page = alice.get("/")
     assert page.status_code == 200
     assert "alice" in page.text and '/logout"' in page.text
@@ -271,8 +271,8 @@ def test_only_the_token_hash_is_stored(alice: TestClient, store: Store) -> None:
 
 
 def test_logged_in_user_skips_the_login_page(alice: TestClient) -> None:
-    assert alice.get("/login").headers["location"] == "/"
-    assert alice.get("/register").headers["location"] == "/"
+    assert alice.get("/login").headers["location"] == "/characters"
+    assert alice.get("/register").headers["location"] == "/characters"
 
 
 def test_auth_cookie_flags(client: TestClient, store: Store) -> None:

@@ -17,6 +17,7 @@ from chummer5.store import UserRecord
 from chummer5.web import prefs
 from chummer5.web.auth import (
     AUTH_COOKIE_NAME,
+    CHARACTERS_PATH,
     LOGIN_PATH,
     PASSWORD_PATH,
     REGISTER_PATH,
@@ -34,7 +35,10 @@ from chummer5.web.session import CHARGEN_KEY_STATE, SessionStore
 
 router = APIRouter()
 
-# Where a successful login lands. WP139 makes this the character list.
+# Where a login or a registration lands, and where the login page sends someone already logged
+# in: the character list (WP139).
+LANDING_PATH = CHARACTERS_PATH
+# Where a password change carries on: chargen, with the character that was open.
 HOME_PATH = "/"
 
 
@@ -89,7 +93,7 @@ def _log_in(request: Request, user: UserRecord) -> Response:
         accounts.end_session(store, old_token)
         _chargen_sessions(request).discard(accounts.hash_token(old_token))
     login = accounts.start_session(store, user)
-    target = PASSWORD_PATH if user.must_change_password else HOME_PATH
+    target = PASSWORD_PATH if user.must_change_password else LANDING_PATH
     response = redirect(request, target)
     set_auth_cookie(request, response, login.token)
     return response
@@ -102,7 +106,7 @@ def _log_in(request: Request, user: UserRecord) -> Response:
 def login_page(request: Request) -> Response:
     _hosted_or_404(request)
     if current_user(request) is not None:
-        return redirect(request, HOME_PATH)
+        return redirect(request, LANDING_PATH)
     return _form_page(request, "login.html", title_key="Web_Auth_LoginTitle", username="")
 
 
@@ -130,7 +134,7 @@ def login(request: Request, username: str = Form(""), password: str = Form("")) 
 def register_page(request: Request) -> Response:
     _hosted_or_404(request)
     if current_user(request) is not None:
-        return redirect(request, HOME_PATH)
+        return redirect(request, LANDING_PATH)
     return _form_page(
         request, "register.html", title_key="Web_Auth_RegisterTitle", username="", invite=""
     )

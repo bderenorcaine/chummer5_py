@@ -1,0 +1,57 @@
+<!doctype html>
+{# WP139: the character list, the landing page after login. The chargen shell's title bar
+   (display preferences, account links) over one panel, no step nav: nothing here edits the open
+   character. Not inside #app-shell, so its requests carry no X-Character-Id and are never
+   tab-guarded. `data-tabs-passive` keeps this tab out of static/tabs.js's "is another tab of the
+   app open?" count: switching characters elsewhere doesn't break this page. #}
+<html lang="{{ html_lang }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ _("Web_App_WindowTitle", page=_("Web_Characters_ListTitle")) }}</title>
+    <meta name="htmx-config" content='{"historyCacheSize": 0}' />
+    {% include "_theme_link.html" %}
+    <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
+    <script src="{{ url_for('static', path='vendor/htmx/htmx.min.js') }}"></script>
+    <script src="{{ url_for('static', path='tabs.js') }}"></script>
+  </head>
+  <body data-tabs-passive>
+    <div class="list-shell">
+      <header class="app-shell__titlebar">
+        <span class="app-shell__title">{{ _("Web_App_Title") }}</span>
+        <a class="list-shell__back" href="/">
+          {%- if open_character.stored -%}
+          {{ _("Web_Characters_BackTo", name=open_character.name or _("Web_Characters_Unnamed")) }}
+          {%- else -%}
+          {{ _("Web_Characters_BackToChargen") }}
+          {%- endif -%}
+        </a>
+        {% include "_titlebar_prefs.html" %}
+        {% include "_titlebar_account.html" %}
+      </header>
+      <main class="list-shell__main">
+        <section class="panel character-list">
+          <h1 class="panel__heading">{{ _("Web_Characters_ListTitle") }}</h1>
+          <label class="character-list__filter">
+            {{ _("Web_Characters_Filter") }}
+            <input
+              id="character-filter"
+              type="search"
+              name="q"
+              value="{{ name_filter }}"
+              maxlength="{{ max_filter }}"
+              autocomplete="off"
+              hx-get="/characters"
+              hx-trigger="input changed delay:300ms, search"
+              hx-target="#character-list"
+              hx-replace-url="true"
+            />
+          </label>
+          <div id="character-list">
+            {% include "_character_list.html" %}
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

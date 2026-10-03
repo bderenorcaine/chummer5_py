@@ -10,6 +10,13 @@
 // a minute after a while, in Chrome), but it still receives and answers messages. Other devices
 // can't be seen from here, and aren't affected anyway (the server's revision check covers them).
 // A static file, not inline, so a strict Content-Security-Policy (WP141) can allow it.
+//
+// WP139 adds two things:
+// - A control with `data-confirm="always"` (Delete on the character list) always asks. When
+//   another tab is open, its `data-confirm-tabs` text, if any, is added to the question (deleting
+//   the open character switches this browser to a new one).
+// - A page whose <body> has `data-tabs-passive` (the character list) asks, but doesn't answer:
+//   switching characters elsewhere doesn't break it, so it is no reason to warn.
 (function () {
   if (!("BroadcastChannel" in window)) return; // then htmx simply always asks
   var CHANNEL = "chummer5-tabs";
@@ -21,7 +28,8 @@
   channel.onmessage = function (event) {
     var message = event.data || {};
     if (message.from === me) return;
-    if (message.type === "ping") {
+    // Read at message time: this script runs in <head>, before <body> exists.
+    if (message.type === "ping" && !document.body.hasAttribute("data-tabs-passive")) {
       channel.postMessage({ type: "pong", from: me, to: message.from });
     } else if (message.type === "pong" && message.to === me && waiting) {
       waiting(true);
@@ -47,8 +55,12 @@
     var question = event.detail.question;
     if (!question) return; // not a confirmed control: htmx goes ahead as usual
     event.preventDefault();
+    var elt = event.detail.elt;
+    var always = elt.getAttribute("data-confirm") === "always";
+    var extra = elt.getAttribute("data-confirm-tabs");
     anotherTabIsOpen(function (open) {
-      if (!open || window.confirm(question)) event.detail.issueRequest(true);
+      if (open && extra) question += "\n\n" + extra;
+      if ((!open && !always) || window.confirm(question)) event.detail.issueRequest(true);
     });
   });
 })();

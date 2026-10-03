@@ -71,6 +71,19 @@ def _section_or_404(page: StepPage, tab: str) -> None:
         )
 
 
+def prefs_context(session: ChargenSession) -> dict[str, Any]:
+    """What the title bar's display-preference pickers (`_titlebar_prefs.html`) and the theme
+    `<link>` read. WP139: the character list page has them too."""
+    return {
+        "theme": session.theme,
+        "themes": THEMES,
+        "theme_fonts": THEMES_BY_SLUG[session.theme].fonts,
+        "locale": session.locale,
+        "locales": prefs.LOCALES,
+        "html_lang": prefs.LOCALES_BY_TAG.get(session.locale, _DEFAULT_LOCALE_ENTRY).html_lang,
+    }
+
+
 def _shell_context(
     session: ChargenSession,
     page: StepPage,
@@ -93,13 +106,8 @@ def _shell_context(
         **nav_context(session, chargen_ctx),
         **validation_context(session, chargen_ctx),  # WP135
         **resource_panel_context(session, chargen_ctx),
+        **prefs_context(session),
         "page": page,
-        "theme": session.theme,
-        "themes": THEMES,
-        "theme_fonts": THEMES_BY_SLUG[session.theme].fonts,
-        "locale": session.locale,
-        "locales": prefs.LOCALES,
-        "html_lang": prefs.LOCALES_BY_TAG.get(session.locale, _DEFAULT_LOCALE_ENTRY).html_lang,
     }
     if page.tabbed:
         context |= tabs_context(session, page, chargen_ctx, resolve_tab(session, page, tab))
@@ -154,7 +162,7 @@ def shell_swap_response(
     return _respond(response, new_cookie)
 
 
-def _is_htmx_fragment_request(request: Request) -> bool:
+def is_htmx_fragment_request(request: Request) -> bool:
     # htmx's history-restore request (back button on a history-cache miss) also sets
     # `HX-Request`, but swaps the response in as the whole page, so it needs the full shell.
     return (
@@ -170,12 +178,12 @@ def index(request: Request) -> HTMLResponse:
 
 @router.get("/ui/page/{slug}", response_class=HTMLResponse)
 def page(request: Request, slug: str) -> HTMLResponse:
-    return _render(request, slug, fragment=_is_htmx_fragment_request(request))
+    return _render(request, slug, fragment=is_htmx_fragment_request(request))
 
 
 @router.get("/ui/page/{slug}/{tab}", response_class=HTMLResponse)
 def page_tab(request: Request, slug: str, tab: str) -> HTMLResponse:
-    return _render(request, slug, fragment=_is_htmx_fragment_request(request), tab=tab)
+    return _render(request, slug, fragment=is_htmx_fragment_request(request), tab=tab)
 
 
 @router.get("/ui/tabs/{slug}", response_class=HTMLResponse)
