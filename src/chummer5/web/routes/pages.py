@@ -35,6 +35,7 @@ from fastapi.responses import HTMLResponse
 from chummer5.web import prefs
 from chummer5.web.auth import app_store, current_user
 from chummer5.web.catalogs import templates
+from chummer5.web.persistence import open_character_context
 from chummer5.web.prefs import THEMES, THEMES_BY_SLUG
 from chummer5.web.routes.character import _character_sheet_context
 from chummer5.web.routes.priorities import _session_priority_form_context
@@ -71,7 +72,10 @@ def _section_or_404(page: StepPage, tab: str) -> None:
 
 
 def _shell_context(
-    session: ChargenSession, page: StepPage, tab: str | None = None
+    session: ChargenSession,
+    page: StepPage,
+    tab: str | None = None,
+    sheet_messages: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Everything `_page.html` and `_step_nav.html` read for `page`: the page's own fragment
     context plus the nav's items, and -- for a composite page -- its tab strip, showing `tab` if
@@ -80,7 +84,7 @@ def _shell_context(
     """
     chargen_ctx = chargen_context(session, _session_priority_form_context(session))
     page_ctx = (
-        _character_sheet_context(session, chargen_ctx=chargen_ctx)
+        _character_sheet_context(session, chargen_ctx=chargen_ctx, **(sheet_messages or {}))
         if page.slug == "export"
         else chargen_ctx
     )
@@ -119,10 +123,34 @@ def _render(request: Request, slug: str, *, fragment: bool, tab: str | None = No
     session.current_page = page.slug
     context = _shell_context(session, page, tab)
     context["current_user"] = current_user(request)  # WP137: the title bar's account links
+    context |= open_character_context(request, session)  # WP138
     if fragment:
         response = templates.TemplateResponse(request, "_page.html", {**context, "oob_nav": True})
     else:
         response = templates.TemplateResponse(request, "base.html", context)
+    return _respond(response, new_cookie)
+
+
+def shell_swap_response(
+    request: Request,
+    session: ChargenSession,
+    slug: str,
+    new_cookie: str | None = None,
+    **sheet_messages: Any,
+) -> HTMLResponse:
+    """WP138: the whole shell for `slug`, swapped over `#app-shell` in place. For a response that
+    changed which character is open (the first store at the priority confirmation, a load or an
+    import): only re-rendering the wrapper renews its `hx-headers`, and a full reload would lose
+    the response's own messages (an import's dropped qualities, say). `sheet_messages` are the
+    Export page's `error`/`info`."""
+    page = _page_or_404(slug)
+    session.current_page = page.slug
+    context = _shell_context(session, page, sheet_messages=sheet_messages)
+    context["current_user"] = current_user(request)
+    context |= open_character_context(request, session)
+    response = templates.TemplateResponse(request, "_app_shell.html", context)
+    response.headers["HX-Retarget"] = "#app-shell"
+    response.headers["HX-Reswap"] = "outerHTML"
     return _respond(response, new_cookie)
 
 
@@ -185,6 +213,16 @@ def step_nav(request: Request) -> HTMLResponse:
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
     return response
+
+
+@router.get("/ui/open-character", response_class=HTMLResponse)
+def open_character_fragment(request: Request) -> HTMLResponse:
+    """The title bar's open-character name alone (WP138), re-fetched on `chargen-changed`."""
+    session, new_cookie = resolve_session(request)
+    response = templates.TemplateResponse(
+        request, "_open_character.html", open_character_context(request, session)
+    )
+    return _respond(response, new_cookie)
 
 
 @router.get("/ui/validation-status", response_class=HTMLResponse)

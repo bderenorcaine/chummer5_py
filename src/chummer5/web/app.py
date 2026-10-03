@@ -47,11 +47,13 @@ from chummer5.web.catalogs import (
     MVP_QUALITIES,
     STATIC_DIR,
 )
+from chummer5.web.persistence import restore_session, store_middleware
 from chummer5.web.routes import (
     account,
     attributes,
     bio,
     character,
+    characters,
     contacts,
     cyberware,
     foci,
@@ -109,6 +111,8 @@ def create_app(mode: Mode | None = None, store: Store | None = None) -> FastAPI:
 
     app = FastAPI(title="Chummer5", lifespan=lifespan)
     app.state.sessions = SessionStore()
+    # WP138: a lost chargen session is rebuilt from the user's last-opened character.
+    app.state.session_restorer = restore_session
     app.state.mode = resolved_mode
     app.state.store = resolved_store
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -134,6 +138,13 @@ def create_app(mode: Mode | None = None, store: Store | None = None) -> FastAPI:
         ):
             response.headers["HX-Trigger"] = CHARGEN_CHANGED_EVENT
         return response
+
+    # WP138: the tab guard (before the route) and the autosave (after it). Registered after
+    # `_signal_chargen_changed`, so it wraps it: a refused or conflicting change answers with its
+    # 409 notice, which carries no `chargen-changed` trigger. Inside the login gate, which it
+    # needs (the user owns the character).
+    app.middleware("http")(store_middleware)
+    app.include_router(characters.router)
 
     # WP137: hosted mode's login gate. Registered after `_signal_chargen_changed`, so it is the
     # outer one (Starlette runs the last-added middleware first): a request turned away never

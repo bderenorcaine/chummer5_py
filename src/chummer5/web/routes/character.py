@@ -1137,6 +1137,26 @@ def _apply_built_character_to_session(
     session.character = built
 
 
+def build_from_save(save: CharacterSave) -> Character:
+    """`build_character` against this app's catalogs: a save (uploaded, or stored -- WP138) back
+    into a `Character`. Raises what `build_character` raises for a save that doesn't fit."""
+    return build_character(
+        save,
+        metatypes=METATYPES,
+        priorities=PRIORITIES,
+        skills=SKILLS,
+        qualities=QUALITIES,
+        lifestyles=LIFESTYLES,
+        traditions=TRADITIONS,
+        spells=SPELLS,
+        powers=POWERS,
+        cyberware=CYBERWARE_ENTRIES,
+        bioware=BIOWARE,
+        foci=FOCI,
+        mentors=MENTORS,
+    )
+
+
 @router.get("/character/save")
 def download_save(request: Request) -> Response:
     session, new_cookie = resolve_session(request)
@@ -1170,21 +1190,7 @@ async def load_save(request: Request) -> HTMLResponse:
         try:
             text = raw.decode("utf-8")
             save = from_json(text)
-            built = build_character(
-                save,
-                metatypes=METATYPES,
-                priorities=PRIORITIES,
-                skills=SKILLS,
-                qualities=QUALITIES,
-                lifestyles=LIFESTYLES,
-                traditions=TRADITIONS,
-                spells=SPELLS,
-                powers=POWERS,
-                cyberware=CYBERWARE_ENTRIES,
-                bioware=BIOWARE,
-                foci=FOCI,
-                mentors=MENTORS,
-            )
+            built = build_from_save(save)
         # A user-supplied file's shape is never trusted beyond this point -- malformed JSON
         # (ValueError, via json.JSONDecodeError/UnicodeDecodeError), a missing field
         # (KeyError), a save shaped as something other than a JSON object (AttributeError, from
@@ -1194,13 +1200,12 @@ async def load_save(request: Request) -> HTMLResponse:
         except (ValueError, KeyError, AttributeError) as exc:
             error = Message.of("Web_Sheet_ErrorLoad", error=str(exc))
         else:
-            _apply_built_character_to_session(session, save, built)
-            info = Message.of("Web_Sheet_Loaded")
-    context = _character_sheet_context(session, error=error, info=info)
-    response = templates.TemplateResponse(request, "_character_sheet.html", context)
-    if new_cookie is not None:
-        response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")
-    return response
+            error = _store_as_new_character(request, session, save, built)
+            if error is None:
+                return _switched_response(
+                    request, session, new_cookie, Message.of("Web_Sheet_Loaded")
+                )
+    return _sheet_fragment(request, session, new_cookie, error=error, info=info)
 
 
 @router.post("/character/import-chum5", response_class=HTMLResponse)
@@ -1244,7 +1249,8 @@ async def import_chum5_route(request: Request) -> HTMLResponse:
             except ET.ParseError as exc:
                 error = Message.of("Web_Sheet_ErrorInvalidChum5", error=str(exc))
             else:
-                _apply_built_character_to_session(session, result.save, result.built)
+                error = _store_as_new_character(request, session, result.save, result.built)
+            if error is None:
                 messages = [Message.of("Web_Sheet_Imported")]
                 if result.dropped_qualities:
                     messages.append(
@@ -1277,8 +1283,52 @@ async def import_chum5_route(request: Request) -> HTMLResponse:
                             names=MessageJoin(tuple(result.dropped_powers)),
                         )
                     )
-                info = MessageJoin(tuple(messages), "Web_List_Space")
+                return _switched_response(
+                    request, session, new_cookie, MessageJoin(tuple(messages), "Web_List_Space")
+                )
+    return _sheet_fragment(request, session, new_cookie, error=error, info=info)
+
+
+def _store_as_new_character(
+    request: Request, session: ChargenSession, save: CharacterSave, built: Character
+) -> Message | None:
+    """WP138: a loaded or imported save becomes a **new** stored character, which this session
+    then opens -- it never overwrites the character that was open. Returns the error to show
+    instead (the quota). WP140 moves uploads to `POST /characters/upload`."""
+    # Imported here: `persistence` imports this module.
+    from chummer5.web import persistence
+
+    tentative = ChargenSession()
+    _apply_built_character_to_session(tentative, save, built)
+    tentative.current_page = "export"
+    return persistence.store_new(request, session, tentative)
+
+
+def _switched_response(
+    request: Request,
+    session: ChargenSession,
+    new_cookie: str | None,
+    info: Message | MessageJoin,
+) -> HTMLResponse:
+    """The whole shell, on the Export page with `info`: the open character changed, so the
+    shell's `hx-headers` has to (see `pages.shell_swap_response`)."""
+    from chummer5.web.routes.pages import shell_swap_response
+
+    return shell_swap_response(request, session, "export", new_cookie, info=info)
+
+
+def _sheet_fragment(
+    request: Request,
+    session: ChargenSession,
+    new_cookie: str | None,
+    *,
+    error: Message | None,
+    info: Message | MessageJoin | None,
+) -> HTMLResponse:
+    from chummer5.web.persistence import open_character_context
+
     context = _character_sheet_context(session, error=error, info=info)
+    context |= open_character_context(request, session)
     response = templates.TemplateResponse(request, "_character_sheet.html", context)
     if new_cookie is not None:
         response.set_cookie(SESSION_COOKIE_NAME, new_cookie, httponly=True, samesite="lax")

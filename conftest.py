@@ -14,3 +14,4 @@ def _isolated_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CHUMMER5_MODE", raising=False)
     monkeypatch.delenv("CHUMMER5_CHARACTER_QUOTA", raising=False)
     monkeypatch.delenv("CHUMMER5_SESSION_DAYS", raising=False)
+    monkeypatch.delenv("CHUMMER5_SESSION_IDLE_MINUTES", raising=False)

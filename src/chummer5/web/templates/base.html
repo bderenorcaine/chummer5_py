@@ -8,12 +8,19 @@
        HX-History-Restore-Request, which chummer5.web.routes.pages answers with the whole shell).
        A snapshot would restore a page as it was *before* whatever the player did elsewhere, e.g.
        a Skills page missing the "no longer fits" warning a later priorities change caused. #}
-    <meta name="htmx-config" content='{"historyCacheSize": 0}' />
+    {# WP138: `responseHandling` is htmx 2's default plus one entry: 409 swaps. The tab guard's and
+       the cross-device check's notices are 409s, and htmx swaps no 4xx by default. #}
+    <meta
+      name="htmx-config"
+      content='{"historyCacheSize": 0, "responseHandling": [{"code": "204", "swap": false}, {"code": "[23]..", "swap": true}, {"code": "409", "swap": true}, {"code": "[45]..", "swap": false, "error": true}]}'
+    />
     {# WP100: the theme (token values only) first, then the structural sheet that reads them. #}
     {% include "_theme_link.html" %}
     <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
     <!-- htmx 2.0.10, vendored — see static/vendor/htmx/VENDORED.md -->
     <script src="{{ url_for('static', path='vendor/htmx/htmx.min.js') }}"></script>
+    {# WP138: the switch warning's "is another tab of the app open?" check. #}
+    <script src="{{ url_for('static', path='tabs.js') }}"></script>
     <script>
       // WP64, trimmed by WP97: keep a sub-category <details> (skill categories, gear groups,
       // cyberware slots, ...) the way the player left it across htmx swaps. Each such <details>
@@ -47,51 +54,6 @@
     </script>
   </head>
   <body>
-    {# WP97: the application shell (Phase W) -- a title bar over a sidebar step nav and one
-       content pane. Nav clicks swap only #page; see chummer5.web.routes.pages. #}
-    <div class="app-shell">
-      <header class="app-shell__titlebar">
-        <span class="app-shell__title">{{ _("Web_App_Title") }}</span>
-        {% include "_validation_status.html" %}
-        {# WP100/WP101: display preferences. Changing one is not a chargen change (see
-           chummer5.web.prefs): the theme swaps only its own <link>, out of band; the language
-           reloads the page, since every string on it changes. #}
-        <div class="app-shell__prefs">
-          <label class="app-shell__pref">
-            {{ _("Web_Prefs_Theme") }}
-            <select name="theme" hx-post="/ui/prefs/theme" hx-trigger="change" hx-swap="none">
-              {% for option in themes %}
-              <option value="{{ option.slug }}" {% if option.slug == theme %}selected{% endif %}>{{ _(option.label_key) }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          {% include "_font_hint.html" %}
-          <label class="app-shell__pref">
-            {{ _("Web_Prefs_Language") }}
-            <select name="locale" hx-post="/ui/prefs/locale" hx-trigger="change" hx-swap="none">
-              {% for option in locales %}
-              <option value="{{ option.tag }}" lang="{{ option.html_lang }}" {% if option.tag == locale %}selected{% endif %}>{{ option.label }}</option>
-              {% endfor %}
-            </select>
-          </label>
-        </div>
-        {# WP137: hosted mode's account links. A plain form, not htmx: logging out leaves the app. #}
-        {% if current_user %}
-        <div class="app-shell__account">
-          <a href="{{ url_for('password_page') }}" title="{{ _('Web_Auth_PasswordTitle') }}">{{ current_user.username }}</a>
-          <form method="post" action="{{ url_for('logout') }}">
-            <button type="submit">{{ _("Web_Auth_Logout") }}</button>
-          </form>
-        </div>
-        {% endif %}
-      </header>
-      <aside class="app-shell__sidebar">
-        {% include "_step_nav.html" %}
-        {% include "_resource_panel.html" %}
-      </aside>
-      <main id="page" class="app-shell__main">
-        {% include "_page.html" %}
-      </main>
-    </div>
+    {% include "_app_shell.html" %}
   </body>
 </html>

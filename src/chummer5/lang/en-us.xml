@@ -201,6 +201,39 @@
       <key>Web_BuildMethod_SumtoTen</key>
       <text>Sum-to-Ten</text>
     </string>
+    <!-- Characters: the open character, storing and switching (WP138) -->
+    <string>
+      <key>Web_Characters_ChangedElsewhere</key>
+      <text>This character was changed on another device since this page loaded, so your last change was not saved. Reload to get the latest version.</text>
+    </string>
+    <string>
+      <key>Web_Characters_New</key>
+      <text>New character</text>
+    </string>
+    <string>
+      <key>Web_Characters_NewButton</key>
+      <text>New character</text>
+    </string>
+    <string>
+      <key>Web_Characters_QuotaReached</key>
+      <text>You already have {quota} characters, the most an account can store. Delete one to start another.</text>
+    </string>
+    <string>
+      <key>Web_Characters_Reload</key>
+      <text>Reload</text>
+    </string>
+    <string>
+      <key>Web_Characters_StaleTab</key>
+      <text>Another tab of this browser has opened a different character, so this change was not applied. Reload to continue with that character.</text>
+    </string>
+    <string>
+      <key>Web_Characters_SwitchConfirm</key>
+      <text>Leave “{name}”? It is saved. Other tabs of this app in this browser will stop working until you reload them.</text>
+    </string>
+    <string>
+      <key>Web_Characters_Unnamed</key>
+      <text>Unnamed</text>
+    </string>
     <!-- Contacts -->
     <string>
       <key>Web_Contacts_ColConnection</key>

@@ -2044,3 +2044,38 @@ The user reviewed `spec/plan/phase-y-hosted-deployment.md` before any of WP136-1
   change elsewhere) stay in memory until WP138's idle eviction, which now explicitly owns them
   (phase file updated).
 - The other review fixes are listed in `worklogs/WP137.md` → "Review follow-up".
+
+## 2026-10-03 — WP138: the open character, autosave, switching
+
+- **A changed open character re-renders the shell in place, not via `HX-Refresh`.** The tab's
+  `hx-headers` lives on a wrapper the step fragments never replace. A response that changes the
+  character's id therefore answers with the whole `_app_shell.html`, swapped over `#app-shell`
+  (`pages.shell_swap_response`). Those responses are the first store at priority confirmation, a
+  load and an import. Without the swap the tab would keep sending `new` and trip its own guard on
+  the next POST. A refresh would also have renewed the id, but it would have thrown away an
+  import's messages (dropped qualities, skills…). Open and New are full navigations
+  (`HX-Redirect: /`).
+- **Load and import already store as a *new* character (pulled forward from WP140).** Under
+  autosave, the old in-place overwrite of the open character would have autosaved one character's
+  data over another's row. WP140 keeps the multi-file `/characters/upload`, the limits, and
+  `defusedxml`.
+- **Local mode restores only a browser that brings a cookie the server doesn't know** (a restart,
+  an eviction). A browser with no cookie starts a new character, as before. Restoring for every
+  new cookie would quietly put two "separate" local browsers onto one character, and it would
+  break the existing per-cookie isolation test for no gain: the local player opens characters from
+  WP139's list. In hosted mode every new login restores (the plan's "restart and re-login" case).
+- **Switch warning: asked at click time, not tracked.** On `htmx:confirm`, `static/tabs.js` pings
+  the other tabs over a BroadcastChannel and waits 250 ms for a reply. A heartbeat would go stale:
+  Chrome throttles a background tab's timers to about once a minute, but the tab still answers
+  messages promptly.
+- **The tab guard skips `/ui/prefs/`, `/characters/` (switching is what the player asked for, behind
+  its own confirmation) and the account pages.** The autosave skips them too.
+- **Concurrency:** `ChargenSession.lock` makes multi-field changes atomic against
+  `snapshot()`. `adopt()` replaces everything a switch changes. A per-session `save_lock`
+  serializes autosaves: without it, two POSTs finishing together both send the same expected
+  revision, and the second one "conflicts" with the first. A test reproduces that 5 out of 5 times.
+- **Idle eviction:** sessions idle over `CHUMMER5_SESSION_IDLE_MINUTES` (default 120) are
+  dropped, swept at most once a minute from ordinary lookups. This also frees hosted sessions whose
+  login ended without a logout (the WP137 review's leftover). An invalid value stops startup.
+- **The title bar links to the character list in WP139**, which creates the list. WP138 shows the
+  name ("New character" / "Unnamed" / the street name, then the name) and a New button.

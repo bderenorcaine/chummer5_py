@@ -53,6 +53,7 @@ class UserRecord:
     theme: str | None
     locale: str | None
     must_change_password: bool = False
+    last_character_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -267,6 +268,13 @@ class Store:
                 db.execute("UPDATE users SET theme = ? WHERE id = ?", (theme, user_id))
             if locale is not None:
                 db.execute("UPDATE users SET locale = ? WHERE id = ?", (locale, user_id))
+
+    def set_last_character(self, user_id: int, character_id: int | None) -> None:
+        """Remember which character the user has open (WP138), or that none is (a new one)."""
+        with self._write() as db:
+            db.execute(
+                "UPDATE users SET last_character_id = ? WHERE id = ?", (character_id, user_id)
+            )
 
     # -- invites ------------------------------------------------------------------------------
 

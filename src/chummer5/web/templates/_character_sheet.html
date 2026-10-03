@@ -462,12 +462,15 @@
   <p>{{ _("Web_Sheet_Placeholder") }}</p>
   {% endif %}
 
+  {# WP138: loading or importing stores the file as a new character and opens it (the open one
+     is left as it is), so both forms carry the switch warning. #}
   <h3>{{ _("Web_Sheet_Load") }}</h3>
   <form
     hx-post="/character/load"
     hx-target="#character-sheet"
     hx-swap="outerHTML"
     hx-encoding="multipart/form-data"
+    {% if open_character and open_character.stored %}hx-confirm="{{ open_character.switch_question }}"{% endif %}
   >
     <label>
       {{ _("Web_Sheet_NativeSaveFile") }}
@@ -482,6 +485,7 @@
     hx-target="#character-sheet"
     hx-swap="outerHTML"
     hx-encoding="multipart/form-data"
+    {% if open_character and open_character.stored %}hx-confirm="{{ open_character.switch_question }}"{% endif %}
   >
     <label>
       {{ _("Web_Sheet_LegacySaveFile") }}

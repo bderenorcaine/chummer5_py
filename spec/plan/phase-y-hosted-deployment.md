@@ -183,7 +183,7 @@ it with an Opus `/code-review high`.
   - After login the chargen shell renders. After logout the old cookie gets the redirect again.
   - Local mode: the existing test suite passes unchanged.
 
-- [ ] **WP138 — The open character, autosave, and new-character flow.**
+- [x] **WP138 — The open character, autosave, and new-character flow.**
   *Suggested model:* **Opus.** The densest WP: middleware ordering, the revision check, the tab guard and its two htmx traps, the multi-tab check, and thread-pool reads of the session. Most failures here are silent wrong behavior, not failing tests.
   Goal: chargen edits a stored character, and every change is saved.
   Deliverables:
@@ -274,6 +274,12 @@ it with an Opus `/code-review high`.
     also shows the username and a logout link.
   - All strings go through i18n. Every theme renders the page (it reuses the shell's table and
     button styles).
+  **From WP138 (2026-10-03):** the pieces are in place. `POST /characters/{id}/open` and
+  `POST /characters/new` exist (`web/routes/characters.py`). `open_character_context()`
+  (`web/persistence.py`) gives every switch control its `hx-confirm` text
+  (`open_character.switch_question`), and `static/tabs.js` decides whether to show it. Deleting the
+  open character should end in `persistence.new_character()`. The title bar's
+  `_open_character.html` is where the "My characters" link goes.
   Depends on: WP138.
   Acceptance: a user with three characters sees exactly those three; filtering "ali" finds
   "Alias"-named rows only; deleting removes the row and the count drops; another user's characters
@@ -294,7 +300,9 @@ it with an Opus `/code-review high`.
     - Uploads never overwrite an existing character.
   - The Export page's existing "load" / "import .chum5" forms are rewired to this. In both modes an
     upload creates a new stored character and opens it, instead of replacing the session character
-    in place.
+    in place. **WP138 already does the "new stored character, then open it" part** for the two
+    existing single-file routes (`_store_as_new_character` in `web/routes/character.py`). What is
+    left is moving them onto `/characters/upload`.
   - **Limits:** a configurable per-file size cap (default 5 MB), enforced while reading, not after.
     At most 20 files per request.
   - **XML hardening:** parse uploaded XML with `defusedxml.ElementTree` (added as a runtime

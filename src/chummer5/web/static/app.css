@@ -561,3 +561,19 @@ details[open] > .panel__heading {
 .auth-form__alt {
   margin-top: 1rem;
 }
+
+/* WP138: the open character in the title bar, and the notice a refused change shows. */
+.open-character {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.open-character__name {
+  font-weight: 600;
+}
+
+.stale-notice__reload {
+  font-weight: 600;
+}

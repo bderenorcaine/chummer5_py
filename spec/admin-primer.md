@@ -91,9 +91,12 @@ Typical flows:
 | Delete one old version | `podman rmi chummer5:0.1.0` |
 | Delete every image no container uses | `podman image prune -a` (this also removes your rollback targets) |
 
-**What a restart loses.** Today, any character not saved by its player. Players should download
-their JSON save before you restart or deploy. Once WP138 ships, a restart loses at most a
-pre-priorities draft. Everything after the priority confirmation is autosaved.
+**What a restart loses.** At most a character whose priorities were never confirmed. From the
+priority confirmation onward, every change is saved to the database as it happens (WP138), and the
+next login (or, in local mode, the same browser) reopens the last character. The same goes for the
+in-memory sessions the app drops after 2 hours idle (`CHUMMER5_SESSION_IDLE_MINUTES`). Until WP142
+mounts a data volume, the database itself lives in the container, so a **redeploy** (new
+container) still loses it.
 
 ## Database and backups (planned)
 

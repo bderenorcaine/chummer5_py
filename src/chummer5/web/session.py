@@ -14,11 +14,16 @@ leak session state into each other.
 
 from __future__ import annotations
 
+import copy
 import secrets
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from fastapi import Request
 
+from chummer5 import accounts
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
 from chummer5.engine.character import Character
 from chummer5.web import prefs
@@ -195,36 +200,140 @@ class ChargenSession:
     page_tabs: dict[str, str] = field(default_factory=dict)
     theme: str = DEFAULT_THEME
     locale: str = DEFAULT_LOCALE
+    # WP138: the stored character this session edits (`None` until the first priority
+    # confirmation stores it), the revision it last loaded or saved (the cross-device check), and a
+    # digest of the save JSON as last stored, so an autosave that would write the same bytes
+    # doesn't. Set only through `adopt` (or on a fresh session not yet shared).
+    character_id: int | None = None
+    revision: int | None = None
+    saved_digest: str | None = None
+    # When a request last used this session (`time.monotonic()`), for idle eviction.
+    last_used: float = field(default_factory=time.monotonic, compare=False, repr=False)
+    # `lock` guards multi-field changes (a reconfirmation sets five letters and the character;
+    # an open replaces everything) against a snapshot taken mid-way. `save_lock` serializes
+    # autosaves of this session, so two POSTs finishing together can't both write against the
+    # same expected revision and have the second one conflict with the first.
+    lock: threading.RLock = field(default_factory=threading.RLock, compare=False, repr=False)
+    save_lock: threading.Lock = field(default_factory=threading.Lock, compare=False, repr=False)
+
+    def snapshot(self) -> ChargenSession:
+        """A consistent shallow copy, for serializing without reading a field twice while another
+        thread replaces it (Phase Y, Finding 4)."""
+        with self.lock:
+            return copy.copy(self)
+
+    def adopt(self, other: ChargenSession) -> None:
+        """Take over `other`'s character and everything that goes with it, in one step: opening a
+        stored character, starting a new one, or the first store of one. The display
+        preferences, the locks and `last_used` stay this session's own."""
+        with self.lock:
+            for name in _ADOPTED_FIELDS:
+                setattr(self, name, getattr(other, name))
+
+
+# Everything a session holds about *the character*, as opposed to how this browser shows it.
+_ADOPTED_FIELDS = (
+    "heritage_letter",
+    "attributes_letter",
+    "skills_letter",
+    "resources_letter",
+    "talent_letter",
+    "build_method",
+    "metatype_id",
+    "character",
+    "current_page",
+    "page_tabs",
+    "character_id",
+    "revision",
+    "saved_digest",
+)
+
+# A function building the session for a key that has none: WP138's "rebuild from the user's
+# last-opened character" (`chummer5.web.persistence.restore_session`), installed by `create_app`.
+# Without one (a bare `SessionStore`), a missing session starts fresh.
+Restorer = Callable[[Request], ChargenSession]
 
 
 class SessionStore:
-    """Process-lifetime `session id -> ChargenSession` map."""
+    """Process-lifetime `session key -> ChargenSession` map, with idle eviction (WP138).
 
-    def __init__(self) -> None:
+    **Eviction** happens in passing: at most once every `SWEEP_INTERVAL` seconds, a lookup drops
+    every session unused for longer than the idle timeout. That covers a hosted session whose
+    login ended other than by logout (expiry, an admin reset, a password change on another
+    device): no request can reach it again, so it ages out (WP137 review)."""
+
+    SWEEP_INTERVAL = 60.0
+
+    def __init__(self, idle_seconds: float | None = None) -> None:
         self._sessions: dict[str, ChargenSession] = {}
+        self._lock = threading.Lock()
+        self.idle_seconds = (
+            idle_seconds if idle_seconds is not None else accounts.chargen_idle_seconds()
+        )
+        self._last_sweep = time.monotonic()
 
-    def create(self) -> tuple[str, ChargenSession]:
+    def __len__(self) -> int:
+        return len(self._sessions)
+
+    def _used(self, session: ChargenSession) -> ChargenSession:
+        session.last_used = time.monotonic()
+        return session
+
+    def sweep(self, now: float | None = None) -> int:
+        """Drop every session idle longer than the timeout. Returns how many went."""
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            self._last_sweep = now
+            stale = [k for k, s in self._sessions.items() if now - s.last_used > self.idle_seconds]
+            for key in stale:
+                del self._sessions[key]
+        return len(stale)
+
+    def _maybe_sweep(self) -> None:
+        if time.monotonic() - self._last_sweep >= self.SWEEP_INTERVAL:
+            self.sweep()
+
+    def create(
+        self, factory: Callable[[], ChargenSession] = ChargenSession
+    ) -> tuple[str, ChargenSession]:
+        self._maybe_sweep()
         session_id = secrets.token_urlsafe(24)
-        session = ChargenSession()
-        self._sessions[session_id] = session
+        session = self._used(factory())
+        with self._lock:
+            self._sessions[session_id] = session
         return session_id, session
 
     def get(self, session_id: str) -> ChargenSession | None:
-        return self._sessions.get(session_id)
+        self._maybe_sweep()
+        session = self._sessions.get(session_id)
+        return self._used(session) if session is not None else None
 
-    def get_or_create(self, key: str) -> ChargenSession:
-        """The session under a key the caller owns (hosted mode's login-session hash)."""
-        return self._sessions.setdefault(key, ChargenSession())
+    def get_or_create(
+        self, key: str, factory: Callable[[], ChargenSession] = ChargenSession
+    ) -> ChargenSession:
+        """The session under a key the caller owns (hosted mode's login-session hash), built by
+        `factory` if there is none. The factory runs under the store's lock, so two requests
+        racing on one key build it once."""
+        existing = self.get(key)
+        if existing is not None:
+            return existing
+        with self._lock:
+            session = self._sessions.get(key)
+            if session is None:
+                session = self._sessions[key] = factory()
+        return self._used(session)
 
     def discard(self, key: str) -> None:
-        self._sessions.pop(key, None)
+        with self._lock:
+            self._sessions.pop(key, None)
 
     def rekey(self, old: str, new: str) -> None:
         """Move a session to a new key: a password change issues a new login token, and the
         character in progress should come along."""
-        session = self._sessions.pop(old, None)
-        if session is not None:
-            self._sessions[new] = session
+        with self._lock:
+            session = self._sessions.pop(old, None)
+            if session is not None:
+                self._sessions[new] = session
 
 
 def session_key(request: Request) -> str | None:
@@ -263,16 +372,46 @@ def resolve_session(request: Request) -> tuple[ChargenSession, str | None]:
     `chummer5.web.session` (rather than `chummer5.web.catalogs`) keeps every route module's import
     of it alongside `ChargenSession`/`SessionStore`/`SESSION_COOKIE_NAME`, which it's built
     directly out of.
+
+    **WP138**: the result is cached on `request.state`, so the middleware's tab guard and the
+    route resolve the same session (and a new cookie is set once), and the autosave after the
+    route finds the session the route actually used. A session missing for a key the browser
+    *had* -- a hosted login (always), or a local cookie this process doesn't know (a restart, an
+    eviction) -- is rebuilt by `app.state.session_restorer` from the user's last-opened
+    character. A local browser with no cookie at all starts a new character, as before.
     """
+    cached: tuple[ChargenSession, str | None] | None = getattr(request.state, _RESOLVED_STATE, None)
+    if cached is not None:
+        return cached
     store: SessionStore = request.app.state.sessions
+    restorer: Restorer | None = getattr(request.app.state, "session_restorer", None)
+
+    def rebuilt() -> ChargenSession:
+        return restorer(request) if restorer is not None else ChargenSession()
+
     hosted_key = getattr(request.state, CHARGEN_KEY_STATE, None)
+    result: tuple[ChargenSession, str | None]
     if hosted_key is not None:
-        session = store.get_or_create(hosted_key)
+        session = store.get_or_create(hosted_key, rebuilt)
         _apply_user_prefs(request, session)
-        return session, None
-    session_id = request.cookies.get(SESSION_COOKIE_NAME)
-    existing = store.get(session_id) if session_id else None
-    if existing is not None:
-        return existing, None
-    new_session_id, session = store.create()
-    return session, new_session_id
+        result = (session, None)
+    else:
+        session_id = request.cookies.get(SESSION_COOKIE_NAME)
+        existing = store.get(session_id) if session_id else None
+        if existing is not None:
+            result = (existing, None)
+        else:
+            # A fresh id even for an unknown cookie: the server never adopts a client-chosen one.
+            new_id, session = store.create(rebuilt if session_id else ChargenSession)
+            result = (session, new_id)
+    setattr(request.state, _RESOLVED_STATE, result)
+    return result
+
+
+_RESOLVED_STATE = "chargen_session"
+
+
+def resolved_session(request: Request) -> ChargenSession | None:
+    """The session this request already resolved, if it did (the autosave's question)."""
+    cached: tuple[ChargenSession, str | None] | None = getattr(request.state, _RESOLVED_STATE, None)
+    return cached[0] if cached is not None else None

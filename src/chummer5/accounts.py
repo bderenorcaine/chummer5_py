@@ -92,6 +92,27 @@ def session_lifetime() -> timedelta:
     return timedelta(days=days)
 
 
+DEFAULT_CHARGEN_IDLE_MINUTES = 120
+
+
+def chargen_idle_seconds() -> float:
+    """`CHUMMER5_SESSION_IDLE_MINUTES`, else 120: how long an unused chargen session stays in
+    memory (WP138). Evicting one loses nothing stored, since every change is autosaved; the next
+    request rebuilds it from the user's last-opened character."""
+    raw = os.environ.get("CHUMMER5_SESSION_IDLE_MINUTES", "").strip()
+    if not raw:
+        return DEFAULT_CHARGEN_IDLE_MINUTES * 60.0
+    try:
+        minutes = float(raw)
+    except ValueError:
+        raise ValueError(
+            f"CHUMMER5_SESSION_IDLE_MINUTES must be a number of minutes, got {raw!r}"
+        ) from None
+    if not 0 < minutes < float("inf"):
+        raise ValueError(f"CHUMMER5_SESSION_IDLE_MINUTES must be above 0, got {raw!r}")
+    return minutes * 60.0
+
+
 # --- passwords -----------------------------------------------------------------------------------
 
 MIN_PASSWORD_LENGTH = 10

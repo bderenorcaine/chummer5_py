@@ -175,6 +175,7 @@ def submit_priorities(
     )
     error: Message | str | None = None
     character = session.character
+    first_stored = False
 
     # WP44: which validity rule applies to the same 5 letters depends on `build_method` --
     # Priority's bijection (WP14/WP24) or Sum-to-Ten's repeats-allowed/sum-to-10 rule (see
@@ -251,14 +252,30 @@ def submit_priorities(
             # `character.attribute_value("CHA")`, which this same reconfirmation (a metatype
             # swap, or attribute points now read against new ranges) can itself have changed.
             character = _relink_contact_selection(character, character.contact_selection)
-            session.heritage_letter = heritage_letter
-            session.attributes_letter = attributes_letter
-            session.skills_letter = skills_letter
-            session.resources_letter = resources_letter
-            session.talent_letter = talent_letter
-            session.build_method = build_method
-            session.metatype_id = metatype_id
-            session.character = character
+            # WP138: one locked step, so a concurrent autosave never snapshots the new letters
+            # with the old character. The *first* confirmation goes onto a copy instead, which
+            # is stored as a new character (quota-checked) and only then adopted: at quota the
+            # confirmation is refused and nothing changes.
+            target = session.snapshot() if session.character_id is None else session
+            with session.lock:
+                target.heritage_letter = heritage_letter
+                target.attributes_letter = attributes_letter
+                target.skills_letter = skills_letter
+                target.resources_letter = resources_letter
+                target.talent_letter = talent_letter
+                target.build_method = build_method
+                target.metatype_id = metatype_id
+                target.character = character
+            if target is not session:
+                # Imported here: `persistence` imports `routes.character`, which imports this.
+                from chummer5.web import persistence
+
+                refused = persistence.store_new(request, session, target)
+                if refused is None:
+                    first_stored = True
+                else:
+                    error = refused
+                    character = session.character
 
     # WP97: through WP96 this re-rendered every chargen section (the whole `_chargen_body.html`),
     # since a reconfirmation can leave any carried-forward spend over budget (WP19). Under the
@@ -281,6 +298,11 @@ def submit_priorities(
         character=character,
         error=error,
     )
+    if first_stored:
+        # WP138: the character now has an id, so the shell's `hx-headers` must change with it.
+        from chummer5.web.routes.pages import shell_swap_response
+
+        return shell_swap_response(request, session, "priorities", new_cookie)
     context = chargen_context(session, priority_ctx)
     response = templates.TemplateResponse(request, "_priority_form.html", context)
     if new_cookie is not None:

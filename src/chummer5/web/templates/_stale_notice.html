@@ -1,0 +1,7 @@
+{# WP138: why a change was refused -- the tab guard (another tab switched this browser to a
+   different character) or the revision check (another device saved this character first). Swapped
+   into #page by a 409. The link reloads the current URL, which renders the current character. #}
+<section class="panel stale-notice" role="alert">
+  <p class="warning">{{ _(message_key) }}</p>
+  <p><a class="stale-notice__reload" href="">{{ _("Web_Characters_Reload") }}</a></p>
+</section>

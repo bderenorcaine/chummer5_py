@@ -63,9 +63,19 @@ def _v2_must_change_password(db: sqlite3.Connection) -> None:
     db.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
 
 
+def _v3_last_character(db: sqlite3.Connection) -> None:
+    """WP138: the character a user last had open, which a lost chargen session (a restart, an
+    eviction, a new login) is rebuilt from. Cleared when that character is deleted."""
+    db.execute(
+        "ALTER TABLE users ADD COLUMN last_character_id INTEGER "
+        "REFERENCES characters(id) ON DELETE SET NULL"
+    )
+
+
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v1_initial,
     _v2_must_change_password,
+    _v3_last_character,
 ]
 
 
