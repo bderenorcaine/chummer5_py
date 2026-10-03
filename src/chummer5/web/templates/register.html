@@ -1,0 +1,32 @@
+{% extends "_auth_layout.html" %}
+{% block content %}
+<p>{{ _("Web_Auth_RegisterIntro") }}</p>
+<form method="post" action="/register" class="auth-form__fields">
+  <label class="auth-form__field">
+    {{ _("Web_Auth_InviteCode") }}
+    <input type="text" name="invite" value="{{ invite }}" maxlength="64"
+           autocomplete="off" autocapitalize="characters" required autofocus />
+  </label>
+  <label class="auth-form__field">
+    {{ _("Web_Auth_Username") }}
+    <input type="text" name="username" value="{{ username }}" maxlength="{{ max_username }}"
+           autocomplete="username" autocapitalize="none" required />
+    <small>{{ _("Web_Auth_UsernameHint") }}</small>
+  </label>
+  <label class="auth-form__field">
+    {{ _("Web_Auth_Password") }}
+    <input type="password" name="password" minlength="{{ min_password }}"
+           maxlength="{{ max_password }}" autocomplete="new-password" required />
+    <small>{{ _("Web_Auth_PasswordHint", min=min_password) }}</small>
+  </label>
+  <label class="auth-form__field">
+    {{ _("Web_Auth_PasswordConfirm") }}
+    <input type="password" name="confirm" minlength="{{ min_password }}"
+           maxlength="{{ max_password }}" autocomplete="new-password" required />
+  </label>
+  <button type="submit">{{ _("Web_Auth_RegisterButton") }}</button>
+</form>
+<p class="auth-form__alt">
+  {{ _("Web_Auth_HaveAccount") }} <a href="/login">{{ _("Web_Auth_LoginLink") }}</a>
+</p>
+{% endblock %}

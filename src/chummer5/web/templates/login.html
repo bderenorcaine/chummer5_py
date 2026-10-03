@@ -1,0 +1,19 @@
+{% extends "_auth_layout.html" %}
+{% block content %}
+<form method="post" action="/login" class="auth-form__fields">
+  <label class="auth-form__field">
+    {{ _("Web_Auth_Username") }}
+    <input type="text" name="username" value="{{ username }}" maxlength="{{ max_username }}"
+           autocomplete="username" autocapitalize="none" required autofocus />
+  </label>
+  <label class="auth-form__field">
+    {{ _("Web_Auth_Password") }}
+    <input type="password" name="password" maxlength="{{ max_password }}"
+           autocomplete="current-password" required />
+  </label>
+  <button type="submit">{{ _("Web_Auth_LoginButton") }}</button>
+</form>
+<p class="auth-form__alt">
+  {{ _("Web_Auth_NoAccount") }} <a href="/register">{{ _("Web_Auth_RegisterLink") }}</a>
+</p>
+{% endblock %}

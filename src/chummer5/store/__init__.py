@@ -4,21 +4,29 @@ Stdlib `sqlite3` only. Everything outside this package goes through `Store`; no 
 """
 
 from chummer5.store.repository import (
+    AuthSessionRecord,
     CharacterRecord,
     CharacterSummary,
+    InviteInvalidError,
+    InviteRecord,
     QuotaExceededError,
     RevisionConflictError,
     Store,
     UserExistsError,
+    UserListing,
     UserRecord,
 )
 
 __all__ = [
+    "AuthSessionRecord",
     "CharacterRecord",
     "CharacterSummary",
+    "InviteInvalidError",
+    "InviteRecord",
     "QuotaExceededError",
     "RevisionConflictError",
     "Store",
     "UserExistsError",
+    "UserListing",
     "UserRecord",
 ]

@@ -59,6 +59,135 @@
       <key>Web_Attributes_Update</key>
       <text>Update attributes</text>
     </string>
+    <!-- Accounts: login, registration, password (WP137) -->
+    <string>
+      <key>Web_Auth_BackToApp</key>
+      <text>Back to the character creator</text>
+    </string>
+    <string>
+      <key>Web_Auth_ChangePasswordButton</key>
+      <text>Change password</text>
+    </string>
+    <string>
+      <key>Web_Auth_CurrentPassword</key>
+      <text>Current password</text>
+    </string>
+    <string>
+      <key>Web_Auth_CurrentPasswordWrong</key>
+      <text>The current password is wrong.</text>
+    </string>
+    <string>
+      <key>Web_Auth_HaveAccount</key>
+      <text>Already have an account?</text>
+    </string>
+    <string>
+      <key>Web_Auth_InviteCode</key>
+      <text>Invite code</text>
+    </string>
+    <string>
+      <key>Web_Auth_InviteInvalid</key>
+      <text>That invite code is not valid. It may have been used already or have expired.</text>
+    </string>
+    <string>
+      <key>Web_Auth_LoginButton</key>
+      <text>Log in</text>
+    </string>
+    <string>
+      <key>Web_Auth_LoginFailed</key>
+      <text>Wrong username or password.</text>
+    </string>
+    <string>
+      <key>Web_Auth_LoginLink</key>
+      <text>Log in</text>
+    </string>
+    <string>
+      <key>Web_Auth_LoginTitle</key>
+      <text>Log in</text>
+    </string>
+    <string>
+      <key>Web_Auth_Logout</key>
+      <text>Log out</text>
+    </string>
+    <string>
+      <key>Web_Auth_MustChangePassword</key>
+      <text>Your password was reset. Choose a new one to continue.</text>
+    </string>
+    <string>
+      <key>Web_Auth_NewPassword</key>
+      <text>New password</text>
+    </string>
+    <string>
+      <key>Web_Auth_NoAccount</key>
+      <text>No account yet?</text>
+    </string>
+    <string>
+      <key>Web_Auth_Password</key>
+      <text>Password</text>
+    </string>
+    <string>
+      <key>Web_Auth_PasswordConfirm</key>
+      <text>Repeat the password</text>
+    </string>
+    <string>
+      <key>Web_Auth_PasswordHint</key>
+      <text>At least {min} characters.</text>
+    </string>
+    <string>
+      <key>Web_Auth_PasswordMismatch</key>
+      <text>The two passwords differ.</text>
+    </string>
+    <string>
+      <key>Web_Auth_PasswordTitle</key>
+      <text>Change password</text>
+    </string>
+    <string>
+      <key>Web_Auth_PasswordTooLong</key>
+      <text>The password is longer than {max} characters.</text>
+    </string>
+    <string>
+      <key>Web_Auth_PasswordTooShort</key>
+      <text>The password needs at least {min} characters.</text>
+    </string>
+    <string>
+      <key>Web_Auth_PasswordUnchanged</key>
+      <text>The new password is the same as the current one.</text>
+    </string>
+    <string>
+      <key>Web_Auth_RegisterButton</key>
+      <text>Create account</text>
+    </string>
+    <string>
+      <key>Web_Auth_RegisterIntro</key>
+      <text>Accounts are by invitation. Enter the code you were given, then choose a username and password.</text>
+    </string>
+    <string>
+      <key>Web_Auth_RegisterLink</key>
+      <text>Register with an invite code</text>
+    </string>
+    <string>
+      <key>Web_Auth_RegisterTitle</key>
+      <text>Create an account</text>
+    </string>
+    <string>
+      <key>Web_Auth_Username</key>
+      <text>Username</text>
+    </string>
+    <string>
+      <key>Web_Auth_UsernameChars</key>
+      <text>A username may contain only letters, digits, dots, dashes and underscores.</text>
+    </string>
+    <string>
+      <key>Web_Auth_UsernameHint</key>
+      <text>Letters, digits, dots, dashes and underscores.</text>
+    </string>
+    <string>
+      <key>Web_Auth_UsernameLength</key>
+      <text>A username needs {min} to {max} characters.</text>
+    </string>
+    <string>
+      <key>Web_Auth_UsernameTaken</key>
+      <text>That username is taken.</text>
+    </string>
     <!-- BuildMethod -->
     <string>
       <key>Web_BuildMethod_Priority</key>

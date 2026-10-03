@@ -69,7 +69,7 @@ def test_migrations_run_in_order_and_resume(
     migrate(db)
     migrate(db)
     assert calls == [2, 3]
-    assert db.execute("SELECT version FROM schema_version").fetchone() == (3,)
+    assert db.execute("SELECT version FROM schema_version").fetchone() == (len(MIGRATIONS) + 2,)
 
 
 def test_failed_migration_rolls_back(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

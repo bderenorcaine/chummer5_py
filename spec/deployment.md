@@ -14,7 +14,7 @@ are in `admin-primer.md`.
  ┌────────────────────────── the server ──────────────────────────┐
  │  Caddy (already running for mail + Nextcloud)                   │
  │    • TLS certificate, renewed automatically                     │
- │    • basicauth   (interim, until WP137's logins)                │
+ │    • basicauth   (interim, until hosted mode)                   │
  │    • reverse_proxy → 127.0.0.1:8005                             │
  │          │                                                      │
  │          ▼  only reachable from the server itself               │

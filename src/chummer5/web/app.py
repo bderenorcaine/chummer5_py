@@ -27,11 +27,16 @@ environment note), then open http://127.0.0.1:8000/.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 
+from chummer5 import accounts
+from chummer5.accounts import LOCAL, Mode, app_mode
+from chummer5.store import Store
+from chummer5.web.auth import require_login
 from chummer5.web.catalogs import (
     BIOWARE,
     CYBERWARE,
@@ -43,6 +48,7 @@ from chummer5.web.catalogs import (
     STATIC_DIR,
 )
 from chummer5.web.routes import (
+    account,
     attributes,
     bio,
     character,
@@ -82,10 +88,27 @@ __all__ = [
 ]
 
 
-def create_app() -> FastAPI:
-    """Build the FastAPI app: priority-letter + metatype selection, WP14's real chargen screen."""
-    app = FastAPI(title="Chummer5")
+def create_app(mode: Mode | None = None, store: Store | None = None) -> FastAPI:
+    """Build the FastAPI app: priority-letter + metatype selection, WP14's real chargen screen.
+
+    **WP137**: `mode` (default `CHUMMER5_MODE`, else local) and `store` (default: the database at
+    `CHUMMER5_DB`). Building the app opens no database; the store initializes itself on first use,
+    and the lifespan below does that up front when a real server starts.
+    """
+    resolved_mode = mode if mode is not None else app_mode()
+    resolved_store = store if store is not None else Store()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        resolved_store.initialize()
+        if resolved_mode == LOCAL:
+            accounts.ensure_local_user(resolved_store)  # the one implicit user
+        yield
+
+    app = FastAPI(title="Chummer5", lifespan=lifespan)
     app.state.sessions = SessionStore()
+    app.state.mode = resolved_mode
+    app.state.store = resolved_store
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     # WP97: the application shell -- `GET /`, the nav's page/nav routes, and the Export page.
@@ -109,6 +132,12 @@ def create_app() -> FastAPI:
         ):
             response.headers["HX-Trigger"] = CHARGEN_CHANGED_EVENT
         return response
+
+    # WP137: hosted mode's login gate. Registered after `_signal_chargen_changed`, so it is the
+    # outer one (Starlette runs the last-added middleware first): a request turned away never
+    # reaches the routes or the chargen-changed signal. A no-op in local mode.
+    app.middleware("http")(require_login)
+    app.include_router(account.router)
 
     # WP62: one router per chargen step (see `chummer5.web.routes`'s own docstring); registration
     # order here is cosmetic (routes are matched by path/method, not declaration order) but mirrors

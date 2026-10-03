@@ -20,13 +20,27 @@ podman exec -it chummer5 python -m chummer5.admin <command> [options]
 
 | Task | Command | Since |
 |---|---|---|
-| Mint an invite code (prints it) | `invite` | planned, WP137 |
-| … that expires after N days | `invite --expires-days 7` | planned, WP137 |
-| List open (unused, unexpired) invites | `invites` | planned, WP137 |
-| Revoke an invite | `revoke CODE` | planned, WP137 |
-| List accounts | `users` | planned, WP137 |
-| Reset a password (prints a one-time temporary password) | `reset-password USERNAME` | planned, WP137 |
-| Delete an account and all its characters (asks first) | `delete-user USERNAME` | planned, WP137 |
+| Mint an invite code (prints it, e.g. `B2NP-PGG1-SEH3-AF5D`) | `invite` | WP137 |
+| … that expires after N days | `invite --expires-days 7` | WP137 |
+| List open (unused, unexpired) invites | `invites` | WP137 |
+| Revoke an unused invite | `revoke CODE` | WP137 |
+| List accounts (character count, created, last login) | `users` | WP137 |
+| Reset a password (prints a one-time temporary password) | `reset-password USERNAME` | WP137 |
+| Delete an account and all its characters (asks you to type the name) | `delete-user USERNAME` | WP137 |
+| … without the prompt, for scripts | `delete-user USERNAME --yes` | WP137 |
+
+Notes:
+
+- **Invite codes** are single-use. Players can type them in any case, with or without the dashes.
+  A used code can't be revoked; it stays as the record of who it let in.
+- **`reset-password`** ends every login session the user has, so it also locks out a session that
+  may have been stolen. The temporary password works once: after logging in with it, the player
+  has to choose a new one before anything else.
+- **Usernames** are case-insensitive (`Alice` and `alice` are the same account): 3-32 letters,
+  digits, `.`, `-` or `_`. **Passwords**: at least 10 characters, no other rules.
+- Players change their own password from the title bar (click the username → `/account/password`).
+  That logs out their other devices.
+- Login sessions last 30 days from the last use (`CHUMMER5_SESSION_DAYS` changes that).
 
 Typical flows:
 
@@ -35,7 +49,7 @@ Typical flows:
 - **Forgotten password.** Run `reset-password NAME` and give them the temporary password over a
   channel you trust. There is no email reset, by design.
 
-**Until WP137 ships,** access is Caddy `basicauth` instead (see `deploy/Caddyfile.example`):
+**Until the server runs in hosted mode** (`CHUMMER5_MODE=hosted`, wired up by WP142), access is Caddy `basicauth` instead (see `deploy/Caddyfile.example`):
 
 | Task | Command |
 |---|---|
@@ -83,7 +97,7 @@ pre-priorities draft. Everything after the priority confirmation is autosaved.
 |---|---|---|
 | Back up while running (SQLite online backup) | backup script, path TBD | planned, WP142 |
 | Restore a backup | procedure in `deployment.md` | planned, WP142 |
-| Where the database lives | named volume, mounted at the path in `CHUMMER5_DB` | planned, WP136/142 |
+| Where the database lives | `/data/chummer5.db` in the container (`CHUMMER5_DB`); WP142 mounts a named volume on `/data` | WP137 (path), planned WP142 (volume) |
 
 ## If the site is down
 

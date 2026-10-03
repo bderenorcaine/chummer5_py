@@ -21,9 +21,16 @@ from fastapi import Request
 
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD
 from chummer5.engine.character import Character
+from chummer5.web import prefs
 from chummer5.web.prefs import DEFAULT_LOCALE, DEFAULT_THEME
 
 SESSION_COOKIE_NAME = "chummer5_session"
+
+# WP137: in hosted mode the auth middleware (`chummer5.web.auth`) sets `request.state.chargen_key`
+# to the login session's token hash. The chargen session is then keyed by the login, not by its own
+# cookie, so logging out (or another person logging in on the same browser) never hands one user's
+# in-progress character to another.
+CHARGEN_KEY_STATE = "chargen_key"
 
 # The 5 priority letters SR5's own priority table uses across all 5 categories (Heritage, Talent,
 # Attributes, Skills, Resources). Through WP23, Talent was a hardcoded, unoffered assumption
@@ -205,6 +212,39 @@ class SessionStore:
     def get(self, session_id: str) -> ChargenSession | None:
         return self._sessions.get(session_id)
 
+    def get_or_create(self, key: str) -> ChargenSession:
+        """The session under a key the caller owns (hosted mode's login-session hash)."""
+        return self._sessions.setdefault(key, ChargenSession())
+
+    def discard(self, key: str) -> None:
+        self._sessions.pop(key, None)
+
+    def rekey(self, old: str, new: str) -> None:
+        """Move a session to a new key: a password change issues a new login token, and the
+        character in progress should come along."""
+        session = self._sessions.pop(old, None)
+        if session is not None:
+            self._sessions[new] = session
+
+
+def session_key(request: Request) -> str | None:
+    """The key of this request's chargen session: the login's (hosted) or the cookie's (local)."""
+    key = getattr(request.state, CHARGEN_KEY_STATE, None)
+    return key if key is not None else request.cookies.get(SESSION_COOKIE_NAME)
+
+
+def _apply_user_prefs(request: Request, session: ChargenSession) -> None:
+    """Hosted mode: the theme and language live on the user row, so they follow the player to
+    every device. Copied onto the session on every lookup; a stored value no longer offered (a
+    theme since removed) is ignored."""
+    user = getattr(request.state, "user", None)
+    if user is None:
+        return
+    if user.theme in prefs.THEMES_BY_SLUG:
+        session.theme = user.theme
+    if user.locale in prefs.LOCALES_BY_TAG:
+        session.locale = user.locale
+
 
 def resolve_session(request: Request) -> tuple[ChargenSession, str | None]:
     """Look up this request's session by cookie, creating one if absent.
@@ -225,9 +265,14 @@ def resolve_session(request: Request) -> tuple[ChargenSession, str | None]:
     directly out of.
     """
     store: SessionStore = request.app.state.sessions
-    session_id = request.cookies.get(SESSION_COOKIE_NAME)
-    session = store.get(session_id) if session_id else None
-    if session is not None:
+    hosted_key = getattr(request.state, CHARGEN_KEY_STATE, None)
+    if hosted_key is not None:
+        session = store.get_or_create(hosted_key)
+        _apply_user_prefs(request, session)
         return session, None
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    existing = store.get(session_id) if session_id else None
+    if existing is not None:
+        return existing, None
     new_session_id, session = store.create()
     return session, new_session_id

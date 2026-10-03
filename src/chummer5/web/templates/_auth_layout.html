@@ -1,0 +1,29 @@
+<!doctype html>
+{# WP137: the account pages (login, registration, password). Same theme stylesheet and structural
+   sheet as the chargen shell (base.html), same title bar, but no step nav: there is no character
+   yet, and these pages work without htmx. #}
+<html lang="{{ html_lang }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ _("Web_App_WindowTitle", page=_(title_key)) }}</title>
+    {% include "_theme_link.html" %}
+    <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
+  </head>
+  <body>
+    <div class="auth-shell">
+      <header class="app-shell__titlebar">
+        <span class="app-shell__title">{{ _("Web_App_Title") }}</span>
+      </header>
+      <main class="auth-shell__main">
+        <section class="panel auth-form">
+          <h1 class="panel__heading">{{ _(title_key) }}</h1>
+          {% if error_key %}
+          <p class="error" role="alert">{{ _(error_key, **error_params) }}</p>
+          {% endif %}
+          {% block content %}{% endblock %}
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

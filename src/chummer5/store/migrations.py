@@ -57,7 +57,16 @@ _V1_SCHEMA = [
 ]
 
 
-MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [_v1_initial]
+def _v2_must_change_password(db: sqlite3.Connection) -> None:
+    """WP137: an admin `reset-password` hands out a one-time password, which the player must
+    replace at the next login."""
+    db.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
+
+
+MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
+    _v1_initial,
+    _v2_must_change_password,
+]
 
 
 def current_version(db: sqlite3.Connection) -> int:

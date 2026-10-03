@@ -2001,3 +2001,33 @@ The user reviewed `spec/plan/phase-y-hosted-deployment.md` before any of WP136-1
   chose not to. The devcontainer gains curl, sqlite3, caddy and procps for everything short of
   the image. `deploy/test-image.sh` (host) covers the image itself, and shares its build with
   `deploy.sh` through `deploy/lib.sh`.
+
+## 2026-10-03 — WP137: accounts and invite codes
+
+- **Scope addition: a change-password page and a "must change" flag.** The plan's `reset-password`
+  prints a *one-time* temporary password, but nothing in Phase Y let a player replace a password.
+  WP137 adds `/account/password` (current password + new one twice; reached from the username in
+  the title bar) and a `users.must_change_password` column (schema v2). A login with a reset
+  password is held on that page until the player replaces it. A password change ends every other
+  session the user has. The current browser continues in a fresh session, with its chargen session
+  moved over.
+- **Pulled forward from WP138: in hosted mode the chargen session is keyed by the login session**
+  (its token hash), not by its own cookie. Otherwise logging out and having someone else log in on
+  the same browser would hand them the previous user's in-memory character. Logout discards the
+  chargen session. WP138 still owns `character_id`, eviction and rebuilding from storage.
+- **Local mode now opens the database at startup** (the implicit `local` user). The production
+  image's app user could not write its default data path, so `deploy/Containerfile` gains a
+  `chummer`-owned `/data` with `CHUMMER5_DB=/data/chummer5.db`. That is ephemeral until WP142
+  mounts the volume there. A deploy of this commit in local mode is safe as a result.
+- **Login and register handlers are plain `def`**, so their scrypt hash (N=2^17, about 0.3 s, the
+  OWASP minimum) runs in the thread pool, not on the event loop that serves every chargen POST.
+- **An unknown username costs the same scrypt as a wrong password**, and both answer with the same
+  message, so a timing or wording difference does not reveal which accounts exist. (Registration
+  still says "username taken". That is unavoidable, and registration needs an invite anyway.)
+- **The auth cookie's `Secure` flag follows the request scheme** for now. Behind Caddy with the
+  image's `--proxy-headers --forwarded-allow-ips "*"`, that is https. WP141 settles it for good.
+- **Test isolation:** a repository-root `conftest.py` points `CHUMMER5_DB` at a per-test temporary
+  file and clears `CHUMMER5_MODE`, so no test can touch a real database. It sits at the root, not
+  in `tests/`: with a `tests/conftest.py` the suite's `from tests.fixtures ...` imports stopped
+  resolving (`ModuleNotFoundError: No module named 'tests'`), while a root one puts the repository
+  root on `sys.path`.

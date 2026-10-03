@@ -33,6 +33,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from chummer5.web import prefs
+from chummer5.web.auth import app_store, current_user
 from chummer5.web.catalogs import templates
 from chummer5.web.prefs import THEMES, THEMES_BY_SLUG
 from chummer5.web.routes.character import _character_sheet_context
@@ -117,6 +118,7 @@ def _render(request: Request, slug: str, *, fragment: bool, tab: str | None = No
         _section_or_404(page, tab)
     session.current_page = page.slug
     context = _shell_context(session, page, tab)
+    context["current_user"] = current_user(request)  # WP137: the title bar's account links
     if fragment:
         response = templates.TemplateResponse(request, "_page.html", {**context, "oob_nav": True})
     else:
@@ -223,6 +225,8 @@ def set_theme(request: Request, theme: str = Form(...)) -> HTMLResponse:
         raise HTTPException(status_code=422, detail=f"No such theme: {theme!r}.")
     session, new_cookie = resolve_session(request)
     session.theme = theme
+    if (user := current_user(request)) is not None:  # WP137: hosted mode keeps it on the account
+        app_store(request).set_user_prefs(user.id, theme=theme)
     response = templates.TemplateResponse(
         request,
         "_theme_swap.html",
@@ -243,6 +247,8 @@ def set_locale(request: Request, locale: str = Form(...)) -> HTMLResponse:
         raise HTTPException(status_code=422, detail=f"No such language: {locale!r}.")
     session, new_cookie = resolve_session(request)
     session.locale = locale
+    if (user := current_user(request)) is not None:
+        app_store(request).set_user_prefs(user.id, locale=locale)
     response = HTMLResponse("")
     response.headers["HX-Refresh"] = "true"
     if new_cookie is not None:

@@ -71,6 +71,22 @@ body {
   margin-left: 0.3rem;
 }
 
+/* WP137: hosted mode's username and logout button. */
+.app-shell__account {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.app-shell__account a {
+  color: inherit;
+}
+
+.app-shell__account form {
+  margin: 0;
+}
+
 .app-shell__sidebar {
   grid-area: sidebar;
   border-top: var(--frame-width) solid var(--frame-color);
@@ -497,4 +513,51 @@ details[open] > .panel__heading {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 0.2rem 1rem;
+}
+
+/* WP137: the account pages (login, registration, password) -- the title bar over one centred
+   panel, no step nav. */
+.auth-shell {
+  min-height: 100vh;
+}
+
+.auth-shell__main {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: var(--main-bg);
+}
+
+.auth-form {
+  width: 100%;
+  max-width: 26rem;
+}
+
+.auth-form .panel__heading {
+  cursor: default;
+  margin: 0 0 0.75rem;
+}
+
+.auth-form__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.auth-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.auth-form__field small {
+  opacity: 0.8;
+}
+
+.auth-form__fields button {
+  align-self: flex-start;
+}
+
+.auth-form__alt {
+  margin-top: 1rem;
 }

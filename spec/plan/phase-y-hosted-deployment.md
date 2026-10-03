@@ -145,7 +145,7 @@ it with an Opus `/code-review high`.
   "not found" for user A's character ID), the quota boundary (the 100th insert succeeds, the 101st
   fails, overwriting at 100 succeeds), and a migration from an empty file.
 
-- [ ] **WP137 — Accounts and invite codes.**
+- [x] **WP137 — Accounts and invite codes.**
   *Suggested model:* Sonnet, then an Opus `/code-review high`. The spec is concrete, but it's auth code, where mistakes (a non-constant-time compare, a session that survives a reset) pass every test.
   Goal: invite-only registration, login and logout. In hosted mode, nothing except the login and
   registration pages is reachable without a login.

@@ -27,8 +27,9 @@ from markupsafe import Markup, escape
 from starlette.requests import Request
 
 from chummer5.data.lang import DataTerms, load_data_terms, load_locale_strings
+from chummer5.web import prefs
 from chummer5.web.prefs import DEFAULT_LOCALE
-from chummer5.web.session import SESSION_COOKIE_NAME
+from chummer5.web.session import session_key
 
 logger = logging.getLogger(__name__)
 
@@ -169,9 +170,12 @@ def request_locale(request: Request | None) -> str:
     if cached is not None:
         return str(cached)
     locale = DEFAULT_LOCALE
-    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    session_id = session_key(request)
     sessions = getattr(request.app.state, "sessions", None)
-    if session_id is not None and sessions is not None:
+    user = getattr(request.state, "user", None)  # WP137: hosted mode's stored preference
+    if user is not None and user.locale in prefs.LOCALES_BY_TAG:
+        locale = user.locale
+    elif session_id is not None and sessions is not None:
         session = sessions.get(session_id)
         if session is not None:
             locale = session.locale
