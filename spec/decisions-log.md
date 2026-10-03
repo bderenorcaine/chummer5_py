@@ -1959,3 +1959,45 @@ users, a public catalog) stays out. The full plan is `spec/plan/phase-y-hosted-d
   using the same storage with one implicit user.
 - **Single worker.** Chargen sessions stay in process memory (rebuilt from the stored save when
   missing), so production runs one uvicorn worker. Moving them out of process is not scheduled.
+
+## 2026-10-03 — Phase Y, rulings refined before implementation
+
+The user reviewed `spec/plan/phase-y-hosted-deployment.md` before any of WP136-142 started.
+
+- **Why invite-only, stated plainly.** This is a hobby project for the user and the people they
+  play with. It is not a commercial service, and it is not meant to become the default place SR5
+  players build characters. "Asking to be exploited" stays as a second reason, not the main one.
+- **Dependencies: security beats minimalism.** The 2026-10-02 "no new dependencies" default is
+  relaxed for input hardening on the public-facing side. WP140 parses uploaded XML with
+  `defusedxml` instead of a hand-rolled DOCTYPE/ENTITY refusal. Convenience dependencies are still
+  avoided.
+- **Admin page:** still out of scope, possibly later. `spec/admin-primer.md` now lists every admin
+  command, and WPs keep it current. The CLI's functions stay callable from Python so a later admin
+  page can reuse them.
+- **Correction: the open character is per browser, not per account.** The chargen session is keyed
+  by the login session (one cookie). Two consequences were added to WP138:
+  - A **switch warning.** Open/New/Upload/Delete-the-open-one ask for confirmation when another tab
+    of the app is open in the same browser. This was the user's request.
+  - A **revision check** on autosave. Without it, two devices with the same character open would
+    silently overwrite each other's edits.
+- **Found while drafting: a trap for the tab guard.** `historyCacheSize: 0` (WP97) makes back/forward
+  swap the body's *contents*, so an `hx-headers` on `<body>` itself would keep a stale character ID.
+  WP138 puts it on an inner wrapper.
+- **Finding 4 corrected.** One uvicorn worker is not one thread: `def` routes run in a thread pool.
+  A worker per session isn't something uvicorn can do (no sticky routing between worker
+  processes), so it is not pursued.
+- **Deployment and versions, ahead of WP142.** `deploy/` has a production `Containerfile`,
+  `deploy.sh` (build from a `git archive` of HEAD, ship over SSH, swap, health-check, roll back)
+  and a Caddy example. The Caddy example uses interim `basic_auth`, since the pre-Phase-Y app has
+  no login. The version was a never-bumped `0.1.0` placeholder. SemVer starts now, as defined in
+  `spec/deployment.md`: 0.x until Phase Y ships, 1.0.0 at the first hosted release.
+- **Tab-guard details pinned down.** A mismatched htmx GET answers `HX-Refresh` (the stale tab just
+  reloads). A mismatched POST gets a 409, which needs a `responseHandling` entry, because htmx 2
+  doesn't swap 4xx responses by default. `reset-password` and `delete-user` end that user's login
+  sessions.
+- **The devcontainer stays unprivileged; image checks run on the host.** Nested podman fails in
+  the devcontainer under every isolation mode (no `CAP_SYS_ADMIN`, no `setgroups`, `/proc/sys`
+  read-only). `--privileged` would fix that, but it gives the agent far more reach, and the user
+  chose not to. The devcontainer gains curl, sqlite3, caddy and procps for everything short of
+  the image. `deploy/test-image.sh` (host) covers the image itself, and shares its build with
+  `deploy.sh` through `deploy/lib.sh`.

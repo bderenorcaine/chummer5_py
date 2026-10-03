@@ -3,10 +3,20 @@ FROM python:3.12-slim
 # poppler-utils isn't an app dependency; it lets an AI agent render/extract text from the SR5
 # core rulebook PDF kept locally under spec/rulebooks/ (gitignored, not app code) as a rules
 # reference.
+# Phase Y (hosted deployment) testing tools, none of them app dependencies:
+# - curl: probing the app and the deploy health check the way deploy/deploy.sh does on the server
+# - sqlite3: inspecting the WP136 database and exercising WP142's online `.backup`
+# - caddy: running the app behind deploy/Caddyfile.example locally (WP142's acceptance). Debian 13
+#   ships 2.6, which only knows the `basicauth` spelling -- that's why the example uses it.
+# - procps: ps/pkill, for stopping a uvicorn or caddy started in the background
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
         build-essential \
         poppler-utils \
+        curl \
+        sqlite3 \
+        caddy \
+        procps \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir uv
