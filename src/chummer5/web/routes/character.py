@@ -1,5 +1,6 @@
-"""Character-sheet/save/load/import routes: `GET /character/save`, `POST /character/load` (WP11's
-native format), `POST /character/import-chum5` (WP12's legacy import).
+"""Character-sheet/save routes: `GET /character/save` (WP11's native format). WP140 moved loading
+and importing to `POST /characters/upload` (`chummer5.web.routes.characters`, with the per-file
+work in `chummer5.web.uploads`); this module keeps the Export page's responses to it.
 
 **WP62**: split out of the former `chummer5.web.app` -- see `spec/plan/phase-r-architecture-
 cleanup.md`'s WP58 audit for the target shape this module is part of. Houses the two genuinely
@@ -7,20 +8,16 @@ cross-cutting aggregator/save helpers that read every committed selection off `C
 (`_character_sheet_context`, `_character_save_from_session`), not just the routes.
 
 **WP97**: `GET /character/sheet` moved to `chummer5.web.routes.pages` -- it is now the shell's
-Export page under its old URL. The load/import routes stay here and set `current_page` to it.
+Export page under its old URL.
 """
 
 from __future__ import annotations
 
-import tempfile
-import xml.etree.ElementTree as ET
 from collections.abc import Iterable
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
-from starlette.datastructures import UploadFile
 
 from chummer5.data.cyberware import CONDITION_DESCRIPTIONS
 from chummer5.data.grades import STANDARD_GRADE
@@ -77,13 +74,11 @@ from chummer5.engine.skills import (
     skill_rating,
 )
 from chummer5.engine.weapon_accessories import InstalledAccessory, builtin_accessories
-from chummer5.io.legacy_import import UnsupportedLegacyCharacterError, import_chum5
 from chummer5.io.save_format import (
     DEFAULT_TALENT_CODENAME,
     CharacterSave,
     build_character,
     create_character_save,
-    from_json,
     to_json,
 )
 from chummer5.web.catalogs import (
@@ -356,7 +351,7 @@ def _mentor_pool_rows(character: Character) -> list[dict[str, Any]]:
 def _character_sheet_context(
     session: ChargenSession,
     *,
-    error: Message | None = None,
+    error: Message | MessageJoin | None = None,
     info: Message | MessageJoin | None = None,
     chargen_ctx: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -1099,8 +1094,8 @@ def _character_save_from_session(session: ChargenSession) -> CharacterSave:
 def _apply_built_character_to_session(
     session: ChargenSession, save: CharacterSave, built: Character
 ) -> None:
-    """Overwrite `ChargenSession` from a successfully loaded/imported character -- used by both
-    `load_save` (WP11's native format) and `import_chum5_route` (WP12's legacy import), since both
+    """Overwrite `ChargenSession` from a successfully loaded/imported character -- used by every
+    upload, native save (WP11's format) or legacy `.chum5` (WP12's import) alike, since both
     ultimately produce the same `(CharacterSave, Character)` pair (WP18 retired the
     `BuiltCharacter` wrapper `build_character` used to return -- see `chummer5.io.save_format`'s
     docstring; `built` already carries its own `skill_allocation`/`quality_selection`/
@@ -1175,154 +1170,26 @@ def download_save(request: Request) -> Response:
     return response
 
 
-@router.post("/character/load", response_class=HTMLResponse)
-async def load_save(request: Request) -> HTMLResponse:
-    session, new_cookie = resolve_session(request)
-    session.current_page = "export"  # WP97
-    form = await request.form()
-    upload = form.get("save_file")
-    error: Message | None = None
-    info: Message | None = None
-    if not isinstance(upload, UploadFile) or not upload.filename:
-        error = Message.of("Web_Sheet_ErrorChooseSave")
-    else:
-        raw = await upload.read()
-        try:
-            text = raw.decode("utf-8")
-            save = from_json(text)
-            built = build_from_save(save)
-        # A user-supplied file's shape is never trusted beyond this point -- malformed JSON
-        # (ValueError, via json.JSONDecodeError/UnicodeDecodeError), a missing field
-        # (KeyError), a save shaped as something other than a JSON object (AttributeError, from
-        # calling .get on a list/scalar), or a shape that parses but fails one of
-        # build_character's own validations (ValueError) are all just "not a loadable save",
-        # reported the same way rather than crashing the request.
-        except (ValueError, KeyError, AttributeError) as exc:
-            error = Message.of("Web_Sheet_ErrorLoad", error=str(exc))
-        else:
-            error = _store_as_new_character(request, session, save, built)
-            if error is None:
-                return _switched_response(
-                    request, session, new_cookie, Message.of("Web_Sheet_Loaded")
-                )
-    return _sheet_fragment(request, session, new_cookie, error=error, info=info)
-
-
-@router.post("/character/import-chum5", response_class=HTMLResponse)
-async def import_chum5_route(request: Request) -> HTMLResponse:
-    session, new_cookie = resolve_session(request)
-    session.current_page = "export"  # WP97
-    form = await request.form()
-    upload = form.get("chum5_file")
-    error: Message | None = None
-    info: MessageJoin | None = None
-    if not isinstance(upload, UploadFile) or not upload.filename:
-        error = Message.of("Web_Sheet_ErrorChooseChum5")
-    else:
-        raw = await upload.read()
-        # `import_chum5`/`load_chum5` take a `Path`, not bytes -- write the upload to a scratch
-        # file rather than widening that module's signature for this one caller. Deleted
-        # automatically once the `with` block exits, success or failure.
-        with tempfile.NamedTemporaryFile(suffix=".chum5") as tmp:
-            tmp.write(raw)
-            tmp.flush()
-            try:
-                result = import_chum5(
-                    Path(tmp.name),
-                    metatypes=METATYPES,
-                    priorities=PRIORITIES,
-                    skills=SKILLS,
-                    qualities=QUALITIES,
-                    lifestyles=LIFESTYLES,
-                    traditions=TRADITIONS,
-                    spells=SPELLS,
-                    powers=POWERS,
-                    cyberware=CYBERWARE_ENTRIES,
-                    bioware=BIOWARE,
-                )
-            except UnsupportedLegacyCharacterError as exc:
-                # The importer's reasons are engine-side English, joined but not translated.
-                error = Message.of(
-                    "Web_Sheet_ErrorCannotImport",
-                    reasons=MessageJoin(tuple(exc.reasons), "Web_List_Semicolon"),
-                )
-            except ET.ParseError as exc:
-                error = Message.of("Web_Sheet_ErrorInvalidChum5", error=str(exc))
-            else:
-                error = _store_as_new_character(request, session, result.save, result.built)
-            if error is None:
-                messages = [Message.of("Web_Sheet_Imported")]
-                if result.dropped_qualities:
-                    messages.append(
-                        Message.of(
-                            "Web_Sheet_DroppedQualities",
-                            names=MessageJoin(tuple(result.dropped_qualities)),
-                        )
-                    )
-                if result.dropped_skills:
-                    messages.append(
-                        Message.of(
-                            "Web_Sheet_DroppedSkills",
-                            names=MessageJoin(tuple(result.dropped_skills)),
-                        )
-                    )
-                # WP29: surfaced now that a real Magician/Adept import can actually succeed
-                # (WP28 added these fields to `ImportResult`, but nothing reached the browser
-                # for them until this WP wired traditions/spells/powers into this route at all).
-                if result.dropped_spells:
-                    messages.append(
-                        Message.of(
-                            "Web_Sheet_DroppedSpells",
-                            names=MessageJoin(tuple(result.dropped_spells)),
-                        )
-                    )
-                if result.dropped_powers:
-                    messages.append(
-                        Message.of(
-                            "Web_Sheet_DroppedPowers",
-                            names=MessageJoin(tuple(result.dropped_powers)),
-                        )
-                    )
-                return _switched_response(
-                    request, session, new_cookie, MessageJoin(tuple(messages), "Web_List_Space")
-                )
-    return _sheet_fragment(request, session, new_cookie, error=error, info=info)
-
-
-def _store_as_new_character(
-    request: Request, session: ChargenSession, save: CharacterSave, built: Character
-) -> Message | None:
-    """WP138: a loaded or imported save becomes a **new** stored character, which this session
-    then opens -- it never overwrites the character that was open. Returns the error to show
-    instead (the quota). WP140 moves uploads to `POST /characters/upload`."""
-    # Imported here: `persistence` imports this module.
-    from chummer5.web import persistence
-
-    tentative = ChargenSession()
-    _apply_built_character_to_session(tentative, save, built)
-    tentative.current_page = "export"
-    return persistence.store_new(request, session, tentative)
-
-
-def _switched_response(
+def switched_response(
     request: Request,
     session: ChargenSession,
     new_cookie: str | None,
     info: Message | MessageJoin,
 ) -> HTMLResponse:
     """The whole shell, on the Export page with `info`: the open character changed, so the
-    shell's `hx-headers` has to (see `pages.shell_swap_response`)."""
+    shell's `hx-headers` has to (see `pages.shell_swap_response`). WP140: the answer to an
+    upload from the Export page."""
     from chummer5.web.routes.pages import shell_swap_response
 
     return shell_swap_response(request, session, "export", new_cookie, info=info)
 
 
-def _sheet_fragment(
+def sheet_fragment(
     request: Request,
     session: ChargenSession,
     new_cookie: str | None,
     *,
-    error: Message | None,
+    error: Message | MessageJoin | None,
     info: Message | MessageJoin | None,
 ) -> HTMLResponse:
     from chummer5.web.persistence import open_character_context

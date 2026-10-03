@@ -421,8 +421,8 @@ def test_load_stores_a_new_character_and_leaves_the_open_one(
     before = stored(store, owner, int(first))
 
     response = local.post(
-        "/character/load",
-        files={"save_file": ("x.json", save.encode(), "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("x.json", save.encode(), "application/json")},
         headers=_htmx(first),
     )
     assert response.status_code == 200
@@ -452,7 +452,7 @@ def test_switch_controls_carry_the_warning_and_the_script_loads(local: TestClien
     token = shell_token(confirm(local).text)
     bio(local, "Ghost", token)
     export = local.get("/ui/page/export").text
-    assert export.count('hx-confirm="Leave “Ghost”?') == 3  # New, load, import
+    assert export.count('hx-confirm="Leave “Ghost”?') == 2  # New, and (WP140) the one upload form
     assert local.get("/static/tabs.js").status_code == 200
 
 

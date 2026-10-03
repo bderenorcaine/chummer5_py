@@ -230,8 +230,8 @@ def test_save_load_round_trips_bioware_selection() -> None:
     fresh_client = TestClient(create_app())
     fresh_client.get("/")
     load_response = fresh_client.post(
-        "/character/load",
-        files={"save_file": ("character.json", save_response.content, "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("character.json", save_response.content, "application/json")},
     )
 
     assert "Character loaded." in load_response.text
@@ -338,8 +338,8 @@ def test_save_load_round_trips_a_reflex_recorders_chosen_skill() -> None:
     fresh_client = TestClient(create_app())
     fresh_client.get("/")
     load_response = fresh_client.post(
-        "/character/load",
-        files={"save_file": ("character.json", save_response.content, "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("character.json", save_response.content, "application/json")},
     )
 
     assert "Character loaded." in load_response.text

@@ -441,8 +441,8 @@ def test_save_load_round_trips_rating_priced_gear() -> None:
     fresh_client = TestClient(create_app())
     fresh_client.get("/")
     load_response = fresh_client.post(
-        "/character/load",
-        files={"save_file": ("character.json", save_response.content, "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("character.json", save_response.content, "application/json")},
     )
 
     assert "Character loaded." in load_response.text

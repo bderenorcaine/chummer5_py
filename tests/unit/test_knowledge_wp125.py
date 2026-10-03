@@ -161,8 +161,8 @@ def test_the_web_pages_share_the_active_pool_and_a_save_keeps_everything() -> No
     fresh = TestClient(create_app())
     fresh.get("/")
     fresh.post(
-        "/character/load",
-        files={"save_file": ("c.json", json.dumps(saved).encode(), "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("c.json", json.dumps(saved).encode(), "application/json")},
     )
     sheet = re.sub(r"\s+", " ", fresh.get("/character/sheet").text)
     assert "Corporations (Evo)" in sheet

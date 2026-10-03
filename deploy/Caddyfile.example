@@ -12,9 +12,11 @@ chummer.example.org {
 		alice $2a$14$REPLACE_WITH_OUTPUT_OF_caddy_hash-password
 	}
 
-	# Matches WP140's per-file cap (5 MB) times a little headroom for multi-file uploads.
+	# Just above the app's own cap for one upload request (20 files of up to 10 MB each, WP140),
+	# so an oversized upload is answered by the app with a readable message, not by Caddy with a
+	# bare 413 that the page can't show.
 	request_body {
-		max_size 25MB
+		max_size 210MB
 	}
 
 	encode zstd gzip

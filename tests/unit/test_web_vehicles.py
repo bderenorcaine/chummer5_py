@@ -154,8 +154,8 @@ def test_a_vehicle_purchase_survives_save_and_load() -> None:
     fresh_client = TestClient(create_app())
     fresh_client.get("/")
     loaded = fresh_client.post(
-        "/character/load",
-        files={"save_file": ("character.json", saved.content, "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("character.json", saved.content, "application/json")},
     )
     assert loaded.status_code == 200
     sheet = _squash(fresh_client.get("/character/sheet").text)

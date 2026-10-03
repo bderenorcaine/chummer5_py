@@ -457,40 +457,27 @@
   {% endif %}
 
   <h3>{{ _("String_Save") }}</h3>
-  <p><a href="/character/save">{{ _("Web_Sheet_Download") }}</a></p>
+  {# WP140: the stored save, verbatim, named after the character. #}
+  <p><a href="{% if open_character and open_character.stored %}/characters/{{ open_character.id }}/download{% else %}/character/save{% endif %}">{{ _("Web_Sheet_Download") }}</a></p>
   {% else %}
   <p>{{ _("Web_Sheet_Placeholder") }}</p>
   {% endif %}
 
-  {# WP138: loading or importing stores the file as a new character and opens it (the open one
-     is left as it is), so both forms carry the switch warning. #}
-  <h3>{{ _("Web_Sheet_Load") }}</h3>
+  {# WP138: an upload stores the file as a new character and opens it (the open one is left as it
+     is), so the form carries the switch warning. WP140: one form for both formats (detected by
+     content), posting to the list's upload route with `open=true`. #}
+  <h3>{{ _("Web_Upload_Heading") }}</h3>
   <form
-    hx-post="/character/load"
+    hx-post="/characters/upload?open=true"
     hx-target="#character-sheet"
     hx-swap="outerHTML"
     hx-encoding="multipart/form-data"
     {% if open_character and open_character.stored %}hx-confirm="{{ open_character.switch_question }}"{% endif %}
   >
     <label>
-      {{ _("Web_Sheet_NativeSaveFile") }}
-      <input type="file" name="save_file" accept="application/json,.json" />
+      {{ _("Web_Upload_FileLabel") }}
+      <input type="file" name="files" accept="application/json,.json,.chum5" />
     </label>
-    <button type="submit">{{ _("Web_Sheet_LoadButton") }}</button>
-  </form>
-
-  <h3>{{ _("Web_Sheet_ImportHeading") }}</h3>
-  <form
-    hx-post="/character/import-chum5"
-    hx-target="#character-sheet"
-    hx-swap="outerHTML"
-    hx-encoding="multipart/form-data"
-    {% if open_character and open_character.stored %}hx-confirm="{{ open_character.switch_question }}"{% endif %}
-  >
-    <label>
-      {{ _("Web_Sheet_LegacySaveFile") }}
-      <input type="file" name="chum5_file" accept=".chum5" />
-    </label>
-    <button type="submit">{{ _("Web_Sheet_ImportButton") }}</button>
+    <button type="submit">{{ _("Web_Upload_Button") }}</button>
   </form>
 </div>

@@ -29,3 +29,23 @@ def character_quota() -> int:
     if value < 0:
         raise ValueError("CHUMMER5_CHARACTER_QUOTA must not be negative")
     return value
+
+
+# Not the 5 MB the plan first set: legacy saves embed their mugshots, and one in the test corpus
+# (`Ghile Mear.chum5`) is 5.7 MB (decisions log, 2026-10-03). A native save is a few kilobytes.
+DEFAULT_UPLOAD_MAX_MB = 10
+
+
+def upload_max_bytes() -> int:
+    """`CHUMMER5_UPLOAD_MAX_MB`, else 10: the largest file an upload may carry (WP140), in bytes.
+    Read per request, like the quota."""
+    raw = os.environ.get("CHUMMER5_UPLOAD_MAX_MB", "").strip()
+    if not raw:
+        return DEFAULT_UPLOAD_MAX_MB * 1024 * 1024
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"CHUMMER5_UPLOAD_MAX_MB must be a number, got {raw!r}") from None
+    if value <= 0:
+        raise ValueError(f"CHUMMER5_UPLOAD_MAX_MB must be above 0, got {raw!r}")
+    return int(value * 1024 * 1024)

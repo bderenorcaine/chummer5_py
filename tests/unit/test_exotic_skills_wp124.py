@@ -160,7 +160,9 @@ def test_the_skills_page_adds_two_instances_and_they_survive_a_save() -> None:
     saved = client.get("/character/save").content
     fresh = TestClient(create_app())
     fresh.get("/")
-    fresh.post("/character/load", files={"save_file": ("c.json", saved, "application/json")})
+    fresh.post(
+        "/characters/upload?open=true", files={"files": ("c.json", saved, "application/json")}
+    )
     assert _committed(fresh) == {FLAMETHROWER: 3, HARPOON: 2}
 
 
@@ -196,8 +198,8 @@ def test_a_pre_wp124_save_moves_a_bare_exotic_spend_onto_an_unspecified_instance
     fresh = TestClient(create_app())
     fresh.get("/")
     fresh.post(
-        "/character/load",
-        files={"save_file": ("c.json", json.dumps(data).encode(), "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("c.json", json.dumps(data).encode(), "application/json")},
     )
     saved = json.loads(fresh.get("/character/save").content)
     assert saved["skill_points"] == {exotic_skill_key(EXOTIC_RANGED.id, "Unspecified"): 2}

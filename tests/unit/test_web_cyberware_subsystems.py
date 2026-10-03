@@ -330,8 +330,8 @@ def test_save_load_round_trips_a_plugin_purchase() -> None:
     fresh = TestClient(create_app())
     fresh.get("/")
     loaded = fresh.post(
-        "/character/load",
-        files={"save_file": ("character.json", save.content, "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("character.json", save.content, "application/json")},
     )
 
     assert "Character loaded." in loaded.text

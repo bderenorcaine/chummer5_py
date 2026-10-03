@@ -123,8 +123,8 @@ def test_the_picker_offers_2_and_a_loaded_rating_3_survives_an_edit() -> None:
     fresh = TestClient(create_app())
     fresh.get("/")
     fresh.post(
-        "/character/load",
-        files={"save_file": ("c.json", json.dumps(saved).encode(), "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("c.json", json.dumps(saved).encode(), "application/json")},
     )
     datajack = BY_NAME["Datajack"]
     page = fresh.post(

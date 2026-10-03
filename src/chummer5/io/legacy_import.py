@@ -262,7 +262,6 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
-from pathlib import Path
 
 from chummer5.data.bioware import Bioware
 from chummer5.data.cyberware_subsystems import CyberwareEntry
@@ -289,6 +288,7 @@ from chummer5.engine.qualities import QualityPickRequest, choice_options, mvp_qu
 from chummer5.engine.resources import Contact
 from chummer5.engine.skills import UNSPECIFIED_EXOTIC, exotic_skill_key
 from chummer5.io.legacy_chum5 import (
+    Chum5Source,
     LegacyCharacter,
     LegacyCyberware,
     LegacySkill,
@@ -984,7 +984,7 @@ def import_legacy_character(
 
 
 def import_chum5(
-    path: Path,
+    source: Chum5Source,
     *,
     metatypes: tuple[Metatype, ...],
     priorities: PriorityTable,
@@ -997,9 +997,10 @@ def import_chum5(
     cyberware: tuple[CyberwareEntry, ...] = (),
     bioware: tuple[Bioware, ...] = (),
 ) -> ImportResult:
-    """Parse a `.chum5` file (WP4's `load_chum5`) and import it (see `import_legacy_character`)."""
+    """Parse a `.chum5` file (WP4's `load_chum5`) and import it (see `import_legacy_character`).
+    WP140: `source` is a path, the file's bytes, or an open binary file."""
     return import_legacy_character(
-        load_chum5(path),
+        load_chum5(source),
         metatypes=metatypes,
         priorities=priorities,
         skills=skills,

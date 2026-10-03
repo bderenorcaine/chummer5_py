@@ -642,3 +642,18 @@ details[open] > .panel__heading {
   align-items: center;
   gap: 0.5rem;
 }
+
+/* WP140: the list's upload control and its per-file results. */
+.character-list__upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.character-list__results {
+  margin: 0.5rem 0;
+  padding: 0;
+  list-style: none;
+}

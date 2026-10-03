@@ -52,8 +52,8 @@ def test_importing_yeti_through_the_web_layer_matches_the_engine_directly() -> N
         raw = f.read()
 
     response = client.post(
-        "/character/import-chum5",
-        files={"chum5_file": ("Yeti.chum5", raw, "application/octet-stream")},
+        "/characters/upload?open=true",
+        files={"files": ("Yeti.chum5", raw, "application/octet-stream")},
     )
 
     assert response.status_code == 200
@@ -102,8 +102,8 @@ def test_importing_a_blocked_legacy_character_through_the_web_layer_reports_ever
         raw = f.read()
 
     response = client.post(
-        "/character/import-chum5",
-        files={"chum5_file": ("Miko.chum5", raw, "application/octet-stream")},
+        "/characters/upload?open=true",
+        files={"files": ("Miko.chum5", raw, "application/octet-stream")},
     )
 
     assert response.status_code == 200

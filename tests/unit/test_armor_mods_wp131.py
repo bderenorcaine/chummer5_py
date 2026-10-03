@@ -172,7 +172,9 @@ def test_the_resources_page_the_save_and_the_sheet() -> None:
 
     fresh = TestClient(create_app())
     fresh.get("/")
-    fresh.post("/character/load", files={"save_file": ("c.json", saved, "application/json")})
+    fresh.post(
+        "/characters/upload?open=true", files={"files": ("c.json", saved, "application/json")}
+    )
     sheet = re.sub(r"\s+", " ", fresh.get("/character/sheet").text)
     # Full body armor with its full helmet: 15 + 3 (p. 436).
     assert "18 (Full Body Armor 18)" in sheet

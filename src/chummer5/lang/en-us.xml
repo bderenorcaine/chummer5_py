@@ -1084,14 +1084,6 @@
       <text>Cannot import: {reasons}</text>
     </string>
     <string>
-      <key>Web_Sheet_ErrorChooseChum5</key>
-      <text>Choose a .chum5 file to import.</text>
-    </string>
-    <string>
-      <key>Web_Sheet_ErrorChooseSave</key>
-      <text>Choose a save file to load.</text>
-    </string>
-    <string>
       <key>Web_Sheet_ErrorInvalidChum5</key>
       <text>Not a valid .chum5 file: {error}</text>
     </string>
@@ -1110,14 +1102,6 @@
     <string>
       <key>Web_Sheet_Focus</key>
       <text>{name} (Force {force}, {cost}, {karma} Karma)</text>
-    </string>
-    <string>
-      <key>Web_Sheet_ImportButton</key>
-      <text>Import .chum5</text>
-    </string>
-    <string>
-      <key>Web_Sheet_ImportHeading</key>
-      <text>Import legacy character</text>
     </string>
     <string>
       <key>Web_Sheet_Imported</key>
@@ -1164,10 +1148,6 @@
       <text>Language</text>
     </string>
     <string>
-      <key>Web_Sheet_LegacySaveFile</key>
-      <text>Legacy Chummer5 save (.chum5)</text>
-    </string>
-    <string>
       <key>Web_Sheet_LifestyleOptions</key>
       <text>Options:</text>
     </string>
@@ -1182,14 +1162,6 @@
     <string>
       <key>Web_Sheet_Lifestyle_Other</key>
       <text>{tier} ({count} months, {cost}).</text>
-    </string>
-    <string>
-      <key>Web_Sheet_Load</key>
-      <text>Load</text>
-    </string>
-    <string>
-      <key>Web_Sheet_LoadButton</key>
-      <text>Load save</text>
     </string>
     <string>
       <key>Web_Sheet_Loaded</key>
@@ -1234,10 +1206,6 @@
     <string>
       <key>Web_Sheet_MentorSpirit</key>
       <text>Mentor Spirit</text>
-    </string>
-    <string>
-      <key>Web_Sheet_NativeSaveFile</key>
-      <text>Native save file (.json)</text>
     </string>
     <string>
       <key>Web_Sheet_NoKnowledge</key>
@@ -1778,6 +1746,51 @@
     <string>
       <key>Web_Theme_Shadowrun4</key>
       <text>Shadowrun 4</text>
+    </string>
+    <!-- Upload: storing JSON saves and legacy .chum5 files as new characters (WP140) -->
+    <string>
+      <key>Web_Upload_Button</key>
+      <text>Upload</text>
+    </string>
+    <string>
+      <key>Web_Upload_ChooseFile</key>
+      <text>Choose a JSON save or a .chum5 file to upload.</text>
+    </string>
+    <string>
+      <key>Web_Upload_FileLabel</key>
+      <text>JSON save or legacy .chum5 file</text>
+    </string>
+    <string>
+      <key>Web_Upload_FileResult</key>
+      <text>{file}: {result}</text>
+    </string>
+    <string>
+      <key>Web_Upload_FileTooLarge</key>
+      <text>Too large (the limit is {size} MB per file).</text>
+    </string>
+    <string>
+      <key>Web_Upload_FilesLabel</key>
+      <text>JSON saves or .chum5 files (up to {count})</text>
+    </string>
+    <string>
+      <key>Web_Upload_Heading</key>
+      <text>Upload a character</text>
+    </string>
+    <string>
+      <key>Web_Upload_Malformed</key>
+      <text>The upload could not be read. Try again.</text>
+    </string>
+    <string>
+      <key>Web_Upload_RequestTooLarge</key>
+      <text>The upload is too large. Send at most {count} files of up to {size} MB each.</text>
+    </string>
+    <string>
+      <key>Web_Upload_TooManyFiles</key>
+      <text>Too many files. Upload at most {count} at a time.</text>
+    </string>
+    <string>
+      <key>Web_Upload_UnsafeXml</key>
+      <text>Refused: the file declares XML entities or external references, which no Chummer save uses.</text>
     </string>
     <!-- Vehicles -->
     <string>

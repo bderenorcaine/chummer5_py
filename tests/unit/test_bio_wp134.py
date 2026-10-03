@@ -86,7 +86,9 @@ def test_the_bio_page_round_trips_through_a_save() -> None:
     }
     fresh = TestClient(create_app())
     fresh.get("/")
-    fresh.post("/character/load", files={"save_file": ("c.json", saved, "application/json")})
+    fresh.post(
+        "/characters/upload?open=true", files={"files": ("c.json", saved, "application/json")}
+    )
     assert 'value="Ghost"' in fresh.get("/ui/page/bio").text
     assert json.loads(fresh.get("/character/save").content)["biography"]["name"] == "Jane Doe"
 
@@ -105,7 +107,7 @@ def test_a_legacy_alias_appears_on_the_sheet() -> None:
     client.get("/")
     raw = mundane_fixture_path(PRIORITY_BUILD_FIXTURE).read_bytes()
     client.post(
-        "/character/import-chum5",
-        files={"chum5_file": ("Yeti.chum5", raw, "application/octet-stream")},
+        "/characters/upload?open=true",
+        files={"files": ("Yeti.chum5", raw, "application/octet-stream")},
     )
     assert "<h2>Yeti-#ffffff</h2>" in client.get("/character/sheet").text

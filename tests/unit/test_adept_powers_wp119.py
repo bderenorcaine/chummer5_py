@@ -252,7 +252,9 @@ def test_two_critical_strikes_through_the_page_and_a_save() -> None:
     saved = client.get("/character/save").content
     fresh = TestClient(create_app())
     fresh.get("/")
-    fresh.post("/character/load", files={"save_file": ("c.json", saved, "application/json")})
+    fresh.post(
+        "/characters/upload?open=true", files={"files": ("c.json", saved, "application/json")}
+    )
     assert "Critical Strike (rating 1, Clubs)" in fresh.get("/character/sheet").text
 
 

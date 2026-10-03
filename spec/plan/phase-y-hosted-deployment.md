@@ -285,7 +285,7 @@ it with an Opus `/code-review high`.
   "Alias"-named rows only; deleting removes the row and the count drops; another user's characters
   never appear.
 
-- [ ] **WP140 — Download and upload.**
+- [x] **WP140 — Download and upload.**
   *Suggested model:* Sonnet. It reuses the existing import logic. The limits and `defusedxml` are specified.
   Goal: per-character JSON download, and uploading JSON or `.chum5` files as new characters.
   Deliverables:
@@ -303,7 +303,7 @@ it with an Opus `/code-review high`.
     in place. **WP138 already does the "new stored character, then open it" part** for the two
     existing single-file routes (`_store_as_new_character` in `web/routes/character.py`). What is
     left is moving them onto `/characters/upload`.
-  - **Limits:** a configurable per-file size cap (default 5 MB), enforced while reading, not after.
+  - **Limits:** a configurable per-file size cap (default ~~5 MB~~ 10 MB, see below), enforced while reading, not after.
     At most 20 files per request.
   - **XML hardening:** parse uploaded XML with `defusedxml.ElementTree` (added as a runtime
     dependency, see the 2026-10-03 ruling). It refuses entity declarations and external
@@ -319,6 +319,11 @@ it with an Opus `/code-review high`.
   (`open_character.switch_question`, only when `open_character.stored`, like New). Since the list
   is outside `#app-shell`, an upload from it should end in a full navigation to `/` (as Open does),
   not `pages.shell_swap_response`.
+  **Outcome (WP140, 2026-10-03):** two departures from the above, both in the decisions log.
+  The per-file default is 10 MB, because legacy saves embed mugshots and one corpus file is
+  5.7 MB (`CHUMMER5_UPLOAD_MAX_MB`). An upload from the list stores its files and opens none of
+  them, so it carries no switch warning; only the Export page's upload (`?open=true`) opens what it
+  stored. The old `/character/load` and `/character/import-chum5` routes are gone.
   Depends on: WP138, WP139.
   Acceptance:
   - A download → upload round trip produces an equal save.
@@ -351,7 +356,8 @@ it with an Opus `/code-review high`.
   - **Error pages:** no tracebacks or exception text in hosted-mode responses. The details are
     logged server-side.
   - **Input bounds:** a length cap on Bio free-text fields and on usernames, and a request-body size
-    cap for non-upload routes.
+    cap for non-upload routes. (`POST /characters/upload` already caps its own body while reading,
+    `chummer5.web.uploads`; WP140.)
   - A short `spec/` note listing what is protected and how, for future WPs to keep true.
   Depends on: WP137-140.
   Acceptance:
@@ -373,11 +379,13 @@ it with an Opus `/code-review high`.
     user, installs dependencies without the dev group, and runs `uvicorn --workers 1
     --proxy-headers` on `0.0.0.0:8000` inside the container.
   - Configuration is entirely environment variables: `CHUMMER5_MODE=hosted`, `CHUMMER5_DB`,
-    `CHUMMER5_PUBLIC_URL`, `CHUMMER5_TRUSTED_PROXY`, the quota, and the timeouts.
+    `CHUMMER5_PUBLIC_URL`, `CHUMMER5_TRUSTED_PROXY`, the quota, the timeouts, and the upload cap
+    (`CHUMMER5_UPLOAD_MAX_MB`, WP140).
   - An example `compose`/`podman run` setup with the port published to `127.0.0.1` only and a named
     volume for the database.
   - A Caddyfile site-block snippet (`reverse_proxy 127.0.0.1:<port>`) and an upload body-size limit
-    matching WP140's.
+    matching WP140's. (WP140 set `deploy/Caddyfile.example` to 210MB, just above the app's own
+    whole-request cap, so the app answers an oversized upload readably.)
   - A backup script using SQLite's online `.backup` (safe while running), a retention example, and a
     restore procedure.
   - `spec/deployment.md` (the runbook):

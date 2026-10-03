@@ -198,7 +198,7 @@ def test_the_aspect_survives_a_save() -> None:
     fresh = TestClient(create_app())
     fresh.get("/")
     loaded = fresh.post(
-        "/character/load", files={"save_file": ("c.json", saved, "application/json")}
+        "/characters/upload?open=true", files={"files": ("c.json", saved, "application/json")}
     )
     assert "Character loaded." in loaded.text
     assert "Aspect: Enchanting" in fresh.get("/character/sheet").text

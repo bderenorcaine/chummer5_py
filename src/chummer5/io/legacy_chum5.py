@@ -10,6 +10,12 @@ those later WPs without importing their conclusions. See `spec/worklogs/WP4.md` 
 structure this was reverse-engineered from (there is no `.xsd` for the save format, unlike the data
 files), and `spec/worklogs/WP9.md` for the `<contacts>`/`<contactpoints>` extension WP4 deferred to
 this WP.
+
+**WP140: a `.chum5` is a player's file, so it is parsed with `defusedxml`.** Uploads made it
+untrusted input on a public server. `defusedxml` refuses entity declarations and external
+references (`defusedxml.DefusedXmlException`, a `ValueError`), which blocks entity-expansion bombs
+and external-entity reads; no legacy save uses either (the whole corpus parses). The game data XML
+under `legacy/` is trusted and keeps the stdlib parser.
 """
 
 from __future__ import annotations
@@ -18,6 +24,9 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
+from typing import BinaryIO
+
+import defusedxml.ElementTree as DefusedET
 
 from chummer5.engine.biography import LEGACY_ELEMENTS, Biography, create_biography
 
@@ -488,8 +497,25 @@ def _parse_priorities(root: ET.Element) -> PrioritySelections:
     )
 
 
-def load_chum5(path: Path) -> LegacyCharacter:
+# What `load_chum5` reads: a file path, the file's bytes (an upload), or an open binary file.
+Chum5Source = Path | bytes | BinaryIO
+
+
+def _parse_root(source: Chum5Source) -> ET.Element:
+    """The document element, through `defusedxml`. Raises `ET.ParseError` for malformed XML and
+    `defusedxml.DefusedXmlException` for a forbidden construct (entities, external references)."""
+    if isinstance(source, bytes):
+        return DefusedET.fromstring(source)
+    root = DefusedET.parse(source).getroot()
+    if root is None:  # never, after a successful parse; for the type checker
+        raise ET.ParseError("no document element")
+    return root
+
+
+def load_chum5(source: Chum5Source) -> LegacyCharacter:
     """Parse a legacy `.chum5` save file into a `LegacyCharacter` of MVP-relevant raw fields.
+
+    WP140: `source` may be the file's bytes or an open binary file as well as a `Path`.
 
     WP49 adds `knowledge_skills` (every raw `<knoskills>` entry -- previously excluded per WP3's
     precedent). Contacts (WP9)
@@ -507,7 +533,7 @@ def load_chum5(path: Path) -> LegacyCharacter:
     Vehicles/gear/matrix/etc. remain untouched — this parser only extracts what WP6-WP33's engine
     and import path need to validate against.
     """
-    root = ET.parse(path).getroot()
+    root = _parse_root(source)
     newskills_elem = root.find("newskills")
     return LegacyCharacter(
         metatype=root.findtext("metatype", ""),

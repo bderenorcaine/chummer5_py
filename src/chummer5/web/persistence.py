@@ -110,6 +110,7 @@ def open_character_context(request: Request, session: ChargenSession) -> dict[st
     return {
         "open_character": {
             "token": open_character_token(snap),
+            "id": snap.character_id,
             "stored": snap.character_id is not None,
             "name": name,
             # WP138's switch warning: shown only when another tab of the app is open in this
@@ -166,24 +167,37 @@ def restore_session(request: Request) -> ChargenSession:
 # --- switching -----------------------------------------------------------------------------------
 
 
-def store_new(
-    request: Request, session: ChargenSession, tentative: ChargenSession
-) -> Message | None:
-    """Store `tentative`'s character as a **new** character and make `session` adopt it. Returns
-    the error to show instead (the quota), leaving `session` untouched."""
+def insert_new(request: Request, tentative: ChargenSession) -> Message | None:
+    """Store `tentative`'s character as a **new** character, stamping `tentative` with its id,
+    revision and digest (ready to `adopt`). Returns the error to show instead (the quota)."""
     store = app_store(request)
-    owner = owner_id(request)
     text = save_json(tentative)
     try:
-        record = store.create_character(owner, text)
+        record = store.create_character(owner_id(request), text)
     except QuotaExceededError:
         return Message.of("Web_Characters_QuotaReached", quota=store.quota)
     tentative.character_id = record.id
     tentative.revision = record.revision
     tentative.saved_digest = _digest(text)
-    session.adopt(tentative)
-    store.set_last_character(owner, record.id)
     return None
+
+
+def adopt_stored(request: Request, session: ChargenSession, tentative: ChargenSession) -> None:
+    """Make `session` edit `tentative`, a character `insert_new` just stored."""
+    assert tentative.character_id is not None
+    session.adopt(tentative)
+    app_store(request).set_last_character(owner_id(request), tentative.character_id)
+
+
+def store_new(
+    request: Request, session: ChargenSession, tentative: ChargenSession
+) -> Message | None:
+    """Store `tentative`'s character as a **new** character and make `session` adopt it. Returns
+    the error to show instead (the quota), leaving `session` untouched."""
+    error = insert_new(request, tentative)
+    if error is None:
+        adopt_stored(request, session, tentative)
+    return error
 
 
 def open_character(request: Request, session: ChargenSession, character_id: int) -> bool:

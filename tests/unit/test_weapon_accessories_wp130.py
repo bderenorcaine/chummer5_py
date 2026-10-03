@@ -185,8 +185,8 @@ def test_the_resources_page_the_save_and_the_sheet() -> None:
     fresh = TestClient(create_app())
     fresh.get("/")
     fresh.post(
-        "/character/load",
-        files={"save_file": ("c.json", saved, "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("c.json", saved, "application/json")},
     )
     sheet = re.sub(r"\s+", " ", fresh.get("/character/sheet").text)
     assert "Ares Predator V #1: Smartgun System, Internal (built in)," in sheet

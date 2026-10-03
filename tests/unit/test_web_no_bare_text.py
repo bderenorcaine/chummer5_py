@@ -114,6 +114,7 @@ ALLOWED_PYTHON_STRINGS = frozenset(
         "Resonance Active",
         "Rigger Command Consoles",
         'attachment; filename="character.json"',
+        'attachment; filename="{}"',
     }
 )
 

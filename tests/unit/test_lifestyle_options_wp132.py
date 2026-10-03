@@ -125,7 +125,7 @@ def test_the_lifestyle_page_and_the_save() -> None:
     fresh = TestClient(create_app())
     fresh.get("/")
     fresh.post(
-        "/character/load",
-        files={"save_file": ("c.json", json.dumps(saved).encode(), "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("c.json", json.dumps(saved).encode(), "application/json")},
     )
     assert "bought permanently, 280000¥" in re.sub(r"\s+", " ", fresh.get("/character/sheet").text)

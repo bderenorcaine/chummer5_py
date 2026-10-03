@@ -159,8 +159,8 @@ def test_a_german_session_saves_english_ids_and_reloads_identically(german: None
     english = TestClient(create_app())
     english.get("/")
     loaded = english.post(
-        "/character/load",
-        files={"save_file": ("character.json", json.dumps(save), "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("character.json", json.dumps(save), "application/json")},
     ).text
     assert "Character loaded." in loaded
     sheet = english.get("/character/sheet").text

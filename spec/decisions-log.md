@@ -2107,3 +2107,31 @@ problems in a row. Each is now either caught by `deploy.sh`'s preflight or writt
 `admin-primer.md`'s "If the site is down" now starts from what the browser says ("Unable to
 connect" / "Secure connection failed" / 502) and maps each to the link in browser → DNS → Caddy →
 container that broke.
+
+## 2026-10-03 — WP140: download and upload
+
+- **The per-file upload cap defaults to 10 MB, not the plan's 5 MB.** Legacy saves embed their
+  mugshots, and `Ghile Mear.chum5` in the test corpus is 5.7 MB. A 5 MB cap would refuse genuine
+  player files. A native save is a few kilobytes. Configurable through `CHUMMER5_UPLOAD_MAX_MB`.
+  `deploy/Caddyfile.example`'s `request_body` limit is now 210MB, just above the app's own
+  whole-request cap (20 × 10 MB plus framing). An oversized upload therefore gets the app's
+  readable message instead of a bare 413 from Caddy, which htmx wouldn't show.
+- **An upload from the list opens nothing.** It can carry up to 20 files, and opening "the last
+  one" would be arbitrary. Results show per file above the list, and the new rows appear in it.
+  Since nothing switches, the list's Upload has no switch warning. That is consistent with the
+  2026-10-03 ruling, which covers actions that *change* the open character. The Export page's
+  upload (`?open=true`) still opens what it stored, as WP138's load did, and keeps the warning.
+- **One route, one form.** The Export page's load and import forms became one upload form. The
+  old `POST /character/load` and `POST /character/import-chum5` are gone (about 30 tests moved to
+  `/characters/upload?open=true`). `GET /character/save` stays as the fallback for a session with
+  no stored character. The Export page's download link now points at the stored copy.
+- **Every `.chum5` goes through `defusedxml`**, not only uploads. `load_chum5` is the only reader
+  of `.chum5` files, and every one is a player's file. The game data XML keeps stdlib parsing. All
+  35 `.chum5` files in the repo parse under `defusedxml`.
+- **Finding: two legacy test files crash the importer with a plain `ValueError`.**
+  `Popstar.chum5` and `Skink.chum5` carry adept powers at rating 0 ("'Danger Sense': rating 0 is
+  out of range", "'Killing Hands' … rating must be 1, got 0"). Both are outside the registered
+  fixtures. Through the old import route that was a 500. The upload route now reports it as
+  "Cannot import: …". The importer itself should either refuse these cleanly
+  (`UnsupportedLegacyCharacterError`) or drop zero-rated powers like other dropped content. Left
+  for a future WP; no current WP covers it.

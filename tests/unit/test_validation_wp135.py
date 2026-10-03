@@ -139,8 +139,8 @@ def test_yetis_over_cap_contact_is_not_an_issue() -> None:
     client.get("/")
     raw = mundane_fixture_path(PRIORITY_BUILD_FIXTURE).read_bytes()
     client.post(
-        "/character/import-chum5",
-        files={"chum5_file": ("Yeti.chum5", raw, "application/octet-stream")},
+        "/characters/upload?open=true",
+        files={"files": ("Yeti.chum5", raw, "application/octet-stream")},
     )
     sheet = re.sub(r"\s+", " ", client.get("/character/sheet").text)
     start = sheet.index('id="validation-panel"')

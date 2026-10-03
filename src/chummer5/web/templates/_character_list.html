@@ -1,5 +1,6 @@
 {# WP139: the list itself, with the New button and usage that a delete changes. Re-fetched by the
-   filter box (GET /characters) and returned by a delete, both into #character-list. Delete always
+   filter box (GET /characters) and returned by a delete or (WP140) an upload, all into
+   #character-list. Delete always
    asks (`data-confirm="always"`); Open and New ask only when another tab of the app is open
    (static/tabs.js), and not at all when nothing would switch. #}
 <div class="character-list__toolbar">
@@ -10,8 +11,30 @@
     {% if open_character.stored %}hx-confirm="{{ open_character.switch_question }}"{% endif %}
     {% if at_quota %}disabled aria-describedby="character-quota-reason"{% endif %}
   >{{ _("Web_Characters_NewButton") }}</button>
+  {# WP140: upload stores each file as a new character and opens none of them, so it carries no
+     switch warning. #}
+  <form
+    class="character-list__upload"
+    hx-post="/characters/upload"
+    hx-target="#character-list"
+    hx-encoding="multipart/form-data"
+    hx-include="#character-filter"
+  >
+    <label>
+      {{ _("Web_Upload_FilesLabel", count=max_files) }}
+      <input type="file" name="files" multiple accept="application/json,.json,.chum5" {% if at_quota %}disabled{% endif %} />
+    </label>
+    <button type="submit" {% if at_quota %}disabled aria-describedby="character-quota-reason"{% endif %}>{{ _("Web_Upload_Button") }}</button>
+  </form>
   <span class="character-list__usage">{{ _("Web_Characters_Usage", count=count, quota=quota) }}</span>
 </div>
+{% if upload_results %}
+<ul class="character-list__results" role="status">
+  {% for result in upload_results %}
+  <li class="{{ 'info' if result.ok else 'error' }}">{{ result.message | tr }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
 {% if at_quota %}
 <p id="character-quota-reason" class="info">{{ _("Web_Characters_QuotaReached", quota=quota) }}</p>
 {% endif %}
@@ -45,6 +68,7 @@
           {% if open_character.stored %}hx-confirm="{{ open_character.switch_question }}"{% endif %}
         >{{ _("Label_Open") }}</button>
         {% endif %}
+        <a href="/characters/{{ row.id }}/download" download>{{ _("Button_Download") }}</a>
         <button
           type="button"
           hx-post="/characters/{{ row.id }}/delete"

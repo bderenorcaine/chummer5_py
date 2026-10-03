@@ -55,10 +55,10 @@ def test_character_sheet_shows_placeholder_before_confirmation() -> None:
 
     assert response.status_code == 200
     assert "Confirm a metatype and priorities" in response.text
-    # The load/import forms are always available, even before any chargen confirmation -- that's
-    # how a session can start *from* an import rather than the priority form.
-    assert 'hx-post="/character/load"' in response.text
-    assert 'hx-post="/character/import-chum5"' in response.text
+    # The upload form is always available, even before any chargen confirmation -- that's how a
+    # session can start *from* an import rather than the priority form. WP140: one form for both
+    # formats.
+    assert 'hx-post="/characters/upload?open=true"' in response.text
 
 
 def test_character_sheet_shows_derived_stats_matching_the_engine() -> None:
@@ -117,8 +117,8 @@ def test_saved_character_loads_into_a_fresh_session_with_matching_values() -> No
     fresh_client = TestClient(create_app())
     fresh_client.get("/")
     response = fresh_client.post(
-        "/character/load",
-        files={"save_file": ("character.json", save_bytes, "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("character.json", save_bytes, "application/json")},
     )
 
     assert response.status_code == 200
@@ -161,8 +161,8 @@ def test_a_loaded_qualitys_bonus_survives_a_later_attribute_edit() -> None:
     fresh_client = TestClient(create_app())
     fresh_client.get("/")
     fresh_client.post(
-        "/character/load",
-        files={"save_file": ("character.json", save_bytes, "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("character.json", save_bytes, "application/json")},
     )
     assert "Sneaking" in fresh_client.get("/character/sheet").text
 
@@ -176,8 +176,8 @@ def test_loading_a_malformed_file_is_rejected_without_touching_the_session() -> 
     _confirm_human(client)
 
     response = client.post(
-        "/character/load",
-        files={"save_file": ("bad.json", b"not json at all", "application/json")},
+        "/characters/upload?open=true",
+        files={"files": ("bad.json", b"not json at all", "application/json")},
     )
 
     assert response.status_code == 200
@@ -187,24 +187,14 @@ def test_loading_a_malformed_file_is_rejected_without_touching_the_session() -> 
     assert "Human" in sheet.text
 
 
-def test_loading_without_choosing_a_file_shows_a_prompt_not_a_crash() -> None:
+def test_uploading_without_choosing_a_file_shows_a_prompt_not_a_crash() -> None:
     client = TestClient(create_app())
     client.get("/")
 
-    response = client.post("/character/load", data={})
+    response = client.post("/characters/upload?open=true", data={})
 
     assert response.status_code == 200
-    assert "Choose a save file" in response.text
-
-
-def test_importing_without_choosing_a_file_shows_a_prompt_not_a_crash() -> None:
-    client = TestClient(create_app())
-    client.get("/")
-
-    response = client.post("/character/import-chum5", data={})
-
-    assert response.status_code == 200
-    assert "Choose a .chum5 file" in response.text
+    assert "Choose a JSON save or a .chum5 file" in response.text
 
 
 def test_importing_a_non_xml_file_is_rejected() -> None:
@@ -212,8 +202,8 @@ def test_importing_a_non_xml_file_is_rejected() -> None:
     client.get("/")
 
     response = client.post(
-        "/character/import-chum5",
-        files={"chum5_file": ("bad.chum5", b"this is not xml", "application/xml")},
+        "/characters/upload?open=true",
+        files={"files": ("bad.chum5", b"this is not xml", "application/xml")},
     )
 
     assert response.status_code == 200

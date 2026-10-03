@@ -136,5 +136,7 @@ def test_the_attributes_page_raises_magic_with_karma_and_it_survives_a_save() ->
     saved = client.get("/character/save").content
     fresh = TestClient(create_app())
     fresh.get("/")
-    fresh.post("/character/load", files={"save_file": ("c.json", saved, "application/json")})
+    fresh.post(
+        "/characters/upload?open=true", files={"files": ("c.json", saved, "application/json")}
+    )
     assert "Magic rating: 5" in fresh.get("/character/sheet").text
