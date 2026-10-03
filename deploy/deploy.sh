@@ -34,6 +34,20 @@ source "${SCRIPT_DIR}/lib.sh"
 
 remote() { ssh "${SERVER}" "$@"; }
 
+# ---------------------------------------------------------------- 0. can the server run it?
+# Checked first, so a missing tool fails in seconds instead of after the build and the copy. The
+# commands below run over a non-interactive ssh, which doesn't read the login profile: a tool
+# that works in an interactive session on the server can still be missing from this PATH.
+MISSING="$(remote "for tool in ${RCMD} curl; do command -v \"\$tool\" >/dev/null || echo \"\$tool\"; done")"
+if [[ -n "${MISSING}" ]]; then
+    echo "error: not found on ${SERVER} (over non-interactive ssh): ${MISSING//$'\n'/ }" >&2
+    echo "  check:  ssh ${SERVER} 'command -v podman docker curl; echo \"PATH=\$PATH\"'" >&2
+    echo "  if the server has Docker instead: REMOTE_CONTAINER_CMD=docker $0 ${SERVER}" >&2
+    echo "  if it's installed but not found: add its directory to PATH in the server's ~/.bashrc" >&2
+    echo "  (above any 'return if not interactive' line)" >&2
+    exit 1
+fi
+
 # ---------------------------------------------------------------- 1. which version is this?
 if [[ -n "${CHUMMER5_TAG:-}" ]]; then
     TAG="${CHUMMER5_TAG}"
