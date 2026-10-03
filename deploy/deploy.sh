@@ -59,6 +59,12 @@ if [ RCMD = podman ] && [ "$(podman info --format "{{.Host.Security.Rootless}}" 
         || echo "rootless podman: $user has no range in /etc/subuid and /etc/subgid"
     command -v slirp4netns >/dev/null 2>&1 || command -v pasta >/dev/null 2>&1 \
         || echo "rootless podman: no network helper (slirp4netns, or pasta from passt)"
+    # Without lingering, the container dies with this ssh session: the health check passes, and
+    # the site is a 502 from the moment the deploy ends.
+    if command -v loginctl >/dev/null 2>&1 \
+        && [ "$(loginctl show-user "$user" --property=Linger --value 2>/dev/null)" != yes ]; then
+        echo "rootless podman: lingering is off for $user, so the container would stop when this ssh session ends (sudo loginctl enable-linger $user)"
+    fi
 fi
 '
 PROBLEMS="$(remote "${PREFLIGHT//RCMD/${RCMD}}")"

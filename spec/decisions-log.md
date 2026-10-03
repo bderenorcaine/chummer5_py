@@ -2079,3 +2079,31 @@ The user reviewed `spec/plan/phase-y-hosted-deployment.md` before any of WP136-1
   login ended without a logout (the WP137 review's leftover). An invalid value stops startup.
 - **The title bar links to the character list in WP139**, which creates the list. WP138 shows the
   name ("New character" / "Unnamed" / the street name, then the name) and a New button.
+
+## 2026-10-03 — First real deploy: what the server setup actually needed
+
+The first deploy to the user's server (rootless Podman behind Caddy, DNS at Hover) hit five
+problems in a row. Each is now either caught by `deploy.sh`'s preflight or written into
+`deployment.md` → "First deploy", so WP142's runbook starts from them:
+
+1. **Podman wasn't installed on the server.** The preflight now checks for the container CLI,
+   `curl` and `gunzip` over a non-interactive ssh (which doesn't read the login profile).
+2. **Rootless podman without its recommended packages** (`--no-install-recommends`): first no
+   `newuidmap` (`uidmap` package, plus subordinate ID ranges), then no `slirp4netns`. The preflight
+   now requires `podman info` to succeed, subuid/subgid ranges, and a network helper.
+   `deployment.md` lists the whole package set. The deploying user stays without sudo: an admin
+   account runs the one-time steps for it.
+3. **A `*` wildcard DNS record hid the missing `chummer` record**, so the name resolved to another
+   machine ("Unable to connect"). Diagnosed by querying Hover's authoritative nameservers
+   directly, which showed the record had never been saved there. The runbook now says to check
+   `getent hosts` against an existing name before configuring Caddy.
+4. **Caddy's first certificate attempt ran before DNS was right** ("Secure connection failed").
+   `systemctl restart caddy` retries now; the runbook mentions Let's Encrypt's 5-failures-per-hour
+   limit.
+5. **502 once the deploy's ssh session closed: lingering was off**, so systemd stopped the rootless
+   container with the session. The health check couldn't see it, because its session was still
+   open. The preflight now refuses to deploy while `loginctl` reports `Linger=no`.
+
+`admin-primer.md`'s "If the site is down" now starts from what the browser says ("Unable to
+connect" / "Secure connection failed" / 502) and maps each to the link in browser → DNS → Caddy →
+container that broke.

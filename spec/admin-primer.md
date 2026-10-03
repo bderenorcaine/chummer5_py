@@ -108,8 +108,18 @@ container) still loses it.
 
 ## If the site is down
 
+What the browser says points at the broken link in browser → DNS → Caddy → container:
+
+| Browser says | Broken link | Look at |
+|---|---|---|
+| "Unable to connect" | DNS sends the name to another machine (e.g. a `*` wildcard record) | `getent hosts chummer.<domain>` vs. the server's address; `deployment.md` → "First deploy", step 1 |
+| "Secure connection failed" | Caddy has no certificate for the name | `journalctl -u caddy`; `deployment.md` → "First deploy", step 6 |
+| 502 Bad Gateway | Caddy is fine, the container doesn't answer | the steps below; lingering, `deployment.md` → "First deploy", step 3 |
+
 1. `podman ps -a --filter name=chummer5`. If it isn't "Up", check `podman logs --tail 50 chummer5`
    for the reason. Then `podman start chummer5`, or redeploy the last good tag.
+   If it stopped right after a deploy, or every time you log out, lingering is off:
+   `loginctl show-user $USER --property=Linger` must say `yes`.
 2. If the container is up but the browser shows 502, Caddy can't reach it. Check the `curl` line
    above. If that works, compare the port in the Caddyfile's `reverse_proxy` with
    `CHUMMER5_HOST_PORT`.

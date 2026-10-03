@@ -83,7 +83,16 @@ unprivileged on purpose, and podman can't build or run images inside it (decisio
 ## First deploy (one-time server setup)
 
 1. **DNS:** an `A` (and `AAAA`, if you have IPv6) record for `chummer.<domain>` pointing at the
-   server.
+   server. Copy the addresses an existing name on that server already has (e.g. `cloud.<domain>`).
+   - Add it **where the domain's DNS is hosted**, which is whatever `NS` record the domain has
+     (for sixthworldforge.com: Hover). It is not necessarily the server's hosting company. Records
+     added in a DNS console the domain doesn't use change nothing.
+   - In the provider's form, the host name is just `chummer`, not the full name.
+   - **A wildcard record (`*`) hides a missing one.** Every name without its own record still
+     resolves, to the wildcard's address, so the browser reaches the wrong machine and says
+     "Unable to connect". Check before going on: `getent hosts chummer.<domain>` must show the
+     server's address, the same as `getent hosts cloud.<domain>`. Resolvers may keep an old answer
+     for the record's TTL (Hover: 15 minutes).
 2. **Container runtime, curl and gzip on the server.** `deploy.sh` checks all of this first,
    before building, and says what is missing.
    - **Rootless Podman** (the default: deploying as an unprivileged user) needs more than the
@@ -98,11 +107,15 @@ unprivileged on purpose, and podman can't build or run images inside it (decisio
    - **Docker:** the deploying user must be allowed to use the Docker socket (usually the
      `docker` group, which is effectively root on that machine). Deploy with
      `REMOTE_CONTAINER_CMD=docker`.
-3. **Restart after reboot.** `--restart unless-stopped` needs help from systemd under Podman:
+3. **Keep the container running.** Under Podman this needs systemd's help:
    - rootful Podman: `sudo systemctl enable --now podman-restart.service`
-   - rootless Podman (deploying as a normal user):
-     `systemctl --user enable --now podman-restart.service` and
-     `sudo loginctl enable-linger <user>`. Without lingering, your containers stop when you log out.
+   - rootless Podman (deploying as a normal user): `sudo loginctl enable-linger <user>`, then, as
+     that user, `systemctl --user enable --now podman-restart.service`.
+     **Lingering is not optional.** Without it, systemd stops all of the user's processes when
+     their last session ends, and that includes the container. The deploy's health check passes
+     (its ssh session is still open), and the site answers **502 Bad Gateway** from the moment it
+     closes. `deploy.sh` refuses to deploy while lingering is off. If `systemctl --user` says
+     "Failed to connect to bus", log in again after enabling lingering.
    - Docker: nothing to do. The daemon honors the restart policy.
 4. **SSH:** `ssh user@server true` works from your machine without a password prompt (key-based).
 5. **Deploy:** `deploy/deploy.sh user@server`.
@@ -110,10 +123,15 @@ unprivileged on purpose, and podman can't build or run images inside it (decisio
    - Replace the domain.
    - Create one `basicauth` line per player. Run `caddy hash-password` on the server for each
      hash.
-   - Reload with `sudo systemctl reload caddy`.
+   - Reload with `sudo systemctl reload caddy`. **Do step 1 first, and check it.**
 
-   Caddy requests the certificate on the first request. If that fails, the Caddy log
-   (`journalctl -u caddy`) says why. It is almost always DNS not pointing at the server yet.
+   Caddy fetches the certificate from Let's Encrypt itself, which works only once DNS points at
+   the server. If Caddy tried earlier, the browser says **"Secure connection failed"** (Caddy has
+   no certificate for the name), and Caddy waits longer between each retry.
+   `sudo systemctl restart caddy` makes it try again now, then `journalctl -u caddy -f` should
+   show "certificate obtained successfully". If it says "too many failed authorizations", Let's
+   Encrypt's limit of 5 failed attempts per name per hour was used up: wait an hour and restart
+   again.
 7. Open `https://chummer.<domain>`, enter a basic-auth login, and you should see chargen.
 
 ## Every later deploy
