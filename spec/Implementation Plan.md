@@ -74,7 +74,7 @@ chummer5_py/
     Project Overview.md
     decisions-log.md
     plan/            # per-phase WP entries
-    rulebooks/
+    rulebooks/        (gitignored, local-only: copyrighted rulebook material)
       learnings.md    (index)
       learnings/      # per-phase rulebook-citation entries
       character_creation_chapter.md

@@ -26,9 +26,10 @@ htmlcov/
 .idea/
 .DS_Store
 
-# Copyrighted reference material kept locally for rules lookups, not for redistribution.
-# (Only the PDF itself -- spec/rulebooks/learnings.md is this project's own original notes and is
-# meant to be tracked; discovered during WP25 that this rule had been silently swallowing it,
-# so every prior WP's "recorded in learnings.md" claim was never actually committed. See WP25's
-# worklog.)
-/spec/rulebooks/*.pdf
+# Copyrighted reference material kept locally for rules lookups, not for redistribution: the
+# rulebook PDF, the chapter transcriptions made from it, and the learnings/ citation notes (which
+# quote it). The whole directory stays local-only; nothing under it is published.
+/spec/rulebooks/
+
+# Third-party .chum5 save files used as local examples -- not ours to publish.
+/examples/legacy/

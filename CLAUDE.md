@@ -24,7 +24,13 @@ Each phase file's own "Depends on" lines tell you when you genuinely need anothe
 `spec/rulebooks/character_creation_chapter.md` is "Creating a Shadowrunner" (core rulebook pp. 62-104,
 Steps One-Nine — metatype, priorities, attributes, skills, qualities, contacts, resources, lifestyle,
 chargen-time Karma spend) already extracted verbatim, with its own cross-reference index for pages it
-points at elsewhere in the book. **Check this file first for anything in that scope.** Only open
+points at elsewhere in the book. **Check this file first for anything in that scope.**
+
+**Everything under `spec/rulebooks/` is gitignored and local-only** — the PDF, the chapter
+extractions, and `learnings.md` + `learnings/` all reproduce copyrighted rulebook text. Read and
+update them freely, but never commit them, never `git add -f` them, and never copy rulebook prose
+into tracked files (code, tests, worklogs, decisions-log, commit messages). Tracked files cite a
+page number and paraphrase; the verbatim text stays in `spec/rulebooks/`. Only open
 `spec/rulebooks/Shadowrun_Fifth_Edition_Core_Rulebook.pdf` (via `pdftotext -layout`, not a raw read —
 see existing worklogs for the pattern) when the chapter extraction doesn't cover it, or when a citation's
 exact page/wording still needs pinning down for `learnings.md`.
@@ -35,7 +41,8 @@ exact page/wording still needs pinning down for `learnings.md`.
 - Tick the checkbox in the WP's phase file as part of that commit.
 - If the WP resolved a rulebook question via the PDF, record the citation in the relevant
   `spec/rulebooks/learnings/phase-<letter>.md` (create the phase file if the phase doesn't have one
-  yet, and add it to `learnings.md`'s index table).
+  yet, and add it to `learnings.md`'s index table). These files are gitignored — the update stays
+  local and is not part of the commit.
 - If the WP surfaced a scoping decision, correction, or cross-phase finding, add a dated entry to
   `spec/decisions-log.md`.
 - `spec/worklogs/WP<n>.md` — write a retrospective entry for non-trivial WPs, matching the existing
