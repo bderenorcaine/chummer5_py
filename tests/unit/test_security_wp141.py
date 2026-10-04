@@ -375,7 +375,11 @@ def _assert_csp_clean(html: str, where: str) -> None:
     assert "hx-on" not in html, f"hx-on in {where}"
     for trigger in re.findall(r'hx-trigger="([^"]*)"', html):
         assert "[" not in trigger, f"htmx event filter (evaluated code) in {where}: {trigger}"
-    for url in re.findall(r'(?:src|href)="([^"]+)"', html):
+    # Resources only: an <a href> off-site (the legal footer's license and source links) is a
+    # navigation, which the CSP does not govern.
+    resources = re.findall(r'\bsrc="([^"]+)"', html)
+    resources += re.findall(r'<link\b[^>]*\bhref="([^"]+)"', html)
+    for url in resources:
         assert not re.match(r"(https?:)?//", url), f"off-site resource in {where}: {url}"
     if "htmx.min.js" in html:
         config = re.search(r'name="htmx-config"\s+content=\'([^\']*)\'', html)

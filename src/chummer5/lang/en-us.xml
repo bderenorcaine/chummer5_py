@@ -615,6 +615,27 @@
       <key>Web_Knowledge_Update</key>
       <text>Update knowledge &amp; language skills</text>
     </string>
+    <!-- Legal: the footer's copyright, license and trademark notices (GPL section 5(d)) -->
+    <string>
+      <key>Web_Legal_Copyright</key>
+      <text>Chummer5 © 2026 Dominik Steenken. Based on Chummer5a, © the Chummer5a contributors.</text>
+    </string>
+    <string>
+      <key>Web_Legal_License</key>
+      <text>Free software under the GNU General Public License, version 3 or later, with ABSOLUTELY NO WARRANTY.</text>
+    </string>
+    <string>
+      <key>Web_Legal_LicenseLink</key>
+      <text>License</text>
+    </string>
+    <string>
+      <key>Web_Legal_SourceLink</key>
+      <text>Source code</text>
+    </string>
+    <string>
+      <key>Web_Legal_Trademark</key>
+      <text>Shadowrun and Matrix are registered trademarks and/or trademarks of The Topps Company, Inc. This is an unofficial fan project, not affiliated with or endorsed by Topps or Catalyst Game Labs.</text>
+    </string>
     <!-- Lifestyle -->
     <string>
       <key>Web_Lifestyle_Intro</key>

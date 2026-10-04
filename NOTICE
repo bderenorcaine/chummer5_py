@@ -1,0 +1,42 @@
+Chummer5 (Python reimplementation)
+Copyright (C) 2026 Dominik Steenken
+
+This program is a modified version of Chummer5a
+(https://github.com/chummer5a/chummer5a), Copyright (C) the Chummer5a contributors,
+licensed under the GNU General Public License, version 3 or later.
+
+Modifications
+-------------
+Starting 2026-07-16, this repository diverges from upstream Chummer5a as follows:
+
+- The original C#/WinForms codebase was moved, otherwise unchanged, under legacy/.
+- A new Python implementation was written under src/ and tests/. It ports Chummer5a's
+  character-creation rules logic, reads Chummer5a's game data (legacy/Chummer/data) and UI
+  string catalogs (legacy/Chummer/lang) at runtime, and uses Chummer5a's test characters
+  (legacy/Chummer.Tests/TestFiles) as a regression oracle.
+
+The full history of both the upstream project and these modifications is in this
+repository's git history.
+
+License
+-------
+This program is free software: you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation, either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+the GNU General Public License for more details. A copy is in LICENSE.
+
+Third-party components
+----------------------
+- htmx (src/chummer5/web/static/vendor/htmx/): Zero-Clause BSD; see the LICENSE file there.
+- legacy/ includes third-party components under their own licenses, each with its license file
+  alongside it, as distributed by upstream Chummer5a.
+
+Trademarks and game content
+---------------------------
+Shadowrun and Matrix are registered trademarks and/or trademarks of The Topps Company, Inc.
+Catalyst Game Labs is a trademark of InMediaRes Productions, LLC. This is an unofficial fan
+project, not affiliated with or endorsed by Topps or Catalyst Game Labs. The game data names
+rulebook content and cites it by page; it does not replace the books, which you need to play.

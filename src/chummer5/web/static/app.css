@@ -31,10 +31,11 @@ body {
 .app-shell {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   grid-template-areas:
     "titlebar titlebar"
-    "sidebar main";
+    "sidebar main"
+    "footer footer";
   min-height: 100vh;
 }
 
@@ -296,7 +297,8 @@ a.step-nav__item--current:hover {
     grid-template-areas:
       "titlebar"
       "sidebar"
-      "main";
+      "main"
+      "footer";
   }
 
   .app-shell__sidebar {
@@ -525,10 +527,13 @@ details[open] > .panel__heading {
 /* WP137: the account pages (login, registration, password) -- the title bar over one centred
    panel, no step nav. */
 .auth-shell {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
 .auth-shell__main {
+  flex: 1 1 auto;
   display: flex;
   justify-content: center;
   padding: 2rem 1rem;
@@ -592,10 +597,13 @@ details[open] > .panel__heading {
 /* WP139: the character list -- the shell's title bar over one panel, no step nav. Table, button
    and panel looks come from the theme, as on every step page. */
 .list-shell {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
 .list-shell__main {
+  flex: 1 1 auto;
   padding: 1.5rem 1.25rem;
   background: var(--main-bg);
 }
@@ -656,4 +664,23 @@ details[open] > .panel__heading {
   margin: 0.5rem 0;
   padding: 0;
   list-style: none;
+}
+
+/* The legal footer (GPL section 5(d)): copyright, license, source link, trademark notice. Below
+   the content on every full-page layout; a grid area of its own in the chargen shell. */
+.legal-footer {
+  grid-area: footer;
+  padding: 0.75rem 1.25rem;
+  border-top: var(--frame-width) solid var(--frame-color);
+  font-size: 0.75rem;
+  color: var(--panel-muted-fg);
+  background: var(--main-bg);
+}
+
+.legal-footer p {
+  margin: 0.15rem 0;
+}
+
+.legal-footer a {
+  color: inherit;
 }

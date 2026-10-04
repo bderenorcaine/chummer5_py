@@ -28,4 +28,8 @@ image and starts the web app inside it with the port published to the host — o
 ## License
 
 GPLv3 — see [LICENSE](LICENSE). Inherited from the legacy codebase, whose data files, rules logic, and
-test fixtures this project reuses.
+test fixtures this project reuses. [NOTICE](NOTICE) has the copyright, what changed from upstream
+Chummer5a, and third-party and trademark notices.
+
+Shadowrun and Matrix are registered trademarks and/or trademarks of The Topps Company, Inc. This is an
+unofficial fan project, not affiliated with or endorsed by Topps or Catalyst Game Labs.

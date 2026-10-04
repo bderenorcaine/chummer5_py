@@ -24,6 +24,8 @@ WORKDIR /app
 COPY --from=build /app /app
 COPY legacy/Chummer/data ./legacy/Chummer/data
 COPY legacy/Chummer/lang ./legacy/Chummer/lang
+# GPL: the license and the copyright/modification notice travel with every copy of the program.
+COPY LICENSE NOTICE ./
 # WP136/137: the SQLite database. The app creates it at startup, in local mode too, and /app is
 # root-owned, so it needs a directory of its own the app user can write. deploy.sh mounts the
 # named volume chummer5-data here (WP142); a new, empty volume takes this directory's owner.
