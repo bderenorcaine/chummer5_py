@@ -53,7 +53,8 @@ Four ideas carry the whole design:
    which code is running.
 2. **Builds from the commit, not the working tree.** It runs `git archive HEAD` into a temporary
    folder, copying only what the app needs at runtime: `src/`, `pyproject.toml`, `uv.lock`, and
-   `legacy/Chummer/data` + `legacy/Chummer/lang`, which the loaders read at runtime. Then it runs
+   `legacy/Chummer/data` + `legacy/Chummer/lang`, which the loaders read at runtime, plus `LICENSE`
+   and `NOTICE`, which the GPL requires to travel with every copy. Then it runs
    `podman build -f deploy/Containerfile`. Uncommitted changes are left out, with a warning.
    - The Containerfile has two stages. The first installs uv and syncs the locked, non-dev
      dependencies. The second copies the result into a clean `python:3.12-slim` image, adds the

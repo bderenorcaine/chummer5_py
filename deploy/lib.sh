@@ -32,7 +32,7 @@ build_image() {
     fi
     context="$(mktemp -d)"
     git -C "${REPO_DIR}" archive HEAD \
-        pyproject.toml uv.lock README.md src legacy/Chummer/data legacy/Chummer/lang \
+        pyproject.toml uv.lock README.md LICENSE NOTICE src legacy/Chummer/data legacy/Chummer/lang \
         deploy/Containerfile | tar -x -C "${context}"
     local status=0
     podman build ${BUILD_PLATFORM:+--platform "${BUILD_PLATFORM}"} \
