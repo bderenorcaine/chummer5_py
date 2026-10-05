@@ -684,3 +684,224 @@ details[open] > .panel__heading {
 .legal-footer a {
   color: inherit;
 }
+
+/* --- Priorities page (WP143, Phase Z) ---------------------------------------------------------
+   spec/plan/phase-z-page-redesigns.md: one centred column of comfortable width (heading, method
+   dropdown, panel), top-aligned; on a phone it is the content pane's full width. Messages sit at
+   the bottom, under every control, and Revert keeps its space while hidden, so nothing a player
+   is about to click ever moves. */
+.priority-page {
+  max-width: 30rem;
+  margin-inline: auto;
+}
+
+.priority-page__method {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  font: inherit;
+}
+
+.priority-panel {
+  border-bottom: var(--panel-rule-width) solid var(--rule);
+}
+
+.priority-panel__intro {
+  margin: 0 0 1rem;
+  color: var(--panel-muted-fg);
+}
+
+/* Priority: the fixed letters A-E beside the five category tiles. Both lists share one row
+   height, so each letter lines up with whichever tile is in its row. */
+.priority-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.75rem;
+}
+
+.priority-grid__letters,
+.priority-grid__tiles {
+  display: grid;
+  grid-auto-rows: 2.5rem;
+  row-gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.priority-grid__letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  font-family: var(--font-title);
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--summary-fg);
+}
+
+.priority-tile {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--frame-color);
+  border-radius: var(--radius);
+  background: var(--section-bg-b);
+  cursor: grab;
+  user-select: none;
+}
+
+.priority-tile:focus-visible {
+  outline: 2px solid var(--section-accent);
+  outline-offset: 2px;
+}
+
+.priority-tile__handle {
+  color: var(--panel-muted-fg);
+}
+
+/* Sum-to-Ten: label, dot leader, value; a closing total row. */
+.sum-to-ten__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+}
+
+.sum-to-ten__leader {
+  flex: 1;
+  align-self: end;
+  margin-bottom: 0.6rem;
+  border-bottom: 2px dotted var(--rule);
+}
+
+.sum-to-ten__spinner {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.sum-to-ten__value {
+  min-width: 3.5em;
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sum-to-ten__value:focus-visible {
+  outline: 2px solid var(--section-accent);
+  outline-offset: 1px;
+}
+
+.sum-to-ten__step {
+  min-width: 1.9rem;
+  min-height: 1.9rem;
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.sum-to-ten__row--total {
+  margin-top: 0.25rem;
+  padding: 0 0.3rem;
+  border-top: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.sum-to-ten__row--total abbr {
+  text-decoration: none;
+}
+
+.sum-to-ten__total {
+  font-variant-numeric: tabular-nums;
+}
+
+.sum-to-ten__row--off {
+  color: var(--error-fg);
+  background: var(--error-bg);
+}
+
+/* The Metatype field, then the status line (a fixed two-line height, so its changing text never
+   moves the buttons), then Revert and CONFIRM. */
+.priority-panel__metatype {
+  margin-top: 1rem;
+}
+
+.priority-panel__metatype label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.priority-panel__metatype select {
+  width: 100%;
+  font: inherit;
+}
+
+.priority-status {
+  display: flex;
+  align-items: center;
+  height: 2.9em;
+  margin: 0.5rem 0 0.25rem;
+  overflow: hidden;
+  color: var(--panel-muted-fg);
+}
+
+.priority-status--confirmed {
+  color: var(--info-fg);
+}
+
+.priority-status--changed {
+  color: var(--warning-fg);
+}
+
+.priority-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.priority-actions button {
+  min-height: 2.5rem;
+  padding: 0.3rem 1rem;
+  font: inherit;
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
+}
+
+.priority-actions__revert--idle {
+  visibility: hidden;
+}
+
+/* What each placed priority gives -- always the form's current selection. */
+.priority-summary {
+  margin: 1rem 0 0;
+}
+
+.priority-summary__row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.2rem 0;
+}
+
+.priority-summary__row + .priority-summary__row {
+  border-top: 1px solid var(--rule);
+}
+
+.priority-summary dt {
+  color: var(--panel-muted-fg);
+}
+
+.priority-summary dd {
+  margin: 0;
+}
+
+.priority-summary__row--changed dd {
+  font-weight: 600;
+  color: var(--warning-fg);
+}

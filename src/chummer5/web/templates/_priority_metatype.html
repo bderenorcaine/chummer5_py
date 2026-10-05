@@ -1,0 +1,20 @@
+{# WP143: the Priorities panel's Metatype field. `GET /ui/priorities/preview` sends it again out of
+   band when the Heritage letter changes which metatypes are offered; `metatype_offer` is the
+   letter these options were rendered for. A metatype the letter doesn't offer is never swapped
+   for another: the field falls back to the placeholder instead. #}
+<div id="priority-metatype" class="priority-panel__metatype"{% if priority_metatype_oob %} hx-swap-oob="true"{% endif %}>
+  <label>
+    <span class="priority-panel__metatype-label">{{ _("String_Metatype") }}</span>
+    <select id="metatype-select" name="metatype_id">
+      {% if not priority_metatype_id %}
+      <option value="" selected disabled>{{ _("Web_Priorities_ChooseMetatype") }}</option>
+      {% endif %}
+      {% for choice in priority_metatype_options %}
+      <option value="{{ choice.metatype.id }}" {% if choice.metatype.id == priority_metatype_id %}selected{% endif %}>
+        {{ _n("Web_Metatype_Option", choice.special_attribute_points, name=choice.metatype | dterm("metatypes.xml")) }}
+      </option>
+      {% endfor %}
+    </select>
+  </label>
+  <input type="hidden" name="metatype_offer" value="{{ priority_metatype_offer }}" />
+</div>

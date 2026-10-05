@@ -2224,3 +2224,18 @@ container that broke.
   - Switching from Sum-to-Ten to Priority picks the order with the smallest total letter distance.
   - Leaving with unconfirmed changes asks Confirm / Stay / Revert, rather than silently keeping a
     draft the rest of the character doesn't use.
+
+## 2026-10-05 — WP143: Priorities redesign, server side
+
+- **`GET /ui/metatypes` is gone**, along with `_metatype_select.html`. They served the Heritage
+  dropdown the redesign removed. `GET /ui/priorities/preview` re-renders the Metatype field out
+  of band when the Heritage letter changes what's offered.
+- **The Priorities panel's context keys are all `priority_`-prefixed.** `chargen_context` merges
+  every step's context over the priorities one, and the Export sheet already uses
+  `priority_summary`. The redesign's summary is `priority_gives`.
+- **No preselected metatype before the first confirmation** (added to the phase file's
+  "Defaults"). Before WP143, the browser implicitly selected the first option.
+- **Sum-to-Ten → Priority keeps the player's ranking.** Sorted matching is one of possibly
+  several assignments with the minimal total distance. It is the only one that never ranks a
+  category below one the player put lower. Display order breaks ties between equal letters.
+  Details in `spec/worklogs/WP143.md`.

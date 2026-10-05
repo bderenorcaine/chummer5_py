@@ -8,6 +8,8 @@ exactly 10) lives in `tests/integration/test_legacy_chum5.py`, alongside the res
 
 from __future__ import annotations
 
+import itertools
+
 import pytest
 
 from chummer5.engine.build_method import (
@@ -16,6 +18,7 @@ from chummer5.engine.build_method import (
     SUM_TO_TEN_POINT_VALUES,
     SUM_TO_TEN_TARGET,
     SUPPORTED_BUILD_METHODS,
+    nearest_priority_assignment,
     sum_to_ten_total,
     validate_sum_to_ten_total,
 )
@@ -72,3 +75,55 @@ def test_validate_sum_to_ten_total_rejects_over_target() -> None:
     # invalid as falling short, not merely "wasteful."
     with pytest.raises(ValueError, match="must total exactly 10"):
         validate_sum_to_ten_total(["A", "A", "A", "A", "A"])  # 4*5 = 20
+
+
+# --- WP143: Sum-to-Ten -> Priority conversion ---------------------------------------------------
+
+
+def _distance(before: tuple[str, ...], after: tuple[str, ...]) -> int:
+    return sum(abs(ord(a) - ord(b)) for a, b in zip(before, after, strict=True))
+
+
+def test_all_e_converts_to_display_order() -> None:
+    assert nearest_priority_assignment(("E",) * 5) == ("A", "B", "C", "D", "E")
+
+
+@pytest.mark.parametrize("letters", list(itertools.permutations("ABCDE"))[::7])
+def test_five_distinct_letters_are_unchanged(letters: tuple[str, ...]) -> None:
+    assert nearest_priority_assignment(letters) == letters
+
+
+@pytest.mark.parametrize(
+    ("letters", "expected"),
+    [
+        # A typical legal Sum-to-Ten spread: B B B E E -> the three Bs take A-C in display order.
+        (("B", "B", "B", "E", "E"), ("A", "B", "C", "D", "E")),
+        (("E", "E", "B", "B", "B"), ("D", "E", "A", "B", "C")),
+        (("A", "A", "C", "E", "E"), ("A", "B", "C", "D", "E")),
+        (("C", "A", "E", "A", "C"), ("C", "A", "E", "B", "D")),
+        (("D", "D", "A", "A", "A"), ("D", "E", "A", "B", "C")),
+    ],
+)
+def test_mixed_cases(letters: tuple[str, ...], expected: tuple[str, ...]) -> None:
+    assert nearest_priority_assignment(letters) == expected
+
+
+def test_brute_force_minimal_and_order_preserving() -> None:
+    """Over every 5-letter input (3125 of them), against all 120 Priority assignments: the result
+    is a permutation of A-E, no assignment has a smaller total letter distance, the player's
+    ranking is never inverted, and equal letters are settled by display order."""
+    permutations = list(itertools.permutations("ABCDE"))
+    for letters in itertools.product("ABCDE", repeat=5):
+        result = nearest_priority_assignment(letters)
+        assert sorted(result) == list("ABCDE")
+        best = min(_distance(letters, p) for p in permutations)
+        assert _distance(letters, result) == best, letters
+        for i, j in itertools.combinations(range(5), 2):  # i comes first in display order
+            if letters[i] <= letters[j]:
+                assert result[i] < result[j], (letters, result)
+
+
+@pytest.mark.parametrize("letters", [("A", "B", "C", "D"), ("A", "B", "C", "D", "F"), ()])
+def test_conversion_rejects_malformed_input(letters: tuple[str, ...]) -> None:
+    with pytest.raises(ValueError):
+        nearest_priority_assignment(letters)

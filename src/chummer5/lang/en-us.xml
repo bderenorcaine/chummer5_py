@@ -831,8 +831,16 @@
       <text>Build method</text>
     </string>
     <string>
+      <key>Web_Priorities_Change</key>
+      <text>{old} → {new}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_ChooseMetatype</key>
+      <text>Choose metatype</text>
+    </string>
+    <string>
       <key>Web_Priorities_Confirm</key>
-      <text>Confirm metatype &amp; priorities</text>
+      <text>Confirm</text>
     </string>
     <string>
       <key>Web_Priorities_Confirmed</key>
@@ -851,6 +859,38 @@
       <text>Select a metatype offered for the chosen Heritage priority.</text>
     </string>
     <string>
+      <key>Web_Priorities_GivesAttributes_One</key>
+      <text>{letter} — {count} attribute point</text>
+    </string>
+    <string>
+      <key>Web_Priorities_GivesAttributes_Other</key>
+      <text>{letter} — {count} attribute points</text>
+    </string>
+    <string>
+      <key>Web_Priorities_GivesHeritageNone</key>
+      <text>{letter} — no metatype chosen</text>
+    </string>
+    <string>
+      <key>Web_Priorities_GivesHeritage_One</key>
+      <text>{letter} — {metatype}, {count} special attribute point</text>
+    </string>
+    <string>
+      <key>Web_Priorities_GivesHeritage_Other</key>
+      <text>{letter} — {metatype}, {count} special attribute points</text>
+    </string>
+    <string>
+      <key>Web_Priorities_GivesResources</key>
+      <text>{letter} — {nuyen}</text>
+    </string>
+    <string>
+      <key>Web_Priorities_GivesSkills</key>
+      <text>{letter} — {skills} skill points, {groups} skill group points</text>
+    </string>
+    <string>
+      <key>Web_Priorities_GivesTalent</key>
+      <text>{letter} — {options}</text>
+    </string>
+    <string>
       <key>Web_Priorities_Heading</key>
       <text>Priority &amp; metatype selection</text>
     </string>
@@ -859,36 +899,60 @@
       <text>Heritage</text>
     </string>
     <string>
-      <key>Web_Priorities_Intro</key>
-      <text>Assign each of Heritage, Talent, Attributes, Skills, and Resources a different priority letter (A-E). Talent's own archetype (Mundane/Magician/Adept) is chosen on the Magic page, once you confirm a letter for it here — which archetypes are offered depends on the letter.</text>
+      <key>Web_Priorities_IntroPriority</key>
+      <text>Drag the five categories into the order you want: the one beside A gets the most, the one beside E the least. Talent's own archetype (Mundane, Magician, Adept, …) is chosen on the Magic page; the letter decides which archetypes are offered.</text>
     </string>
     <string>
-      <key>Web_Priorities_MethodPriority</key>
-      <text>Priority (each of the 5 must use a different letter)</text>
+      <key>Web_Priorities_IntroSumtoTen</key>
+      <text>Give each category a priority from A (4 points) to E (0 points). Letters may repeat, but the points must total exactly {target}. Talent's own archetype is chosen on the Magic page; the letter decides which archetypes are offered.</text>
     </string>
     <string>
-      <key>Web_Priorities_MethodSumToTen</key>
-      <text>Sum-to-Ten (letters may repeat; point values must total exactly {target})</text>
+      <key>Web_Priorities_Lower</key>
+      <text>Lower priority</text>
+    </string>
+    <string>
+      <key>Web_Priorities_Raise</key>
+      <text>Raise priority</text>
     </string>
     <string>
       <key>Web_Priorities_Resources</key>
       <text>Resources</text>
     </string>
     <string>
+      <key>Web_Priorities_Revert</key>
+      <text>Revert</text>
+    </string>
+    <string>
       <key>Web_Priorities_StaleSelections</key>
       <text>Some of your existing attribute, skill, or gear selections no longer fit these priorities — the affected steps are marked ⚠ in the step list.</text>
     </string>
     <string>
-      <key>Web_Priorities_SumToTenTotal</key>
-      <text>Current total: {total} / {target}</text>
+      <key>Web_Priorities_StatusChanged</key>
+      <text>Changed — not confirmed yet</text>
+    </string>
+    <string>
+      <key>Web_Priorities_StatusUnconfirmed</key>
+      <text>Not confirmed yet</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SumToTenTotalLabel</key>
+      <text>Total</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SumToTenValue</key>
+      <text>{letter} ({points})</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SumToTenValueText_One</key>
+      <text>{letter}, {count} point</text>
+    </string>
+    <string>
+      <key>Web_Priorities_SumToTenValueText_Other</key>
+      <text>{letter}, {count} points</text>
     </string>
     <string>
       <key>Web_Priorities_SummaryAttributes</key>
       <text>Attributes {letter} — {name}</text>
-    </string>
-    <string>
-      <key>Web_Priorities_SummaryBuildMethod</key>
-      <text>Build method: {method}</text>
     </string>
     <string>
       <key>Web_Priorities_SummaryHeritage</key>
@@ -901,10 +965,6 @@
     <string>
       <key>Web_Priorities_SummarySkills</key>
       <text>Skills {letter} — {name}</text>
-    </string>
-    <string>
-      <key>Web_Priorities_SummarySpecialPoints</key>
-      <text>Special attribute points (EDG budget): {points}</text>
     </string>
     <string>
       <key>Web_Priorities_SummaryTalent</key>

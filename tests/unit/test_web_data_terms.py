@@ -132,7 +132,9 @@ def test_german_names_reach_the_page_but_never_its_form_fields(german: None) -> 
     assert 'value="Low"' in lifestyle  # the tier's key stays English ...
     assert "Unterschicht" in lifestyle  # ... while its label is German
     priorities = client.get("/ui/page/priorities").text
-    assert "A - Jeder Metatyp" in priorities
+    # WP143: the summary names what Talent's letter offers, from priorities.xml's rows.
+    assert "E — Mundan" in priorities
+    assert 'name="talent_letter" value="E"' in priorities  # the letter itself stays a letter
     assert "Mensch" in priorities
 
 

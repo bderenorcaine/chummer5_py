@@ -110,6 +110,9 @@ method dropdown above it:
   alone would lock keyboard users out.
 - **An on-page Revert button** sits beside CONFIRM. It is visible only in the "changed" state, but
   its space is always reserved.
+- **No metatype is preselected for a never-confirmed character** (WP143). The Metatype field
+  opens on a "Choose metatype" placeholder, so the page opens unconfirmable. This is the same
+  "never silently pick a metatype" rule the preview applies.
 - **Leaving with "Revert" continues the navigation.** Nothing server-side changed, so reverting
   just drops the form's edits and goes where the player was headed. "Confirm" confirms, then
   continues. "Stay" cancels the navigation.
@@ -146,7 +149,7 @@ it with an Opus `/code-review high`.
 
 ---
 
-- [ ] **WP143 — Priorities redesign: server side, markup and layout.**
+- [x] **WP143 — Priorities redesign: server side, markup and layout.**
   *Suggested model:* Sonnet.
   Goal: the new panel's full server side and markup. The page renders both layouts and switches
   between them. It shows the live summary and status and confirms. Drag and spinner interaction is

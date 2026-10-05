@@ -1,7 +1,0 @@
-<select id="metatype-select" name="metatype_id">
-  {% for choice in metatype_options %}
-  <option value="{{ choice.metatype.id }}" {% if choice.metatype.id == selected.metatype_id %}selected{% endif %}>
-    {{ _n("Web_Metatype_Option", choice.special_attribute_points, name=choice.metatype | dterm("metatypes.xml")) }}
-  </option>
-  {% endfor %}
-</select>

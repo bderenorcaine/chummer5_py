@@ -26,7 +26,7 @@ def test_index_serves_priority_form_and_sets_session_cookie() -> None:
     assert response.status_code == 200
     assert "Heritage" in response.text
     assert "Attributes" in response.text
-    assert "Confirm metatype" in response.text
+    assert "Confirm" in response.text
     assert SESSION_COOKIE_NAME in response.cookies
 
 
@@ -40,19 +40,6 @@ def test_index_default_selection_is_a_valid_distinct_permutation() -> None:
     # pre-populated for Heritage A with Human as an option.
     assert "Human" in response.text
     assert "Talent" in response.text
-
-
-def test_metatype_fragment_matches_engine_for_a_given_heritage_letter() -> None:
-    client = TestClient(create_app())
-
-    response = client.get("/ui/metatypes", params={"heritage_letter": "D"})
-
-    assert response.status_code == 200
-    expected = metatype_choices(PRIORITIES.heritage["D"], METATYPES)
-    for choice in expected:
-        assert choice.metatype.name in response.text
-    # Heritage D only offers Human/Elf -- Troll must not appear.
-    assert "Troll" not in response.text
 
 
 def test_submitting_valid_priorities_and_metatype_matches_engine_output() -> None:
@@ -80,7 +67,8 @@ def test_submitting_valid_priorities_and_metatype_matches_engine_output() -> Non
     assert "Confirmed: Human" in response.text
 
     expected = create_character(human_choice, "A", "B", PRIORITIES, {})
-    assert f"Special attribute points (EDG budget): {expected.special_attribute_points}" in (
+    # WP143: the summary's Heritage row names the metatype and its special attribute points.
+    assert f"A — Human, {expected.special_attribute_points} special attribute points" in (
         response.text
     )
     assert expected.special_attribute_points == human_choice.special_attribute_points
@@ -195,13 +183,12 @@ def test_submitting_talent_at_a_non_e_letter_still_resolves_to_mundane() -> None
 
     assert response.status_code == 200
     assert "Confirmed: Human" in response.text
-    assert "Talent A" in response.text
+    assert 'name="talent_letter" value="A"' in response.text
 
     expected = create_character(human_choice, "E", "B", PRIORITIES, {})
     assert expected.special_attribute_points == human_choice.special_attribute_points
-    assert f"Special attribute points (EDG budget): {expected.special_attribute_points}" in (
-        response.text
-    )
+    assert expected.special_attribute_points == 1
+    assert "E — Human, 1 special attribute point<" in response.text
 
 
 def test_submitting_sum_to_ten_with_repeated_letters_summing_to_10_is_accepted() -> None:

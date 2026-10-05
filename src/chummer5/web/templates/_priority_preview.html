@@ -1,0 +1,72 @@
+{# WP143: the Priorities panel's live part -- the status line, Revert/CONFIRM, the summary of what
+   each placed priority gives, and the error slot. Rendered inside `#priority-preview` by a full
+   render, and alone by `GET /ui/priorities/preview` (Finding 2: the status is decided
+   server-side, and the script reads it off `data-priority-status`/`-confirmable`). #}
+{% macro gives(row) -%}
+{%- if row.category == "heritage" -%}
+{%- if row.choice -%}
+{{ _n("Web_Priorities_GivesHeritage", row.choice.special_attribute_points, letter=row.letter, metatype=row.choice.metatype | dterm("metatypes.xml")) }}
+{%- else -%}
+{{ _("Web_Priorities_GivesHeritageNone", letter=row.letter) }}
+{%- endif -%}
+{%- elif row.category == "talent" -%}
+{%- set options -%}{% for option in row.options %}{{ option.name | dterm("priorities.xml") }}{% if not loop.last %}{{ _("Web_List_Separator") }}{% endif %}{% endfor %}{%- endset -%}
+{{ _("Web_Priorities_GivesTalent", letter=row.letter, options=options) }}
+{%- elif row.category == "attributes" -%}
+{{ _n("Web_Priorities_GivesAttributes", row.points, letter=row.letter) }}
+{%- elif row.category == "skills" -%}
+{{ _("Web_Priorities_GivesSkills", letter=row.letter, skills=row.skills, groups=row.groups) }}
+{%- else -%}
+{{ _("Web_Priorities_GivesResources", letter=row.letter, nuyen=row.nuyen | nuyen) }}
+{%- endif -%}
+{%- endmacro %}
+<p
+  id="priority-status"
+  class="priority-status priority-status--{{ priority_status }}"
+  data-priority-status="{{ priority_status }}"
+  data-priority-confirmable="{{ 'true' if priority_confirmable else 'false' }}"
+>
+  {% if priority_status == "confirmed" %}{{ _("Web_Priorities_Confirmed", metatype=priority_confirmed_metatype | dterm("metatypes.xml")) }}{% elif priority_status == "changed" %}{{ _("Web_Priorities_StatusChanged") }}{% else %}{{ _("Web_Priorities_StatusUnconfirmed") }}{% endif %}
+</p>
+<div class="priority-actions">
+  {# Revert's space is always reserved: hidden, not removed, outside the "changed" status. #}
+  <button
+    type="button"
+    class="priority-actions__revert{% if priority_status != 'changed' %} priority-actions__revert--idle{% endif %}"
+    hx-get="/ui/priorities/revert"
+    hx-target="#priority-section"
+    hx-swap="outerHTML"
+    {% if priority_status != "changed" %}disabled{% endif %}
+  >{{ _("Web_Priorities_Revert") }}</button>
+  <button
+    type="submit"
+    class="priority-actions__confirm"
+    {% if not priority_confirmable or priority_status == "confirmed" %}disabled{% endif %}
+  >{{ _("Web_Priorities_Confirm") }}</button>
+</div>
+<dl class="priority-summary">
+  {% for row in priority_gives %}
+  <div class="priority-summary__row{% if row.old or row.old_method %} priority-summary__row--changed{% endif %}">
+    <dt>{{ _(row.label_key) }}</dt>
+    <dd>
+      {%- if row.method is defined -%}
+      {%- if row.old_method -%}
+      {{ _("Web_Priorities_Change", old=_("Web_BuildMethod_" ~ row.old_method), new=_("Web_BuildMethod_" ~ row.method)) }}
+      {%- else -%}
+      {{ _("Web_BuildMethod_" ~ row.method) }}
+      {%- endif -%}
+      {%- elif row.old -%}
+      {{ _("Web_Priorities_Change", old=gives(row.old), new=gives(row.gives)) }}
+      {%- else -%}
+      {{ gives(row.gives) }}
+      {%- endif -%}
+    </dd>
+  </div>
+  {% endfor %}
+</dl>
+{% if priority_error %}
+<p class="error">{{ priority_error | tr }}</p>
+{% endif %}
+{% if priority_metatype_oob %}
+{% include "_priority_metatype.html" %}
+{% endif %}

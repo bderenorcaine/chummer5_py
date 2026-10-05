@@ -1,122 +1,119 @@
-<div id="priority-section" class="panel">
-  <details open>
-  <summary class="panel__heading">{{ _("Web_Priorities_Heading") }}</summary>
-  <p>{{ _("Web_Priorities_Intro") }}</p>
+{# WP143 (Phase Z): the redesigned Priorities page -- spec/plan/phase-z-page-redesigns.md and its
+   sketch, examples/ui/priorities.png. One centred column: the heading, the method dropdown, then
+   the panel. `#priority-section` is what the method dropdown, Revert and CONFIRM swap.
 
-  {% if error %}
-  <p class="error">{{ error | tr }}</p>
-  {% endif %}
-  {% if priority_stale_selections %}
-  <p class="warning">{{ _("Web_Priorities_StaleSelections") }}</p>
-  {% endif %}
+   The method dropdown sits outside the form (`form=` still submits it), so its `change` never
+   reaches the form's own listeners: a method change re-renders the whole panel through
+   `GET /ui/priorities/layout`, while any other change inside the form asks
+   `GET /ui/priorities/preview` for the status and summary. Both layouts post the same five
+   `<category>_letter` fields to `POST /ui/priorities` (Finding 1). The preview never re-renders
+   the tiles or the spinners: static/app.js (WP144) is holding them. #}
+<div id="priority-section" class="priority-page">
+  <h1 class="page__heading">{{ _("Web_Priorities_Heading") }}</h1>
+
+  <select
+    id="priority-method"
+    class="priority-page__method"
+    name="build_method"
+    form="priority-form"
+    aria-label="{{ _('Web_Priorities_BuildMethod') }}"
+    hx-get="/ui/priorities/layout"
+    hx-include="#priority-form"
+    hx-target="#priority-section"
+    hx-swap="outerHTML"
+  >
+    {% for method in priority_build_methods %}
+    <option value="{{ method }}" {% if method == priority_layout %}selected{% endif %}>{{ _("Web_BuildMethod_" ~ method) }}</option>
+    {% endfor %}
+  </select>
 
   <form
     id="priority-form"
+    class="panel priority-panel priority-panel--{{ priority_layout | lower }}"
     hx-post="/ui/priorities"
     hx-target="#priority-section"
     hx-swap="outerHTML"
   >
-    <fieldset>
-      <legend>{{ _("Web_Priorities_BuildMethod") }}</legend>
-      {% for method in build_methods %}
-      <label>
-        <input
-          type="radio"
-          name="build_method"
-          value="{{ method }}"
-          {% if method == selected.build_method %}checked{% endif %}
-        >
-        {% if method == priority_build_method %}{{ _("Web_Priorities_MethodPriority") }}{% else %}{{ _("Web_Priorities_MethodSumToTen", target=sum_to_ten_target) }}{% endif %}
-      </label>
+    <input type="hidden" name="layout" value="{{ priority_layout }}" />
+
+    <p class="priority-panel__intro">
+      {% if priority_sum_to_ten %}{{ _("Web_Priorities_IntroSumtoTen", target=sum_to_ten_target) }}{% else %}{{ _("Web_Priorities_IntroPriority") }}{% endif %}
+    </p>
+
+    {% if priority_sum_to_ten %}
+    {# One row per category in display order. Each value is a spinner over the point scale below,
+       which is the script's only source for letters, points and their texts. #}
+    <div class="sum-to-ten" data-sum-to-ten-target="{{ sum_to_ten_target }}">
+      <ol class="sum-to-ten__scale" hidden>
+        {% for letter, points in sum_to_ten_scale %}
+        <li data-letter="{{ letter }}" data-points="{{ points }}" data-valuetext="{{ _n('Web_Priorities_SumToTenValueText', points, letter=letter) }}">{{ _("Web_Priorities_SumToTenValue", letter=letter, points=points) }}</li>
+        {% endfor %}
+      </ol>
+      {% for row in sum_to_ten_rows %}
+      <div class="sum-to-ten__row" data-category="{{ row.category }}">
+        <span class="sum-to-ten__label" id="sum-to-ten-label-{{ row.category }}">{{ _(row.label_key) }}</span>
+        <span class="sum-to-ten__leader" aria-hidden="true"></span>
+        <span class="sum-to-ten__spinner">
+          <span
+            class="sum-to-ten__value"
+            role="spinbutton"
+            tabindex="0"
+            aria-labelledby="sum-to-ten-label-{{ row.category }}"
+            aria-valuemin="0"
+            aria-valuemax="{{ sum_to_ten_max }}"
+            aria-valuenow="{{ row.points }}"
+            aria-valuetext="{{ _n('Web_Priorities_SumToTenValueText', row.points, letter=row.letter) }}"
+          >{{ _("Web_Priorities_SumToTenValue", letter=row.letter, points=row.points) }}</span>
+          <button type="button" class="sum-to-ten__step" data-step="1" tabindex="-1" aria-label="{{ _('Web_Priorities_Raise') }}">▲</button>
+          <button type="button" class="sum-to-ten__step" data-step="-1" tabindex="-1" aria-label="{{ _('Web_Priorities_Lower') }}">▼</button>
+          <input type="hidden" name="{{ row.category }}_letter" value="{{ row.letter }}" />
+        </span>
+      </div>
       {% endfor %}
-      {% if selected.build_method == sum_to_ten_build_method %}
-      <p>{{ _("Web_Priorities_SumToTenTotal", total=sum_to_ten_total, target=sum_to_ten_target) }}</p>
-      {% endif %}
-    </fieldset>
-
-    <label>
-      {{ _("Web_Priorities_Heritage") }}
-      <select
-        name="heritage_letter"
-        hx-get="/ui/metatypes"
-        hx-trigger="change"
-        hx-target="#metatype-select"
-        hx-swap="outerHTML"
-        hx-include="this"
-      >
-        {% for letter in letters %}
-        <option value="{{ letter }}" {% if letter == selected.heritage_letter %}selected{% endif %}>
-          {{ heritage_priorities[letter].name | dterm("priorities.xml") }}
-        </option>
+      <div class="sum-to-ten__row sum-to-ten__row--total{% if sum_to_ten_total != sum_to_ten_target %} sum-to-ten__row--off{% endif %}">
+        <abbr class="sum-to-ten__label" title="{{ _('Web_Priorities_SumToTenTotalLabel') }}">∑</abbr>
+        <span class="sum-to-ten__leader" aria-hidden="true"></span>
+        <span class="sum-to-ten__total"><output class="sum-to-ten__sum">{{ sum_to_ten_total }}</output> / {{ sum_to_ten_target }}</span>
+      </div>
+    </div>
+    {% else %}
+    {# The letters stay put; the tiles beside them move (WP144). So the letters are not inside the
+       tiles, and every tile carries its category's hidden letter input. #}
+    <div class="priority-grid">
+      <ol class="priority-grid__letters" aria-hidden="true">
+        {% for letter in priority_letters %}
+        <li class="priority-grid__letter">{{ letter }}</li>
         {% endfor %}
-      </select>
-    </label>
-
-    <label>
-      {{ _("Web_Tab_Talent") }}
-      <select name="talent_letter">
-        {% for letter in letters %}
-        <option value="{{ letter }}" {% if letter == selected.talent_letter %}selected{% endif %}>
-          {{ talent_priorities[letter].name | dterm("priorities.xml") }}
-        </option>
+      </ol>
+      <ol id="priority-tiles" class="priority-grid__tiles" data-priority-letters="{{ priority_letters | join(' ') }}">
+        {% for tile in priority_tiles %}
+        <li class="priority-tile" data-category="{{ tile.category }}" tabindex="0">
+          <span class="priority-tile__handle" aria-hidden="true">⠿</span>
+          <span class="priority-tile__label">{{ _(tile.label_key) }}</span>
+          <input type="hidden" name="{{ tile.category }}_letter" value="{{ tile.letter }}" />
+        </li>
         {% endfor %}
-      </select>
-    </label>
+      </ol>
+    </div>
+    {% endif %}
 
-    <label>
-      {{ _("Label_Attributes") }}
-      <select name="attributes_letter">
-        {% for letter in letters %}
-        <option value="{{ letter }}" {% if letter == selected.attributes_letter %}selected{% endif %}>
-          {{ attributes_priorities[letter].name | dterm("priorities.xml") }}
-        </option>
-        {% endfor %}
-      </select>
-    </label>
+    {% include "_priority_metatype.html" %}
 
-    <label>
-      {{ _("Tab_Skills") }}
-      <select name="skills_letter">
-        {% for letter in letters %}
-        <option value="{{ letter }}" {% if letter == selected.skills_letter %}selected{% endif %}>
-          {{ skills_priorities[letter].name | dterm("priorities.xml") }}
-        </option>
-        {% endfor %}
-      </select>
-    </label>
+    <div
+      id="priority-preview"
+      class="priority-preview"
+      hx-get="/ui/priorities/preview"
+      hx-include="#priority-form"
+      hx-trigger="change from:#priority-form, priority-input from:#priority-form delay:150ms"
+      hx-sync="this:replace"
+      hx-target="this"
+      hx-swap="innerHTML"
+    >
+      {% include "_priority_preview.html" %}
+    </div>
 
-    <label>
-      {{ _("Web_Priorities_Resources") }}
-      <select name="resources_letter">
-        {% for letter in letters %}
-        <option value="{{ letter }}" {% if letter == selected.resources_letter %}selected{% endif %}>
-          {{ resources_priorities[letter].name | dterm("priorities.xml") }}
-        </option>
-        {% endfor %}
-      </select>
-    </label>
-
-    <label>
-      {{ _("String_Metatype") }}
-      {% include "_metatype_select.html" %}
-    </label>
-
-    <button type="submit">{{ _("Web_Priorities_Confirm") }}</button>
+    {% if priority_stale_selections %}
+    <p class="warning">{{ _("Web_Priorities_StaleSelections") }}</p>
+    {% endif %}
   </form>
-
-  {% if character %}
-  <div id="character-summary">
-    <h2>{{ _("Web_Priorities_Confirmed", metatype=character.metatype | dterm("metatypes.xml")) }}</h2>
-    <ul>
-      <li>{{ _("Web_Priorities_SummaryBuildMethod", method=_("Web_BuildMethod_" ~ selected.build_method)) }}</li>
-      <li>{{ _("Web_Priorities_SummaryHeritage", letter=selected.heritage_letter, name=heritage_priorities[selected.heritage_letter].name | dterm("priorities.xml")) }}</li>
-      <li>{{ _("Web_Priorities_SummaryTalent", letter=selected.talent_letter, name=talent_priorities[selected.talent_letter].name | dterm("priorities.xml")) }}</li>
-      <li>{{ _("Web_Priorities_SummaryAttributes", letter=selected.attributes_letter, name=attributes_priorities[selected.attributes_letter].name | dterm("priorities.xml")) }}</li>
-      <li>{{ _("Web_Priorities_SummarySkills", letter=selected.skills_letter, name=skills_priorities[selected.skills_letter].name | dterm("priorities.xml")) }}</li>
-      <li>{{ _("Web_Priorities_SummaryResources", letter=selected.resources_letter, name=resources_priorities[selected.resources_letter].name | dterm("priorities.xml")) }}</li>
-      <li>{{ _("Web_Priorities_SummarySpecialPoints", points=character.special_attribute_points) }}</li>
-    </ul>
-  </div>
-  {% endif %}
-  </details>
 </div>

@@ -24,7 +24,7 @@ itself lets `CharacterSettings._intSumtoTen` vary per settings block, but every 
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from types import MappingProxyType
 
 # `<buildmethod>` literal values (chummer5.io.legacy_chum5.LegacyCharacter.build_method) -- matched
@@ -71,3 +71,30 @@ def validate_sum_to_ten_total(letters: Iterable[str]) -> int:
             f"{'+'.join(letters)} totals {total}"
         )
     return total
+
+
+def nearest_priority_assignment(letters: Sequence[str]) -> tuple[str, ...]:
+    """WP143: the Priority assignment closest to `letters` -- one letter per category, in display
+    order (Heritage, Talent, Attributes, Skills, Resources), repeats allowed, as Sum-to-Ten holds
+    them -- for a player switching from Sum-to-Ten to Priority.
+
+    The categories are sorted stably by letter, display order breaking ties, and handed out A-E in
+    that order. This minimises the total letter distance (A->B is 1, A->C is 2, ...): sorted
+    matching is optimal for that sum. It is also the one optimal answer that never inverts the
+    player's own ranking -- a category the player put higher never ends up lower. Other optimal
+    answers can exist (H=C, T=B, Attributes=A, Skills=A gives Talent C and Heritage D, but
+    Heritage C and Talent D costs the same), and those are deliberately not chosen: equal letters
+    are the only ties, and display order settles them (user ruling 2026-10-05, Phase Z).
+
+    Five distinct letters come back unchanged. Raises `ValueError` unless `letters` is five
+    letters A-E.
+    """
+    letters = tuple(letters)
+    priority_letters = tuple(SUM_TO_TEN_POINT_VALUES)  # A-E, best first
+    if len(letters) != len(priority_letters) or not set(letters) <= set(priority_letters):
+        raise ValueError(f"need one letter A-E for each of the 5 categories, got {letters}")
+    ranked = sorted(range(len(letters)), key=lambda index: letters[index])  # stable
+    result = [""] * len(letters)
+    for rank, index in enumerate(ranked):
+        result[index] = priority_letters[rank]
+    return tuple(result)
