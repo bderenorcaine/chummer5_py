@@ -31,6 +31,8 @@ the GNU General Public License for more details. A copy is in LICENSE.
 Third-party components
 ----------------------
 - htmx (src/chummer5/web/static/vendor/htmx/): Zero-Clause BSD; see the LICENSE file there.
+- SortableJS (src/chummer5/web/static/vendor/sortablejs/): MIT, Copyright (c) 2019 All
+  contributors to Sortable; see the LICENSE file there.
 - legacy/ includes third-party components under their own licenses, each with its license file
   alongside it, as distributed by upstream Chummer5a.
 

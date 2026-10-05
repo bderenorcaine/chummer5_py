@@ -8,7 +8,9 @@ server side beyond the markup hooks pinned here.
 
 from __future__ import annotations
 
+import hashlib
 import re
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,6 +21,7 @@ from chummer5.data.priorities import load_priorities
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD, SUM_TO_TEN_BUILD_METHOD
 from chummer5.engine.character import metatype_choices
 from chummer5.web.app import MUNDANE_SKILLS, create_app
+from chummer5.web.catalogs import STATIC_DIR
 from chummer5.web.prefs import THEMES
 
 PRIORITIES = load_priorities()
@@ -107,7 +110,7 @@ def test_priority_layout_letters_beside_tiles_in_letter_order(client: TestClient
     assert '<h1 class="page__heading">Priority &amp; metatype selection</h1>' in html
     letters = re.search(r'<ol class="priority-grid__letters".*?</ol>', html, re.S)
     assert letters and "priority-tile" not in letters.group(0)  # the letters stay put
-    tiles = re.search(r'<ol id="priority-tiles".*?</ol>', html, re.S)
+    tiles = re.search(r'<ol\s+id="priority-tiles".*?</ol>', html, re.S)
     assert tiles
     order = re.findall(r'data-category="(\w+)"', tiles.group(0))
     assert order == ["heritage", "attributes", "skills", "resources", "talent"]  # A, B, C, D, E
@@ -517,3 +520,78 @@ def test_both_layouts_render_csp_clean_under_every_theme(
     assert f"themes/{theme}.css" in page
     assert ("spinbutton" in page) == (method == SUM_TO_TEN_BUILD_METHOD)
     _assert_csp_clean(page, f"{method} page ({theme})")
+
+
+# --- WP144: the vendored SortableJS and the hooks static/app.js relies on ---------------------
+
+VENDOR = Path(STATIC_DIR) / "vendor" / "sortablejs"
+
+
+def test_sortablejs_is_vendored_with_its_license_and_notice() -> None:
+    assert (VENDOR / "LICENSE").read_text().startswith("MIT License")
+    vendored = (VENDOR / "VENDORED.md").read_text()
+    assert "1.15.7" in vendored
+    digest = hashlib.sha256((VENDOR / "Sortable.min.js").read_bytes()).hexdigest()
+    assert digest in vendored  # the checksum on record is the file's
+    assert (VENDOR / "Sortable.min.js").read_text().startswith("/*! Sortable 1.15.7 - MIT")
+    notice = (Path(STATIC_DIR).parents[3] / "NOTICE").read_text()
+    assert "SortableJS (src/chummer5/web/static/vendor/sortablejs/): MIT" in notice
+
+
+def test_sortablejs_is_served_and_included_before_app_js(client: TestClient) -> None:
+    served = client.get("/static/vendor/sortablejs/Sortable.min.js")
+    assert served.status_code == 200
+    assert "javascript" in served.headers["content-type"]
+    page = client.get("/").text
+    assert page.index("vendor/htmx/htmx.min.js") < page.index("vendor/sortablejs/Sortable.min.js")
+    assert page.index("vendor/sortablejs/Sortable.min.js") < page.index("/static/app.js")
+    _assert_csp_clean(page, "/")
+
+
+def test_priority_layout_hooks(client: TestClient) -> None:
+    html = client.get("/ui/page/priorities", headers=HTMX).text
+    tiles = re.search(r'<ol\s+id="priority-tiles".*?</ol>', html, re.S)
+    assert tiles
+    assert 'data-priority-letters="A B C D E"' in tiles.group(0)
+    assert 'aria-describedby="priority-tiles-help"' in tiles.group(0)
+    assert 'id="priority-tiles-help"' in html
+    assert '<p id="priority-live" class="visually-hidden" aria-live="polite"></p>' in html
+    # Each tile carries its announcement for every letter, rendered server-side.
+    assert tiles.group(0).count("data-announce-") == 25
+    assert 'data-announce-c="Heritage: priority C"' in tiles.group(0)
+    # The preview listens for the script's event on the form.
+    assert "priority-input from:#priority-form delay:150ms" in html
+
+
+def test_sum_to_ten_layout_hooks(client: TestClient) -> None:
+    html = client.get(
+        "/ui/priorities/layout", params={**_form(SUM_TO_TEN_BUILD_METHOD), "layout": "Priority"}
+    ).text
+    assert 'data-sum-to-ten-target="10"' in html
+    assert html.count('class="sum-to-ten__value"') == 5
+    assert html.count('<span class="sum-to-ten__spinner">') == 5
+    assert '<output class="sum-to-ten__sum">' in html
+    assert 'class="priority-actions__confirm"' in html
+    assert "data-announce-" not in html
+
+
+def test_every_hook_the_script_selects_on_is_in_the_markup(client: TestClient) -> None:
+    """The class names and ids WP144's part of app.js looks up, each present in a rendered panel,
+    so renaming one on either side fails here rather than silently in a browser."""
+    script = (Path(STATIC_DIR) / "app.js").read_text()
+    wp144 = script[script.index("WP144") :]
+    priority = client.get("/ui/page/priorities", headers=HTMX).text
+    sum_to_ten = client.get(
+        "/ui/priorities/layout", params={**_form(SUM_TO_TEN_BUILD_METHOD), "layout": "Priority"}
+    ).text
+    rendered = priority + sum_to_ten
+    classes = set(re.findall(r'"\.([a-z][\w-]*)', wp144)) | set(
+        re.findall(r'classList\.(?:contains|toggle)\("([\w-]+)"', wp144)
+    )
+    ids = set(re.findall(r'(?:getElementById\("|"#|id === "|\.id !== ")([\w-]+)"', wp144))
+    assert {"priority-tile", "sum-to-ten__value", "sum-to-ten__step"} <= classes
+    assert {"priority-tiles", "priority-live", "priority-preview"} <= ids
+    for name in classes:
+        assert re.search(rf'class="[^"]*\b{re.escape(name)}\b', rendered), name
+    for name in ids:
+        assert f'id="{name}"' in rendered, name

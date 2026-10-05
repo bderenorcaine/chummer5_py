@@ -227,7 +227,7 @@ it with an Opus `/code-review high`.
   Acceptance: pytest is green repo-wide. Every deliverable above is covered server-side. The panel
   renders in both layouts under all four themes, with no CSP violations.
 
-- [ ] **WP144 — Priorities redesign: drag-to-reorder and Sum-to-Ten spinners.**
+- [x] **WP144 — Priorities redesign: drag-to-reorder and Sum-to-Ten spinners.**
   *Suggested model:* Opus.
   Goal: the client-side widgets on top of WP143's markup.
   Deliverables:

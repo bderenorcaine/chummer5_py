@@ -134,4 +134,213 @@
 
   // `htmx:load` fires for the initial page and for every piece of swapped-in content.
   document.addEventListener("htmx:load", restoreSkillFilter);
+
+  // --- WP144 (Phase Z): the Priorities page's drag-to-reorder and Sum-to-Ten spinners ----------
+  // Everything rule-bearing is the server's (WP143): which letters the rows stand for, the point
+  // scale and its texts, the ∑ target, and whether the form is confirmable. This only moves
+  // tiles and steps spinners, writes the hidden letter inputs, and asks for a preview.
+
+  // The preview listens for this on the form (`priority-input from:#priority-form delay:150ms`),
+  // so a burst of changes becomes one request.
+  function requestPriorityPreview(form) {
+    if (form) form.dispatchEvent(new CustomEvent("priority-input", { bubbles: true }));
+  }
+
+  // Priority: after any reorder, each tile's hidden input takes the letter of the row it is in.
+  function rewriteTileLetters(list) {
+    var letters = (list.getAttribute("data-priority-letters") || "").split(" ");
+    Array.prototype.forEach.call(list.children, function (tile, index) {
+      var input = tile.querySelector('input[type="hidden"]');
+      if (input && letters[index]) input.value = letters[index];
+    });
+  }
+
+  function announceTile(tile) {
+    var live = document.getElementById("priority-live");
+    var input = tile.querySelector('input[type="hidden"]');
+    if (!live || !input) return;
+    var text = tile.getAttribute("data-announce-" + input.value.toLowerCase());
+    if (text) live.textContent = text; // server-rendered (WP102): no text is composed here
+  }
+
+  function tilesReordered(list, moved) {
+    rewriteTileLetters(list);
+    if (moved) announceTile(moved);
+    requestPriorityPreview(list.closest("form"));
+  }
+
+  // One Sortable per tile list. The panel is swapped in by navigation, the method switch, Revert
+  // and CONFIRM, so every newly loaded list gets an instance -- and never a second one.
+  function initPriorityTiles(root) {
+    if (!window.Sortable || !root.querySelectorAll) return;
+    var lists = Array.prototype.slice.call(root.querySelectorAll("#priority-tiles"));
+    if (root.id === "priority-tiles") lists.push(root);
+    lists.forEach(function (list) {
+      if (window.Sortable.get(list)) return;
+      window.Sortable.create(list, {
+        animation: 150,
+        // A touch must be held before it drags, so a swipe over the tiles still scrolls the
+        // page (portrait phones). Mouse drags start at once.
+        delay: 250,
+        delayOnTouchOnly: true,
+        touchStartThreshold: 5,
+        ghostClass: "priority-tile--ghost",
+        chosenClass: "priority-tile--chosen",
+        onUpdate: function (evt) {
+          tilesReordered(list, evt.item);
+        },
+      });
+    });
+  }
+
+  document.addEventListener("htmx:load", function (e) {
+    initPriorityTiles(e.detail && e.detail.elt ? e.detail.elt : document);
+  });
+
+  // A swapped-out list's instance goes with it.
+  document.addEventListener("htmx:beforeCleanupElement", function (e) {
+    var elt = e.detail && e.detail.elt;
+    if (elt && elt.id === "priority-tiles" && window.Sortable) {
+      var instance = window.Sortable.get(elt);
+      if (instance) instance.destroy();
+    }
+  });
+
+  // Keyboard reordering: Alt+↑ / Alt+↓ on a focused tile. The *neighbour* is moved, not the
+  // tile: moving the focused node itself would drop its focus in most browsers.
+  function moveTileByKey(tile, up) {
+    var list = tile.parentNode;
+    if (up) {
+      var prev = tile.previousElementSibling;
+      if (!prev) return;
+      list.insertBefore(prev, tile.nextSibling);
+    } else {
+      var next = tile.nextElementSibling;
+      if (!next) return;
+      list.insertBefore(next, tile);
+    }
+    tile.focus();
+    tilesReordered(list, tile);
+  }
+
+  // Sum-to-Ten: a spinner steps along the scale the server rendered beside it (lowest first).
+  function sumToTenBox(el) {
+    return el.closest(".sum-to-ten");
+  }
+
+  function scaleItem(box, points) {
+    return box.querySelector('.sum-to-ten__scale > li[data-points="' + points + '"]');
+  }
+
+  // CONFIRM stays the server's call (`data-priority-confirmable`). The script may only disable
+  // it early, while ∑ is off target -- including right after a preview answered for an older
+  // state that was on target.
+  function guardSumToTen(box) {
+    var form = box.closest("form");
+    var total = 0;
+    box.querySelectorAll(".sum-to-ten__value").forEach(function (spinner) {
+      total += Number(spinner.getAttribute("aria-valuenow")) || 0;
+    });
+    var target = Number(box.getAttribute("data-sum-to-ten-target"));
+    var off = total !== target;
+    var sum = box.querySelector(".sum-to-ten__sum");
+    if (sum) sum.value = String(total);
+    var row = box.querySelector(".sum-to-ten__row--total");
+    if (row) row.classList.toggle("sum-to-ten__row--off", off);
+    var confirm = form && form.querySelector(".priority-actions__confirm");
+    if (confirm && off) confirm.disabled = true;
+  }
+
+  function stepSpinner(spinner, delta) {
+    var box = sumToTenBox(spinner);
+    if (!box) return;
+    var min = Number(spinner.getAttribute("aria-valuemin"));
+    var max = Number(spinner.getAttribute("aria-valuemax"));
+    var now = Number(spinner.getAttribute("aria-valuenow"));
+    var next = Math.max(min, Math.min(max, now + delta)); // stops at A and E, no wrapping
+    var item = scaleItem(box, next);
+    if (next === now || !item) return;
+    spinner.setAttribute("aria-valuenow", String(next));
+    spinner.setAttribute("aria-valuetext", item.getAttribute("data-valuetext"));
+    spinner.textContent = item.textContent; // the server's own "E (0)" text for that step
+    var input = spinner.parentNode.querySelector('input[type="hidden"]');
+    if (input) input.value = item.getAttribute("data-letter");
+    guardSumToTen(box);
+    requestPriorityPreview(box.closest("form"));
+  }
+
+  document.addEventListener("keydown", function (e) {
+    var t = e.target;
+    if (!(t instanceof HTMLElement)) return;
+    if (t.classList.contains("priority-tile") && e.altKey && !e.ctrlKey && !e.metaKey) {
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        moveTileByKey(t, e.key === "ArrowUp");
+      }
+    } else if (t.classList.contains("sum-to-ten__value") && !e.altKey && !e.ctrlKey) {
+      // Up raises the priority (towards A, more points).
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        stepSpinner(t, e.key === "ArrowUp" ? 1 : -1);
+      }
+    }
+  });
+
+  document.addEventListener("click", function (e) {
+    var button = e.target instanceof Element ? e.target.closest(".sum-to-ten__step") : null;
+    if (!button) return;
+    var spinner = button.parentNode.querySelector(".sum-to-ten__value");
+    if (!spinner) return;
+    // Focus the value, not the button, so the wheel and arrow keys work on it next.
+    spinner.focus();
+    stepSpinner(spinner, Number(button.getAttribute("data-step")));
+  });
+
+  // The wheel steps a spinner only while it has focus *and* the pointer is over it, so scrolling
+  // the page across the panel never changes a value. Trackpads send many small pixel deltas:
+  // those accumulate, one step per WHEEL_STEP. A mouse notch (a large delta) or a line/page-mode
+  // event is one step, however large its delta.
+  var WHEEL_STEP = 50;
+  var WHEEL_IDLE_MS = 250;
+  var wheel = { spinner: null, sum: 0, last: 0 };
+
+  document.addEventListener(
+    "wheel",
+    function (e) {
+      var area = e.target instanceof Element ? e.target.closest(".sum-to-ten__spinner") : null;
+      var spinner = area && area.querySelector(".sum-to-ten__value");
+      if (!spinner || document.activeElement !== spinner || e.deltaY === 0) return;
+      e.preventDefault();
+      var now = Date.now();
+      if (
+        wheel.spinner !== spinner ||
+        now - wheel.last > WHEEL_IDLE_MS ||
+        (wheel.sum !== 0 && wheel.sum > 0 !== e.deltaY > 0)
+      ) {
+        wheel.sum = 0;
+      }
+      wheel.spinner = spinner;
+      wheel.last = now;
+      if (e.deltaMode !== 0 || Math.abs(e.deltaY) >= WHEEL_STEP) {
+        wheel.sum = 0;
+        stepSpinner(spinner, e.deltaY < 0 ? 1 : -1); // wheel up: towards A
+        return;
+      }
+      wheel.sum += e.deltaY;
+      if (Math.abs(wheel.sum) >= WHEEL_STEP) {
+        stepSpinner(spinner, wheel.sum < 0 ? 1 : -1);
+        wheel.sum = 0;
+      }
+    },
+    { passive: false }
+  );
+
+  // A preview swap re-renders CONFIRM from the server's verdict; re-apply the early disable if
+  // the spinners have moved off target since that request went out.
+  document.addEventListener("htmx:afterSwap", function (e) {
+    var target = e.detail && e.detail.target;
+    if (!target || target.id !== "priority-preview") return;
+    var box = target.closest("form") && target.closest("form").querySelector(".sum-to-ten");
+    if (box) guardSumToTen(box);
+  });
 })();

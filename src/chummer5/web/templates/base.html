@@ -22,6 +22,9 @@
     <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
     <!-- htmx 2.0.10, vendored — see static/vendor/htmx/VENDORED.md -->
     <script src="{{ url_for('static', path='vendor/htmx/htmx.min.js') }}"></script>
+    <!-- SortableJS 1.15.7, vendored — see static/vendor/sortablejs/VENDORED.md -->
+    {# WP144: the Priorities page's drag-to-reorder (static/app.js sets it up). #}
+    <script src="{{ url_for('static', path='vendor/sortablejs/Sortable.min.js') }}"></script>
     {# WP138: the switch warning's "is another tab of the app open?" check. #}
     <script src="{{ url_for('static', path='tabs.js') }}"></script>
     {# WP141: the page's own behavior (details state, number-input autosubmit, table filters),

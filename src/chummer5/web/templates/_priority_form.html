@@ -85,9 +85,21 @@
         <li class="priority-grid__letter">{{ letter }}</li>
         {% endfor %}
       </ol>
-      <ol id="priority-tiles" class="priority-grid__tiles" data-priority-letters="{{ priority_letters | join(' ') }}">
+      {# WP144: each tile carries what to announce once it lands on each letter, so the script
+         writes no text of its own. #}
+      <ol
+        id="priority-tiles"
+        class="priority-grid__tiles"
+        data-priority-letters="{{ priority_letters | join(' ') }}"
+        aria-describedby="priority-tiles-help"
+      >
         {% for tile in priority_tiles %}
-        <li class="priority-tile" data-category="{{ tile.category }}" tabindex="0">
+        <li
+          class="priority-tile"
+          data-category="{{ tile.category }}"
+          tabindex="0"
+          {% for letter in priority_letters %}data-announce-{{ letter | lower }}="{{ _('Web_Priorities_MovedTo', category=_(tile.label_key), letter=letter) }}" {% endfor %}
+        >
           <span class="priority-tile__handle" aria-hidden="true">⠿</span>
           <span class="priority-tile__label">{{ _(tile.label_key) }}</span>
           <input type="hidden" name="{{ tile.category }}_letter" value="{{ tile.letter }}" />
@@ -95,6 +107,8 @@
         {% endfor %}
       </ol>
     </div>
+    <p id="priority-tiles-help" class="priority-panel__hint">{{ _("Web_Priorities_ReorderHint") }}</p>
+    <p id="priority-live" class="visually-hidden" aria-live="polite"></p>
     {% endif %}
 
     {% include "_priority_metatype.html" %}

@@ -911,8 +911,16 @@
       <text>Lower priority</text>
     </string>
     <string>
+      <key>Web_Priorities_MovedTo</key>
+      <text>{category}: priority {letter}</text>
+    </string>
+    <string>
       <key>Web_Priorities_Raise</key>
       <text>Raise priority</text>
+    </string>
+    <string>
+      <key>Web_Priorities_ReorderHint</key>
+      <text>Drag a category to another row, or focus it and press Alt+↑ or Alt+↓.</text>
     </string>
     <string>
       <key>Web_Priorities_Resources</key>

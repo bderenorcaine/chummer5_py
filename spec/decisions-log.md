@@ -2239,3 +2239,14 @@ container that broke.
   several assignments with the minimal total distance. It is the only one that never ranks a
   category below one the player put lower. Display order breaks ties between equal letters.
   Details in `spec/worklogs/WP143.md`.
+
+## 2026-10-05 — WP144: SortableJS, the second vendored front-end dependency
+
+- **The user approved SortableJS (MIT) on 2026-10-05**, for the Priorities page's
+  drag-to-reorder. Version 1.15.7 is vendored under `static/vendor/sortablejs/` like htmx: pinned,
+  with its license, checksums on record in `VENDORED.md`, and listed in `NOTICE`. It is the only
+  front-end dependency besides htmx.
+- **Client-side widgets get no text of their own.** Anything the script shows or announces (a
+  spinner's "B (3)", its `aria-valuetext`, a tile's "Heritage: priority B") is rendered by the
+  server as data next to the widget, and copied from there. That keeps i18n and the WP102
+  no-bare-text rule intact for scripts too.
