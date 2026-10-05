@@ -2206,3 +2206,21 @@ container that broke.
   WP141 left for WP142.
 - **No version bump here.** `deployment.md` suggests 1.0.0 for the first hosted release. Cutting
   it is the user's call when they deploy.
+
+## 2026-10-05 — Phase Z: page redesigns, starting with Priorities
+
+- **One open-ended phase for page redesigns.** Phase W moved every step into the shell unchanged.
+  Redesigning page contents happens in Phase Z (`spec/plan/phase-z-page-redesigns.md`), one sketch
+  at a time. Later redesigns add WP blocks to that file instead of opening new phases. Its
+  "standing design rules" apply to all of them.
+- **Messages never above controls (user ruling).** Warnings at the top of a page push the controls
+  down and make the next click miss. Redesigned pages put them at the bottom, or anywhere else
+  they can't move a control. Existing, un-redesigned pages still have the old placement.
+- **Priorities redesign rulings** (full table in the phase file):
+  - Priority mode reorders categories against fixed letters by drag, using SortableJS, a vendored
+    front-end dependency the user approved.
+  - Sum-to-Ten uses spinners, and the scroll wheel only works on a focused spinner.
+  - Sum-to-Ten starts at all E. The user wants no impression of a default distribution.
+  - Switching from Sum-to-Ten to Priority picks the order with the smallest total letter distance.
+  - Leaving with unconfirmed changes asks Confirm / Stay / Revert, rather than silently keeping a
+    draft the rest of the character doesn't use.
