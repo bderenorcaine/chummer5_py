@@ -65,6 +65,13 @@ CATEGORY_LABEL_KEYS = MappingProxyType(
     }
 )
 
+# WP145: the explicit "confirmed" signal the leave dialog waits for before resuming a navigation
+# -- never inferred from a status code (a refused first store is a 200 with an error). After
+# settle, so the swap (a whole-shell swap, on the first confirmation) is done when it fires; and
+# not `HX-Trigger`, which `chummer5.web.app` overwrites with `chargen-changed` on every POST.
+PRIORITIES_CONFIRMED_HEADER = "HX-Trigger-After-Settle"
+PRIORITIES_CONFIRMED_EVENT = "priorities-confirmed"
+
 # WP143: the panel's status (Phase Z, Finding 2), exposed as `data-priority-status`.
 STATUS_UNCONFIRMED = "unconfirmed"
 STATUS_CONFIRMED = "confirmed"
@@ -589,7 +596,9 @@ def submit_priorities(
         # WP138: the character now has an id, so the shell's `hx-headers` must change with it.
         from chummer5.web.routes.pages import shell_swap_response
 
-        return shell_swap_response(request, session, "priorities", new_cookie)
+        response = shell_swap_response(request, session, "priorities", new_cookie)
+        response.headers[PRIORITIES_CONFIRMED_HEADER] = PRIORITIES_CONFIRMED_EVENT
+        return response
     selection = _form_selection(
         build_method,
         metatype_id,
@@ -599,4 +608,7 @@ def submit_priorities(
         skills_letter,
         resources_letter,
     )
-    return _render_panel(request, session, new_cookie, selection, error)
+    response = _render_panel(request, session, new_cookie, selection, error)
+    if error is None:
+        response.headers[PRIORITIES_CONFIRMED_HEADER] = PRIORITIES_CONFIRMED_EVENT
+    return response

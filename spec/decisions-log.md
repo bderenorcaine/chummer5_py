@@ -2250,3 +2250,15 @@ container that broke.
   spinner's "B (3)", its `aria-valuetext`, a tile's "Heritage: priority B") is rendered by the
   server as data next to the widget, and copied from there. That keeps i18n and the WP102
   no-bare-text rule intact for scripts too.
+
+## 2026-10-05 — WP145: the leave dialog
+
+- **The success signal is `HX-Trigger-After-Settle: priorities-confirmed`, not `HX-Trigger`.**
+  The app middleware sets `HX-Trigger: chargen-changed` on every successful POST, which would
+  overwrite a route's own `HX-Trigger`. Any later route that needs to signal the client should
+  use the after-swap or after-settle headers, or merge into the middleware's value.
+- **One dialog per action.** On a dirty Priorities panel, the leave dialog replaces WP138's
+  multi-tab switch warning for that action rather than stacking on it (phase-file trap).
+  Everywhere else, the switch warning is unchanged.
+- **The language picker gets the browser's generic leave prompt** while the panel is dirty,
+  because it reloads the page. The theme picker doesn't ask at all.

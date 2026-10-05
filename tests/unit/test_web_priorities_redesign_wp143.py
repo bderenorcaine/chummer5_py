@@ -20,6 +20,7 @@ from chummer5.data.metatypes import load_metatypes
 from chummer5.data.priorities import load_priorities
 from chummer5.engine.build_method import PRIORITY_BUILD_METHOD, SUM_TO_TEN_BUILD_METHOD
 from chummer5.engine.character import metatype_choices
+from chummer5.store import Store
 from chummer5.web.app import MUNDANE_SKILLS, create_app
 from chummer5.web.catalogs import STATIC_DIR
 from chummer5.web.prefs import THEMES
@@ -595,3 +596,105 @@ def test_every_hook_the_script_selects_on_is_in_the_markup(client: TestClient) -
         assert re.search(rf'class="[^"]*\b{re.escape(name)}\b', rendered), name
     for name in ids:
         assert f'id="{name}"' in rendered, name
+
+
+# --- WP145: the leave-with-unconfirmed-changes dialog and the confirmation signal ---------------
+
+SIGNAL = "HX-Trigger-After-Settle"
+
+
+def _dialog(html: str) -> str:
+    match = re.search(r'<dialog id="priority-leave".*?</dialog>', html, re.S)
+    assert match, "no leave dialog"
+    return match.group(0)
+
+
+def test_leave_dialog_markup_for_a_confirmed_character(confirmed: TestClient) -> None:
+    html = confirmed.get("/ui/page/priorities", headers=HTMX).text
+    dialog = _dialog(html)
+    assert "Unconfirmed priorities" in dialog
+    assert "The rest of the character still uses the confirmed priorities" in dialog
+    choices = re.findall(r'data-leave-choice="(\w+)"', dialog)
+    assert choices == ["confirm", "stay", "revert"]
+    assert ">Confirm and continue</button>" in dialog
+    assert 'data-leave-choice="stay" autofocus>Stay</button>' in dialog  # the default focus
+    assert ">Revert and continue</button>" in dialog
+    # Inside the swapped section, outside the form (it never submits it).
+    section = html[html.index('id="priority-section"') :]
+    assert section.index("</form>") < section.index('<dialog id="priority-leave"')
+
+
+def test_leave_dialog_discards_for_a_never_confirmed_character(client: TestClient) -> None:
+    dialog = _dialog(client.get("/ui/page/priorities", headers=HTMX).text)
+    assert ">Discard and continue</button>" in dialog
+    assert "Revert and continue" not in dialog
+    assert "the character doesn&#39;t exist" in dialog
+
+
+def test_the_dialog_follows_every_panel_render(confirmed: TestClient) -> None:
+    for html in (
+        confirmed.get("/ui/priorities/revert").text,
+        confirmed.get(
+            "/ui/priorities/layout",
+            params={**_form(SUM_TO_TEN_BUILD_METHOD), "layout": PRIORITY_BUILD_METHOD},
+        ).text,
+        confirmed.post("/ui/priorities", data=_form(attributes="C", skills="B")).text,
+    ):
+        assert ">Revert and continue</button>" in _dialog(html)
+
+
+def test_a_successful_confirmation_signals_after_settle(confirmed: TestClient) -> None:
+    response = confirmed.post("/ui/priorities", data=_form(attributes="C", skills="B"))
+    assert response.headers[SIGNAL] == "priorities-confirmed"
+    # Beside, not instead of, the step nav's own refresh signal.
+    assert response.headers["HX-Trigger"] == "chargen-changed"
+
+
+def test_the_first_confirmation_signals_on_its_shell_swap(client: TestClient) -> None:
+    response = client.post("/ui/priorities", data=_form())
+    assert response.headers["HX-Retarget"] == "#app-shell"
+    assert response.headers[SIGNAL] == "priorities-confirmed"
+
+
+@pytest.mark.parametrize(
+    "form",
+    [
+        _form(attributes="A"),  # duplicate letters
+        _form(metatype_id=""),  # no metatype
+        _form(SUM_TO_TEN_BUILD_METHOD, heritage="A", talent="A"),  # off target
+    ],
+)
+def test_a_failed_confirmation_does_not_signal(confirmed: TestClient, form: dict[str, str]) -> None:
+    response = confirmed.post("/ui/priorities", data=form)
+    assert response.status_code == 200
+    assert SIGNAL not in response.headers
+
+
+def test_a_first_confirmation_refused_at_quota_does_not_signal(tmp_path: Path) -> None:
+    store = Store(tmp_path / "quota.db", quota=1)
+    with TestClient(create_app(mode="local", store=store), follow_redirects=False) as local:
+        local.get("/")
+        assert local.post("/ui/priorities", data=_form()).headers[SIGNAL]
+        local.post("/characters/new")
+        refused = local.post("/ui/priorities", data=_form())
+        assert "You already have 1 character" in refused.text
+        assert SIGNAL not in refused.headers
+
+
+def test_the_script_holds_every_way_out(client: TestClient) -> None:
+    """The WP145 part of app.js covers each trigger the phase file lists. A browser can't run
+    here; this pins that none of them was dropped."""
+    script = client.get("/static/app.js").text
+    wp145 = script[script.index("WP145 (Phase Z)") :]
+    for hook in (
+        '"htmx:confirm"',  # the step nav, a character switch
+        '"click"',  # plain links
+        '"submit"',  # logout
+        '"popstate"',  # the back button
+        '"beforeunload"',  # reload, close, typed URLs
+        '"priorities-confirmed"',  # resume only on the server's signal
+        "/ui/prefs/",  # the display preferences don't leave
+        "showModal",
+        "stopImmediatePropagation",
+    ):
+        assert hook in wp145, hook

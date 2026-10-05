@@ -7,7 +7,8 @@
    `GET /ui/priorities/layout`, while any other change inside the form asks
    `GET /ui/priorities/preview` for the status and summary. Both layouts post the same five
    `<category>_letter` fields to `POST /ui/priorities` (Finding 1). The preview never re-renders
-   the tiles or the spinners: static/app.js (WP144) is holding them. #}
+   the tiles or the spinners: static/app.js (WP144) is holding them. The leave dialog (WP145) is
+   the section's last child. #}
 <div id="priority-section" class="priority-page">
   <h1 class="page__heading">{{ _("Web_Priorities_Heading") }}</h1>
 
@@ -130,4 +131,22 @@
     <p class="warning">{{ _("Web_Priorities_StaleSelections") }}</p>
     {% endif %}
   </form>
+
+  {# WP145: asked before anything takes this panel off the page while it holds edits the rest of
+     the character doesn't use yet (static/app.js decides when, from the status above). Outside
+     the form: it never submits, and the panel's swaps replace it along with everything else.
+     A never-confirmed character has nothing to revert to, so the third choice discards. #}
+  <dialog id="priority-leave" class="priority-leave" aria-labelledby="priority-leave-title" aria-describedby="priority-leave-text">
+    <h2 id="priority-leave-title" class="priority-leave__title">{{ _("Web_Priorities_LeaveTitle") }}</h2>
+    <p id="priority-leave-text">
+      {% if character %}{{ _("Web_Priorities_LeaveText") }}{% else %}{{ _("Web_Priorities_LeaveTextNew") }}{% endif %}
+    </p>
+    <div class="priority-leave__actions">
+      <button type="button" data-leave-choice="confirm">{{ _("Web_Priorities_LeaveConfirm") }}</button>
+      <button type="button" data-leave-choice="stay" autofocus>{{ _("Web_Priorities_LeaveStay") }}</button>
+      <button type="button" data-leave-choice="revert">
+        {%- if character %}{{ _("Web_Priorities_LeaveRevert") }}{% else %}{{ _("Web_Priorities_LeaveDiscard") }}{% endif -%}
+      </button>
+    </div>
+  </dialog>
 </div>

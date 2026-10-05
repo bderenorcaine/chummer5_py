@@ -935,3 +935,41 @@ details[open] > .panel__heading {
   font-weight: 600;
   color: var(--warning-fg);
 }
+
+/* WP145: the leave-with-unconfirmed-changes dialog. */
+.priority-leave {
+  max-width: min(28rem, calc(100vw - 2rem));
+  padding: 1rem 1.25rem;
+  border: var(--frame-width) solid var(--frame-color);
+  border-left: var(--panel-accent-width) solid var(--section-accent);
+  border-radius: var(--radius);
+  color: var(--page-fg);
+  background: var(--section-bg-a);
+}
+
+.priority-leave::backdrop {
+  background: color-mix(in srgb, var(--page-fg) 45%, transparent);
+}
+
+.priority-leave__title {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
+  color: var(--summary-fg);
+}
+
+.priority-leave__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.priority-leave__actions button {
+  min-height: 2.25rem;
+  padding: 0.3rem 0.9rem;
+  font: inherit;
+}

@@ -124,7 +124,7 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | W | UI shell, theming, i18n | done (WP97-106) | [phase-w-ui-shell.md](plan/phase-w-ui-shell.md) |
 | X | Closing the "Creating a Shadowrunner" gaps | done (WP107-135) | [phase-x-rulebook-completeness.md](plan/phase-x-rulebook-completeness.md) |
 | Y | Hosted multi-user deployment (accounts, invites, stored characters) | done (WP136-142) — **hosted deployment ready**; the server steps are the user's (`spec/deployment.md`) | [phase-y-hosted-deployment.md](plan/phase-y-hosted-deployment.md) |
-| Z | Page redesigns (open-ended: further page redesigns go here) | open (WP143-145: Priorities) | [phase-z-page-redesigns.md](plan/phase-z-page-redesigns.md) |
+| Z | Page redesigns (open-ended: further page redesigns go here) | open — Priorities redesign done (WP143-145); manual browser checklists in WP144/WP145's worklogs | [phase-z-page-redesigns.md](plan/phase-z-page-redesigns.md) |
 
 Next unclaimed WP number: **WP146** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V

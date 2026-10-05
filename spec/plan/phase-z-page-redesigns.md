@@ -276,7 +276,7 @@ it with an Opus `/code-review high`.
     - everything still working after a layout switch, a revert and a confirm (re-initialisation)
     - all four themes
 
-- [ ] **WP145 — Priorities redesign: leave-with-unconfirmed-changes dialog.**
+- [x] **WP145 — Priorities redesign: leave-with-unconfirmed-changes dialog.**
   *Suggested model:* Opus.
   Goal: a player can't leave the Priorities page believing unconfirmed edits are in effect.
   Deliverables:
@@ -309,7 +309,8 @@ it with an Opus `/code-review high`.
     silently discard the edits.
   - **Confirm and continue:** submit the form through htmx. Resume the navigation only on success.
     Have the server signal success explicitly, e.g. an `HX-Trigger: priorities-confirmed` response
-    header from `submit_priorities`; the script must not infer success from the status code. On
+    header from `submit_priorities` (WP145: it had to be `HX-Trigger-After-Settle`, since the app
+    middleware overwrites `HX-Trigger`); the script must not infer success from the status code. On
     an error, stay, so the error shows at the bottom as usual. WP138's first-confirm path answers
     with a whole-shell swap. Make sure the navigation still resumes (or deliberately lands on the
     new shell) in that case.

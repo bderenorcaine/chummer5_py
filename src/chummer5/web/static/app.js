@@ -143,6 +143,7 @@
   // The preview listens for this on the form (`priority-input from:#priority-form delay:150ms`),
   // so a burst of changes becomes one request.
   function requestPriorityPreview(form) {
+    noteLeaveEdit(); // WP145: the status on the page is now out of date
     if (form) form.dispatchEvent(new CustomEvent("priority-input", { bubbles: true }));
   }
 
@@ -342,5 +343,265 @@
     if (!target || target.id !== "priority-preview") return;
     var box = target.closest("form") && target.closest("form").querySelector(".sum-to-ten");
     if (box) guardSumToTen(box);
+  });
+
+  // --- WP145 (Phase Z): asking before unconfirmed priorities leave the page -------------------
+  // While the Priorities panel holds edits the rest of the character doesn't use (status
+  // "changed", or "unconfirmed" once the player has touched the form), anything that would take
+  // the panel off the page asks first: Confirm and continue / Stay / Revert (or Discard) and
+  // continue. htmx requests are held at `htmx:confirm`, plain links and forms at click/submit,
+  // and the back button at `popstate`. Reload, closing the tab and typed URLs get the browser's
+  // own generic prompt (`beforeunload`): a page can't show its own dialog there.
+  var leave = {
+    changeSeq: 0, // bumped by every edit in the panel
+    sentSeq: 0, // `changeSeq` when the newest preview request went out
+    answeredSeq: 0, // `changeSeq` the status on the page answers for
+    touched: false, // the player edited this panel (what matters before the first confirmation)
+    keepTouched: false, // the panel about to load is the panel's own response (method, CONFIRM)
+    url: null, // the Priorities page's URL, to put back when the back button is held
+    resume: null, // what "continue" does, while the dialog is open
+    afterConfirm: null, // what to do once the server says the confirmation succeeded
+    passBack: false, // a back navigation the player already agreed to
+    unloading: false, // a page navigation the player already agreed to
+  };
+
+  function noteLeaveEdit() {
+    leave.changeSeq += 1;
+    leave.touched = true;
+  }
+
+  function prioritySection() {
+    return document.getElementById("priority-section");
+  }
+
+  // The dirty window: until a preview answers for the latest edit, the status attribute is stale,
+  // so the form counts as dirty -- never "clean" on the strength of an out-of-date attribute.
+  function priorityDirty() {
+    if (!prioritySection()) return false;
+    if (leave.changeSeq > leave.answeredSeq) return true;
+    var status = document.getElementById("priority-status");
+    var value = status && status.getAttribute("data-priority-status");
+    return value === "changed" || (value === "unconfirmed" && leave.touched);
+  }
+
+  // Confirm only when the server says the form is confirmable *for the latest edit*.
+  function syncLeaveConfirm(dialog) {
+    var status = document.getElementById("priority-status");
+    var confirmable =
+      status &&
+      status.getAttribute("data-priority-confirmable") === "true" &&
+      leave.changeSeq <= leave.answeredSeq;
+    var button = dialog.querySelector('[data-leave-choice="confirm"]');
+    if (button) button.disabled = !confirmable;
+  }
+
+  function askBeforeLeaving(resume) {
+    var dialog = document.getElementById("priority-leave");
+    if (!dialog || typeof dialog.showModal !== "function") {
+      resume(); // no <dialog> support: the edits are lost, as they were before WP145
+      return;
+    }
+    leave.resume = resume;
+    syncLeaveConfirm(dialog);
+    if (!dialog.open) dialog.showModal(); // Stay has `autofocus`; Escape closes as Stay
+  }
+
+  function confirmThen(resume) {
+    var form = document.getElementById("priority-form");
+    if (!form) return;
+    leave.afterConfirm = resume;
+    if (typeof form.requestSubmit === "function") form.requestSubmit();
+    else window.htmx.trigger(form, "submit");
+  }
+
+  // The dialog's buttons. Whatever closes it otherwise (Escape) is Stay.
+  document.addEventListener("click", function (e) {
+    var button = e.target instanceof Element ? e.target.closest("[data-leave-choice]") : null;
+    if (!button) return;
+    var choice = button.getAttribute("data-leave-choice");
+    var resume = leave.resume;
+    leave.resume = null;
+    var dialog = button.closest("dialog");
+    if (dialog && dialog.open) dialog.close(choice);
+    if (!resume || choice === "stay") return;
+    if (choice === "confirm") confirmThen(resume);
+    else resume(); // revert/discard: nothing server-side changed, so just go
+  });
+
+  document.addEventListener(
+    "close",
+    function (e) {
+      if (e.target && e.target.id === "priority-leave") leave.resume = null;
+    },
+    true // `close` doesn't bubble
+  );
+
+  // Success is the server's explicit signal (`HX-Trigger-After-Settle: priorities-confirmed`),
+  // fired once the swap -- a whole new shell, on the first confirmation -- has settled.
+  document.addEventListener("priorities-confirmed", function () {
+    var resume = leave.afterConfirm;
+    leave.afterConfirm = null;
+    if (resume) resume();
+  });
+
+  // ... and anything else (an error, a refused first store, a 409 notice) means stay: the
+  // response shows why at the bottom of the panel, as usual.
+  document.addEventListener("htmx:afterRequest", function (e) {
+    var d = e.detail || {};
+    if (!leave.afterConfirm || !d.elt || d.elt.id !== "priority-form") return;
+    var signal = d.xhr && d.xhr.getResponseHeader("HX-Trigger-After-Settle");
+    if (!d.successful || !signal || signal.indexOf("priorities-confirmed") === -1) {
+      leave.afterConfirm = null;
+    }
+  });
+
+  // Edits the WP144 widgets don't report: the Metatype and method dropdowns. Capture phase, so
+  // the edit is counted before htmx sends the request it triggers.
+  document.addEventListener(
+    "change",
+    function (e) {
+      var id = e.target && e.target.id;
+      if (id === "metatype-select" || id === "priority-method") noteLeaveEdit();
+    },
+    true
+  );
+
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    var d = e.detail || {};
+    var section = prioritySection();
+    if (d.elt && d.elt.id === "priority-preview") {
+      leave.sentSeq = leave.changeSeq;
+    } else if (section && d.target === section) {
+      // Method switch and CONFIRM keep "touched"; Revert is back to the confirmed state.
+      var path = (d.requestConfig && d.requestConfig.path) || "";
+      leave.keepTouched = path.indexOf("/ui/priorities/revert") !== 0;
+    }
+  });
+
+  document.addEventListener("htmx:afterSwap", function (e) {
+    var target = e.detail && e.detail.target;
+    if (!target || target.id !== "priority-preview") return;
+    leave.answeredSeq = Math.max(leave.answeredSeq, leave.sentSeq);
+    var dialog = document.getElementById("priority-leave");
+    if (dialog && dialog.open) syncLeaveConfirm(dialog);
+  });
+
+  // A panel arriving (page load, navigation, method switch, Revert, CONFIRM) is the server's
+  // answer for everything it shows.
+  document.addEventListener("htmx:load", function (e) {
+    var elt = e.detail && e.detail.elt;
+    if (!elt || !elt.querySelector) return;
+    if (elt.id !== "priority-section" && !elt.querySelector("#priority-section")) return;
+    leave.sentSeq = leave.answeredSeq = leave.changeSeq;
+    leave.touched = leave.keepTouched;
+    leave.keepTouched = false;
+    leave.url = window.location.href;
+  });
+
+  // htmx requests that would take the panel off the page: anything swapped over it (the step
+  // nav into #page, a whole-shell swap) and any change made outside it (a character switch
+  // re-renders the shell). Not the panel's own requests, not the background refreshes of other
+  // regions, and not the display preferences (/ui/prefs/), which don't leave the page.
+  function leavesPriorities(d) {
+    var section = prioritySection();
+    if (!section || !d.elt || section.contains(d.elt)) return false;
+    if (String(d.path || "").indexOf("/ui/prefs/") === 0) return false;
+    if (d.target && d.target.contains && d.target.contains(section)) return true;
+    return String(d.verb).toLowerCase() !== "get";
+  }
+
+  // Continue an htmx request that was held. After a first confirmation the shell is new, so the
+  // control that asked is gone: replay through its counterpart in the new shell.
+  function resumeHtmx(d) {
+    return function () {
+      if (document.body.contains(d.elt)) {
+        d.issueRequest(true);
+        return;
+      }
+      var verb = String(d.verb).toLowerCase();
+      var twin = document.querySelector("[hx-" + verb + '="' + CSS.escape(d.path) + '"]');
+      if (twin) twin.click();
+      else if (verb === "get") window.location.href = d.path;
+    };
+  }
+
+  // Capture phase, so this runs before tabs.js's switch warning (WP138) and, when it asks,
+  // stops that one: one dialog per action. Continuing skips htmx's own confirmation too.
+  document.addEventListener(
+    "htmx:confirm",
+    function (e) {
+      var d = e.detail || {};
+      if (!leavesPriorities(d) || !priorityDirty()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      askBeforeLeaving(resumeHtmx(d));
+    },
+    true
+  );
+
+  // Plain links that leave the page in this tab (the character list, the account page, ...).
+  document.addEventListener(
+    "click",
+    function (e) {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
+        return;
+      var a = e.target instanceof Element ? e.target.closest("a[href]") : null;
+      if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+      if (a.hasAttribute("hx-get") || a.hasAttribute("hx-post")) return; // htmx:confirm's
+      var href = a.getAttribute("href") || "";
+      if (href.charAt(0) === "#" || !priorityDirty()) return;
+      e.preventDefault();
+      askBeforeLeaving(function () {
+        leave.unloading = true;
+        window.location.href = a.href;
+      });
+    },
+    true
+  );
+
+  // Plain form submissions that leave the page (logout).
+  document.addEventListener(
+    "submit",
+    function (e) {
+      var form = e.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      if (form.hasAttribute("hx-post") || form.hasAttribute("hx-get")) return;
+      if ((form.getAttribute("method") || "").toLowerCase() === "dialog" || !priorityDirty()) return;
+      e.preventDefault();
+      var action = form.getAttribute("action");
+      askBeforeLeaving(function () {
+        leave.unloading = true;
+        // After a first confirmation the title bar is new: submit its copy of the form.
+        var live = document.body.contains(form)
+          ? form
+          : document.querySelector('form[action="' + CSS.escape(action || "") + '"]');
+        if (live) live.submit(); // `submit()` fires no submit event, so this doesn't ask again
+      });
+    },
+    true
+  );
+
+  // The back (or forward) button. htmx's history restore can't be cancelled, so this listener --
+  // added before htmx sets `window.onpopstate` at DOM-ready, hence called first -- stops it, puts
+  // the Priorities URL back on top, and asks. Continuing goes back to where the player was
+  // headed: it is the entry right under the one put back, whichever button was pressed.
+  window.addEventListener("popstate", function (e) {
+    if (leave.passBack) {
+      leave.passBack = false;
+      return;
+    }
+    if (!priorityDirty() || !leave.url) return;
+    e.stopImmediatePropagation();
+    history.pushState({ htmx: true }, "", leave.url);
+    askBeforeLeaving(function () {
+      leave.passBack = true;
+      history.back();
+    });
+  });
+
+  window.addEventListener("beforeunload", function (e) {
+    if (leave.unloading || !priorityDirty()) return;
+    e.preventDefault();
+    e.returnValue = ""; // older browsers ask only when this is set
   });
 })();

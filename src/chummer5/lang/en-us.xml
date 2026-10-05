@@ -907,6 +907,34 @@
       <text>Give each category a priority from A (4 points) to E (0 points). Letters may repeat, but the points must total exactly {target}. Talent's own archetype is chosen on the Magic page; the letter decides which archetypes are offered.</text>
     </string>
     <string>
+      <key>Web_Priorities_LeaveConfirm</key>
+      <text>Confirm and continue</text>
+    </string>
+    <string>
+      <key>Web_Priorities_LeaveDiscard</key>
+      <text>Discard and continue</text>
+    </string>
+    <string>
+      <key>Web_Priorities_LeaveRevert</key>
+      <text>Revert and continue</text>
+    </string>
+    <string>
+      <key>Web_Priorities_LeaveStay</key>
+      <text>Stay</text>
+    </string>
+    <string>
+      <key>Web_Priorities_LeaveText</key>
+      <text>Your priority changes are not confirmed. The rest of the character still uses the confirmed priorities until you confirm them.</text>
+    </string>
+    <string>
+      <key>Web_Priorities_LeaveTextNew</key>
+      <text>Your priorities are not confirmed yet. Until they are, the character doesn't exist and the other pages have nothing to work with.</text>
+    </string>
+    <string>
+      <key>Web_Priorities_LeaveTitle</key>
+      <text>Unconfirmed priorities</text>
+    </string>
+    <string>
       <key>Web_Priorities_Lower</key>
       <text>Lower priority</text>
     </string>
