@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase Z — Post-MVP: page redesigns (WP143-145, open-ended)
+### Phase Z — Post-MVP: page redesigns (WP143-146, open-ended)
 
 **Why now.** Raised 2026-10-05 with a hand-drawn redesign of the Priorities page
 (`examples/ui/priorities.png` / `.svg`, committed alongside this file). Phase W (WP97-106) built the
@@ -11,7 +11,7 @@ sketch at a time.
 **This phase is open-ended.** More page redesigns are likely to follow. **Add each one here** as
 its own block of WPs, with its sketch under `examples/ui/` and a dated rulings table like the
 Priorities one below. Don't open a new phase per page. Claim WP numbers from the index's "Next
-unclaimed WP number" as usual, and update the "WP143-145" range in this file's title and in the
+unclaimed WP number" as usual, and update the "WP143-146" range in this file's title and in the
 index's phase row. The **standing design rules** below apply to every redesign in this phase, not
 just Priorities. Extend them when a later sketch settles something new.
 
@@ -331,3 +331,107 @@ it with an Opus `/code-review high`.
     - the back button
     - reload or close giving the browser prompt
     - no double dialog with the WP138 switch warning
+
+---
+
+#### Redesign 2 — Attributes (WP146)
+
+**Sketch:** `examples/ui/attributes.png` / `.svg`. The table itself doesn't change: same rows, the
+same five columns, and the same column headers the page already uses ("Value (augmented)",
+"Metatype range"). Only two things change:
+
+- **The one-line budget sentence becomes three boxes** in a row above the table. Each box has a
+  small label and a large "remaining/budget" value:
+  - **Primary Attributes**, e.g. `20/20`
+  - **Special Attributes**, e.g. `9/9`
+  - **Karma**, e.g. `25/25`, with a subtitle "(5 x level)"
+- **The Update Attributes button goes.** The sketch draws it full-width at the bottom. The user
+  then ruled to drop it (below).
+
+**The user's rulings (2026-10-06):**
+
+| Question | Ruling |
+|---|---|
+| Update Attributes button | **Dropped. Autosave only.** The form already posts on every `change` and on `number-input` (400 ms debounce), so the button has never done anything extra. No explicit-commit model, no leave dialog: an attribute edit takes effect as soon as it posts, as it does today. |
+| What "(5 x level)" under Karma means | A **cost hint**: raising an attribute with Karma costs the new rating × 5 (core rulebook p. 106-107, Karma Advancement Table; `ATTRIBUTE_KARMA_PER_RATING` in `engine/character.py`, cited in `learnings/phase-o.md`'s WP51 entry). The box still shows the same leftover Karma remaining / available as today's sentence (`attribute_karma_remaining` / `attribute_karma_budget`). It is not a fixed 25. |
+| A pool overspent (remaining < 0) | **That box is highlighted**, with the same treatment as the Sum-to-Ten ∑ row. The explaining warning stays at the bottom (standing rule 1). |
+| The boxes in portrait | **They stay in one row and shrink**: three equal columns, with the labels wrapping inside the boxes. |
+
+**Defaults this file sets (not user rulings; change them here if they turn out wrong):**
+
+- **One "Special Attributes" label** for mundane and Awakened characters alike, as the sketch
+  shows. Today's two sentences ("Special (Edge)" / "Special (Edge/Magic)") become one label. The
+  rows below already show which attributes the pool covers. The magic-specific variant's i18n key
+  is removed if nothing else uses it.
+- **A plain page heading** ("Attributes", `Label_Attributes`) above the boxes, as on the
+  Priorities page. The sketch doesn't show one. Standing rule 3 keeps the heading and drops only
+  the `<details>` wrapper.
+- **The column cap is wider than Priorities' 30rem**, because the table has five columns. Pick
+  the narrowest cap at which the table fits without horizontal scroll at its widest localised
+  header (about 36–40rem). Below that width the column fills the pane, per standing rule 2. If
+  the table still overflows on a phone, wrap just the table in an `overflow-x: auto` container.
+  The boxes and the page must never scroll sideways.
+
+---
+
+- [x] **WP146 — Attributes redesign: budget boxes, autosave only.**
+  *Suggested model:* Sonnet. No new client behaviour: the existing `number-input` hook in
+  `app.js` keeps driving autosave. Everything is markup, CSS and pytest.
+  Goal: the Attributes page as sketched in `examples/ui/attributes.png`, with the user's rulings
+  above.
+  Deliverables:
+  - **Template rewrite** of `_attribute_allocation.html`:
+    - Drop the `<details>`/`<summary>` wrapper (standing rule 3). The heading becomes a plain
+      heading. Keep `#attribute-allocation` as the swap target. `test_web_shell.py` and
+      `session.py` reference it.
+    - **Three budget boxes** in one row, above the table. Each box has a label and a
+      `remaining/budget` value. The Karma box adds the "(5 x level)" subtitle. An overspent box
+      (remaining < 0) gets a highlight modifier class, decided in the template from the context
+      values the route already computes. The script decides nothing.
+    - **Remove the submit button** and the `Web_Attributes_Update` key. The form keeps
+      `hx-trigger="change, number-input delay:400ms"`. Check that pressing Enter in a number
+      input still does nothing harmful. With several fields and no submit button, a browser does
+      no implicit submission. If one ever happens, it has no `action` and would GET the current
+      URL, so add an explicit guard if a test shows otherwise.
+    - **Messages at the bottom** (standing rule 1): `attribute_error` and
+      `attribute_budget_warning` move below the table, inside a region that doesn't push the
+      table. The table is the last control on the page, so placing them after it is enough.
+    - The no-character placeholder branch stays as it is, apart from losing the wrapper.
+  - **i18n** (standing rule 6): new keys for the three box labels and the Karma subtitle. Look
+    for legacy keys with exactly matching English before adding new ones. Retire
+    `Web_Attributes_PrimaryRemaining`, `Web_Attributes_SpecialRemaining`,
+    `Web_Attributes_SpecialMagicRemaining`, `Web_Attributes_KarmaRemaining` and
+    `Web_Attributes_Update` if nothing else uses them.
+  - **CSS** in `app.css`, in a new "Attributes page (WP146, Phase Z)" section after the
+    Priorities one:
+    - the centred column (see "Defaults" for the cap)
+    - the box row: three equal columns that stay in one row at every width, with labels wrapping
+    - the boxes: solid border, small label, large tabular-numeral value
+    - the overspent highlight: reuse the ∑ row's off-target treatment, or share one class with it
+    - Theme tokens only. Check all four themes, in light and dark (standing rule 5).
+  - **Trap: focus across the autosave swap.** Every autosave replaces `#attribute-allocation`
+    with `outerHTML`. htmx only restores focus and caret to an element that has a stable `id`.
+    Without one, a player typing "4" and pausing loses focus mid-edit. Check whether the current
+    inputs keep focus. If they don't, give each input a stable `id` (e.g. `attr-BOD`,
+    `karma-attr-BOD`) so htmx's focus preservation applies. Cover the ids with a test.
+  - **Tests:**
+    - Update the existing attribute-page tests (sentence wording, the button) for the new markup.
+    - New tests:
+      - three boxes, each showing the right `remaining/budget`, for a mundane and an Awakened
+        character
+      - the overspent modifier present exactly when remaining < 0, per pool
+      - no submit button
+      - messages after the table in document order
+      - no `<details>` wrapper
+    - The CSP and no-bare-text tests stay green.
+  Depends on: nothing new. Read `web/routes/attributes.py`
+  (`_attribute_allocation_context`) and the WP143 section of `app.css` first, for the column and
+  highlight idiom.
+  Acceptance:
+  - pytest is green repo-wide, and every deliverable above is covered server-side.
+  - The worklog has a short manual browser checklist, marked "not run here":
+    - the boxes under all four themes, light and dark
+    - portrait width: the boxes in one row, no sideways page scroll
+    - the overspent highlight
+    - typing a two-digit value without losing focus
+    - autosave still applying edits (the value column updates)

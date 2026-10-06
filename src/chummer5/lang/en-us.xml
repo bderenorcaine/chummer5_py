@@ -36,28 +36,12 @@
       <text>Value (augmented)</text>
     </string>
     <string>
-      <key>Web_Attributes_KarmaRemaining</key>
-      <text>Karma remaining for attribute increases: {remaining} / {budget}.</text>
+      <key>Web_Attributes_KarmaCostHint</key>
+      <text>(5 x level)</text>
     </string>
     <string>
       <key>Web_Attributes_Placeholder</key>
       <text>Confirm a metatype and priorities on the Priorities page before allocating attribute points.</text>
-    </string>
-    <string>
-      <key>Web_Attributes_PrimaryRemaining</key>
-      <text>Primary attribute points remaining: {remaining} / {budget}.</text>
-    </string>
-    <string>
-      <key>Web_Attributes_SpecialMagicRemaining</key>
-      <text>Special (Edge/Magic) points remaining: {remaining} / {budget}.</text>
-    </string>
-    <string>
-      <key>Web_Attributes_SpecialRemaining</key>
-      <text>Special (Edge) points remaining: {remaining} / {budget}.</text>
-    </string>
-    <string>
-      <key>Web_Attributes_Update</key>
-      <text>Update attributes</text>
     </string>
     <!-- Accounts: login, registration, password (WP137) -->
     <string>

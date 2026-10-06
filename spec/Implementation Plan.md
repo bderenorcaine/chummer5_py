@@ -124,9 +124,9 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | W | UI shell, theming, i18n | done (WP97-106) | [phase-w-ui-shell.md](plan/phase-w-ui-shell.md) |
 | X | Closing the "Creating a Shadowrunner" gaps | done (WP107-135) | [phase-x-rulebook-completeness.md](plan/phase-x-rulebook-completeness.md) |
 | Y | Hosted multi-user deployment (accounts, invites, stored characters) | done (WP136-142) — **hosted deployment ready**; the server steps are the user's (`spec/deployment.md`) | [phase-y-hosted-deployment.md](plan/phase-y-hosted-deployment.md) |
-| Z | Page redesigns (open-ended: further page redesigns go here) | open — Priorities redesign done (WP143-145); manual browser checklists in WP144/WP145's worklogs | [phase-z-page-redesigns.md](plan/phase-z-page-redesigns.md) |
+| Z | Page redesigns (open-ended: further page redesigns go here) | open — Priorities redesign done (WP143-145; manual browser checklists in WP144/WP145's worklogs); Attributes redesign done (WP146; browser checklist in its worklog) | [phase-z-page-redesigns.md](plan/phase-z-page-redesigns.md) |
 
-Next unclaimed WP number: **WP146** (see Phase P's own file for why WP57-59 were claimed; Phase T
+Next unclaimed WP number: **WP147** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V
 claimed WP64-71 on 2026-07-27 from a second manual-testing pass — see those phase files for scope;
 Phase S's WP59 research pass claimed WP72-76 on 2026-07-29 for its synthetic-fixture WP list;
@@ -156,4 +156,5 @@ Phase Y claimed **WP136-142** on 2026-10-02, for hosting the app on the user's o
 invite-only accounts and per-user stored characters — see that phase file's own rulings table.
 Phase Z claimed **WP143-145** on 2026-10-05, for the Priorities page redesign sketched in
 `examples/ui/priorities.png`. Phase Z is open-ended: later page redesigns add their WPs to that
-same phase file rather than opening a phase per page.
+same phase file rather than opening a phase per page. WP146 was added on 2026-10-06 for the
+Attributes page redesign sketched in `examples/ui/attributes.png`.

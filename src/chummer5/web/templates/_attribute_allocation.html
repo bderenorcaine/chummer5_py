@@ -1,24 +1,30 @@
-<div id="attribute-allocation" class="panel">
+{# WP146 (Phase Z): the redesigned Attributes page -- spec/plan/phase-z-page-redesigns.md and its
+   sketch, examples/ui/attributes.png. One centred column: the heading, the three budget boxes,
+   the table, then messages (standing rule 1: nothing that comes and goes sits above a control).
+   There is no submit button: the form autosaves on `change` and, while typing, on the
+   `number-input` event static/app.js re-dispatches. Every input has a stable id so htmx can put
+   focus and caret back after the `outerHTML` swap. #}
+<div id="attribute-allocation" class="attribute-page">
+  <h1 class="page__heading">{{ _("Label_Attributes") }}</h1>
   {% if character %}
-  <details open>
-  <summary class="panel__heading">{{ _("Label_Attributes") }}</summary>
 
-  {% if attribute_error %}
-  <p class="error">{{ attribute_error | tr }}</p>
-  {% endif %}
-  {% if attribute_budget_warning %}
-  <p class="warning">{{ attribute_budget_warning | tr }}</p>
-  {% endif %}
-
-  <p>
-    {{ _("Web_Attributes_PrimaryRemaining", remaining=primary_remaining, budget=primary_budget) }}
-    {% if character.magic_type %}
-    {{ _("Web_Attributes_SpecialMagicRemaining", remaining=special_remaining, budget=special_budget) }}
-    {% else %}
-    {{ _("Web_Attributes_SpecialRemaining", remaining=special_remaining, budget=special_budget) }}
-    {% endif %}
-    {{ _("Web_Attributes_KarmaRemaining", remaining=attribute_karma_remaining, budget=attribute_karma_budget) }}
-  </p>
+  <div class="attribute-budgets">
+    <div class="attribute-budget{% if primary_remaining < 0 %} attribute-budget--over{% endif %}">
+      <span class="attribute-budget__label">{{ _("Label_SummaryPrimaryAttributes") }}</span>
+      <span class="attribute-budget__value">{{ primary_remaining }}/{{ primary_budget }}</span>
+    </div>
+    <div class="attribute-budget{% if special_remaining < 0 %} attribute-budget--over{% endif %}">
+      <span class="attribute-budget__label">{{ _("String_SpecialAttributes") }}</span>
+      <span class="attribute-budget__value">{{ special_remaining }}/{{ special_budget }}</span>
+    </div>
+    <div class="attribute-budget{% if attribute_karma_remaining < 0 %} attribute-budget--over{% endif %}">
+      <span class="attribute-budget__label">
+        {{ _("String_Karma") }}
+        <span class="attribute-budget__hint">{{ _("Web_Attributes_KarmaCostHint") }}</span>
+      </span>
+      <span class="attribute-budget__value">{{ attribute_karma_remaining }}/{{ attribute_karma_budget }}</span>
+    </div>
+  </div>
 
   <form
     hx-post="/ui/attributes"
@@ -26,6 +32,7 @@
     hx-swap="outerHTML"
     hx-trigger="change, number-input delay:400ms"
   >
+    <div class="attribute-table">
     <table>
       <thead>
         <tr>
@@ -43,6 +50,7 @@
           <td>
             <input
               type="number"
+              id="attr-{{ row.code }}"
               name="attr_{{ row.code }}"
               value="{{ row.points }}"
               min="0"
@@ -53,6 +61,7 @@
             {% if row.karma_points is not none %}
             <input
               type="number"
+              id="karma-attr-{{ row.code }}"
               name="karma_attr_{{ row.code }}"
               value="{{ row.karma_points }}"
               min="0"
@@ -66,9 +75,15 @@
         {% endfor %}
       </tbody>
     </table>
-    <button type="submit">{{ _("Web_Attributes_Update") }}</button>
+    </div>
   </form>
-  </details>
+
+  {% if attribute_error %}
+  <p class="error">{{ attribute_error | tr }}</p>
+  {% endif %}
+  {% if attribute_budget_warning %}
+  <p class="warning">{{ attribute_budget_warning | tr }}</p>
+  {% endif %}
   {% else %}
   <p>{{ _("Web_Attributes_Placeholder") }}</p>
   {% endif %}

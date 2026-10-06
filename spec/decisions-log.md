@@ -2262,3 +2262,21 @@ container that broke.
   Everywhere else, the switch warning is unchanged.
 - **The language picker gets the browser's generic leave prompt** while the panel is dirty,
   because it reloads the page. The theme picker doesn't ask at all.
+
+## 2026-10-06 — Phase Z: Attributes redesign scoped (WP146)
+
+- **Second Phase Z redesign: Attributes** (`examples/ui/attributes.png`). The budget sentence
+  becomes three boxes (Primary, Special, Karma). The table doesn't change.
+- **Update Attributes button dropped; autosave only (user ruling).** The form already posts on
+  every change, so the button never did anything. No explicit-commit model and no leave dialog
+  for this page, unlike Priorities.
+- **The Karma box's "(5 x level)" is a cost hint (user ruling)**, not a fixed budget. The box shows
+  the same leftover Karma as before.
+- **An overspent box is highlighted** like the Sum-to-Ten ∑ row. The boxes stay in one row in
+  portrait (user rulings).
+
+## 2026-10-06 — WP146: Attributes redesign
+
+- **Autosave inputs now carry stable ids** (`attr-<CODE>`, `karma-attr-<CODE>`) so htmx can restore
+  focus after the `outerHTML` swap. Other autosaving step forms have the same exposure and weren't
+  touched. Fix them when each is redesigned.

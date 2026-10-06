@@ -6,6 +6,8 @@ same acceptance bar as WP14's own test module: "manual walkthrough; values match
 the same inputs."
 """
 
+import re
+
 from fastapi.testclient import TestClient
 
 from chummer5.data.metatypes import load_metatypes
@@ -80,7 +82,7 @@ def test_index_after_confirmation_shows_allocation_forms_with_full_budget() -> N
 
     expected_primary_budget = PRIORITIES.attributes["B"].points
     expected_skills_budget = PRIORITIES.skills["C"].skills
-    assert f"{expected_primary_budget} / {expected_primary_budget}" in attributes_page.text
+    assert f"{expected_primary_budget}/{expected_primary_budget}" in attributes_page.text
     assert f"{expected_skills_budget} / {expected_skills_budget}" in response.text
     # Magic-linked skills are excluded from the mundane MVP allocation UI (see app.py's
     # MUNDANE_SKILLS comment) -- Spellcasting (Sorcery group, MAG-linked) must not appear.
@@ -154,7 +156,7 @@ def test_submitting_valid_attribute_points_matches_engine_output() -> None:
     assert f"<td>{expected.attribute_value('AGI')}</td>" in response.text
 
     budget = PRIORITIES.attributes["B"].points
-    assert f"{budget - 3} / {budget}" in response.text
+    assert f"{budget - 3}/{budget}" in response.text
 
 
 def test_submitting_over_budget_attribute_points_is_rejected_and_state_unchanged() -> None:
@@ -172,7 +174,7 @@ def test_submitting_over_budget_attribute_points_is_rejected_and_state_unchanged
     # The committed session state is untouched -- reloading the page shows the old (zero) spend,
     # not the rejected one.
     index = client.get("/ui/page/attributes")
-    assert f"{budget} / {budget}" in index.text
+    assert f"{budget}/{budget}" in index.text
 
 
 def test_submitting_valid_skill_points_matches_engine_output() -> None:
@@ -278,7 +280,7 @@ def test_reconfirming_priorities_with_a_still_fitting_budget_keeps_the_allocatio
     skills_page = client.get("/ui/page/skills")
     primary_budget = PRIORITIES.attributes["B"].points
     skills_budget = PRIORITIES.skills["C"].skills
-    assert f"{primary_budget - 2} / {primary_budget}" in attributes_page.text
+    assert f"{primary_budget - 2}/{primary_budget}" in attributes_page.text
     assert f"{skills_budget - 3} / {skills_budget}" in skills_page.text
     assert 'value="2"' in attributes_page.text  # BOD's spent points still echoed in the form
     assert "No longer fits" not in attributes_page.text
@@ -322,7 +324,7 @@ def test_reconfirming_priorities_with_a_lower_attributes_budget_flags_the_existi
     assert new_budget == 14
     # The old spend (15 points) is still shown, over the new 14-point budget -- not reset to 0.
     assert 'value="5"' in response.text
-    assert f"-1 / {new_budget}" in response.text
+    assert f"-1/{new_budget}" in response.text
     assert "No longer fits since priorities were last confirmed" in response.text
     assert "exceeds" in response.text
 
@@ -608,7 +610,7 @@ def test_full_page_reload_shows_each_sections_own_karma_numbers_not_knowledges()
     assert attribute_budget != skill_budget  # sanity: the two sections' own budgets really differ
 
     assert (
-        f"Karma remaining for attribute increases: {both_spent_remaining} / {attribute_budget}"
+        f'attribute-budget__value">{both_spent_remaining}/{attribute_budget}<'
         in attributes_page.text
     )
     assert (
@@ -631,3 +633,71 @@ def test_character_sheet_shows_karma_funded_specialization() -> None:
     assert response.status_code == 200
     assert "Assault Rifles" in response.text
     assert "Skill/skill-group karma cost: 7." in response.text
+
+
+# --- WP146: the redesigned Attributes page ---------------------------------------------------
+
+
+def _budget_boxes(html: str) -> list[tuple[str, bool]]:
+    """(value text, overspent?) of each budget box, in document order."""
+    return [
+        (value, bool(over))
+        for over, value in re.findall(
+            r'<div class="attribute-budget( attribute-budget--over)?">.*?'
+            r'attribute-budget__value">([^<]*)<',
+            html,
+            flags=re.S,
+        )
+    ]
+
+
+def test_attributes_page_shows_three_budget_boxes_without_a_button_or_details() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    html = client.get("/ui/page/attributes").text
+    budget = PRIORITIES.attributes["B"].points
+    boxes = _budget_boxes(html)
+    assert len(boxes) == 3
+    assert boxes[0] == (f"{budget}/{budget}", False)
+    assert not any(over for _, over in boxes)
+    assert "(5 x level)" in html
+    assert 'type="submit"' not in html
+    assert "<details" not in html
+    assert "Update attributes" not in html
+
+
+def test_an_overspent_pool_highlights_only_its_own_box() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)  # Attributes B: 20 points
+    client.post(
+        "/ui/attributes", data={"attr_BOD": "5", "attr_AGI": "4", "attr_REA": "4", "attr_STR": "2"}
+    )
+    heritage = PRIORITIES.heritage["A"]
+    human = next(c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human")
+    # Attributes D is 14 points: the 15 already spent now overspend the primary pool (WP19).
+    client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "D",
+            "skills_letter": "C",
+            "resources_letter": "B",
+            "talent_letter": "E",
+            "metatype_id": human.metatype.id,
+        },
+    )
+    primary, special, karma = _budget_boxes(client.get("/ui/page/attributes").text)
+    assert primary == ("-1/14", True)
+    assert special[1] is False
+    assert karma[1] is False
+
+
+def test_attribute_inputs_keep_stable_ids_and_messages_follow_the_table() -> None:
+    client = TestClient(create_app())
+    _confirm_human(client)
+    budget = PRIORITIES.attributes["B"].points
+    html = client.post("/ui/attributes", data={"attr_BOD": str(budget + 5)}).text
+    assert 'id="attr-BOD"' in html
+    assert 'id="karma-attr-BOD"' in html
+    assert html.index("attribute-budgets") < html.index("<table") < html.index("</table>")
+    assert html.index("</table>") < html.index('class="error"')

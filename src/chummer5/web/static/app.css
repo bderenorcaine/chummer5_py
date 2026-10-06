@@ -973,3 +973,60 @@ details[open] > .panel__heading {
   padding: 0.3rem 0.9rem;
   font: inherit;
 }
+
+/* --- Attributes page (WP146, Phase Z) ----------------------------------------------------------
+   spec/plan/phase-z-page-redesigns.md: the same centred column as Priorities, wider because the
+   table has five columns. The three budget boxes stay in one row at every width (labels wrap
+   inside them); an overspent pool's box takes the Sum-to-Ten off-target colours. Messages sit
+   under the table. */
+.attribute-page {
+  max-width: 40rem;
+  margin-inline: auto;
+}
+
+.attribute-budgets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.attribute-budget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  padding: 0.4rem 0.3rem;
+  border: var(--panel-rule-width) solid var(--rule);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.attribute-budget__label {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.attribute-budget__hint {
+  display: block;
+  color: var(--panel-muted-fg);
+}
+
+.attribute-budget__value {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.attribute-budget--over {
+  color: var(--error-fg);
+  background: var(--error-bg);
+}
+
+.attribute-budget--over .attribute-budget__hint {
+  color: inherit;
+}
+
+.attribute-table {
+  overflow-x: auto;
+}
