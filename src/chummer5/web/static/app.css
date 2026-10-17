@@ -1037,8 +1037,9 @@ details[open] > .panel__heading {
 
 /* --- Qualities page (WP147, Phase Z) -----------------------------------------------------------
    spec/plan/phase-z-page-redesigns.md, "Redesign 3": the Attributes column and budget boxes, then
-   a Positive and a Negative table, each scrolling sideways on its own if a phone is too narrow.
-   The Mentor Spirit fieldset follows; messages sit under it. */
+   a full-width category dropdown styled like the Priorities method dropdown, and the chosen
+   category's table, which scrolls sideways on its own if a phone is too narrow. The Mentor Spirit
+   fieldset follows under Positive; messages sit under it. */
 .quality-page {
   max-width: 40rem;
   margin-inline: auto;
@@ -1048,12 +1049,11 @@ details[open] > .panel__heading {
   margin-bottom: 1rem;
 }
 
-.quality-section__heading {
-  margin: 0 0 0.5rem;
-  padding-bottom: 0.2rem;
-  border-bottom: var(--panel-rule-width) solid var(--rule);
-  font-family: var(--font-title);
-  font-size: 1.05rem;
+.quality-page__view {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  font: inherit;
 }
 
 .quality-table {

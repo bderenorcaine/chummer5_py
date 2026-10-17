@@ -452,7 +452,13 @@ Quality, Category, Karma, Rating, Detail). The Mentor Spirit fieldset follows, t
 button. The form already autosaves (`hx-trigger="change, number-input delay:400ms"`), so the
 button does nothing extra. This is the same situation WP146 found on Attributes.
 
-**Defaults this file sets (no user rulings yet; change them here if they turn out wrong):**
+**The user's rulings (2026-10-17, after WP147 first landed):**
+
+| Question | Ruling |
+|---|---|
+| Positive and Negative on one page | **A dropdown switches between them**, like the Priorities method dropdown. One category's table shows at a time. This replaces the two stacked sections below. |
+
+**Defaults this file sets (not user rulings; change them here if they turn out wrong):**
 
 - **Two budget boxes replace the Karma sentence**, using the Attributes-page box style:
   **Positive Qualities** and **Negative Qualities**, each showing `remaining/limit` against
@@ -463,12 +469,13 @@ button does nothing extra. This is the same situation WP146 found on Attributes.
   (2026-10-06): the button never did anything extra, so there is no explicit commit and no leave
   dialog.
 - **The table splits into two sections, Positive then Negative**, each under its own small
-  heading. The Category column goes, because the section says it. That leaves five columns:
+  heading. *(Superseded by the dropdown ruling above: the dropdown replaces the headings, and the
+  page opens on Positive. The view isn't remembered across page visits.)* The Category column goes, because the section says it. That leaves five columns:
   Select, Quality, Karma, Rating, Detail. The order inside each section stays as it is today. No
   search or filter box: that is client behaviour, and the user hasn't asked for it.
 - **The "free from metatype" line stays** under the boxes. It only changes when the metatype
   changes on the Priorities page, so it never moves a control while the player works here.
-- **The Mentor Spirit fieldset stays where it is**, below the tables, with its markup unchanged
+- **The Mentor Spirit fieldset stays where it is**, below the tables (shown only with Positive), with its markup unchanged
   apart from stable ids (see the trap below). It is the last control on the page.
 - **A plain page heading** ("Qualities", `String_Qualities`) above the boxes, as on the other two
   redesigned pages.

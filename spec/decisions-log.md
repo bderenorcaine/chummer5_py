@@ -2301,3 +2301,6 @@ container that broke.
 - **The Qualities boxes and section headings reuse legacy `Label_Summary{Positive,Negative}Qualities`**,
   not the filter-menu keys the phase file suggested. They have the same English and better-fitting
   translations.
+- **Positive and Negative qualities are switched by a dropdown (user ruling, same day)**, like the
+  Priorities method dropdown. The dropdown is a form field, so switching it is an autosave, and
+  the inactive category stays in the markup as `hidden` so its picks keep posting.

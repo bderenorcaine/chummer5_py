@@ -207,6 +207,15 @@ def _row_key(quality_id: str, index: int) -> str:
     return quality_id if index == 0 else f"{quality_id}:{index}"
 
 
+# WP147: the Qualities page shows one category at a time, chosen by a dropdown, Positive first.
+QUALITY_VIEWS = ("Positive", "Negative")
+
+
+def _quality_view(raw: object) -> str:
+    """The submitted `quality_view`, or Positive for anything that isn't a known view."""
+    return str(raw) if raw in QUALITY_VIEWS else QUALITY_VIEWS[0]
+
+
 def _row_dom_id(key: str) -> str:
     """WP147: a row key as an id suffix. Quality ids are GUIDs, which never contain `_`, so
     swapping the repeat separator `:` for `_` keeps every row's ids unique."""
@@ -263,6 +272,7 @@ def _quality_selection_context(
     mentor_spirit_skill_choice: str | None = None,
     mentor_spirit_power_targets: tuple[str | None, ...] | None = None,
     error: str | None = None,
+    view: str = QUALITY_VIEWS[0],
 ) -> dict[str, Any]:
     """Context for `_quality_selection.html`. `picks` is whatever should be shown selected -- the
     session's committed selection on a clean render (the default, `None`), or the raw submitted
@@ -343,6 +353,7 @@ def _quality_selection_context(
         "positive_remaining": QUALITY_KARMA_LIMIT - positive_karma,
         "negative_remaining": QUALITY_KARMA_LIMIT - negative_karma,
         "karma_limit": QUALITY_KARMA_LIMIT,
+        "quality_view": view,
         "metatype_qualities": character.metatype_qualities,
         "mentor_spirit_offered": character.magic_type is not None,
         "mentor_spirit_archetypes": MENTORS,
@@ -460,6 +471,9 @@ async def submit_qualities(request: Request) -> HTMLResponse:
         # for anything not in whatever catalog it's given, so this alone is sufficient.
         offered = offerable_quality_catalog(session.character, QUALITIES)
         picks = _submitted_picks(form, offered)
+        # WP147: the category dropdown sits inside the form, so switching it is an autosave like
+        # any other change; the re-render keeps the chosen category showing.
+        view = _quality_view(form.get("quality_view"))
         # WP48: the archetype/general-choice fields are only meaningful when Mentor Spirit
         # itself is checked -- forced to None otherwise, so unchecking the quality never
         # requires also clearing a stale dropdown just to avoid "an archetype was picked
@@ -507,10 +521,11 @@ async def submit_qualities(request: Request) -> HTMLResponse:
                 mentor_spirit_skill_choice=mentor_spirit_skill_choice,
                 mentor_spirit_power_targets=mentor_spirit_power_targets,
                 error=str(exc),
+                view=view,
             )
         else:
             session.character = _replace_committed_qualities(session.character, selection)
-            context = _quality_selection_context(session.character)
+            context = _quality_selection_context(session.character, view=view)
     response = templates.TemplateResponse(request, "_quality_selection.html", context)
     set_session_cookie(request, response, new_cookie)
     return response

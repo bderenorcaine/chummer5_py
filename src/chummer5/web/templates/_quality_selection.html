@@ -1,9 +1,12 @@
 {# WP147 (Phase Z): the redesigned Qualities page -- spec/plan/phase-z-page-redesigns.md,
-   "Redesign 3". One centred column: the heading, the two Karma budget boxes, the Positive and
-   Negative tables, the Mentor Spirit fieldset, then messages (standing rule 1: nothing that comes
-   and goes sits above a control). There is no submit button: the form autosaves on `change` and
-   `number-input`. Every control has a stable id so htmx can put focus and caret back after the
-   `outerHTML` swap. #}
+   "Redesign 3". One centred column: the heading, the two Karma budget boxes, the category
+   dropdown, the table for that category (plus the Mentor Spirit fieldset under Positive), then
+   messages (standing rule 1: nothing that comes and goes sits above a control). There is no
+   submit button: the form autosaves on `change` and `number-input`. The dropdown is inside the
+   form, so switching it is an ordinary autosave and the re-render shows the chosen category. The
+   other category is still rendered, `hidden`, so its picks keep posting with every autosave.
+   Every control has a stable id so htmx can put focus and caret back after the `outerHTML`
+   swap. #}
 <div id="quality-selection" class="quality-page">
   <h1 class="page__heading">{{ _("String_Qualities") }}</h1>
   {% if character %}
@@ -29,12 +32,18 @@
     hx-swap="outerHTML"
     hx-trigger="change, number-input delay:400ms"
   >
-    {% for section, heading_key, rows in [
-      ("positive", "Label_SummaryPositiveQualities", positive_rows),
-      ("negative", "Label_SummaryNegativeQualities", negative_rows),
-    ] %}
-    <section class="quality-section quality-section--{{ section }}">
-    <h2 class="quality-section__heading">{{ _(heading_key) }}</h2>
+    <select
+      id="quality-view"
+      class="quality-page__view"
+      name="quality_view"
+      aria-label="{{ _('Web_Qualities_View') }}"
+    >
+      <option value="Positive" {% if quality_view == "Positive" %}selected{% endif %}>{{ _("Label_SummaryPositiveQualities") }}</option>
+      <option value="Negative" {% if quality_view == "Negative" %}selected{% endif %}>{{ _("Label_SummaryNegativeQualities") }}</option>
+    </select>
+
+    {% for view, rows in [("Positive", positive_rows), ("Negative", negative_rows)] %}
+    <section class="quality-section quality-section--{{ view | lower }}"{% if view != quality_view %} hidden{% endif %}>
     <div class="quality-table">
     <table>
       <thead>
@@ -100,7 +109,7 @@
     {% endfor %}
 
     {% if mentor_spirit_offered %}
-    <fieldset>
+    <fieldset class="quality-mentor"{% if quality_view != "Positive" %} hidden{% endif %}>
       <legend>{{ _("Web_Qualities_MentorLegend") }}</legend>
       <label>
         {{ _("Web_Qualities_MentorArchetype") }}

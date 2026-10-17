@@ -1111,6 +1111,10 @@
       <key>Web_Qualities_Placeholder</key>
       <text>Confirm a metatype and priorities on the Priorities page before selecting qualities.</text>
     </string>
+    <string>
+      <key>Web_Qualities_View</key>
+      <text>Quality type</text>
+    </string>
     <!-- Resources -->
     <string>
       <key>Web_Resources_ColQuantity</key>

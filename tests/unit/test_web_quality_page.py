@@ -215,7 +215,7 @@ def test_messages_come_after_the_last_control() -> None:
     response = client.post("/ui/qualities", data={"quality_id": "not-a-quality"})
 
     html = response.text
-    assert "<fieldset>" in html
+    assert "<fieldset" in html
     assert html.index("</fieldset>") < html.index("</form>") < html.index('class="error"')
 
 
@@ -254,3 +254,84 @@ def test_mentor_spirit_controls_have_ids() -> None:
     page = client.get("/ui/page/qualities").text
 
     assert 'id="mentor-archetype" name="mentor_spirit_archetype_id"' in page
+
+
+def _shown(html: str) -> dict[str, bool]:
+    """Which category sections are visible (not `hidden`)."""
+    return {
+        view: re.search(
+            rf'<section class="quality-section quality-section--{view}"( hidden)?>', html
+        ).group(1)
+        is None
+        for view in ("positive", "negative")
+    }
+
+
+def _selected_view(html: str) -> str:
+    start = html.index('id="quality-view"')
+    select = html[start : html.index("</select>", start)]
+    return re.search(r'<option value="(\w+)" selected', select).group(1)
+
+
+def test_the_page_opens_on_positive_qualities() -> None:
+    client = TestClient(create_app())
+    _confirm_magician(client)
+
+    page = client.get("/ui/page/qualities").text
+
+    assert _selected_view(page) == "Positive"
+    assert _shown(page) == {"positive": True, "negative": False}
+    assert '<fieldset class="quality-mentor">' in page
+    # The dropdown is a form control, before the tables: switching it is an autosave.
+    form = page[page.index("<form") : page.index("</form>")]
+    assert form.index('name="quality_view"') < form.index("quality-section--positive")
+
+
+def test_switching_to_negative_shows_only_negative_and_hides_the_mentor_fieldset() -> None:
+    client = TestClient(create_app())
+    _confirm_magician(client)
+
+    response = client.post("/ui/qualities", data={"quality_view": "Negative"})
+
+    assert _selected_view(response.text) == "Negative"
+    assert _shown(response.text) == {"positive": False, "negative": True}
+    assert '<fieldset class="quality-mentor" hidden>' in response.text
+
+
+def test_the_hidden_category_s_picks_still_post_and_stay_committed() -> None:
+    client = TestClient(create_app())
+    _confirm(client)
+    client.post("/ui/qualities", data={"quality_id": [_CATLIKE.id, _UNCOUTH.id]})
+
+    # The browser posts every checkbox in the form, hidden section included.
+    response = client.post(
+        "/ui/qualities", data={"quality_id": [_CATLIKE.id, _UNCOUTH.id], "quality_view": "Negative"}
+    )
+
+    positive, _ = _sections(response.text)
+    assert re.search(rf'value="{_CATLIKE.id}"\s+checked', positive)
+    sheet = client.get("/character/sheet").text
+    assert "Catlike" in sheet and "Uncouth" in sheet
+
+
+def test_an_error_echo_keeps_the_chosen_view() -> None:
+    client = TestClient(create_app())
+    _confirm(client)
+    picks = [_UNCOUTH, _INSOMNIA_FULL]  # over the Negative limit
+
+    response = client.post(
+        "/ui/qualities", data={"quality_id": [q.id for q in picks], "quality_view": "Negative"}
+    )
+
+    assert 'class="error"' in response.text
+    assert _shown(response.text) == {"positive": False, "negative": True}
+
+
+def test_an_unknown_view_falls_back_to_positive() -> None:
+    client = TestClient(create_app())
+    _confirm(client)
+
+    response = client.post("/ui/qualities", data={"quality_view": "Sideways"})
+
+    assert _selected_view(response.text) == "Positive"
+    assert _shown(response.text) == {"positive": True, "negative": False}
