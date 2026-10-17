@@ -1108,20 +1108,8 @@
       <text>Only the one matching {type} applies.</text>
     </string>
     <string>
-      <key>Web_Qualities_NegativeKarma</key>
-      <text>Negative Quality karma: {spent} / {limit}.</text>
-    </string>
-    <string>
       <key>Web_Qualities_Placeholder</key>
       <text>Confirm a metatype and priorities on the Priorities page before selecting qualities.</text>
-    </string>
-    <string>
-      <key>Web_Qualities_PositiveKarma</key>
-      <text>Positive Quality karma: {spent} / {limit}.</text>
-    </string>
-    <string>
-      <key>Web_Qualities_Update</key>
-      <text>Update qualities</text>
     </string>
     <!-- Resources -->
     <string>

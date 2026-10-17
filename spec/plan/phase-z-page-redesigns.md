@@ -478,7 +478,7 @@ button does nothing extra. This is the same situation WP146 found on Attributes.
 
 ---
 
-- [ ] **WP147 — Qualities redesign: budget boxes, split table, autosave only.**
+- [x] **WP147 — Qualities redesign: budget boxes, split table, autosave only.**
   *Suggested model:* Sonnet. No new client behaviour: the existing autosave triggers keep driving
   the form. Everything is markup, CSS and pytest.
   Goal: the Qualities page restyled like the Attributes page, per the defaults above.

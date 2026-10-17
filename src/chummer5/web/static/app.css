@@ -976,22 +976,30 @@ details[open] > .panel__heading {
 
 /* --- Attributes page (WP146, Phase Z) ----------------------------------------------------------
    spec/plan/phase-z-page-redesigns.md: the same centred column as Priorities, wider because the
-   table has five columns. The three budget boxes stay in one row at every width (labels wrap
-   inside them); an overspent pool's box takes the Sum-to-Ten off-target colours. Messages sit
-   under the table. */
+   table has five columns. The budget boxes are the shared ones below. Messages sit under the
+   table. */
 .attribute-page {
   max-width: 40rem;
   margin-inline: auto;
 }
 
-.attribute-budgets {
+.attribute-table {
+  overflow-x: auto;
+}
+
+/* --- Budget boxes (WP146, shared since WP147) ---------------------------------------------------
+   A row of "remaining/budget" boxes above a redesigned page's controls (Attributes, Qualities).
+   The boxes stay in one row at every width, as equal columns, and labels wrap inside them. An
+   overspent pool's box takes the Sum-to-Ten off-target colours. */
+.budget-boxes {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
-.attribute-budget {
+.budget-box {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1003,30 +1011,55 @@ details[open] > .panel__heading {
   text-align: center;
 }
 
-.attribute-budget__label {
+.budget-box__label {
   font-size: 0.85rem;
   overflow-wrap: anywhere;
 }
 
-.attribute-budget__hint {
+.budget-box__hint {
   display: block;
   color: var(--panel-muted-fg);
 }
 
-.attribute-budget__value {
+.budget-box__value {
   font-size: 1.5rem;
   font-variant-numeric: tabular-nums;
 }
 
-.attribute-budget--over {
+.budget-box--over {
   color: var(--error-fg);
   background: var(--error-bg);
 }
 
-.attribute-budget--over .attribute-budget__hint {
+.budget-box--over .budget-box__hint {
   color: inherit;
 }
 
-.attribute-table {
+/* --- Qualities page (WP147, Phase Z) -----------------------------------------------------------
+   spec/plan/phase-z-page-redesigns.md, "Redesign 3": the Attributes column and budget boxes, then
+   a Positive and a Negative table, each scrolling sideways on its own if a phone is too narrow.
+   The Mentor Spirit fieldset follows; messages sit under it. */
+.quality-page {
+  max-width: 40rem;
+  margin-inline: auto;
+}
+
+.quality-section {
+  margin-bottom: 1rem;
+}
+
+.quality-section__heading {
+  margin: 0 0 0.5rem;
+  padding-bottom: 0.2rem;
+  border-bottom: var(--panel-rule-width) solid var(--rule);
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+}
+
+.quality-table {
   overflow-x: auto;
+}
+
+.quality-table input[type="text"] {
+  max-width: 100%;
 }

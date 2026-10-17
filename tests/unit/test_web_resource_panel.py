@@ -181,7 +181,7 @@ def test_the_point_pools_are_the_numbers_each_step_shows_on_its_own_page() -> No
     assert "Knowledge Points" in rows
     # And they agree with what the step's own page prints.
     attributes_page = client.get("/ui/page/attributes", headers=HTMX).text
-    assert f'attribute-budget__value">{budget - 3}/{budget}<' in attributes_page
+    assert f'budget-box__value">{budget - 3}/{budget}<' in attributes_page
     skills_page = client.get("/ui/page/skills", headers=HTMX).text
     assert f"Skill points remaining: {skills.skills - 4} / {skills.skills}." in skills_page
 

@@ -8,21 +8,21 @@
   <h1 class="page__heading">{{ _("Label_Attributes") }}</h1>
   {% if character %}
 
-  <div class="attribute-budgets">
-    <div class="attribute-budget{% if primary_remaining < 0 %} attribute-budget--over{% endif %}">
-      <span class="attribute-budget__label">{{ _("Label_SummaryPrimaryAttributes") }}</span>
-      <span class="attribute-budget__value">{{ primary_remaining }}/{{ primary_budget }}</span>
+  <div class="budget-boxes">
+    <div class="budget-box{% if primary_remaining < 0 %} budget-box--over{% endif %}">
+      <span class="budget-box__label">{{ _("Label_SummaryPrimaryAttributes") }}</span>
+      <span class="budget-box__value">{{ primary_remaining }}/{{ primary_budget }}</span>
     </div>
-    <div class="attribute-budget{% if special_remaining < 0 %} attribute-budget--over{% endif %}">
-      <span class="attribute-budget__label">{{ _("String_SpecialAttributes") }}</span>
-      <span class="attribute-budget__value">{{ special_remaining }}/{{ special_budget }}</span>
+    <div class="budget-box{% if special_remaining < 0 %} budget-box--over{% endif %}">
+      <span class="budget-box__label">{{ _("String_SpecialAttributes") }}</span>
+      <span class="budget-box__value">{{ special_remaining }}/{{ special_budget }}</span>
     </div>
-    <div class="attribute-budget{% if attribute_karma_remaining < 0 %} attribute-budget--over{% endif %}">
-      <span class="attribute-budget__label">
+    <div class="budget-box{% if attribute_karma_remaining < 0 %} budget-box--over{% endif %}">
+      <span class="budget-box__label">
         {{ _("String_Karma") }}
-        <span class="attribute-budget__hint">{{ _("Web_Attributes_KarmaCostHint") }}</span>
+        <span class="budget-box__hint">{{ _("Web_Attributes_KarmaCostHint") }}</span>
       </span>
-      <span class="attribute-budget__value">{{ attribute_karma_remaining }}/{{ attribute_karma_budget }}</span>
+      <span class="budget-box__value">{{ attribute_karma_remaining }}/{{ attribute_karma_budget }}</span>
     </div>
   </div>
 

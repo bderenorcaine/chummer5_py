@@ -2292,3 +2292,12 @@ container that broke.
   The POST contract (input names) stays unchanged.
 - **The budget-box CSS becomes shared** instead of being copied per page. Stable input ids fix the
   focus loss after autosave that the WP146 entry flagged.
+
+## 2026-10-17 — WP147: Qualities redesign
+
+- **The budget-box CSS is shared now**: `.budget-boxes` / `.budget-box…` replace WP146's
+  `.attribute-budget…`. A later redesign with budget boxes uses these classes, and the grid fits
+  any number of boxes.
+- **The Qualities boxes and section headings reuse legacy `Label_Summary{Positive,Negative}Qualities`**,
+  not the filter-menu keys the phase file suggested. They have the same English and better-fitting
+  translations.

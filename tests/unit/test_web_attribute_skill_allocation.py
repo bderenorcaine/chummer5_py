@@ -609,10 +609,7 @@ def test_full_page_reload_shows_each_sections_own_karma_numbers_not_knowledges()
     skill_budget = STARTING_KARMA - edg_cost  # excludes only Skills' own commitment
     assert attribute_budget != skill_budget  # sanity: the two sections' own budgets really differ
 
-    assert (
-        f'attribute-budget__value">{both_spent_remaining}/{attribute_budget}<'
-        in attributes_page.text
-    )
+    assert f'budget-box__value">{both_spent_remaining}/{attribute_budget}<' in attributes_page.text
     assert (
         f"Karma remaining for skills: {both_spent_remaining} / {skill_budget}" in skills_page.text
     )
@@ -643,8 +640,8 @@ def _budget_boxes(html: str) -> list[tuple[str, bool]]:
     return [
         (value, bool(over))
         for over, value in re.findall(
-            r'<div class="attribute-budget( attribute-budget--over)?">.*?'
-            r'attribute-budget__value">([^<]*)<',
+            r'<div class="budget-box( budget-box--over)?">.*?'
+            r'budget-box__value">([^<]*)<',
             html,
             flags=re.S,
         )
@@ -699,5 +696,5 @@ def test_attribute_inputs_keep_stable_ids_and_messages_follow_the_table() -> Non
     html = client.post("/ui/attributes", data={"attr_BOD": str(budget + 5)}).text
     assert 'id="attr-BOD"' in html
     assert 'id="karma-attr-BOD"' in html
-    assert html.index("attribute-budgets") < html.index("<table") < html.index("</table>")
+    assert html.index("budget-boxes") < html.index("<table") < html.index("</table>")
     assert html.index("</table>") < html.index('class="error"')

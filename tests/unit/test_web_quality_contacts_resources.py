@@ -9,6 +9,8 @@ output for the same inputs." Also covers the WP16-specific regression this WP's 
 selection's Improvements must survive a later attribute/priority resubmission.
 """
 
+import re
+
 from fastapi.testclient import TestClient
 
 from chummer5.data.metatypes import load_metatypes
@@ -48,6 +50,13 @@ def _confirm_human(client: TestClient) -> None:
     assert "Confirmed: Human" in response.text
 
 
+def _quality_budgets(html: str) -> tuple[str, str]:
+    """WP147: the Positive and Negative budget boxes' `remaining/limit` values, in that order."""
+    values = re.findall(r'budget-box__value">([^<]*)<', html)
+    assert len(values) == 2, values
+    return values[0], values[1]
+
+
 def _human_character():
     heritage = PRIORITIES.heritage["A"]
     human_choice = next(
@@ -77,7 +86,7 @@ def test_index_after_confirmation_shows_full_budgets() -> None:
     contacts = client.get("/ui/page/contacts").text
     equipment = client.get("/ui/page/equipment").text
 
-    assert f"0 / {QUALITY_KARMA_LIMIT}" in qualities
+    assert _quality_budgets(qualities) == (f"{QUALITY_KARMA_LIMIT}/{QUALITY_KARMA_LIMIT}",) * 2
     character = _human_character()
     free_points = character.attribute_value("CHA") * 3
     assert f"Free contact points: {free_points}." in contacts
@@ -97,7 +106,9 @@ def test_selecting_catlike_grants_the_sneaking_bonus_matching_the_engine() -> No
     response = client.post("/ui/qualities", data={"quality_id": _CATLIKE.id})
 
     assert response.status_code == 200
-    assert f"{_CATLIKE.karma} / {QUALITY_KARMA_LIMIT}" in response.text
+    assert _quality_budgets(response.text)[0] == (
+        f"{QUALITY_KARMA_LIMIT - _CATLIKE.karma}/{QUALITY_KARMA_LIMIT}"
+    )
 
     skill_response = client.post("/ui/skills", data={})
     character = _human_character()
@@ -265,7 +276,7 @@ def test_select_text_quality_with_a_detail_is_accepted_and_echoed() -> None:
     )
 
     assert response.status_code == 200
-    assert f"5 / {QUALITY_KARMA_LIMIT}" in response.text  # Negative Quality karma
+    assert _quality_budgets(response.text)[1] == f"{QUALITY_KARMA_LIMIT - 5}/{QUALITY_KARMA_LIMIT}"
     assert 'value="UCAS"' in response.text
 
     sheet = client.get("/character/sheet")
@@ -624,7 +635,7 @@ def test_a_rated_quality_gets_a_rating_stepper_and_costs_karma_times_rating() ->
     )
 
     assert response.status_code == 200
-    assert f"16 / {QUALITY_KARMA_LIMIT}" in response.text  # Positive Quality karma
+    assert _quality_budgets(response.text)[0] == f"{QUALITY_KARMA_LIMIT - 16}/{QUALITY_KARMA_LIMIT}"
     assert f'name="quality_rating_{_INDOMITABLE_MENTAL.id}"' in response.text
     assert 'value="2"' in response.text
     sheet = client.get("/character/sheet")
@@ -666,7 +677,7 @@ def test_a_repeatable_quality_offers_another_row_and_takes_two_instances() -> No
         },
     )
 
-    assert f"20 / {QUALITY_KARMA_LIMIT}" in second.text  # Negative Quality karma
+    assert _quality_budgets(second.text)[1] == f"{QUALITY_KARMA_LIMIT - 20}/{QUALITY_KARMA_LIMIT}"
     assert f'value="{_CODEBLOCK.id}:2"' in second.text
     sheet = client.get("/character/sheet")
     assert "Codeblock (Matrix Perception)" in sheet.text

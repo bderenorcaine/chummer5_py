@@ -126,7 +126,7 @@ def test_picking_a_single_option_archetype_shows_on_the_sheet() -> None:
     )
 
     assert response.status_code == 200
-    assert "Positive Quality karma: 5" in _compact(response.text)
+    assert 'budget-box__value">20/25<' in response.text  # Positive box: 5 Karma spent
 
     sheet = client.get("/character/sheet")
     assert "Dog" in sheet.text
@@ -179,7 +179,7 @@ def test_unchecking_mentor_spirit_ignores_a_stale_archetype_dropdown() -> None:
     )
 
     assert response.status_code == 200
-    assert "Positive Quality karma: 0" in _compact(response.text)
+    assert 'budget-box__value">25/25<' in response.text  # Positive box: nothing spent
     sheet = client.get("/character/sheet")
     assert "Dog" not in sheet.text
 

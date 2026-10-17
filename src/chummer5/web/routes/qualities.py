@@ -207,6 +207,12 @@ def _row_key(quality_id: str, index: int) -> str:
     return quality_id if index == 0 else f"{quality_id}:{index}"
 
 
+def _row_dom_id(key: str) -> str:
+    """WP147: a row key as an id suffix. Quality ids are GUIDs, which never contain `_`, so
+    swapping the repeat separator `:` for `_` keeps every row's ids unique."""
+    return key.replace(":", "_")
+
+
 def _quality_rows(
     offered: Iterable[Quality],
     requests: Sequence[QualityPickRequest],
@@ -232,6 +238,7 @@ def _quality_rows(
                 {
                     "quality": quality,
                     "key": _row_key(quality.id, index),
+                    "dom_id": _row_dom_id(_row_key(quality.id, index)),
                     "selected": request is not None,
                     "needs_text": quality.bonus_support == BonusSupport.SELECT_TEXT,
                     "text_value": (request.text or "") if request is not None else "",
@@ -324,14 +331,17 @@ def _quality_selection_context(
         (a for a in MENTORS if a.id == mentor_spirit_archetype_id), None
     )
 
+    rows = _quality_rows(offered, requests, character.magic_type)
     return {
         "character": character,
         "quality_budget_warning": (
             _committed_quality_warning(character, offered) if error is None else None
         ),
-        "quality_rows": _quality_rows(offered, requests, character.magic_type),
-        "positive_karma": positive_karma,
-        "negative_karma": negative_karma,
+        # WP147: the page shows Positive and Negative in sections of their own.
+        "positive_rows": [r for r in rows if r["quality"].category == "Positive"],
+        "negative_rows": [r for r in rows if r["quality"].category == "Negative"],
+        "positive_remaining": QUALITY_KARMA_LIMIT - positive_karma,
+        "negative_remaining": QUALITY_KARMA_LIMIT - negative_karma,
         "karma_limit": QUALITY_KARMA_LIMIT,
         "metatype_qualities": character.metatype_qualities,
         "mentor_spirit_offered": character.magic_type is not None,

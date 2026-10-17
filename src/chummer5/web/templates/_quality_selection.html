@@ -1,23 +1,27 @@
-<div id="quality-selection" class="panel">
+{# WP147 (Phase Z): the redesigned Qualities page -- spec/plan/phase-z-page-redesigns.md,
+   "Redesign 3". One centred column: the heading, the two Karma budget boxes, the Positive and
+   Negative tables, the Mentor Spirit fieldset, then messages (standing rule 1: nothing that comes
+   and goes sits above a control). There is no submit button: the form autosaves on `change` and
+   `number-input`. Every control has a stable id so htmx can put focus and caret back after the
+   `outerHTML` swap. #}
+<div id="quality-selection" class="quality-page">
+  <h1 class="page__heading">{{ _("String_Qualities") }}</h1>
   {% if character %}
-  <details open>
-  <summary class="panel__heading">{{ _("String_Qualities") }}</summary>
 
-  {% if quality_error %}
-  <p class="error">{{ quality_error | tr }}</p>
-  {% endif %}
-  {% if quality_budget_warning %}
-  <p class="warning">{{ quality_budget_warning | tr }}</p>
-  {% endif %}
+  <div class="budget-boxes">
+    <div class="budget-box{% if positive_remaining < 0 %} budget-box--over{% endif %}">
+      <span class="budget-box__label">{{ _("Label_SummaryPositiveQualities") }}</span>
+      <span class="budget-box__value">{{ positive_remaining }}/{{ karma_limit }}</span>
+    </div>
+    <div class="budget-box{% if negative_remaining < 0 %} budget-box--over{% endif %}">
+      <span class="budget-box__label">{{ _("Label_SummaryNegativeQualities") }}</span>
+      <span class="budget-box__value">{{ negative_remaining }}/{{ karma_limit }}</span>
+    </div>
+  </div>
 
   {% if metatype_qualities %}
   <p>{{ _("Web_Qualities_FreeFromMetatype", names=metatype_qualities | map("dterm", "qualities.xml") | join(_("Web_List_Separator"))) }}</p>
   {% endif %}
-
-  <p>
-    {{ _("Web_Qualities_PositiveKarma", spent=positive_karma, limit=karma_limit) }}
-    {{ _("Web_Qualities_NegativeKarma", spent=negative_karma, limit=karma_limit) }}
-  </p>
 
   <form
     hx-post="/ui/qualities"
@@ -25,35 +29,42 @@
     hx-swap="outerHTML"
     hx-trigger="change, number-input delay:400ms"
   >
+    {% for section, heading_key, rows in [
+      ("positive", "Label_SummaryPositiveQualities", positive_rows),
+      ("negative", "Label_SummaryNegativeQualities", negative_rows),
+    ] %}
+    <section class="quality-section quality-section--{{ section }}">
+    <h2 class="quality-section__heading">{{ _(heading_key) }}</h2>
+    <div class="quality-table">
     <table>
       <thead>
         <tr>
           <th>{{ _("Web_Qualities_ColSelect") }}</th>
           <th>{{ _("Web_Qualities_ColQuality") }}</th>
-          <th>{{ _("Web_Qualities_ColCategory") }}</th>
           <th>{{ _("String_Karma") }}</th>
           <th>{{ _("String_Rating") }}</th>
           <th>{{ _("Web_Qualities_ColDetail") }}</th>
         </tr>
       </thead>
       <tbody>
-        {% for row in quality_rows %}
+        {% for row in rows %}
         <tr{% if row.another %} class="quality-row--another"{% endif %}>
           <td>
             <input
               type="checkbox"
+              id="quality-{{ row.dom_id }}"
               name="quality_id"
               value="{{ row.key }}"
               {% if row.selected %}checked{% endif %}
             />
           </td>
           <td>{{ row.quality | dterm("qualities.xml") }}{% if row.another %} <small>{{ _("Web_Qualities_AddAnother") }}</small>{% endif %}</td>
-          <td>{{ row.quality.category | dterm("qualities.xml") }}</td>
           <td>{{ row.quality.karma }}</td>
           <td>
             {% if row.max_rating > 1 %}
             <input
               type="number"
+              id="quality-rating-{{ row.dom_id }}"
               name="quality_rating_{{ row.key }}"
               value="{{ row.rating }}"
               min="1"
@@ -63,7 +74,7 @@
           </td>
           <td>
             {% if row.choice_options %}
-            <select name="quality_choice_{{ row.key }}">
+            <select id="quality-choice-{{ row.dom_id }}" name="quality_choice_{{ row.key }}">
               <option value="">{{ _("Web_Qualities_Choose") }}</option>
               {% for code in row.choice_options %}
               <option value="{{ code }}" {% if code == row.choice_value %}selected{% endif %}>{% include "_quality_choice_label.html" %}</option>
@@ -73,6 +84,7 @@
             {% if row.needs_text %}
             <input
               type="text"
+              id="quality-text-{{ row.dom_id }}"
               name="quality_text_{{ row.key }}"
               value="{{ row.text_value }}"
               placeholder="{{ _('Web_Qualities_DetailPlaceholder') }}"
@@ -83,13 +95,16 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
+    </section>
+    {% endfor %}
 
     {% if mentor_spirit_offered %}
     <fieldset>
       <legend>{{ _("Web_Qualities_MentorLegend") }}</legend>
       <label>
         {{ _("Web_Qualities_MentorArchetype") }}
-        <select name="mentor_spirit_archetype_id">
+        <select id="mentor-archetype" name="mentor_spirit_archetype_id">
           <option value="">{{ _("Web_Qualities_ChooseArchetype") }}</option>
           {% for archetype in mentor_spirit_archetypes %}
           <option value="{{ archetype.id }}" {% if archetype.id == selected_mentor_spirit_archetype_id %}selected{% endif %}>
@@ -110,6 +125,7 @@
         <label>
           <input
             type="radio"
+            id="mentor-general-{{ option.id }}"
             name="mentor_spirit_general_choice_id"
             value="{{ option.id }}"
             {% if option.id == selected_mentor_spirit_general_choice_id %}checked{% endif %}
@@ -130,7 +146,7 @@
       {% if mentor_skill_options %}
       <label>
         {{ _("Web_Qualities_MentorSkillChoice") }}
-        <select name="mentor_spirit_skill_choice">
+        <select id="mentor-skill-choice" name="mentor_spirit_skill_choice">
           <option value="">{{ _("Web_Qualities_Choose") }}</option>
           {% for code in mentor_skill_options %}
           <option value="{{ code }}" {% if code == selected_mentor_skill_choice %}selected{% endif %}>{{ code | dterm("skills.xml") }}</option>
@@ -142,24 +158,28 @@
       <label>
         {{ _("Web_Qualities_MentorPowerTarget", power=slot.power_name | dterm("powers.xml")) }}
         {% if slot.options %}
-        <select name="mentor_spirit_power_target_{{ slot.index }}">
+        <select id="mentor-power-target-{{ slot.index }}" name="mentor_spirit_power_target_{{ slot.index }}">
           <option value="">{{ _("Web_Qualities_Choose") }}</option>
           {% for code in slot.options %}
           <option value="{{ code }}" {% if code == slot.value %}selected{% endif %}>{{ code | dterm("skills.xml") }}</option>
           {% endfor %}
         </select>
         {% else %}
-        <input type="text" name="mentor_spirit_power_target_{{ slot.index }}" value="{{ slot.value or '' }}" />
+        <input type="text" id="mentor-power-target-{{ slot.index }}" name="mentor_spirit_power_target_{{ slot.index }}" value="{{ slot.value or '' }}" />
         {% endif %}
       </label>
       {% endfor %}
       {% endif %}
     </fieldset>
     {% endif %}
-
-    <button type="submit">{{ _("Web_Qualities_Update") }}</button>
   </form>
-  </details>
+
+  {% if quality_error %}
+  <p class="error">{{ quality_error | tr }}</p>
+  {% endif %}
+  {% if quality_budget_warning %}
+  <p class="warning">{{ quality_budget_warning | tr }}</p>
+  {% endif %}
   {% else %}
   <p>{{ _("Web_Qualities_Placeholder") }}</p>
   {% endif %}
