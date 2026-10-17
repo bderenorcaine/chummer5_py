@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase Z — Post-MVP: page redesigns (WP143-146, open-ended)
+### Phase Z — Post-MVP: page redesigns (WP143-147, open-ended)
 
 **Why now.** Raised 2026-10-05 with a hand-drawn redesign of the Priorities page
 (`examples/ui/priorities.png` / `.svg`, committed alongside this file). Phase W (WP97-106) built the
@@ -11,7 +11,7 @@ sketch at a time.
 **This phase is open-ended.** More page redesigns are likely to follow. **Add each one here** as
 its own block of WPs, with its sketch under `examples/ui/` and a dated rulings table like the
 Priorities one below. Don't open a new phase per page. Claim WP numbers from the index's "Next
-unclaimed WP number" as usual, and update the "WP143-146" range in this file's title and in the
+unclaimed WP number" as usual, and update the "WP143-147" range in this file's title and in the
 index's phase row. The **standing design rules** below apply to every redesign in this phase, not
 just Priorities. Extend them when a later sketch settles something new.
 
@@ -435,3 +435,118 @@ same five columns, and the same column headers the page already uses ("Value (au
     - the overspent highlight
     - typing a two-digit value without losing focus
     - autosave still applying edits (the value column updates)
+
+---
+
+#### Redesign 3 — Qualities (WP147)
+
+**No sketch.** Raised 2026-10-17 as "redesign the Qualities page in the same style as the
+Attributes and Priorities pages". This block applies the standing rules and WP146's budget-box
+idiom to today's page (`_quality_selection.html`). If the user sketches the page later, the sketch
+overrides the defaults below.
+
+Today's page, top to bottom: a `<details>` wrapper, the error and budget warning **above** the
+controls (breaks standing rule 1), the "free from metatype" line, a two-sentence Karma summary,
+then one 6-column table of all ~96 offered qualities, Positive and Negative interleaved (Select,
+Quality, Category, Karma, Rating, Detail). The Mentor Spirit fieldset follows, then an "Update"
+button. The form already autosaves (`hx-trigger="change, number-input delay:400ms"`), so the
+button does nothing extra. This is the same situation WP146 found on Attributes.
+
+**Defaults this file sets (no user rulings yet; change them here if they turn out wrong):**
+
+- **Two budget boxes replace the Karma sentence**, using the Attributes-page box style:
+  **Positive Qualities** and **Negative Qualities**, each showing `remaining/limit` against
+  `QUALITY_KARMA_LIMIT` (25, core rulebook Step Four: Purchase Qualities). Remaining is limit − spent, as on Attributes.
+  An overspent box (remaining < 0, reachable on an error echo) takes the overspent highlight.
+  The two boxes stay in one row at every width.
+- **The Update button goes; autosave only.** This follows the user's Attributes ruling
+  (2026-10-06): the button never did anything extra, so there is no explicit commit and no leave
+  dialog.
+- **The table splits into two sections, Positive then Negative**, each under its own small
+  heading. The Category column goes, because the section says it. That leaves five columns:
+  Select, Quality, Karma, Rating, Detail. The order inside each section stays as it is today. No
+  search or filter box: that is client behaviour, and the user hasn't asked for it.
+- **The "free from metatype" line stays** under the boxes. It only changes when the metatype
+  changes on the Priorities page, so it never moves a control while the player works here.
+- **The Mentor Spirit fieldset stays where it is**, below the tables, with its markup unchanged
+  apart from stable ids (see the trap below). It is the last control on the page.
+- **A plain page heading** ("Qualities", `String_Qualities`) above the boxes, as on the other two
+  redesigned pages.
+- **Column cap:** the same as Attributes (40rem) if the five-column table fits at its widest
+  localised header. Otherwise use the narrowest cap that fits. On a phone, wrap each table in an
+  `overflow-x: auto` container. The boxes and the page must never scroll sideways.
+
+---
+
+- [ ] **WP147 — Qualities redesign: budget boxes, split table, autosave only.**
+  *Suggested model:* Sonnet. No new client behaviour: the existing autosave triggers keep driving
+  the form. Everything is markup, CSS and pytest.
+  Goal: the Qualities page restyled like the Attributes page, per the defaults above.
+  Deliverables:
+  - **Template rewrite** of `_quality_selection.html`:
+    - Drop the `<details>`/`<summary>` wrapper (standing rule 3). The heading becomes a plain
+      heading. Keep `#quality-selection` as the swap target, and grep for other references to it
+      (`test_web_shell.py`, `session.py`) before touching it.
+    - **Two budget boxes** in one row above the table(s), with a highlight modifier for an
+      overspent pool. Decide it in the template from context values. Add `positive_remaining` /
+      `negative_remaining` to `_quality_selection_context` if that keeps the template simple.
+    - **Two table sections**, Positive then Negative, without the Category column. Split
+      `quality_rows` server-side (e.g. `positive_rows` / `negative_rows` in the context) rather
+      than filtering in Jinja. Keep every input name exactly as it is (`quality_id`,
+      `quality_rating_<key>`, `quality_choice_<key>`, `quality_text_<key>`), so
+      `_submitted_picks` and `submit_qualities` need no change. Repeatable qualities keep their
+      "add another" rows inside their own section.
+    - **Remove the submit button.** Same Enter-key check as WP146: with several fields and no
+      submit button there is no implicit submission. Add a guard only if a test shows otherwise.
+    - **Messages at the bottom** (standing rule 1): `quality_error` and `quality_budget_warning`
+      move below the Mentor Spirit fieldset, i.e. after the last control.
+    - The no-character placeholder branch stays as it is, apart from losing the wrapper.
+  - **Trap: focus across the autosave swap.** This is the exposure the WP146 decisions-log entry
+    flagged for every autosaving step form. Every autosave replaces `#quality-selection` with
+    `outerHTML`, and htmx only restores focus and caret to an element with a stable `id`. The
+    Detail text box is the worst case: a player typing a name pauses and loses focus mid-word.
+    Give every input and select a stable `id` derived from its row key (e.g. `quality-<key>`,
+    `quality-rating-<key>`, `quality-choice-<key>`, `quality-text-<key>`, and fixed ids for the
+    mentor fields). Row keys contain `:` for repeat instances (`_row_key`), so make sure the
+    derived id is valid and unique. Replacing `:` with `-` is fine as long as it can't collide.
+    Cover the ids with a test.
+  - **i18n** (standing rule 6): new keys for the two box labels and the two section headings.
+    Look for legacy keys with exactly matching English first: legacy
+    `String_SelectQuality_XPathQuery_PositiveOnly` / `…_NegativeOnly` read "Positive Qualities" /
+    "Negative Qualities", and could serve as the box labels or the section headings. Retire `Web_Qualities_PositiveKarma`,
+    `Web_Qualities_NegativeKarma`, `Web_Qualities_Update` and `Web_Qualities_ColCategory` if
+    nothing else uses them (check `_character_sheet.html`).
+  - **CSS** in `app.css`, in a new "Qualities page (WP147, Phase Z)" section after the Attributes
+    one. Reuse the Attributes box classes rather than copying them: if they're page-specific
+    (`.attribute-budget…`), rename them to a shared name (e.g. `.budget-box…`) and update the
+    Attributes template and tests in the same commit. Section headings, the column cap and the
+    table wrapper go in the new section. Theme tokens only. Check all four themes, light and dark
+    (standing rule 5).
+  - **Tests:**
+    - Update the existing quality-page tests for the new markup (Karma sentence, the button, the
+      Category column).
+    - New tests:
+      - two boxes, each with the right `remaining/limit`, including after picking a positive and
+        a negative quality
+      - the overspent modifier present exactly when a pool's remaining < 0
+      - Positive rows only in the Positive section and Negative rows only in the Negative one,
+        with a repeatable quality's "add another" row in the right section
+      - no submit button, no `<details>` wrapper
+      - messages after the last control in document order
+      - stable, unique ids on the inputs, including repeat instances
+      - posting the unchanged form names still commits the same selection (POST contract
+        unchanged)
+    - The CSP and no-bare-text tests stay green.
+  Depends on: nothing new. Read `web/routes/qualities.py` (`_quality_rows`,
+  `_quality_selection_context`), the WP146 template `_attribute_allocation.html` and the WP146
+  section of `app.css` first.
+  Acceptance:
+  - pytest is green repo-wide, and every deliverable above is covered server-side.
+  - The worklog has a short manual browser checklist, marked "not run here":
+    - the boxes and section headings under all four themes, light and dark
+    - portrait width: the boxes in one row, no sideways page scroll
+    - the overspent highlight
+    - typing a Detail text and a rating without losing focus
+    - autosave still applying edits (boxes update on check/uncheck)
+    - the Mentor Spirit fieldset still working for a magic-active character
+    - the Attributes page unchanged if the box classes were renamed

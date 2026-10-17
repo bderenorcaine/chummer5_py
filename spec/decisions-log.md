@@ -2280,3 +2280,15 @@ container that broke.
 - **Autosave inputs now carry stable ids** (`attr-<CODE>`, `karma-attr-<CODE>`) so htmx can restore
   focus after the `outerHTML` swap. Other autosaving step forms have the same exposure and weren't
   touched. Fix them when each is redesigned.
+
+## 2026-10-17 — Phase Z: Qualities redesign scoped (WP147)
+
+- **Third Phase Z redesign: Qualities, without a sketch.** The user asked for it "in the same
+  style" as Attributes and Priorities, so the phase file sets defaults instead of recording
+  rulings. A later sketch overrides them.
+- **Two budget boxes (Positive, Negative) replace the Karma sentence. The Update button goes:
+  autosave only**, extending the user's Attributes ruling of 2026-10-06 to this page.
+- **The 96-row table splits into Positive and Negative sections** and loses its Category column.
+  The POST contract (input names) stays unchanged.
+- **The budget-box CSS becomes shared** instead of being copied per page. Stable input ids fix the
+  focus loss after autosave that the WP146 entry flagged.
