@@ -33,6 +33,7 @@ COUNTERSPELLING = next(s for s in SKILLS if s.name == "Counterspelling")
 
 HTMX = {"HX-Request": "true"}
 CATEGORIES = ("Combat", "Detection", "Health", "Illusion", "Manipulation", "Rituals")
+CATEGORY_SLUGS = tuple(c.lower() for c in CATEGORIES)
 
 
 def _confirm(client: TestClient, codename: str = "Magician", aspect: str | None = None) -> None:
@@ -100,7 +101,7 @@ def _strip(html: str) -> str:
 
 
 def test_the_views_are_the_spell_categories_in_catalog_order() -> None:
-    assert SPELL_VIEW_SLUGS == tuple(c.lower() for c in CATEGORIES)
+    assert SPELL_VIEW_SLUGS == (*CATEGORY_SLUGS, "filtered", "known")  # WP152 added the last two
     assert tuple(dict.fromkeys(s.category for s in SPELLS)) == CATEGORIES
     section = STEP_PAGES_BY_SLUG["magic"].section("spells")
     assert section is not None
@@ -117,7 +118,7 @@ def test_the_strip_lists_every_category_with_its_counters() -> None:
     links = re.findall(r'<a\s[^>]*href="(/ui/page/magic/spells/[a-z]+)"[^>]*>', strip)
     assert links == [f"/ui/page/magic/spells/{slug}" for slug in SPELL_VIEW_SLUGS]
     labels = re.findall(r'<span class="view-tab__label">([^<]+)</span>', strip)
-    assert labels == list(CATEGORIES)
+    assert labels == [*CATEGORIES, "Filtered", "Known"]
     for link in re.findall(r"<a\s[^>]*>", strip):
         assert 'hx-target="#page"' in link and 'hx-push-url="true"' in link
     # The counters sit in the strip: F and C at its start, Ka at its end. No re-fetch: the strip
@@ -131,7 +132,7 @@ def test_the_strip_lists_every_category_with_its_counters() -> None:
     assert "hx-get" not in strip[: strip.index(">")]
 
 
-@pytest.mark.parametrize("slug", SPELL_VIEW_SLUGS)
+@pytest.mark.parametrize("slug", CATEGORY_SLUGS)
 def test_each_category_tab_shows_exactly_its_panel_with_every_checkbox_in_the_form(
     slug: str,
 ) -> None:
@@ -152,7 +153,7 @@ def test_each_category_tab_shows_exactly_its_panel_with_every_checkbox_in_the_fo
     assert re.search(rf'name="spells_tab" value="{slug}"', form)
     panel = re.search(rf'data-spells-panel="{slug}">(.*?)</section>', form, re.S)
     assert panel is not None
-    category = CATEGORIES[SPELL_VIEW_SLUGS.index(slug)]
+    category = CATEGORIES[CATEGORY_SLUGS.index(slug)]
     assert panel.group(1).count('name="spell_id"') == sum(s.category == category for s in SPELLS)
 
 
@@ -184,7 +185,6 @@ def test_a_view_url_requested_directly_renders_the_whole_shell() -> None:
     "url",
     [
         "/ui/page/magic/spells/nosuch",
-        "/ui/page/magic/spells/filtered",  # WP152's views, not yet
         "/ui/page/magic/talent/combat",  # a section with no views
         "/ui/page/magic/nosuch/combat",
         "/ui/page/skills/combat/combat",  # a view-tab page has no third level
@@ -265,7 +265,7 @@ def test_spells_tab_survives_an_autosave(slug: str) -> None:
     assert _shown_panels(html) == [slug]
 
 
-@pytest.mark.parametrize("posted", ["", "nosuch", "filtered"])
+@pytest.mark.parametrize("posted", ["", "nosuch", "rated"])  # Rated is a Skills view
 def test_an_unknown_spells_tab_falls_back_to_combat(posted: str) -> None:
     client = TestClient(create_app())
     _confirm(client)

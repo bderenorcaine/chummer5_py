@@ -2404,3 +2404,21 @@ container that broke.
   WP150's).
 - **The Spells strip lives inside the Spells fragment** and has no re-fetch: every autosave
   re-renders it with the counters.
+
+## 2026-10-25 — WP152: the view script is page-agnostic
+
+- **WP150's Filtered/Rated code now serves any page through data attributes.** A fragment names
+  its scope and the current tab's mode (`data-view-scope`, and `data-view-mode` = `filter`,
+  `fixed` or empty). The sections of a view are `data-view-section`, and its rows carry
+  `data-view-key`, `data-view-name` and `data-view-kept`. A filter field is
+  `input[data-view-filter="<scope>"]`, and a dropdown is any `.view-tabs__select`. The state
+  (query, fixed row set) is kept per scope. Skills (Filtered/Rated) and Spells (Filtered/Known)
+  use the same code, and neither page's ids appear in `app.js`.
+- **"Kept" is decided by the server** (Skills: rating above 0, or a native language; Spells: known),
+  not by the script reading a rating. Standing rule 7: rules stay server-side.
+- **"Entering" a fixed view** means the loaded content holds the scope's fragment, rather than
+  being it. A page render (tab link, history, reload) holds it. A fragment's own autosave swap is
+  it. That was WP150's `.page--skills` test, restated without the page class.
+- **Each page keeps its own breakpoint** for the strip-to-dropdown swap: a container query on
+  its own column. Skills: 41rem on `.page--skills`. Spells: 32rem on `.spells-page`, where its
+  eight-tab strip stops fitting.

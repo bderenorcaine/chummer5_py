@@ -12,7 +12,7 @@
    shown as text, posted through hidden fields so the autosave keeps them. #}
 {% set tab = skills_tab | default("knowledge") %}
 {% set multi = tab in ("filtered", "rated") %}
-<div id="knowledge-skills" class="skills-fragment" data-skills-tab="{{ tab }}"{% if tab != "knowledge" and not multi %} hidden{% endif %}>
+<div id="knowledge-skills" class="skills-fragment" data-view-scope="skills" data-view-mode="{{ {'filtered': 'filter', 'rated': 'fixed'}.get(tab, '') }}" data-skills-tab="{{ tab }}"{% if tab != "knowledge" and not multi %} hidden{% endif %}>
   {% if character %}
   <form
     hx-post="/ui/knowledge"
@@ -21,9 +21,9 @@
     hx-trigger="change, number-input delay:400ms"
   >
     <input type="hidden" name="skills_tab" value="{{ tab if multi else 'knowledge' }}" />
-    <section class="skills-panel skills-panel--knowledge" data-skills-panel="knowledge"{% if multi %} data-skills-view{% endif %}>
+    <section class="skills-panel skills-panel--knowledge" data-skills-panel="knowledge"{% if multi %} data-view-section{% endif %}>
       {% if multi %}
-      <h2 class="skills-panel__heading">{{ _("Web_Skills_TabKnowledge") }}</h2>
+      <h2 class="view-heading">{{ _("Web_Skills_TabKnowledge") }}</h2>
       {% endif %}
       <p class="skills-panel__help">
         {{ _("Web_Knowledge_Help") }}
@@ -50,7 +50,7 @@
           {% set row = item.row %}
           {% set i = item.index %}
           {% if not multi or row.name %}
-          <tr data-skill-key="knowledge-{{ i }}" data-skill-name="{{ row.name | lower }}" data-skill-rating="{{ 1 if row.native else item.total }}">
+          <tr data-view-key="knowledge-{{ i }}" data-view-name="{{ row.name | lower }}" data-view-kept="{{ 'true' if row.native or item.total > 0 else 'false' }}">
             {% if multi %}
             <td>{{ row.name }}<input type="hidden" name="knowledge_name_{{ i }}" value="{{ row.name }}" /></td>
             <td>{{ (row.category | dterm("skills.xml")) if row.category else "—" }}<input type="hidden" name="knowledge_category_{{ i }}" value="{{ row.category }}" /></td>

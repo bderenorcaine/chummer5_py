@@ -31,18 +31,40 @@ from chummer5.web.session import resolve_session, set_session_cookie
 router = APIRouter()
 
 # WP151: the Spells sub-tab's views -- one per spell category, in catalog order (Combat, Detection,
-# Health, Illusion, Manipulation, Rituals), slugged by the lower-cased category. The first is the
-# one the sub-tab opens on.
+# Health, Illusion, Manipulation, Rituals), slugged by the lower-cased category -- then WP152's two
+# views across every category, Filtered and Known (as the Skills page's Filtered and Rated). The
+# first is the one the sub-tab opens on.
 SPELL_CATEGORY_VIEWS: tuple[tuple[str, str], ...] = tuple(
     (category.lower(), category) for category in dict.fromkeys(spell.category for spell in SPELLS)
 )
-SPELL_VIEW_SLUGS: tuple[str, ...] = tuple(slug for slug, _category in SPELL_CATEGORY_VIEWS)
+SPELL_MULTI_VIEWS: tuple[tuple[str, str], ...] = (
+    ("filtered", "Web_Spells_TabFiltered"),
+    ("known", "Web_Spells_TabKnown"),
+)
+SPELL_VIEW_SLUGS: tuple[str, ...] = tuple(
+    slug for slug, _label in (*SPELL_CATEGORY_VIEWS, *SPELL_MULTI_VIEWS)
+)
 _SPELLS_URL = "/ui/page/magic/spells"
 
 
 def spell_view(requested: str | None) -> str:
     """The view a posted `spells_tab` names, or the first one if it names none."""
     return requested if requested in SPELL_VIEW_SLUGS else SPELL_VIEW_SLUGS[0]
+
+
+def _tab_item(
+    slug: str, *, category: str | None = None, label_key: str | None = None
+) -> dict[str, Any]:
+    """One tab of the Spells strip (`_view_tabs.html`'s item shape)."""
+    return {
+        "slug": slug,
+        "href": f"{_SPELLS_URL}/{slug}",
+        "category": category,
+        "label_key": label_key,
+        "stale": False,
+        "enabled": True,
+        "disabled_reason_key": None,
+    }
 
 
 def _counter(label_key: str, title_key: str, remaining: int, of: int) -> dict[str, Any]:
@@ -85,7 +107,8 @@ def _spell_selection_context(
     WP19 established generally.
 
     **WP151**: `spell_panels` (one per view, in strip order, each with its rows), the strip's
-    `spell_tab_items`, and three counters, each `remaining/of`: F, the free spells left (floored at
+    `spell_tab_items` (a category tab names its `category`, a WP152 view its `label_key`), and
+    three counters, each `remaining/of`: F, the free spells left (floored at
     0 -- spells past the free ones are bought with Karma, not overspent); C, what the known-spell
     cap (Magic x 2) leaves; and Ka, the character's leftover Karma (the resource panel's figure).
     `spells_tab` is the view showing; the shell sets it from the URL on a page render.
@@ -142,15 +165,8 @@ def _spell_selection_context(
         "spells_available": True,  # WP121: the template's gate
         "spells_tab": spell_view(tab),
         "spell_tab_items": [
-            {
-                "slug": slug,
-                "href": f"{_SPELLS_URL}/{slug}",
-                "category": category,
-                "stale": False,
-                "enabled": True,
-                "disabled_reason_key": None,
-            }
-            for slug, category in SPELL_CATEGORY_VIEWS
+            *(_tab_item(slug, category=category) for slug, category in SPELL_CATEGORY_VIEWS),
+            *(_tab_item(slug, label_key=label_key) for slug, label_key in SPELL_MULTI_VIEWS),
         ],
         "spell_panels": panels,
         "spell_counters_start": [

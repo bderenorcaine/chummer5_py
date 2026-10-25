@@ -213,7 +213,7 @@ def test_magic_tab_availability_agrees_with_each_fragments_own_guard(talent: str
 
     page = STEP_PAGES_BY_SLUG["magic"]
     for section, (tab, wrapper_id) in zip(page.sections, COMPOSITES["magic"], strict=True):
-        wrapper = re.search(rf'<div id="{wrapper_id}" class="[^"]*">(.*?)\n</div>', html, re.S)
+        wrapper = re.search(rf'<div id="{wrapper_id}"[^>]*>(.*?)\n</div>', html, re.S)
         assert wrapper is not None, wrapper_id
         has_content = bool(wrapper.group(1).strip())
         tab_markup = _tab(html, translate("en-us", section.label_key))

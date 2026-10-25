@@ -1198,6 +1198,30 @@ a.view-tab:focus-visible {
   text-decoration: none;
 }
 
+/* WP150, shared since WP152: a view across every section (Filtered, Rated, Known) puts each
+   section under a small heading, with Filtered's field on top. */
+.view-heading {
+  margin: 1rem 0 0.4rem;
+  font-family: var(--font-title);
+  font-size: 1rem;
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
+  color: var(--summary-fg);
+}
+
+.view-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.view-filter__input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+}
+
 /* WP150: the narrow block -- every counter as one row of equal cells over a dropdown of the tabs.
    Hidden until a page's container query shows it. */
 .view-tabs__narrow {
@@ -1330,33 +1354,10 @@ a.view-tab:focus-visible {
   cursor: not-allowed;
 }
 
-/* --- Skills page: views and narrow widths (WP150, Phase Z) --------------------------------------
-   The Filtered and Rated views stack every section under a small heading, with the filter field
-   on top. Where the strip (twelve 2.2rem tabs, the 5rem lean and a 9rem filler: about 41rem) no
-   longer fits the column, it is hidden and the dropdown shows instead, with the four counters as
-   one row of equal cells above it. */
-.skills-panel__heading {
-  margin: 1rem 0 0.4rem;
-  font-family: var(--font-title);
-  font-size: 1rem;
-  text-transform: var(--display-transform);
-  letter-spacing: var(--display-letter-spacing);
-  color: var(--summary-fg);
-}
-
-.skills-filter {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.skills-filter__input {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-}
-
+/* --- Skills page: narrow widths (WP150, Phase Z) -----------------------------------------------
+   Where the strip (twelve 2.2rem tabs, the 5rem lean and a 9rem filler: about 41rem) no longer
+   fits the column, it is hidden and the dropdown shows instead, with the four counters as one row
+   of equal cells above it. (The views' headings and filter field are shared since WP152.) */
 @container (max-width: 41rem) {
   .page--skills .view-tabs__strip {
     display: none;
@@ -1371,12 +1372,25 @@ a.view-tab:focus-visible {
    spec/plan/phase-z-page-redesigns.md, "Redesign 5": the Magic page's Spells sub-tab in the Skills
    page's style -- the shared view-tab strip (above) over one spell category at a time, messages
    under it. Six columns fit the Attributes/Qualities column; below it the column fills the pane
-   and the table scrolls sideways on its own, never the page. */
+   and the table scrolls sideways on its own, never the page. WP152: where the strip (eight 2.2rem
+   tabs, the 5rem lean and a 9rem filler: about 32rem) no longer fits the column, the dropdown and
+   the counter row replace it, as on Skills. */
 .spells-page {
   max-width: 40rem;
   margin-inline: auto;
+  container-type: inline-size;
 }
 
 .spells-table {
   overflow-x: auto;
+}
+
+@container (max-width: 32rem) {
+  .spells-page .view-tabs__strip {
+    display: none;
+  }
+
+  .spells-page .view-tabs__narrow {
+    display: block;
+  }
 }

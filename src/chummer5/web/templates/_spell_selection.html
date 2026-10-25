@@ -7,9 +7,16 @@
    re-renders the counters with it. Only the current panel shows; the rest are `hidden` but stay
    in the form, so every autosave posts every checkbox. The hidden `spells_tab` input brings the
    same view back after an autosave. There is no submit button: the form autosaves on `change`.
-   Every checkbox has a stable id so htmx can put focus back after the `outerHTML` swap. #}
+   Every checkbox has a stable id so htmx can put focus back after the `outerHTML` swap.
+   WP152: the Filtered and Known views show every category, each under its own heading and marked
+   `data-view-section`; app.js narrows their rows (`data-view-key`/`-name`/`-kept`) and hides a
+   section left empty, the Skills page's Filtered/Rated code made page-agnostic. Filtered's field
+   sits outside the form, so typing in it never autosaves. Where the strip stops fitting, the
+   dropdown and a row of counters replace it (a container query in app.css). #}
 {% from "_view_tabs.html" import view_tabs with context %}
-<div id="spell-selection" class="spells-page">
+{% set view = spells_tab | default("") %}
+{% set multi = view in ("filtered", "known") %}
+<div id="spell-selection" class="spells-page" data-view-scope="spells" data-view-mode="{{ {'filtered': 'filter', 'known': 'fixed'}.get(view, '') }}">
   {% if character and spells_available %}
   {% call(item) view_tabs(
     "spells-tabs",
@@ -18,7 +25,22 @@
     spells_tab,
     spell_counters_start,
     spell_counters_end,
-  ) %}{{ item.category | dterm("spells.xml") }}{% endcall %}
+    select_id="spells-tab-select",
+  ) %}{% if item.category %}{{ item.category | dterm("spells.xml") }}{% else %}{{ _(item.label_key) }}{% endif %}{% endcall %}
+
+  {% if spells_tab == "filtered" %}
+  <label class="view-filter">
+    <span class="view-filter__label">{{ _("Web_Spells_FilterLabel") }}</span>
+    <input
+      type="search"
+      id="spell-filter"
+      class="view-filter__input"
+      data-view-filter="spells"
+      autocomplete="off"
+      placeholder="{{ _('Web_Spells_FilterPlaceholder') }}"
+    />
+  </label>
+  {% endif %}
 
   <form
     hx-post="/ui/spells"
@@ -29,7 +51,10 @@
     <input type="hidden" name="spells_tab" value="{{ spells_tab }}" />
 
     {% for panel in spell_panels %}
-    <section class="spells-panel" data-spells-panel="{{ panel.slug }}"{% if panel.slug != spells_tab %} hidden{% endif %}>
+    <section class="spells-panel" data-spells-panel="{{ panel.slug }}"{% if multi %} data-view-section{% elif panel.slug != spells_tab %} hidden{% endif %}>
+      {% if multi %}
+      <h2 class="view-heading">{{ panel.category | dterm("spells.xml") }}</h2>
+      {% endif %}
       <div class="spells-table">
       <table>
         <thead>
@@ -44,7 +69,7 @@
         </thead>
         <tbody>
           {% for row in panel.rows %}
-          <tr>
+          <tr data-view-key="{{ row.spell.id }}" data-view-name="{{ (row.spell | dterm('spells.xml')) | lower }}" data-view-kept="{{ 'true' if row.selected else 'false' }}">
             <td>
               <input
                 type="checkbox"

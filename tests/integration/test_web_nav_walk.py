@@ -103,7 +103,7 @@ def test_walking_the_nav_renders_each_composite_page_whole() -> None:
         ).text
         assert 'id="skill-allocation"' in tab_html and 'id="knowledge-skills"' in tab_html
         if tab.slug in ("filtered", "rated"):  # WP150: views across the sections
-            assert re.search(r"data-skills-panel=\"knowledge\" data-skills-view", tab_html)
+            assert re.search(r"data-skills-panel=\"knowledge\" data-view-section", tab_html)
         elif tab.slug == "knowledge":
             assert re.search(
                 r'<div id="knowledge-skills"[^>]*data-skills-tab="knowledge">', tab_html

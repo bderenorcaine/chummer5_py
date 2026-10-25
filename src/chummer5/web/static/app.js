@@ -38,7 +38,7 @@
     }
   });
 
-  // --- Client-side table filters (Skills, Resources' gear) ------------------------------------
+  // --- Client-side table filters (the view tabs' Filtered/Rated/Known, Resources' gear) --------
   // Each hides rows of the tables inside its own fragment; a <details> group with no visible row
   // hides too, and a group with a match opens while a filter is active.
   function filterGroups(groupsSelector, rowSelector, matches, active) {
@@ -54,69 +54,82 @@
     });
   }
 
-  // Skills (WP150): the Filtered and Rated views. The server renders every section but Group,
-  // each marked `data-skills-view`, and every row with `data-skill-key`/`-name`/`-rating`; this
-  // only narrows them -- a row out of the view is hidden, and so is a section left empty. Both
-  // fragments rebuild themselves on every autosave, so the state lives here and is reapplied to
-  // whatever loads (the same shape as the <details> store above).
-  var skillFilter = { query: "" };
-  var ratedKeys = null; // the Rated view's rows, fixed when the tab opens
+  // Views (WP150, page-agnostic since WP152): the Skills page's Filtered/Rated and the Spells
+  // sub-tab's Filtered/Known. Each fragment names its scope and the current tab's mode
+  // (`data-view-scope`, `data-view-mode`: "filter", "fixed" or empty). The server renders every
+  // section of such a view marked `data-view-section`, and every row with `data-view-key`/`-name`/
+  // `-kept`; this only narrows them -- a row out of the view is hidden, and so is a section left
+  // empty. The fragments rebuild themselves on every autosave, so the state lives here, per scope,
+  // and is reapplied to whatever loads (the same shape as the <details> store above).
+  var viewQueries = {}; // scope -> the Filtered query, kept across visits
+  var viewKept = {}; // scope -> the fixed view's row keys, fixed when the tab opens
 
-  function skillsTab() {
-    var fragment = document.getElementById("skill-allocation");
-    return fragment ? fragment.getAttribute("data-skills-tab") : null;
+  function viewFragments(scope) {
+    return document.querySelectorAll('[data-view-scope="' + scope + '"]');
   }
 
-  function narrowSkillViews(keep) {
-    document.querySelectorAll("section[data-skills-view]").forEach(function (section) {
-      var anyVisible = false;
-      section.querySelectorAll("tr[data-skill-key]").forEach(function (row) {
-        var match = keep(row);
-        row.hidden = !match;
-        if (match) anyVisible = true;
+  function viewMode(scope) {
+    var fragment = viewFragments(scope)[0];
+    return fragment ? fragment.getAttribute("data-view-mode") : null;
+  }
+
+  function narrowView(scope, keep) {
+    viewFragments(scope).forEach(function (fragment) {
+      fragment.querySelectorAll("section[data-view-section]").forEach(function (section) {
+        var anyVisible = false;
+        section.querySelectorAll("tr[data-view-key]").forEach(function (row) {
+          var match = keep(row);
+          row.hidden = !match;
+          if (match) anyVisible = true;
+        });
+        section.hidden = !anyVisible;
       });
-      section.hidden = !anyVisible;
     });
   }
 
-  function applySkillFilter() {
-    var input = document.getElementById("skill-filter");
-    if (!input || skillsTab() !== "filtered") return;
-    skillFilter.query = input.value;
+  function viewFilterInput(scope) {
+    return document.querySelector('input[data-view-filter="' + scope + '"]');
+  }
+
+  function applyViewFilter(scope) {
+    var input = viewFilterInput(scope);
+    if (!input || viewMode(scope) !== "filter") return;
+    viewQueries[scope] = input.value;
     var query = input.value.trim().toLowerCase();
-    narrowSkillViews(function (row) {
-      return !query || row.dataset.skillName.includes(query);
+    narrowView(scope, function (row) {
+      return !query || row.dataset.viewName.includes(query);
     });
   }
 
-  // A fresh filter field (the Skills fragment re-rendered) gets the query back once; every load
-  // reapplies it, since a Knowledge autosave brings new rows but no new field.
-  function restoreSkillFilter() {
-    var input = document.getElementById("skill-filter");
+  // A fresh filter field (its fragment re-rendered) gets the query back once; every load
+  // reapplies it, since another fragment's autosave (Skills' Knowledge) brings new rows but no
+  // new field.
+  function restoreViewFilter(scope) {
+    var input = viewFilterInput(scope);
     if (!input) return;
     if (!input.dataset.restored) {
       input.dataset.restored = "true";
-      input.value = skillFilter.query;
+      input.value = viewQueries[scope] || "";
     }
-    applySkillFilter();
+    applyViewFilter(scope);
   }
 
-  // Rated: the rows rated when the tab opens stay listed until the player leaves it, so a row set
-  // to 0 doesn't vanish under the cursor (standing rule 1). `entering` is a page render -- the tab
-  // link, history, a reload -- as opposed to a fragment's own autosave swap.
-  function applyRated(entering) {
-    if (skillsTab() !== "rated") {
-      ratedKeys = null;
-      return;
-    }
-    if (entering || ratedKeys === null) {
-      ratedKeys = {};
-      document.querySelectorAll("section[data-skills-view] tr[data-skill-key]").forEach(function (row) {
-        if (Number(row.dataset.skillRating) > 0) ratedKeys[row.dataset.skillKey] = true;
+  // The fixed view (Rated, Known): the rows kept when the tab opens stay listed until the player
+  // leaves it, so a row set to 0 or unchecked doesn't vanish under the cursor (standing rule 1).
+  // `entering` is a page render -- the tab link, history, a reload -- as opposed to a fragment's
+  // own autosave swap.
+  function applyFixedView(scope, entering) {
+    if (entering || !viewKept[scope]) {
+      var kept = {};
+      viewFragments(scope).forEach(function (fragment) {
+        fragment.querySelectorAll("section[data-view-section] tr[data-view-key]").forEach(function (row) {
+          if (row.dataset.viewKept === "true") kept[row.dataset.viewKey] = true;
+        });
       });
+      viewKept[scope] = kept;
     }
-    narrowSkillViews(function (row) {
-      return ratedKeys[row.dataset.skillKey] === true;
+    narrowView(scope, function (row) {
+      return viewKept[scope][row.dataset.viewKey] === true;
     });
   }
 
@@ -137,35 +150,42 @@
   }
 
   document.addEventListener("input", function (e) {
-    var id = e.target && e.target.id;
-    if (id === "skill-filter") applySkillFilter();
-    else if (id === "gear-filter") applyGearFilter();
+    var t = e.target;
+    if (t && t.dataset && t.dataset.viewFilter) applyViewFilter(t.dataset.viewFilter);
+    else if (t && t.id === "gear-filter") applyGearFilter();
   });
 
   document.addEventListener("change", function (e) {
-    var id = e.target && e.target.id;
-    if (id === "skills-tab-select") followSkillsTabSelect(e.target);
+    var t = e.target;
+    if (t && t.classList && t.classList.contains("view-tabs__select")) followViewSelect(t);
   });
 
-  // `htmx:load` fires for the initial page and for every piece of swapped-in content.
+  // `htmx:load` fires for the initial page and for every piece of swapped-in content. Loading
+  // content that holds a scope's fragment (rather than being it) is entering that scope's tab.
   document.addEventListener("htmx:load", function (e) {
     var elt = e.detail && e.detail.elt;
-    var entering =
-      !!elt &&
-      !!elt.querySelector &&
-      ((elt.classList && elt.classList.contains("page--skills")) ||
-        elt.querySelector(".page--skills") !== null);
-    restoreSkillFilter();
-    applyRated(entering);
+    var entering = {};
+    document.querySelectorAll("[data-view-scope]").forEach(function (fragment) {
+      var scope = fragment.getAttribute("data-view-scope");
+      var holds = !!elt && elt !== fragment && !!elt.contains && elt.contains(fragment);
+      entering[scope] = entering[scope] === true || holds;
+    });
+    Object.keys(viewKept).forEach(function (scope) {
+      if (viewMode(scope) !== "fixed") delete viewKept[scope]; // left the tab
+    });
+    Object.keys(entering).forEach(function (scope) {
+      var mode = viewMode(scope);
+      if (mode === "filter") restoreViewFilter(scope);
+      else if (mode === "fixed") applyFixedView(scope, entering[scope]);
+    });
   });
 
-  // WP150: the Skills tab dropdown (narrow widths). A choice clicks the strip's own link for that
-  // tab -- hidden at this width, but still wired by htmx -- so it makes the same request and the
-  // same history entry as a tab click.
-  function followSkillsTabSelect(select) {
-    var link = document.querySelector(
-      '#skills-tabs a.view-tab[href="' + select.value + '"]'
-    );
+  // WP150: a view-tab dropdown (narrow widths). A choice clicks its strip's own link for that tab
+  // -- hidden at this width, but still wired by htmx -- so it makes the same request and the same
+  // history entry as a tab click.
+  function followViewSelect(select) {
+    var strip = select.closest(".view-tabs");
+    var link = strip && strip.querySelector('a.view-tab[href="' + select.value + '"]');
     if (link) link.click();
   }
 

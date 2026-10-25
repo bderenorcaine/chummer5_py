@@ -81,7 +81,7 @@ def test_the_views_show_every_section_but_group_under_its_heading(tab: str) -> N
     html = client.get(f"/ui/page/skills/{tab}", headers=HTMX).text
 
     sections = _sections(html)
-    in_view = [slug for slug, opening in sections.items() if "data-skills-view" in opening]
+    in_view = [slug for slug, opening in sections.items() if "data-view-section" in opening]
     assert in_view == [
         "combat",
         "physical",
@@ -93,9 +93,9 @@ def test_the_views_show_every_section_but_group_under_its_heading(tab: str) -> N
         "knowledge",
     ]
     assert all(" hidden" not in sections[slug] for slug in in_view)
-    assert " hidden" in sections["group"] and "data-skills-view" not in sections["group"]
+    assert " hidden" in sections["group"] and "data-view-section" not in sections["group"]
     assert " hidden" in sections["resonance"]  # no rows to show
-    headings = re.findall(r'<h2 class="skills-panel__heading">([^<]+)</h2>', html)
+    headings = re.findall(r'<h2 class="view-heading">([^<]+)</h2>', html)
     assert headings == [
         "Combat",
         "Physical",
@@ -115,14 +115,21 @@ def test_rows_carry_what_the_script_narrows_by() -> None:
     _with_picks(client)
     html = client.get("/ui/page/skills/rated", headers=HTMX).text
 
-    assert f'data-skill-key="{PISTOLS.id}" data-skill-name="pistols" data-skill-rating="2"' in html
+    # WP152: the page-agnostic names, with "kept" (rated) decided by the server.
+    assert f'data-view-key="{PISTOLS.id}" data-view-name="pistols" data-view-kept="true"' in html
     flamethrower = exotic_skill_key(EXOTIC_RANGED.id, "Flamethrower")
-    exotic = re.search(rf'<tr data-skill-key="x{flamethrower.encode().hex()}"[^>]*>', html)
+    exotic = re.search(rf'<tr data-view-key="x{flamethrower.encode().hex()}"[^>]*>', html)
     assert exotic is not None
-    assert 'data-skill-name="exotic ranged weapon flamethrower"' in exotic.group(0)
-    assert 'data-skill-key="knowledge-0" data-skill-name="corporations" data-skill-rating="1"' in (
+    assert 'data-view-name="exotic ranged weapon flamethrower"' in exotic.group(0)
+    assert 'data-view-key="knowledge-0" data-view-name="corporations" data-view-kept="true"' in (
         html
     )
+    unrated = next(s for s in SKILLS if s.name == "Archery")
+    assert f'data-view-key="{unrated.id}" data-view-name="archery" data-view-kept="false"' in html
+    for fragment in ("skill-allocation", "knowledge-skills"):
+        assert re.search(
+            rf'<div id="{fragment}"[^>]*data-view-scope="skills" data-view-mode="fixed"', html
+        )
 
 
 def test_the_filter_field_is_on_the_filtered_tab_only_and_outside_the_form() -> None:
@@ -145,15 +152,15 @@ def test_both_forms_keep_the_view_across_their_autosaves(tab: str) -> None:
     _confirm(client)
     skills = client.post("/ui/skills", data={"skills_tab": tab, f"skill_{PISTOLS.id}": "1"}).text
     assert 'data-skills-tab="' + tab + '"' in skills
-    assert "data-skills-view" in _sections(skills)["combat"]
+    assert "data-view-section" in _sections(skills)["combat"]
 
     knowledge = client.post("/ui/knowledge", data={"skills_tab": tab}).text
     assert f'<input type="hidden" name="skills_tab" value="{tab}" />' in knowledge
-    assert "data-skills-view" in knowledge and "skills-panel__heading" in knowledge
+    assert "data-view-section" in knowledge and "view-heading" in knowledge
     # Anything else is the Knowledge tab itself.
     plain = client.post("/ui/knowledge", data={"skills_tab": "combat"}).text
     assert '<input type="hidden" name="skills_tab" value="knowledge" />' in plain
-    assert "data-skills-view" not in plain
+    assert "data-view-section" not in plain
 
 
 def test_the_dropdown_lists_every_tab_with_the_current_one_selected() -> None:
@@ -177,10 +184,13 @@ def test_the_dropdown_lists_every_tab_with_the_current_one_selected() -> None:
 
 def test_the_script_has_the_hooks_the_markup_relies_on() -> None:
     script = TestClient(create_app()).get("/static/app.js").text
-    assert 'querySelectorAll("section[data-skills-view]")' in script
-    assert 'getAttribute("data-skills-tab")' in script
-    assert 'id === "skills-tab-select"' in script
-    assert "row.dataset.skillKey" in script and "row.dataset.skillName" in script
+    # WP152: the view code is page-agnostic, keyed on data attributes (see the Spells views too).
+    assert 'querySelectorAll("section[data-view-section]")' in script
+    assert 'getAttribute("data-view-mode")' in script
+    assert 'contains("view-tabs__select")' in script
+    assert "row.dataset.viewKey" in script and "row.dataset.viewName" in script
+    assert "row.dataset.viewKept" in script
+    assert "skill-filter" not in script and "skills-tab-select" not in script
     css = TestClient(create_app()).get("/static/app.css").text
     assert "container-type: inline-size" in css
     assert "@container (max-width: 41rem)" in css
@@ -281,7 +291,7 @@ def test_the_views_only_change_ratings(tab: str) -> None:
         not in client.post("/ui/skills", data={"skills_tab": tab, "exotic_add": "1"}).text
     )
     knowledge = _fragment(html, "knowledge-skills")
-    assert len(re.findall(r"<tr data-skill-key=", knowledge)) == 2  # no blank row
+    assert len(re.findall(r"<tr data-view-key=", knowledge)) == 2  # no blank row
     assert 'type="text" id="knowledge-name' not in knowledge
     assert "<select" not in knowledge  # no category dropdown
     assert '<input type="hidden" name="knowledge_name_0" value="Corporations" />' in knowledge

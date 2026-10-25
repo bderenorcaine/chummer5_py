@@ -1024,7 +1024,7 @@ Skills rulings, applied here.
     - the overspent highlight (more spells than Magic × 2 shows the error at the bottom)
     - the Skills strip looking exactly as before
 
-- [ ] **WP152 — Spells redesign: Filtered and Known tabs, portrait dropdown.**
+- [x] **WP152 — Spells redesign: Filtered and Known tabs, portrait dropdown.**
   *Suggested model:* Sonnet. Small, generalising client behaviour, plus markup.
   Goal: the two views and the narrow-width dropdown on Spells, as in "Defaults", reusing WP150's
   code made page-agnostic.

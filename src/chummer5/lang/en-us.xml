@@ -1695,6 +1695,22 @@
       <key>Web_Spells_CounterKarma</key>
       <text>Ka</text>
     </string>
+    <string>
+      <key>Web_Spells_FilterLabel</key>
+      <text>Filter spells</text>
+    </string>
+    <string>
+      <key>Web_Spells_FilterPlaceholder</key>
+      <text>Part of a spell's name</text>
+    </string>
+    <string>
+      <key>Web_Spells_TabFiltered</key>
+      <text>Filtered</text>
+    </string>
+    <string>
+      <key>Web_Spells_TabKnown</key>
+      <text>Known</text>
+    </string>
     <!-- Spirits -->
     <string>
       <key>Web_Spirits_ColForce</key>
