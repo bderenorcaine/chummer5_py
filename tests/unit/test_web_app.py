@@ -410,3 +410,29 @@ def test_stylesheet_is_served_locally_and_styles_the_shell_through_class_hooks()
     # WP97/WP100: selectors hang off semantic class hooks, never the retired accordion's
     # id-and-tag-structure selectors, so a theme can restyle without knowing the DOM shape.
     assert "#chargen-body" not in sheet.text
+
+
+def test_static_urls_carry_a_content_version_that_follows_the_file(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Static files are served without `Cache-Control`, so the URL itself must change with the
+    content, or a browser keeps using a stale stylesheet or script after an update (the WP148
+    Skills strip rendered unstyled that way)."""
+    import hashlib
+    import re
+
+    from chummer5.web import catalogs
+
+    index = TestClient(create_app()).get("/").text
+    for path in ("app.css", "app.js", "tabs.js", "vendor/htmx/htmx.min.js"):
+        digest = hashlib.sha256((catalogs.STATIC_DIR / path).read_bytes()).hexdigest()[:12]
+        assert f"/static/{path}?v={digest}" in index
+    assert not re.search(r'(?:src|href)="/static/[^"?]+"', index)  # nothing unversioned
+
+    asset = tmp_path / "x.css"
+    asset.write_text("a {}")
+    monkeypatch.setattr(catalogs, "STATIC_DIR", tmp_path)
+    first = catalogs.static_version("x.css")
+    asset.write_text("b {}")
+    import os
+
+    os.utime(asset, (asset.stat().st_atime, asset.stat().st_mtime + 5))
+    assert catalogs.static_version("x.css") != first

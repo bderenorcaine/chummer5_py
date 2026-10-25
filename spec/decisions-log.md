@@ -2373,3 +2373,15 @@ container that broke.
 - **Filtered and Rated only change ratings (user ruling, same day).** No Add buttons and no
   add/blank rows. Knowledge rows show name, category and Native as text, posted back through hidden
   fields. This removes WP150's "a row added on Rated stays hidden" limitation.
+
+## 2026-10-25 — Static assets get a content-hash version in their URL
+
+- **Found while checking WP148 in a browser:** the new Skills strip rendered unstyled. The page's
+  HTML was new but its `app.css` was stale. `StaticFiles` sends no `Cache-Control`, so browsers
+  fall back to their own freshness heuristic and keep an old `/static/app.css` (and
+  `/static/app.js`) for hours after it changes. This affects every front-end change since Phase W,
+  in local and hosted mode alike.
+- **Fix:** the templates' `url_for('static', …)` now appends `?v=<first 12 hex of the file's
+  sha256>` (`catalogs.static_version`, re-hashed when the mtime changes). A changed file is a new
+  URL, so no deploy step and no manual version bump is needed. The CSP is unaffected (`'self'`
+  ignores the query).

@@ -10,6 +10,7 @@ route module needs `templates` to render its own fragment.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +69,28 @@ def _root_relative_url_for(context: Context, name: str, /, **path_params: Any) -
     which behind Caddy is `http://` unless uvicorn trusts the proxy's headers -- on an https page
     that is mixed content the browser blocks, and outside the CSP's `'self'`."""
     request: Request = context["request"]
-    return request.url_for(name, **path_params).path
+    path = request.url_for(name, **path_params).path
+    if name == "static":
+        return f"{path}?v={static_version(str(path_params['path']))}"
+    return path
+
+
+_STATIC_VERSIONS: dict[str, tuple[float, str]] = {}
+
+
+def static_version(path: str) -> str:
+    """A static file's cache-busting version: the start of its content hash. Static files are
+    served without `Cache-Control`, so a browser keeps an unchanged-looking URL for as long as its
+    own freshness heuristic says, and a changed stylesheet or script never reached it (found when
+    the WP148 Skills strip rendered unstyled). With the hash in the URL, every change is a new URL.
+    Re-hashed when the file's mtime changes, so a running dev server picks up edits."""
+    file = STATIC_DIR / path
+    mtime = file.stat().st_mtime
+    cached = _STATIC_VERSIONS.get(path)
+    if cached is None or cached[0] != mtime:
+        cached = (mtime, hashlib.sha256(file.read_bytes()).hexdigest()[:12])
+        _STATIC_VERSIONS[path] = cached
+    return cached[1]
 
 
 templates.env.globals["url_for"] = _root_relative_url_for

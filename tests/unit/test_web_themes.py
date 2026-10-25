@@ -109,7 +109,9 @@ def test_the_parser_rejects_a_theme_that_smuggles_in_a_selector(tmp_path: Path) 
 
 
 def _stylesheets(html: str) -> list[str]:
-    return re.findall(r'<link\s[^>]*rel="stylesheet"[^>]*href="([^"]+)"', html, re.S)
+    """Each stylesheet's path, without its cache-busting `?v=` version."""
+    hrefs = re.findall(r'<link\s[^>]*rel="stylesheet"[^>]*href="([^"]+)"', html, re.S)
+    return [href.split("?")[0] for href in hrefs]
 
 
 def test_the_shell_links_the_default_theme_ahead_of_app_css() -> None:
