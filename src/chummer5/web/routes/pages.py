@@ -28,6 +28,12 @@ the nav uses, so a tab's availability and ⚠ follow a change made on another ta
 two URLs. `GET /ui/page/skills/{tab}` renders the page with both fragments showing that tab's
 panel. Its strip re-fetches `GET /ui/tabs/skills?tab=...`, the tab it was rendered for. The page
 remembers no tab: a nav click opens it on its first tab.
+
+**WP151**: a composite page's section can have views of its own (`PageSection.views`, the Spells
+sub-tab's spell categories), one URL level further down: `GET /ui/page/{slug}/{tab}/{view}`, the
+same htmx-or-whole-shell answer. The page renders exactly as for its sub-tab, with the section's
+`view_key` set to the view; the fragment draws the strip. The bare sub-tab URL opens on the first
+view, and nothing remembers the view.
 """
 
 from __future__ import annotations
@@ -83,6 +89,14 @@ def _section_or_404(page: StepPage, tab: str) -> None:
         )
 
 
+def _view_or_404(page: StepPage, tab: str, view: str) -> None:
+    section = page.section(tab) if page.tabbed else None
+    if section is None or view not in section.views:
+        raise HTTPException(
+            status_code=404, detail=f"No such view on the {page.slug!r} page: {tab!r}/{view!r}."
+        )
+
+
 def prefs_context(session: ChargenSession) -> dict[str, Any]:
     """What the title bar's display-preference pickers (`_titlebar_prefs.html`) and the theme
     `<link>` read. WP139: the character list page has them too."""
@@ -101,11 +115,12 @@ def _shell_context(
     page: StepPage,
     tab: str | None = None,
     sheet_messages: dict[str, Any] | None = None,
+    view: str | None = None,
 ) -> dict[str, Any]:
     """Everything `_page.html` and `_step_nav.html` read for `page`: the page's own fragment
     context plus the nav's items, and -- for a composite page -- its tab strip, showing `tab` if
-    one was requested. `chargen_context` is always computed, because the nav's stale-step markers
-    read it whichever page is showing.
+    one was requested, and that section's `view` (WP151) if one was. `chargen_context` is always
+    computed, because the nav's stale-step markers read it whichever page is showing.
     """
     chargen_ctx = chargen_context(session, _session_priority_form_context(session))
     page_ctx = (
@@ -122,7 +137,11 @@ def _shell_context(
         "page": page,
     }
     if page.tabbed:
-        context |= tabs_context(session, page, chargen_ctx, resolve_tab(session, page, tab))
+        current_tab = resolve_tab(session, page, tab)
+        context |= tabs_context(session, page, chargen_ctx, current_tab)
+        section = page.section(current_tab)
+        if view is not None and section is not None and section.view_key is not None:
+            context[section.view_key] = view
     elif page.tabs:
         current = page.view_tab(tab) if tab is not None else None
         context |= skills_tabs_context(session, page, chargen_ctx, current or page.tabs[0].slug)
@@ -137,13 +156,22 @@ def _respond(request: Request, response: HTMLResponse, new_cookie: str | None) -
     return response
 
 
-def _render(request: Request, slug: str, *, fragment: bool, tab: str | None = None) -> HTMLResponse:
+def _render(
+    request: Request,
+    slug: str,
+    *,
+    fragment: bool,
+    tab: str | None = None,
+    view: str | None = None,
+) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
     page = _page_or_404(slug)
     if tab is not None:
         _section_or_404(page, tab)
+    if tab is not None and view is not None:
+        _view_or_404(page, tab, view)
     session.current_page = page.slug
-    context = _shell_context(session, page, tab)
+    context = _shell_context(session, page, tab, view=view)
     context["current_user"] = current_user(request)  # WP137: the title bar's account links
     context |= open_character_context(request, session)  # WP138
     if fragment:
@@ -198,6 +226,11 @@ def page(request: Request, slug: str) -> HTMLResponse:
 @router.get("/ui/page/{slug}/{tab}", response_class=HTMLResponse)
 def page_tab(request: Request, slug: str, tab: str) -> HTMLResponse:
     return _render(request, slug, fragment=is_htmx_fragment_request(request), tab=tab)
+
+
+@router.get("/ui/page/{slug}/{tab}/{view}", response_class=HTMLResponse)
+def page_tab_view(request: Request, slug: str, tab: str, view: str) -> HTMLResponse:
+    return _render(request, slug, fragment=is_htmx_fragment_request(request), tab=tab, view=view)
 
 
 @router.get("/ui/tabs/{slug}", response_class=HTMLResponse)

@@ -99,7 +99,7 @@ def test_walking_the_nav_renders_each_composite_page_whole() -> None:
         if not tab.enabled:
             continue  # Resonance: a disabled <span>
         tab_html = client.get(
-            _link(html, "skills-tab", f"/ui/page/skills/{tab.slug}"), headers=HTMX
+            _link(html, "view-tab", f"/ui/page/skills/{tab.slug}"), headers=HTMX
         ).text
         assert 'id="skill-allocation"' in tab_html and 'id="knowledge-skills"' in tab_html
         if tab.slug in ("filtered", "rated"):  # WP150: views across the sections
@@ -126,6 +126,6 @@ def test_walking_the_nav_renders_each_composite_page_whole() -> None:
 
     # The Magician's own sections have real content, not the empty guard.
     magic = client.get("/ui/page/magic/spells", headers=HTMX).text
-    assert '<summary class="panel__heading">Spells</summary>' in magic
+    assert 'id="spells-tabs"' in magic and 'name="spell_id"' in magic  # WP151: no <summary>
     assert '<summary class="panel__heading">Bound Spirits</summary>' in magic
     assert '<summary class="panel__heading">Foci</summary>' in magic

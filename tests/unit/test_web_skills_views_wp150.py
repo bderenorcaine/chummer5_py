@@ -170,7 +170,7 @@ def test_the_dropdown_lists_every_tab_with_the_current_one_selected() -> None:
     assert [slug for slug, attrs in flags.items() if "selected" in attrs] == ["social"]
     assert [slug for slug, attrs in flags.items() if "disabled" in attrs] == ["resonance"]
     # The counters' narrow row repeats all four.
-    row = re.search(r'<dl class="skills-counters skills-counters--row">.*?</dl>', html, re.S)
+    row = re.search(r'<dl class="view-counters view-counters--row">.*?</dl>', html, re.S)
     assert row is not None
     assert re.findall(r"<abbr[^>]*>([^<]+)</abbr>", row.group(0)) == ["S", "G", "Ka", "Kn"]
 

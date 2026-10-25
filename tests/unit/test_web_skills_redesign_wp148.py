@@ -80,7 +80,7 @@ def _panel_body(html: str, slug: str) -> str:
 
 def _counters(html: str) -> dict[str, tuple[str, bool]]:
     found = re.findall(
-        r'<div class="skills-counter( skills-counter--over)?"[^>]*>\s*'
+        r'<div class="view-counter( view-counter--over)?"[^>]*>\s*'
         r"<dt[^>]*><abbr[^>]*>([^<]+)</abbr></dt>\s*<dd[^>]*>([^<]+)</dd>",
         html,
     )
@@ -99,7 +99,7 @@ def test_the_strip_lists_the_tabs_in_order_with_resonance_disabled() -> None:
     assert re.findall(r'href="/ui/page/skills/([a-z]+)"', strip) == [
         t.slug for t in SKILLS_TABS if t.enabled
     ]
-    resonance = re.search(r"<span\s[^>]*skills-tab--disabled[^>]*>", strip)
+    resonance = re.search(r"<span\s[^>]*view-tab--disabled[^>]*>", strip)
     assert resonance is not None
     assert 'aria-disabled="true"' in resonance.group(0)
     assert 'title="Technomancers are not supported yet."' in resonance.group(0)
@@ -116,7 +116,7 @@ def test_each_tab_shows_its_own_panel_and_hides_the_rest(slug: str) -> None:
 
     assert _shown_panels(html) == [slug]
     assert re.search(r'<div id="knowledge-skills"[^>]* hidden>', html)
-    current = re.search(r"<(?:a|span)\s[^>]*skills-tab--current[^>]*>", html)
+    current = re.search(r"<(?:a|span)\s[^>]*view-tab--current[^>]*>", html)
     assert current is not None and 'aria-current="page"' in current.group(0)
     if slug != "resonance":  # a disabled <span>, reachable only by URL
         assert f'href="/ui/page/skills/{slug}"' in current.group(0)
@@ -190,7 +190,7 @@ def test_the_strip_refresh_keeps_its_tab_and_rejects_unknown_ones() -> None:
     client = TestClient(create_app())
     _confirm(client)
     strip = client.get("/ui/tabs/skills?tab=vehicle").text
-    assert "skills-tab--current" in strip[strip.index("/ui/page/skills/vehicle") - 300 :][:400]
+    assert "view-tab--current" in strip[strip.index("/ui/page/skills/vehicle") - 300 :][:400]
     assert 'hx-get="/ui/tabs/skills?tab=vehicle"' in strip
     assert 'hx-get="/ui/tabs/skills?tab=combat"' in client.get("/ui/tabs/skills?tab=x").text
 

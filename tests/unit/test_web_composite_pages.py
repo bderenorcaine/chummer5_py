@@ -213,7 +213,7 @@ def test_magic_tab_availability_agrees_with_each_fragments_own_guard(talent: str
 
     page = STEP_PAGES_BY_SLUG["magic"]
     for section, (tab, wrapper_id) in zip(page.sections, COMPOSITES["magic"], strict=True):
-        wrapper = re.search(rf'<div id="{wrapper_id}" class="panel">(.*?)\n</div>', html, re.S)
+        wrapper = re.search(rf'<div id="{wrapper_id}" class="[^"]*">(.*?)\n</div>', html, re.S)
         assert wrapper is not None, wrapper_id
         has_content = bool(wrapper.group(1).strip())
         tab_markup = _tab(html, translate("en-us", section.label_key))
@@ -298,18 +298,18 @@ def test_a_stale_section_is_marked_on_its_own_tab() -> None:
     # Put Skills on C (28 points) so the 25 fit, then move it to D (22) so they don't.
     _confirm_human(client, talent_letter="E", skills_letter="C", resources_letter="D")
     client.post("/ui/skills", data={f"skill_{sid}": str(v) for sid, v in points.items()})
-    assert "skills-tab__marker" not in client.get("/ui/tabs/skills").text
+    assert "view-tab__marker" not in client.get("/ui/tabs/skills").text
 
     _confirm_human(client, talent_letter="E", skills_letter="D", resources_letter="C")
 
     # WP148: on the Skills page's view tabs, Combat (the page's first tab) carries the
     # active-skill warning and Knowledge its own.
     html = client.get("/ui/page/skills", headers=HTMX).text
-    combat = re.search(r'<a\s[^>]*class="skills-tab[^"]*"[^>]*/skills/combat".*?</a>', html, re.S)
+    combat = re.search(r'<a\s[^>]*class="view-tab[^"]*"[^>]*/skills/combat".*?</a>', html, re.S)
     knowledge = re.search(
-        r'<a\s[^>]*class="skills-tab[^"]*"[^>]*/skills/knowledge".*?</a>', html, re.S
+        r'<a\s[^>]*class="view-tab[^"]*"[^>]*/skills/knowledge".*?</a>', html, re.S
     )
     assert combat is not None and knowledge is not None
-    assert "skills-tab__marker" in combat.group(0)
-    assert "skills-tab--stale" in combat.group(0)
-    assert "skills-tab__marker" not in knowledge.group(0)
+    assert "view-tab__marker" in combat.group(0)
+    assert "view-tab--stale" in combat.group(0)
+    assert "view-tab__marker" not in knowledge.group(0)

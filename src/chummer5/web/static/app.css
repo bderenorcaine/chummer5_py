@@ -1027,7 +1027,7 @@ details[open] > .panel__heading {
 }
 
 .budget-box--over,
-.skills-counter--over {
+.view-counter--over {
   color: var(--error-fg);
   background: var(--error-bg);
 }
@@ -1065,31 +1065,22 @@ details[open] > .panel__heading {
   max-width: 100%;
 }
 
-/* --- Skills page (WP148, Phase Z) --------------------------------------------------------------
-   spec/plan/phase-z-page-redesigns.md, "Redesign 4", sketch examples/ui/skills.png: the widest
-   centred column so far (a category tab's table has eight columns), a strip of angled tabs over
-   one panel at a time, messages under the panel. Each table scrolls sideways on its own when the
-   pane is too narrow; so does the strip (until WP150's portrait dropdown), never the page. */
-.page--skills {
-  max-width: 54rem;
-  margin-inline: auto;
-  /* WP150: the strip swaps for a dropdown by the column's own width (below), not the window's:
-     the sidebar nav takes a varying share of a wide window. */
-  container-type: inline-size;
-}
-
-/* The strip. Every tab is a parallelogram: a box skewed about its bottom edge, so the bottoms
-   line up as a plain row and each top leans one strip-height to the right. The label is unskewed
-   and turned to run up the slant. The filler is one more parallelogram that takes the remaining
-   width, so the tabs stay at the left however wide the window. The S/G counters sit in the
-   triangle left free above the first tab; Ka/Kn at the filler's bottom right. The strip is 5rem
-   high and a tab 2.2rem wide; the 5rem recurs below wherever a top's lean is allowed for. */
-.skills-tabs {
+/* --- View-tab strip (WP148, shared since WP151, Phase Z) ----------------------------------------
+   `_view_tabs.html`: the Skills page's strip of angled tabs, also the Spells sub-tab's. Every tab
+   is a parallelogram: a box skewed about its bottom edge, so the bottoms line up as a plain row
+   and each top leans one strip-height to the right. The label is unskewed and turned to run up the
+   slant. The filler is one more parallelogram that takes the remaining width, so the tabs stay at
+   the left however wide the window. The start counters sit in the triangle left free above the
+   first tab; the end counters at the filler's bottom right. The strip is 5rem high and a tab
+   2.2rem wide; the 5rem recurs below wherever a top's lean is allowed for. The strip scrolls
+   sideways inside itself, never the page; a page that renders the narrow block swaps the strip
+   for it with its own container query (WP150), sized to where its strip stops fitting. */
+.view-tabs {
   margin-bottom: 0.75rem;
   overflow-x: auto;
 }
 
-.skills-tabs__strip {
+.view-tabs__strip {
   position: relative;
   display: flex;
   min-width: max-content;
@@ -1098,22 +1089,22 @@ details[open] > .panel__heading {
   border-bottom: var(--tab-rule-width) solid var(--rule);
 }
 
-.skills-tabs__list {
+.view-tabs__list {
   display: flex;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.skills-tab,
-.skills-tabs__filler {
+.view-tab,
+.view-tabs__filler {
   transform-origin: bottom left;
   transform: skewX(-45deg);
   border: 1px solid var(--frame-color);
   border-bottom: 0;
 }
 
-.skills-tab {
+.view-tab {
   position: relative;
   display: block;
   width: 2.2rem;
@@ -1127,7 +1118,7 @@ details[open] > .panel__heading {
   text-decoration: none;
 }
 
-.skills-tab__label {
+.view-tab__label {
   position: absolute;
   bottom: 0.3rem;
   left: calc(50% + 0.3rem);
@@ -1136,37 +1127,37 @@ details[open] > .panel__heading {
   white-space: nowrap;
 }
 
-a.skills-tab:hover {
+a.view-tab:hover {
   background: var(--tab-hover-bg);
 }
 
-a.skills-tab:focus-visible {
+a.view-tab:focus-visible {
   outline: 2px solid var(--section-accent);
   outline-offset: -3px;
 }
 
-.skills-tab--current {
+.view-tab--current {
   font-weight: 600;
   background: var(--tab-current-bg);
   box-shadow: inset 0 calc(-1 * var(--tab-accent-width)) 0 var(--tab-current-accent);
 }
 
-.skills-tab--disabled {
+.view-tab--disabled {
   color: var(--tab-disabled-fg);
   cursor: not-allowed;
 }
 
-.skills-tab__marker {
+.view-tab__marker {
   color: var(--warning-fg);
 }
 
-.skills-tabs__filler {
+.view-tabs__filler {
   flex: 1 0 9rem;
   margin-left: -1px;
   background: var(--section-accent);
 }
 
-.skills-counters {
+.view-counters {
   position: absolute;
   margin: 0;
   font-size: 0.8rem;
@@ -1174,37 +1165,77 @@ a.skills-tab:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.skills-counters--start {
+.view-counters--start {
   top: 0;
   left: 0;
 }
 
-.skills-counters--end {
+.view-counters--end {
   right: 5.4rem;
   bottom: 0.25rem;
   display: flex;
   gap: 0.4rem;
 }
 
-.skills-counter {
+.view-counter {
   display: flex;
   gap: 0.3em;
   padding: 0 0.25em;
   border-radius: var(--radius);
 }
 
-.skills-counters--end .skills-counter:not(.skills-counter--over) {
+.view-counters--end .view-counter:not(.view-counter--over) {
   color: var(--page-fg);
   background: var(--page-bg);
 }
 
-.skills-counter__label,
-.skills-counter__value {
+.view-counter__label,
+.view-counter__value {
   margin: 0;
 }
 
-.skills-counter__label abbr {
+.view-counter__label abbr {
   text-decoration: none;
+}
+
+/* WP150: the narrow block -- every counter as one row of equal cells over a dropdown of the tabs.
+   Hidden until a page's container query shows it. */
+.view-tabs__narrow {
+  display: none;
+}
+
+.view-counters--row {
+  position: static;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.view-counters--row .view-counter {
+  justify-content: center;
+  padding: 0.2rem;
+  border: var(--panel-rule-width) solid var(--rule);
+}
+
+.view-tabs__select {
+  display: block;
+  width: 100%;
+  font: inherit;
+}
+
+/* --- Skills page (WP148, Phase Z) --------------------------------------------------------------
+   spec/plan/phase-z-page-redesigns.md, "Redesign 4", sketch examples/ui/skills.png: the widest
+   centred column so far (a category tab's table has eight columns), a strip of angled tabs over
+   one panel at a time, messages under the panel. Each table scrolls sideways on its own when the
+   pane is too narrow; so does the strip (until WP150's portrait dropdown), never the page. */
+.page--skills {
+  max-width: 54rem;
+  margin-inline: auto;
+  /* WP150: the strip swaps for a dropdown by the column's own width (below), not the window's:
+     the sidebar nav takes a varying share of a wide window. */
+  container-type: inline-size;
 }
 
 /* The panels. Nothing here may set `display` on .skills-panel or a row: inactive panels are
@@ -1326,37 +1357,26 @@ a.skills-tab:focus-visible {
   font: inherit;
 }
 
-.skills-tabs__narrow {
-  display: none;
-}
-
-.skills-counters--row {
-  position: static;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 0.4rem;
-  margin-bottom: 0.5rem;
-}
-
-.skills-counters--row .skills-counter {
-  justify-content: center;
-  padding: 0.2rem;
-  border: var(--panel-rule-width) solid var(--rule);
-}
-
-.skills-tabs__select {
-  display: block;
-  width: 100%;
-  font: inherit;
-}
-
 @container (max-width: 41rem) {
-  .skills-tabs__strip {
+  .page--skills .view-tabs__strip {
     display: none;
   }
 
-  .skills-tabs__narrow {
+  .page--skills .view-tabs__narrow {
     display: block;
   }
+}
+
+/* --- Spells page (WP151, Phase Z) --------------------------------------------------------------
+   spec/plan/phase-z-page-redesigns.md, "Redesign 5": the Magic page's Spells sub-tab in the Skills
+   page's style -- the shared view-tab strip (above) over one spell category at a time, messages
+   under it. Six columns fit the Attributes/Qualities column; below it the column fills the pane
+   and the table scrolls sideways on its own, never the page. */
+.spells-page {
+  max-width: 40rem;
+  margin-inline: auto;
+}
+
+.spells-table {
+  overflow-x: auto;
 }

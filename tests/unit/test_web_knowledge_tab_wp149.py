@@ -71,7 +71,7 @@ def _input(row: str, name: str) -> str:
 def _counter(client: TestClient, label: str) -> str:
     strip = client.get("/ui/tabs/skills?tab=knowledge").text
     match = re.search(
-        rf'<abbr[^>]*>{label}</abbr></dt>\s*<dd class="skills-counter__value">([^<]+)</dd>', strip
+        rf'<abbr[^>]*>{label}</abbr></dt>\s*<dd class="view-counter__value">([^<]+)</dd>', strip
     )
     assert match is not None, label
     return match.group(1)

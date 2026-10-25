@@ -1,0 +1,92 @@
+{# WP151 (Phase Z): the strip of angled view tabs, shared by the Skills page (WP148) and the Spells
+   sub-tab (WP151) -- spec/plan/phase-z-page-redesigns.md, "Redesign 4" and "Redesign 5". The tabs
+   sit at the left; the filler after them grows with the window, so the tabs never spread out.
+   `counters_start` sit in the corner above the first tab, `counters_end` at the filler's bottom
+   right. Each item is a dict: `slug`, `href`, `stale`, `enabled`, `disabled_reason_key`; the one
+   whose slug is `current` is marked. An enabled tab is a link that re-renders the page at `href`
+   (htmx into #page, pushed to history); a disabled one is a <span> carrying its reason. The
+   caller block renders an item's label, so each page names its tabs its own way (an i18n key, a
+   data term).
+   `refresh_url`: the strip re-fetches itself from there on `chargen-changed` (Skills, whose
+   counters change from two forms). A strip inside the fragment it counts for (Spells) has none.
+   WP150: with a `select_id`, a <select> of the same tabs is rendered too, with every counter in
+   one row above it, for where the strip stops fitting (a container query in app.css). app.js
+   turns a choice into a click on that tab's link, so the navigation is the strip's own.
+   Import it `with context`: the labels and reasons go through `_()`. #}
+{% macro view_tabs(id, aria_label, items, current, counters_start=[], counters_end=[], refresh_url=none, select_id=none) %}
+<nav
+  id="{{ id }}"
+  class="view-tabs"
+  aria-label="{{ aria_label }}"
+  {% if refresh_url %}
+  hx-get="{{ refresh_url }}"
+  hx-trigger="chargen-changed from:body"
+  hx-swap="outerHTML"
+  {% endif %}
+>
+  <div class="view-tabs__strip">
+    {% if counters_start %}
+    <dl class="view-counters view-counters--start">
+      {% for counter in counters_start %}
+      {% include "_view_counter.html" %}
+      {% endfor %}
+    </dl>
+    {% endif %}
+    <ul class="view-tabs__list">
+      {% for item in items %}
+      {% set is_current = item.slug == current %}
+      <li class="view-tabs__entry">
+        {% if item.enabled %}
+        <a
+          class="view-tab{% if is_current %} view-tab--current{% endif %}{% if item.stale %} view-tab--stale{% endif %}"
+          href="{{ item.href }}"
+          hx-get="{{ item.href }}"
+          hx-target="#page"
+          hx-swap="innerHTML"
+          hx-push-url="true"
+          {% if is_current %}aria-current="page"{% endif %}
+        ><span class="view-tab__label">{{ caller(item) }}{% if item.stale %} <span class="view-tab__marker" title="{{ _('Web_Nav_StaleMarker') }}">⚠</span>{% endif %}</span></a>
+        {% else %}
+        <span
+          class="view-tab view-tab--disabled{% if is_current %} view-tab--current{% endif %}"
+          aria-disabled="true"
+          {% if is_current %}aria-current="page"{% endif %}
+          title="{{ _(item.disabled_reason_key) }}"
+        ><span class="view-tab__label">{{ caller(item) }}</span></span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="view-tabs__filler" aria-hidden="true"></div>
+    {# Outside the filler: the filler is skewed, and would skew them too. #}
+    {% if counters_end %}
+    <dl class="view-counters view-counters--end">
+      {% for counter in counters_end %}
+      {% include "_view_counter.html" %}
+      {% endfor %}
+    </dl>
+    {% endif %}
+  </div>
+  {% if select_id %}
+  <div class="view-tabs__narrow">
+    {% if counters_start or counters_end %}
+    <dl class="view-counters view-counters--row">
+      {% for counter in counters_start + counters_end %}
+      {% include "_view_counter.html" %}
+      {% endfor %}
+    </dl>
+    {% endif %}
+    <select id="{{ select_id }}" class="view-tabs__select" aria-label="{{ aria_label }}">
+      {% for item in items %}
+      {% set is_current = item.slug == current %}
+      <option
+        value="{{ item.href }}"
+        {% if is_current %}selected{% endif %}
+        {% if not item.enabled %}disabled{% endif %}
+      >{{ caller(item) }}{% if item.stale %} ⚠{% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+</nav>
+{% endmacro %}

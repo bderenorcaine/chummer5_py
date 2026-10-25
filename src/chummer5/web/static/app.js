@@ -38,7 +38,7 @@
     }
   });
 
-  // --- Client-side table filters (Skills, Resources' gear, Spells) -----------------------------
+  // --- Client-side table filters (Skills, Resources' gear) ------------------------------------
   // Each hides rows of the tables inside its own fragment; a <details> group with no visible row
   // hides too, and a group with a match opens while a filter is active.
   function filterGroups(groupsSelector, rowSelector, matches, active) {
@@ -136,21 +136,6 @@
     );
   }
 
-  function applySpellFilter() {
-    var select = document.getElementById("spell-known-filter");
-    if (!select) return;
-    var mode = select.value;
-    filterGroups(
-      "#spell-tables details",
-      "tr[data-spell-selected]",
-      function (row) {
-        var selected = row.dataset.spellSelected === "true";
-        return mode === "all" || (mode === "known" && selected) || (mode === "unknown" && !selected);
-      },
-      mode !== "all"
-    );
-  }
-
   document.addEventListener("input", function (e) {
     var id = e.target && e.target.id;
     if (id === "skill-filter") applySkillFilter();
@@ -159,8 +144,7 @@
 
   document.addEventListener("change", function (e) {
     var id = e.target && e.target.id;
-    if (id === "spell-known-filter") applySpellFilter();
-    else if (id === "skills-tab-select") followSkillsTabSelect(e.target);
+    if (id === "skills-tab-select") followSkillsTabSelect(e.target);
   });
 
   // `htmx:load` fires for the initial page and for every piece of swapped-in content.
@@ -180,7 +164,7 @@
   // same history entry as a tab click.
   function followSkillsTabSelect(select) {
     var link = document.querySelector(
-      '#skills-tabs a.skills-tab[href="' + select.value + '"]'
+      '#skills-tabs a.view-tab[href="' + select.value + '"]'
     );
     if (link) link.click();
   }

@@ -58,7 +58,7 @@ def _counter(client: TestClient, label: str) -> str:
     """WP148: one of the Skills strip's counters, as "remaining/budget"."""
     strip = client.get("/ui/tabs/skills?tab=knowledge").text
     match = re.search(
-        rf'<abbr[^>]*>{label}</abbr></dt>\s*<dd class="skills-counter__value">([^<]+)</dd>', strip
+        rf'<abbr[^>]*>{label}</abbr></dt>\s*<dd class="view-counter__value">([^<]+)</dd>', strip
     )
     assert match is not None, label
     return match.group(1)

@@ -1,0 +1,6 @@
+{# WP148, shared since WP151: one view-strip counter, "S 36/36": a short label (its long name as
+   the tooltip) and remaining/budget, highlighted when overspent. #}
+<div class="view-counter{% if counter.over %} view-counter--over{% endif %}">
+  <dt class="view-counter__label"><abbr title="{{ _(counter.title_key) }}">{{ _(counter.label_key) }}</abbr></dt>
+  <dd class="view-counter__value">{{ counter.remaining }}/{{ counter.of }}</dd>
+</div>

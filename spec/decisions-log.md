@@ -2385,3 +2385,22 @@ container that broke.
   sha256>` (`catalogs.static_version`, re-hashed when the mtime changes). A changed file is a new
   URL, so no deploy step and no manual version bump is needed. The CSP is unaffected (`'self'`
   ignores the query).
+
+## 2026-10-25 — WP151: a sub-tab's own views, and the shared view-tab strip
+
+- **A composite page's section may declare views** (`PageSection.views` and `view_key`), one URL
+  level below its sub-tab: `GET /ui/page/{page}/{section}/{view}`, answered like every page URL
+  (htmx into `#page`, or the whole shell). The page renders exactly as for its sub-tab, with the
+  fragment's `view_key` set from the URL. Nothing remembers the view: the bare sub-tab URL and a
+  nav click open on the first. Only the Magic page's Spells sub-tab has views (the six spell
+  categories). An unknown view, or a third level on a section without views, is a 404. WP98's
+  sub-tab mechanism is otherwise unchanged.
+- **The Skills strip is now shared.** `_view_tabs.html` is a macro (`view_tabs`) taking the tab
+  items, the current slug, the counters, an optional re-fetch URL and an optional dropdown id. Each
+  page renders its tab labels in a caller block, because Skills labels are i18n keys and spell
+  categories are data terms. The strip classes are `.view-tabs*` / `.view-tab*` /
+  `.view-counter*`, and the counter partial is `_view_counter.html`. The Skills page's rendered
+  strip is unchanged apart from the class names (checked by diffing the rendered markup against
+  WP150's).
+- **The Spells strip lives inside the Spells fragment** and has no re-fetch: every autosave
+  re-renders it with the counters.

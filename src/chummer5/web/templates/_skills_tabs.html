@@ -1,84 +1,17 @@
 {# WP148 (Phase Z): the Skills page's strip of angled tabs -- spec/plan/phase-z-page-redesigns.md,
-   "Redesign 4", sketch examples/ui/skills.png. The tabs sit at the left; the filler after them
-   grows with the window, so the tabs never spread out. The S and G counters sit in the corner
-   above the first tab, Ka and Kn at the filler's bottom right. Each tab is a link that re-renders
-   the page with that tab's panel showing (pushed to history, like WP98's sub-tabs). The disabled
-   Resonance tab is a <span> carrying its reason. The strip re-fetches itself on `chargen-changed`
-   for the tab it was rendered for, which is how the counters follow an autosave.
-   WP150: where the strip stops fitting (a container query on the page column, in app.css), it is
-   hidden and a <select> of the same tabs shows instead, with the four counters in one row above
-   it. app.js turns a choice into a click on that tab's link, so the navigation is the strip's
-   own (htmx into #page, pushed to history). #}
-<nav
-  id="skills-tabs"
-  class="skills-tabs"
-  aria-label="{{ _('Web_Tabs_AriaLabel', page=_(page.label_key)) }}"
-  hx-get="/ui/tabs/{{ page.slug }}?tab={{ skills_tab }}"
-  hx-trigger="chargen-changed from:body"
-  hx-swap="outerHTML"
->
-  <div class="skills-tabs__strip">
-    {% if skills_counters_start %}
-    <dl class="skills-counters skills-counters--start">
-      {% for counter in skills_counters_start %}
-      {% include "_skills_counter.html" %}
-      {% endfor %}
-    </dl>
-    {% endif %}
-    <ul class="skills-tabs__list">
-      {% for item in skills_tab_items %}
-      <li class="skills-tabs__entry">
-        {% if item.tab.enabled %}
-        <a
-          class="skills-tab{% if item.current %} skills-tab--current{% endif %}{% if item.stale %} skills-tab--stale{% endif %}"
-          href="/ui/page/{{ page.slug }}/{{ item.tab.slug }}"
-          hx-get="/ui/page/{{ page.slug }}/{{ item.tab.slug }}"
-          hx-target="#page"
-          hx-swap="innerHTML"
-          hx-push-url="true"
-          {% if item.current %}aria-current="page"{% endif %}
-        ><span class="skills-tab__label">{{ _(item.tab.label_key) }}{% if item.stale %} <span class="skills-tab__marker" title="{{ _('Web_Nav_StaleMarker') }}">⚠</span>{% endif %}</span></a>
-        {% else %}
-        <span
-          class="skills-tab skills-tab--disabled{% if item.current %} skills-tab--current{% endif %}"
-          aria-disabled="true"
-          {% if item.current %}aria-current="page"{% endif %}
-          title="{{ _(item.tab.disabled_reason_key) }}"
-        ><span class="skills-tab__label">{{ _(item.tab.label_key) }}</span></span>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-    <div class="skills-tabs__filler" aria-hidden="true"></div>
-    {# Outside the filler: the filler is skewed, and would skew them too. #}
-    {% if skills_counters_end %}
-    <dl class="skills-counters skills-counters--end">
-      {% for counter in skills_counters_end %}
-      {% include "_skills_counter.html" %}
-      {% endfor %}
-    </dl>
-    {% endif %}
-  </div>
-  <div class="skills-tabs__narrow">
-    {% if skills_counters_start %}
-    <dl class="skills-counters skills-counters--row">
-      {% for counter in skills_counters_start + skills_counters_end %}
-      {% include "_skills_counter.html" %}
-      {% endfor %}
-    </dl>
-    {% endif %}
-    <select
-      id="skills-tab-select"
-      class="skills-tabs__select"
-      aria-label="{{ _('Web_Tabs_AriaLabel', page=_(page.label_key)) }}"
-    >
-      {% for item in skills_tab_items %}
-      <option
-        value="/ui/page/{{ page.slug }}/{{ item.tab.slug }}"
-        {% if item.current %}selected{% endif %}
-        {% if not item.tab.enabled %}disabled{% endif %}
-      >{{ _(item.tab.label_key) }}{% if item.stale %} ⚠{% endif %}</option>
-      {% endfor %}
-    </select>
-  </div>
-</nav>
+   "Redesign 4", sketch examples/ui/skills.png. The S and G counters sit in the corner above the
+   first tab, Ka and Kn at the filler's bottom right. The disabled Resonance tab carries its
+   reason. The strip re-fetches itself on `chargen-changed` for the tab it was rendered for, which
+   is how the counters follow an autosave from either form. WP150: the dropdown for narrow widths.
+   WP151: the strip itself is the shared `_view_tabs.html`. #}
+{% from "_view_tabs.html" import view_tabs with context %}
+{% call(item) view_tabs(
+  "skills-tabs",
+  _("Web_Tabs_AriaLabel", page=_(page.label_key)),
+  skills_tab_items,
+  skills_tab,
+  skills_counters_start,
+  skills_counters_end,
+  refresh_url="/ui/tabs/" ~ page.slug ~ "?tab=" ~ skills_tab,
+  select_id="skills-tab-select",
+) %}{{ _(item.tab.label_key) }}{% endcall %}

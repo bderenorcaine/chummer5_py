@@ -67,6 +67,16 @@ def _compact(html: str) -> str:
     return re.sub(r">\s+<", "><", html)
 
 
+def _counter(html: str, label: str) -> str:
+    """WP151: a Spells-strip counter's `remaining/of` (F, C or Ka), which replaced the fragment's
+    budget sentences."""
+    found = re.search(
+        rf'<abbr[^>]*>{label}</abbr></dt>\s*<dd class="view-counter__value">([^<]+)</dd>', html
+    )
+    assert found is not None, label
+    return found.group(1)
+
+
 def _confirm_human(client: TestClient, *, talent_letter: str) -> None:
     """Confirm a Human at Heritage A with `talent_letter` for Talent, and a fixed permutation of
     the remaining 3 letters (B/C/D/E minus whichever one was picked for Talent) for Attributes/
@@ -278,18 +288,20 @@ def test_spell_selection_within_budget_shows_on_the_sheet() -> None:
     response = client.post("/ui/spells", data={"spell_id": [s.id for s in SOME_SPELLS]})
 
     assert response.status_code == 200
-    assert f"Spells chosen: {len(SOME_SPELLS)} / 7" in response.text  # letter B Magician: spells=7
+    # letter B Magician: 7 free spells, Magic 4 (cap 8)
+    assert _counter(response.text, "F") == f"{7 - len(SOME_SPELLS)}/7"
+    assert _counter(response.text, "C") == f"{8 - len(SOME_SPELLS)}/8"
 
     sheet = client.get("/character/sheet")
     for spell in SOME_SPELLS:
         assert spell.name in sheet.text
 
 
-def test_spell_picker_groups_by_category_and_offers_known_unknown_filter() -> None:
-    # WP69: spells are grouped into collapsible per-category <details>, and the picker offers a
-    # known/unknown filter. Both are client-side JS, so this pins the server contract the JS reads:
-    # the filter control renders, each row carries its selected state as data-spell-selected, and
-    # each spell category becomes its own <details data-details-key="spellcat:...">.
+def test_spell_picker_groups_by_category() -> None:
+    # WP69 grouped spells into per-category <details> with a known/unknown filter; WP151 made each
+    # category a view tab with its own panel (`test_web_spells_redesign_wp151.py`), and WP152's
+    # Known view replaces the filter. Every catalog category still gets its group, holding exactly
+    # its own spells, and the chosen spell is checked.
     client = TestClient(create_app())
     _confirm_human(client, talent_letter="B")
     client.post(
@@ -305,14 +317,13 @@ def test_spell_picker_groups_by_category_and_offers_known_unknown_filter() -> No
     response = client.post("/ui/spells", data={"spell_id": [SOME_SPELLS[0].id]})
 
     assert response.status_code == 200
-    assert 'id="spell-known-filter"' in response.text
-    # The one chosen spell is a "known" row, the rest are "unknown".
-    assert 'data-spell-selected="true"' in response.text
-    assert 'data-spell-selected="false"' in response.text
-    # Every SR5-core spell category present in the catalog gets its own collapsible group.
-    categories = {spell.category for spell in SPELLS}
-    for category in categories:
-        assert f'data-details-key="spellcat:{category}"' in response.text
+    assert re.search(rf'id="spell-{SOME_SPELLS[0].id}"[^>]*checked', response.text)
+    panels = dict(
+        re.findall(r'data-spells-panel="([a-z]+)"[^>]*>(.*?)</section>', response.text, re.S)
+    )
+    for category in {spell.category for spell in SPELLS}:
+        ids = set(re.findall(r'name="spell_id"\s+value="([^"]+)"', panels[category.lower()]))
+        assert ids == {spell.id for spell in SPELLS if spell.category == category}
 
 
 def test_spell_selection_beyond_free_budget_is_karma_funded() -> None:
@@ -333,8 +344,9 @@ def test_spell_selection_beyond_free_budget_is_karma_funded() -> None:
     response = client.post("/ui/spells", data={"spell_id": [s.id for s in SPELLS[:8]]})
 
     assert response.status_code == 200
-    assert "Spells chosen: 8 / 7" in response.text
-    assert "Karma cost for spells beyond the free budget: 5" in response.text
+    assert _counter(response.text, "F") == "0/7"
+    assert _counter(response.text, "C") == "0/8"
+    assert _counter(response.text, "Ka") == "20/25"
 
     sheet = client.get("/character/sheet")
     assert "Spell karma cost: 5." in sheet.text

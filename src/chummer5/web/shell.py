@@ -12,7 +12,8 @@ each fragment is a `PageSection`, and `resolve_tab`/`tabs_context` below decide 
 WP148 (Phase Z) gave Skills a different kind of tab: a `PageTab` is a *view* onto the page's
 fragments (a skill category, the groups, the exotic skills, ...) rather than one fragment each, so
 the page mounts both its fragments unwrapped and each fragment shows the panel the tab names. See
-`skills_tabs_context`.
+`skills_tabs_context`. WP151 gave a composite page's section views of its own, one URL level
+further down (`PageSection.views`: the Spells sub-tab's spell categories).
 
 Not a router module: `chummer5.web.routes.pages` owns the shell/page/nav routes, and
 `chummer5.web.routes.priorities` needs `chargen_context` too, so both import from here rather than
@@ -51,7 +52,7 @@ from chummer5.web.routes.powers import _power_selection_context
 from chummer5.web.routes.qualities import _quality_selection_context
 from chummer5.web.routes.resources import _resources_context
 from chummer5.web.routes.skills import _skill_allocation_context
-from chummer5.web.routes.spells import _spell_selection_context
+from chummer5.web.routes.spells import SPELL_VIEW_SLUGS, _spell_selection_context
 from chummer5.web.routes.spirits import _spirit_selection_context
 from chummer5.web.routes.talent import _default_talent_codename, _talent_selection_context
 from chummer5.web.routes.vehicles import _vehicles_context
@@ -93,6 +94,11 @@ class PageSection:
     is shown disabled, with its unavailable reason as the explanation, rather than as an empty pane.
 
     Every `*_key` field is an i18n key (WP102), rendered through `_()` -- none holds display text.
+
+    WP151: a section may declare `views`, slugs one URL level below its own tab
+    (`/ui/page/{page}/{section}/{view}`, the Spells sub-tab's spell categories). The fragment draws
+    its own strip for them and reads the current one from the context key `view_key`; the first is
+    the one the bare sub-tab URL opens on.
     """
 
     slug: str
@@ -101,6 +107,8 @@ class PageSection:
     warning_keys: tuple[str, ...] = ()
     available: Callable[[Character | None], bool] = _always
     unavailable_reason_key: str | None = None
+    views: tuple[str, ...] = ()
+    view_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -266,6 +274,8 @@ STEP_PAGES: tuple[StepPage, ...] = (
                 ("spell_budget_warning",),
                 _casts_spells,
                 "Web_Magic_SpellsUnavailable",
+                views=SPELL_VIEW_SLUGS,  # WP151
+                view_key="spells_tab",
             ),
             PageSection(
                 "powers",
@@ -485,8 +495,11 @@ def skills_tabs_context(
     items = [
         {
             "tab": tab,
-            "current": tab.slug == current_tab,
+            "slug": tab.slug,
+            "href": f"/ui/page/{page.slug}/{tab.slug}",
             "stale": any(chargen_ctx.get(key) for key in tab.warning_keys),
+            "enabled": tab.enabled,
+            "disabled_reason_key": tab.disabled_reason_key,
         }
         for tab in page.tabs
     ]

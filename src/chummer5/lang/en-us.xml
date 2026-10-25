@@ -1660,16 +1660,16 @@
     </string>
     <!-- Spells -->
     <string>
-      <key>Web_Spells_Chosen</key>
-      <text>Spells chosen: {selected} / {budget} free ({remaining} remaining free); known cap (Magic Rating × 2): {cap}.</text>
-    </string>
-    <string>
       <key>Web_Spells_ColDrain</key>
       <text>DV</text>
     </string>
     <string>
       <key>Web_Spells_ColDuration</key>
       <text>Duration</text>
+    </string>
+    <string>
+      <key>Web_Spells_ColKnown</key>
+      <text>Known</text>
     </string>
     <string>
       <key>Web_Spells_ColRange</key>
@@ -1684,32 +1684,16 @@
       <text>Type</text>
     </string>
     <string>
-      <key>Web_Spells_KarmaCost</key>
-      <text>Karma cost for spells beyond the free budget: {cost}.</text>
+      <key>Web_Spells_CounterCap</key>
+      <text>C</text>
     </string>
     <string>
-      <key>Web_Spells_KarmaRemaining</key>
-      <text>Karma remaining for spells: {remaining} / {budget}.</text>
+      <key>Web_Spells_CounterFree</key>
+      <text>F</text>
     </string>
     <string>
-      <key>Web_Spells_Show</key>
-      <text>Show</text>
-    </string>
-    <string>
-      <key>Web_Spells_ShowAll</key>
-      <text>All spells</text>
-    </string>
-    <string>
-      <key>Web_Spells_ShowKnown</key>
-      <text>Known only</text>
-    </string>
-    <string>
-      <key>Web_Spells_ShowUnknown</key>
-      <text>Unknown only</text>
-    </string>
-    <string>
-      <key>Web_Spells_Update</key>
-      <text>Update spells</text>
+      <key>Web_Spells_CounterKarma</key>
+      <text>Ka</text>
     </string>
     <!-- Spirits -->
     <string>

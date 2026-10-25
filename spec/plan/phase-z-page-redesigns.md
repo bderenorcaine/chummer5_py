@@ -972,7 +972,7 @@ Skills rulings, applied here.
 
 ---
 
-- [ ] **WP151 — Spells redesign: strip, counters, category tabs.**
+- [x] **WP151 — Spells redesign: strip, counters, category tabs.**
   *Suggested model:* Opus. It adds a URL level and extracts the shared strip.
   Goal: the Spells sub-tab in the Skills style, for the six category tabs. Filtered, Known and the
   portrait dropdown are WP152. Until then, the strip lists Filtered and Known as disabled tabs with

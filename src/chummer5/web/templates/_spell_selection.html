@@ -1,29 +1,24 @@
-<div id="spell-selection" class="panel">
+{# WP151 (Phase Z): the Spells sub-tab of the Magic page, in the Skills page's style --
+   spec/plan/phase-z-page-redesigns.md, "Redesign 5". One centred column: the shared strip of
+   angled view tabs (`_view_tabs.html`, one per spell category) with the F and C counters in its
+   corner and Ka at its right, then one panel per category, then the messages (standing rule 1:
+   nothing that comes and goes sits above a control). A tab is a URL one level below the sub-tab
+   (`/ui/page/magic/spells/<view>`); the strip lives inside this fragment, so every autosave
+   re-renders the counters with it. Only the current panel shows; the rest are `hidden` but stay
+   in the form, so every autosave posts every checkbox. The hidden `spells_tab` input brings the
+   same view back after an autosave. There is no submit button: the form autosaves on `change`.
+   Every checkbox has a stable id so htmx can put focus back after the `outerHTML` swap. #}
+{% from "_view_tabs.html" import view_tabs with context %}
+<div id="spell-selection" class="spells-page">
   {% if character and spells_available %}
-  <details open>
-  <summary class="panel__heading">{{ _("String_Spells") }}</summary>
-
-  {% if spell_error %}
-  <p class="error">{{ spell_error | tr }}</p>
-  {% endif %}
-  {% if spell_budget_warning %}
-  <p class="error">{{ spell_budget_warning | tr }}</p>
-  {% endif %}
-
-  <p>{{ _("Web_Spells_Chosen", selected=spells_selected, budget=spell_budget, remaining=spells_remaining, cap=spell_max_known) }}</p>
-  <p>
-    {{ _("Web_Spells_KarmaCost", cost=spell_karma_cost) }}
-    {{ _("Web_Spells_KarmaRemaining", remaining=spell_karma_remaining, budget=spell_karma_budget) }}
-  </p>
-
-  <label>
-    {{ _("Web_Spells_Show") }}
-    <select id="spell-known-filter">
-      <option value="all">{{ _("Web_Spells_ShowAll") }}</option>
-      <option value="known">{{ _("Web_Spells_ShowKnown") }}</option>
-      <option value="unknown">{{ _("Web_Spells_ShowUnknown") }}</option>
-    </select>
-  </label>
+  {% call(item) view_tabs(
+    "spells-tabs",
+    _("Web_Tabs_AriaLabel", page=_("String_Spells")),
+    spell_tab_items,
+    spells_tab,
+    spell_counters_start,
+    spell_counters_end,
+  ) %}{{ item.category | dterm("spells.xml") }}{% endcall %}
 
   <form
     hx-post="/ui/spells"
@@ -31,49 +26,56 @@
     hx-swap="outerHTML"
     hx-trigger="change"
   >
-    <div id="spell-tables">
-      {% for category, rows in spell_rows | groupby("spell.category") %}
-      <details
-        data-details-key="spellcat:{{ category }}"
-        {% if rows | selectattr("selected") | list %}open{% endif %}
-      >
-        <summary>{{ category | dterm("spells.xml") }}</summary>
-        <table>
-          <thead>
-            <tr>
-              <th>{{ _("Web_Qualities_ColSelect") }}</th>
-              <th>{{ _("Web_Spells_ColSpell") }}</th>
-              <th>{{ _("Web_Spells_ColType") }}</th>
-              <th>{{ _("Web_Spells_ColRange") }}</th>
-              <th>{{ _("Web_Spells_ColDuration") }}</th>
-              <th>{{ _("Web_Spells_ColDrain") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in rows %}
-            <tr data-spell-selected="{{ 'true' if row.selected else 'false' }}">
-              <td>
-                <input
-                  type="checkbox"
-                  name="spell_id"
-                  value="{{ row.spell.id }}"
-                  {% if row.selected %}checked{% endif %}
-                />
-              </td>
-              <td>{{ row.spell | dterm("spells.xml") }}</td>
-              <td>{{ row.spell.type }}</td>
-              <td>{{ row.spell.range }}</td>
-              <td>{{ row.spell.duration }}</td>
-              <td>{{ row.spell.dv }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </details>
-      {% endfor %}
-    </div>
-    <button type="submit">{{ _("Web_Spells_Update") }}</button>
+    <input type="hidden" name="spells_tab" value="{{ spells_tab }}" />
+
+    {% for panel in spell_panels %}
+    <section class="spells-panel" data-spells-panel="{{ panel.slug }}"{% if panel.slug != spells_tab %} hidden{% endif %}>
+      <div class="spells-table">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ _("Web_Spells_ColKnown") }}</th>
+            <th>{{ _("Web_Spells_ColSpell") }}</th>
+            <th>{{ _("Web_Spells_ColType") }}</th>
+            <th>{{ _("Web_Spells_ColRange") }}</th>
+            <th>{{ _("Web_Spells_ColDuration") }}</th>
+            <th>{{ _("Web_Spells_ColDrain") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in panel.rows %}
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                id="spell-{{ row.spell.id }}"
+                name="spell_id"
+                value="{{ row.spell.id }}"
+                aria-label="{{ row.spell | dterm('spells.xml') }}"
+                {% if row.selected %}checked{% endif %}
+              />
+            </td>
+            <td>{{ row.spell | dterm("spells.xml") }}</td>
+            <td>{{ row.spell.type }}</td>
+            <td>{{ row.spell.range }}</td>
+            <td>{{ row.spell.duration }}</td>
+            <td>{{ row.spell.dv }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+    {% endfor %}
   </form>
-  </details>
+
+  <div class="spells-messages">
+    {% if spell_error %}
+    <p class="error">{{ spell_error | tr }}</p>
+    {% endif %}
+    {% if spell_budget_warning %}
+    <p class="error">{{ spell_budget_warning | tr }}</p>
+    {% endif %}
+  </div>
   {% endif %}
 </div>

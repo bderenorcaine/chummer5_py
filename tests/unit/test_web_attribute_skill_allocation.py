@@ -62,7 +62,7 @@ def _counter(client: TestClient, label: str) -> str:
     read off the strip the way the browser re-fetches it after an autosave."""
     strip = client.get("/ui/tabs/skills").text
     match = re.search(
-        rf'<abbr[^>]*>{label}</abbr></dt>\s*<dd class="skills-counter__value">([^<]+)</dd>', strip
+        rf'<abbr[^>]*>{label}</abbr></dt>\s*<dd class="view-counter__value">([^<]+)</dd>', strip
     )
     assert match is not None, label
     return match.group(1)
@@ -327,7 +327,7 @@ def test_reconfirming_priorities_with_a_lower_skills_budget_flags_the_existing_s
     new_budget = PRIORITIES.skills["D"].skills
     assert new_budget == 22
     assert _counter(client, "S") == f"-3/{new_budget}"
-    assert "skills-counter--over" in client.get("/ui/tabs/skills").text
+    assert "view-counter--over" in client.get("/ui/tabs/skills").text
     assert "No longer fits since priorities were last confirmed" in response.text
     assert "exceeds" in response.text
 
