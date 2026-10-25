@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase Z — Post-MVP: page redesigns (WP143-147, open-ended)
+### Phase Z — Post-MVP: page redesigns (WP143-150, open-ended)
 
 **Why now.** Raised 2026-10-05 with a hand-drawn redesign of the Priorities page
 (`examples/ui/priorities.png` / `.svg`, committed alongside this file). Phase W (WP97-106) built the
@@ -11,7 +11,7 @@ sketch at a time.
 **This phase is open-ended.** More page redesigns are likely to follow. **Add each one here** as
 its own block of WPs, with its sketch under `examples/ui/` and a dated rulings table like the
 Priorities one below. Don't open a new phase per page. Claim WP numbers from the index's "Next
-unclaimed WP number" as usual, and update the "WP143-147" range in this file's title and in the
+unclaimed WP number" as usual, and update the "WP143-150" range in this file's title and in the
 index's phase row. The **standing design rules** below apply to every redesign in this phase, not
 just Priorities. Extend them when a later sketch settles something new.
 
@@ -557,3 +557,332 @@ button does nothing extra. This is the same situation WP146 found on Attributes.
     - autosave still applying edits (boxes update on check/uncheck)
     - the Mentor Spirit fieldset still working for a magic-active character
     - the Attributes page unchanged if the box classes were renamed
+
+---
+
+#### Redesign 4 — Skills (WP148-150)
+
+**Sketch:** `examples/ui/skills.png` / `.svg`. It shows three states of one page:
+
+- **A strip of angled tabs across the top.** In order: Combat, Physical, Social, Technical,
+  Vehicle, Group, Magical, Resonance, Knowledge, Language, Special. The tabs sit at the left. The
+  green area to their right is filler that grows with the window, so the tabs never spread out.
+  Point counters sit at the strip's two ends: "S 36/36" and "G 5/5" at the top left, and a
+  counter at the bottom right of the filler.
+- **A category tab** (Physical shown) has a table: Skill, Attribute, Group, S pts, K pts, Rating,
+  Specialization, Pool. The Specialization cell is a **toggle followed by a text field**. The toggle
+  chooses whether the specialization is bought with skill points or with Karma.
+- **The Group tab** has a table: Group Name, Components (the member skills), S pts, K pts, Rating.
+- **The Special tab** (exotic skills) has a table: Skill, Attribute, Detail (a text field), S pts,
+  K pts, Rating, Pool. It has no Specialization column. An **Add Special Skills** button sits above
+  the bottom button.
+- Each state ends with a full-width **Update Skills** button.
+
+Today's page has two sub-tabs (WP98), "Active Skills" and "Knowledge & Languages". Each holds a
+stack of collapsible sections, plus a filter box and a "rated only" checkbox. This redesign
+replaces both sub-tabs with the single tab strip.
+
+**The user's rulings (2026-10-25):**
+
+| Question | Ruling |
+|---|---|
+| Counters | **Four:** S (skill points), G (skill group points), **Ka** (Karma), **Kn** (free Knowledge points). Ka and Kn sit together at the strip's right end, where the sketch draws its one "K" counter. The sketch's "K" meant Knowledge. |
+| Group tab's points header | Spelled out as **Group Points**. The sketch's "S pts" there is a sketch shorthand. |
+| Knowledge & Languages | **Folds into this page as one Knowledge tab** covering both (ruled the same day). Knowledge and Language skills work the same way apart from Native, so the sketch's separate Language tab goes. The old sub-tab goes too. |
+| Portrait | **The tab strip becomes a dropdown** below a breakpoint. Its order is the tab order, so the main skill categories come first, then Group, then the rest. |
+| Update Skills button | **Dropped. Autosave only**, as on Attributes and Qualities. |
+| Add Special Skills button | **Kept.** It is how an exotic skill gets added. |
+| Magical tab for a Mundane character | **Always enabled.** Arcana is a Pseudo-Magical skill that a mundane character may learn, so for a Mundane character the tab holds Arcana alone. An Awakened character sees every magical skill they may buy (WP118's Adept rules unchanged). This **reverses WP61's ruling** that Arcana needs an Awakened character. See the decisions log, 2026-10-25. |
+| Resonance tab | **Disabled for a non-Technomancer**, and visible so the tabs after it never move. Technomancers are out of scope (Project Overview), so in practice it is always disabled. It carries a disabled reason, the same way the nav's Resonance entry does. |
+| Filter and "rated only" | **Two more tabs, after Special:** a **Filtered** tab, which takes a filter string and shows the matching skills, and a **Rated** tab, which shows every skill with a rating. They replace today's filter box and checkbox. |
+| Text-field placeholders | **Every text field's placeholder is specific to its row.** Today every field shows the same "e.g. Axes". |
+
+**Defaults this file sets (not user rulings; change them here if they turn out wrong):**
+
+- **The tab is a server-rendered link, like WP98's sub-tabs.** Each tab is
+  `GET /ui/page/skills/<tab>`, with htmx into `#page` and pushed to history. All three of WP98's
+  constraints still hold (decisions log, 2026-09-24, WP98):
+  - Every fragment is still rendered.
+  - A tab switch is a fresh render.
+  - The strip re-fetches on `chargen-changed`.
+  
+  The counters live in the strip, so they refresh the same way. This also covers a Knowledge
+  autosave changing S (Knowledge spending Active points, WP125). Each form carries a hidden
+  `skills_tab` field, so a fragment re-rendered after autosave shows the same tab. Inactive panels
+  are rendered but `hidden`, as on Qualities, so every autosave still posts every row. The old `active` sub-tab slug stays valid as an alias for
+  Combat. `knowledge` is still the Knowledge tab's slug.
+- **Tab slugs and order:**
+  - `combat`, `physical`, `social`, `technical`, `vehicle`: skill categories Combat, Physical,
+    Social, Technical and Vehicle Active
+  - `group`
+  - `magical`: Magical Active plus Pseudo-Magical Active
+  - `resonance`
+  - `knowledge`: Knowledge and Language skills in one table
+  - `special`: the exotic skills
+  - `filtered`, `rated`
+  
+  The page opens on Combat. The current tab is not remembered between page visits beyond the URL.
+- **Counter figures** come from the same values as the resource panel's rows (`shell.py`, the
+  resource rows built in `chargen_context`). Ka is the character's leftover Karma, using the
+  resource panel's Karma figures. Each counter reads `remaining/budget`. A counter with
+  remaining < 0 takes the overspent highlight, decided in the template. In portrait, the four
+  counters sit in one row above the dropdown.
+- **The specialization toggle**, worked out on the server:
+  - **Form fields:** one text field `spec_<id>` and one checkbox `spec_karma_<id>`, where checked
+    means Karma. The route maps the text into `specializations` or `karma_specializations`. The
+    engine's rule of at most one specialization per skill
+    (`chummer5.engine.skills`, the "already has a specialization" check) is then met by
+    construction.
+  - **Points need a points-bought rating.** A specialization may use skill points only when the
+    skill has at least 1 skill point of its own (p. 129 needs a rating first; p. 88 forbids
+    specializing a grouped skill in Step Five). Otherwise the toggle renders checked and disabled. A disabled checkbox doesn't
+    post, so a hidden `spec_karma_<id>` carries the value.
+  - **Exotic skills** have no specialization (WP124), so their rows get no toggle.
+  - **Knowledge rows (Language included)** get the same toggle, using Knowledge points or Karma
+    (WP125).
+- **The Group tab's Components** are the member skills' names, translated and joined with
+  `Web_List_Separator`, in catalog order. The group shows up only where `offered_skill_groups`
+  already offers it.
+- **Knowledge tab: one table for Knowledge and Language skills.** Columns: Name (text), Category
+  (select: the four knowledge categories plus **Language**, as legacy `skills.xml` already treats
+  it), Attribute (the category's linked attribute, display only), Native, Kn pts, Ka pts, Rating,
+  Specialization (toggle and text), Pool.
+  - **Native** is a checkbox that is enabled only on a Language row. The cell is always there, so
+    changing a row's category never moves a control. Turning a Language row into another category
+    drops its Native flag.
+  - **The form posts one set of row fields** (`knowledge_*_<i>`). `submit_knowledge` sorts each
+    row into a `KnowledgeSkillPick` or a `LanguageSkillPick` by its category, so the engine's two
+    lists and their validation stay unchanged. That includes the native-language limit.
+  - **The row cap** is `MAX_KNOWLEDGE_ROWS + MAX_LANGUAGE_ROWS`, counted together.
+  - **Today's explanatory sentences** (examples per category, suggested languages) shrink to one
+    short help line. The examples move into the placeholders.
+- **Add rows with a button on every list the player types into.**
+  - **Special:** the Add Special Skills button posts the form with `exotic_add=1`. The response
+    shows one new add row (skill select, Detail, S pts, Ka pts). As today, the row is committed
+    once it names a skill, a detail and some points.
+  - **Knowledge** gets the same idiom ("Add Knowledge Skill"): filled rows plus one blank row
+    per press, up to the combined cap. At the cap the button is disabled, and its space is always
+    reserved (standing rule 1).
+- **The Filtered tab** has a text field at the top of the panel. Every category section that
+  holds a matching row is shown under its own small heading, with its own column set. That covers
+  the active categories, Special and Knowledge, but not Group. Sections without a
+  match are hidden. Matching is client-side (the existing `applySkillFilter` idea in `app.js`, on
+  the translated name plus the exotic detail), and the query survives an autosave swap through
+  the existing filter store.
+- **The Rated tab** uses the same section layout and shows every skill with a rating above 0.
+  **The row set is fixed when the tab opens.** A row the player sets to 0 stays visible until they
+  leave the tab, so rows don't vanish under the cursor while the player edits (standing rule 1).
+  The script stores the visible row keys on tab entry and reapplies them on `htmx:load`.
+- **Placeholders**, all in the form "e.g. …" (one new key with an `{example}` argument), with the
+  example translated through the same `dterm` lookup as the skill names and falling back to
+  English:
+  - **Active skill specialization:** the skill's first suggested specialization
+    (`Skill.specializations`, which every non-exotic active skill has).
+  - **Special Detail:** the base skill's first suggested specialization. Exotic Melee Weapon has
+    none in the data, so it uses its own i18n example (a monofilament whip).
+  - **Knowledge name** (blank row): an entry from `skills.xml`'s `<knowledgeskills>`, chosen by
+    row index so neighbouring rows differ. If the row's category is already set, the entry comes
+    from that category.
+  - **Knowledge specialization:** the first suggested specialization of the catalog entry whose
+    name matches the row's name, ignoring case.
+  - **An unmatched Language row** uses Read/Write, because every catalog language has Read/Write,
+    Speak and a dialect.
+  - **Any other freeform name with no match gets no placeholder**, because an example borrowed
+    from another skill would mislead.
+  - `Web_Skills_SpecPlaceholder` and `Web_Skills_ExoticSpecificPlaceholder` are retired.
+- **Column cap:** Category tabs have eight columns, so this page gets the widest cap so far. Pick
+  the narrowest cap at which a category tab's table fits without sideways scrolling at its widest
+  localised header. On a phone each table goes in an `overflow-x: auto` wrapper. The strip,
+  counters and page never scroll sideways.
+- **The angled tabs** are CSS: a skewed tab shape with the label rotated inside it. Each tab is a
+  real link and can be focused. The current tab has `aria-current="page"`, and the disabled
+  Resonance tab is a `<span>` with its reason, as on WP98's strip.
+
+---
+
+- [ ] **WP148 — Skills redesign: tab strip, counters, active-skill tabs, specialization toggle.**
+  *Suggested model:* Opus. It reworks the composite-page mechanism for one page and changes the
+  skills POST parsing.
+  Goal: the Skills page as sketched in `examples/ui/skills.png`, for every tab except Knowledge,
+  Filtered and Rated. Those three are WP149 and WP150. Until WP149, the Knowledge tab shows
+  today's `_knowledge_skills.html` unchanged.
+  Deliverables:
+  - **Tab mechanism.** The skills `StepPage` gets the strip and slugs from "Defaults". Read
+    `shell.py`'s `StepPage`/`PageSection`, `_page.html`, the tab-strip route
+    `GET /ui/tabs/{slug}` and the WP98 decisions-log entry first. Then either extend those types
+    so a page can have tabs that aren't one fragment each, or give the skills page its own strip
+    template. Pick whichever keeps the other composite pages untouched. The `active` alias keeps
+    working. The about 38 composite-page test requests stay green.
+  - **Counters** S, G, Ka and Kn, placed as in "Defaults", with the overspent highlight. They
+    refresh with the strip on `chargen-changed`.
+  - **Template rewrite** of `_skill_allocation.html`:
+    - Drop the `<details>` wrapper and the per-category `<details>` (standing rule 3). Keep
+      `#skill-allocation` as the swap target.
+    - **One panel per tab:** five category panels, Magical, Resonance (rendered empty when
+      disabled), Group and Special. Only the current one is shown, and the rest are `hidden` but
+      still in the form. A hidden `skills_tab` input carries the tab through autosave.
+    - **Category panels:** Skill, Attribute, Group, S pts, Ka pts, Rating, Specialization (toggle
+      and text), Pool. Rating and Pool are displayed exactly as today.
+    - **Group panel:** Group Name, Components, Group Points, Ka pts, Rating. Input names
+      (`group_<name>`, `karma_group_<name>`) are unchanged.
+    - **Special panel:** today's exotic instance rows, plus the add row the **Add Special Skills**
+      button reveals. The button is `type="button"` and posts through htmx with `exotic_add=1`,
+      not a native submit. The 2026-09-24 decisions-log entry found that these forms' `hx-trigger`
+      replaces htmx's `submit`. The input names (`exotic_key`, `exotic_new_*`) are unchanged.
+    - **Remove the Update button,** the filter box and the "rated only" checkbox. The last two
+      come back as tabs in WP150. Do the same Enter-key check as WP146.
+    - **Messages at the bottom** (standing rule 1): `skill_error` and `skill_budget_warning` go
+      below the current panel, outside anything that can push a control.
+    - **Stable ids** on every input: `skill-<id>`, `karma-skill-<id>`, `spec-<id>`,
+      `spec-karma-<id>`, `group-<slug>` and so on. Exotic instance keys contain `|`, so map them to
+      a valid id that can't collide.
+  - **Specialization toggle** as in "Defaults": parse `spec_<id>` and `spec_karma_<id>` in
+    `submit_skills`, use the hidden fallback for the forced-Karma case, and decide in
+    `_skill_allocation_context` whether the toggle is forced. `parse_specializations`'s other
+    callers are unchanged.
+  - **Arcana for Mundane characters:**
+    - `offered_skills` offers Pseudo-Magical Active skills to every character. Magical Active
+      skills still need an Awakened character, matching legacy's `SkillsSection.cs` filter, which
+      gates only "Magical Active".
+    - Update the WP61 comment in `catalogs.py` to point at the 2026-10-25 decisions-log entry.
+    - Check that `skill_purchase_rules` doesn't block Arcana for a mundane character, and that
+      `MUNDANE_SKILL_GROUPS` doesn't change (Arcana has no group).
+    - The free magic skill grant (`MAGICAL_SKILL_CATEGORIES`) is unaffected.
+  - **Placeholders** for the active-skill specialization fields and the Special Detail field, as in
+    "Defaults". Retire both old placeholder keys once WP149 no longer uses them. Until then, keep
+    `Web_Skills_SpecPlaceholder` for the knowledge fragment.
+  - **i18n** (standing rule 6): tab labels, counter labels, column headers, the toggle's
+    accessible label (one each for points and Karma), the Add button and Resonance's disabled
+    reason. Check legacy keys first, since `Web_Nav_ResonanceUnsupported` may fit. Retire
+    `Web_Skills_PointsRemaining`, `Web_Skills_GroupPointsRemaining`, `Web_Skills_KarmaRemaining`,
+    `Web_Skills_Update`, `Web_Skills_Filter*`, `Web_Skills_RatedOnly`,
+    `Web_Skills_ColKarmaSpec` and the help sentences the panels no longer show, if nothing else
+    uses them.
+  - **CSS** in a new "Skills page (WP148, Phase Z)" section of `app.css`: the angled strip and
+    filler, the counters (sharing the overspent treatment with `.budget-box`), the toggle switch,
+    the column cap and table wrappers. Use theme tokens only, and check all four themes in light
+    and dark. The portrait dropdown is WP150. Until then, let the strip scroll sideways inside
+    its own container below the breakpoint, never the page.
+  - **Tests:**
+    - Update the existing skills-page tests for the new markup.
+    - New tests:
+      - each tab slug renders its panel visible and the others hidden, and `active` aliases
+        `combat`
+      - the Magical tab enabled for a Mundane character with only Arcana; a mundane character can
+        post Arcana points and commit them
+      - Resonance disabled, with its reason
+      - the counters' values and overspent modifiers
+      - the toggle: points and Karma both commit to the right engine field, and it is forced to
+        Karma when the skill has no skill points of its own
+      - the Group panel's Components
+      - Add Special Skills reveals the add row, and filling it commits an instance (the WP124
+        tests keep passing)
+      - the per-skill placeholders
+      - no submit button and no `<details>`
+      - messages after the panel
+      - stable unique ids, including exotic instances
+      - `skills_tab` surviving an autosave
+    - The CSP and no-bare-text tests stay green.
+  Depends on: nothing new. Read `web/routes/skills.py`, `catalogs.py` (`offered_skills`), the WP98
+  decisions-log entry and the WP147 template and CSS first.
+  Acceptance:
+  - pytest is green repo-wide, and every deliverable above is covered server-side.
+  - The decisions log has the Arcana entry.
+  - The worklog has a manual browser checklist, marked "not run here":
+    - the strip under all four themes, light and dark, at a wide window (filler grows, tabs stay
+      left)
+    - tab switching and history back
+    - the toggle's look and behaviour
+    - typing a specialization without losing focus
+    - Add Special Skills
+    - autosave updating Rating, Pool and the counters
+
+- [ ] **WP149 — Skills redesign: Knowledge tab (Knowledge and Language skills).**
+  *Suggested model:* Sonnet. Markup, parsing and tests on the knowledge fragment, inside WP148's
+  mechanism.
+  Goal: Knowledge & Languages folded into the Skills page's single Knowledge tab, as in
+  "Defaults".
+  Deliverables:
+  - **Template rewrite** of `_knowledge_skills.html`:
+    - One panel holding the merged table, shown only on the Knowledge tab. Keep
+      `#knowledge-skills` as its swap target, and add the hidden `skills_tab` input.
+    - The table is as in "Defaults", with Language as a category and Native enabled only on
+      Language rows.
+    - Filled rows plus one blank row, with an "Add Knowledge Skill" button (`type="button"`,
+      posted through htmx). At the cap the button is disabled and its space is kept.
+    - **Merged parsing:** `submit_knowledge` reads one row series (`knowledge_name_<i>`,
+      `knowledge_category_<i>`, `knowledge_native_<i>`, the points, Karma, `knowledge_spec_<i>`
+      and `knowledge_spec_karma_<i>`) and sorts each row by its category into the existing
+      knowledge and language picks. Read `_parse_knowledge_skills`, `_parse_languages` and the
+      `_by_name` helpers first: Karma points and specializations are keyed by name today, so make
+      sure a knowledge skill and a language with the same name can't collide. The `language_*`
+      field names are retired. Saved characters are unaffected, because the engine types don't
+      change.
+    - Rows on the page keep a stable order (`ChargenSession` order, knowledge then languages, as
+      today), so a row's index, and with it its id, doesn't shift when its category changes.
+    - Remove the Update button and the `<details>` wrapper.
+    - Messages go at the bottom.
+    - Stable ids from the row index.
+  - **Its budget sentence goes.** Kn and Ka are WP148's counters. Active points spent on
+    Knowledge show up in S, and a short line in the Knowledge panel states how many Active points
+    Knowledge is using.
+  - **Retire the sub-tab.** Remove the `knowledge` `PageSection` and `Web_Tab_KnowledgeLanguages` /
+    `Web_Tab_ActiveSkills` if nothing else uses them. The `knowledge` slug stays as an alias for
+    the Knowledge tab.
+  - **Placeholders** for names and specializations as in "Defaults". Read
+    the knowledge catalog from `skills.xml`'s `<knowledgeskills>` (add a loader beside
+    `load_skills` if none exists). Then retire `Web_Skills_SpecPlaceholder`.
+  - **i18n** for the new labels and buttons. Retire `Web_Knowledge_FreeRemaining`,
+    `Web_Knowledge_ActivePointsUsed`, `Web_Knowledge_KarmaRemaining`, `Web_Knowledge_Update`
+    and the help sentences the panels no longer show, if unused (check `_character_sheet.html`).
+  - **Tests:**
+    - Update the knowledge-page tests.
+    - New tests:
+      - the merged table's columns, with Native enabled only on Language rows
+      - a row switched between Language and another category committing to the right engine list
+      - the native-language limit still enforced
+      - the Add button and the combined cap
+      - the toggle committing to the right field for a knowledge skill and a language
+      - the placeholders, including a matched and an unmatched knowledge name
+      - S dropping when Knowledge spends Active points (WP125), seen in the counter after the
+        strip re-fetches
+      - stable ids
+      
+  Depends on: WP148.
+  Acceptance:
+  - pytest is green repo-wide.
+  - The worklog has a manual browser checklist, marked "not run here":
+    - the tab under the four themes
+    - adding rows up to the cap
+    - switching a row to and from Language
+    - typing a name without losing focus
+    - the counters updating after a Knowledge edit
+
+- [ ] **WP150 — Skills redesign: Filtered and Rated tabs, portrait dropdown.**
+  *Suggested model:* Sonnet. Small client behaviour in `app.js`. Everything else is markup and CSS.
+  Goal: the two view tabs and the portrait layout, as in "Defaults".
+  Deliverables:
+  - **Filtered and Rated tabs** after Special. Both show every section except Group, each under
+    its own small heading:
+    - **Filtered:** a filter text field. The script hides rows that don't match and sections left
+      empty. Rework `applySkillFilter`/`restoreSkillFilter` to the new markup. Rows carry
+      `data-skill-name` and `data-skill-rating` from the server, including Knowledge rows.
+    - **Rated:** the row set is fixed when the tab opens, then reapplied on `htmx:load`. It is
+      reset when the player leaves the tab and comes back.
+  - **Portrait dropdown.** Below the breakpoint, the strip is replaced by a `<select>` of the same
+    tabs in the same order, with Resonance disabled. Changing it navigates to that tab's URL
+    (from `app.js`, or with htmx attributes, but no inline script). Above the breakpoint the
+    select is hidden, and below it the strip is hidden. Pick the breakpoint where the strip stops
+    fitting.
+  - **i18n** for the two tab labels and the filter field's label and placeholder.
+  - **Tests:** both tabs render all sections with the data attributes, the dropdown lists every tab
+    with the right `selected` and disabled entries, and the CSP tests stay green.
+  Depends on: WP149.
+  Acceptance:
+  - pytest is green repo-wide.
+  - The worklog has a manual browser checklist, marked "not run here":
+    - filtering across active, Special and Knowledge
+    - the query surviving an autosave
+    - a rated row set to 0 staying until the player leaves the tab
+    - portrait: the dropdown, no sideways page scroll, the counters in one row
+    - the four themes, light and dark

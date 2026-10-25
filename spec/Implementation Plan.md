@@ -124,9 +124,9 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | W | UI shell, theming, i18n | done (WP97-106) | [phase-w-ui-shell.md](plan/phase-w-ui-shell.md) |
 | X | Closing the "Creating a Shadowrunner" gaps | done (WP107-135) | [phase-x-rulebook-completeness.md](plan/phase-x-rulebook-completeness.md) |
 | Y | Hosted multi-user deployment (accounts, invites, stored characters) | done (WP136-142) — **hosted deployment ready**; the server steps are the user's (`spec/deployment.md`) | [phase-y-hosted-deployment.md](plan/phase-y-hosted-deployment.md) |
-| Z | Page redesigns (open-ended: further page redesigns go here) | open — Priorities redesign done (WP143-145; manual browser checklists in WP144/WP145's worklogs); Attributes redesign done (WP146; browser checklist in its worklog); Qualities redesign done (WP147; browser checklist in its worklog) | [phase-z-page-redesigns.md](plan/phase-z-page-redesigns.md) |
+| Z | Page redesigns (open-ended: further page redesigns go here) | open — Priorities redesign done (WP143-145; manual browser checklists in WP144/WP145's worklogs); Attributes redesign done (WP146; browser checklist in its worklog); Qualities redesign done (WP147; browser checklist in its worklog); Skills redesign scoped (WP148-150, sketch `examples/ui/skills.png`) | [phase-z-page-redesigns.md](plan/phase-z-page-redesigns.md) |
 
-Next unclaimed WP number: **WP148** (see Phase P's own file for why WP57-59 were claimed; Phase T
+Next unclaimed WP number: **WP151** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V
 claimed WP64-71 on 2026-07-27 from a second manual-testing pass — see those phase files for scope;
 Phase S's WP59 research pass claimed WP72-76 on 2026-07-29 for its synthetic-fixture WP list;
@@ -159,3 +159,5 @@ Phase Z claimed **WP143-145** on 2026-10-05, for the Priorities page redesign sk
 same phase file rather than opening a phase per page. WP146 was added on 2026-10-06 for the
 Attributes page redesign sketched in `examples/ui/attributes.png`. WP147 was added on 2026-10-17
 for a Qualities page redesign in the same style (no sketch; the phase file sets its defaults).
+WP148-150 were added on 2026-10-25 for the Skills page redesign sketched in
+`examples/ui/skills.png` (tab strip, Knowledge & Languages folded in).

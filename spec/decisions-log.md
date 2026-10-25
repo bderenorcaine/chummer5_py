@@ -2304,3 +2304,28 @@ container that broke.
 - **Positive and Negative qualities are switched by a dropdown (user ruling, same day)**, like the
   Priorities method dropdown. The dropdown is a form field, so switching it is an autosave, and
   the inactive category stays in the markup as `hidden` so its picks keep posting.
+
+## 2026-10-25 — Phase Z: Skills redesign scoped (WP148-150)
+
+- **Fourth Phase Z redesign: Skills, from `examples/ui/skills.png`.** A strip of angled tabs (one
+  per skill category, then Group, Magical, Resonance, Knowledge, Special, Filtered, Rated) replaces
+  WP98's two sub-tabs. Four counters (S, G, Ka, Kn) replace the budget sentences. Autosave only.
+  In portrait the strip becomes a dropdown.
+- **Knowledge and Language skills share one Knowledge tab and one table (user ruling, same
+  day).** The sketch drew separate tabs, but the two work the same way apart from Native. Language
+  becomes one more option in the Category dropdown, as legacy `skills.xml` already treats it, and
+  Native is enabled only on Language rows. The form posts one row series, and the route sorts rows
+  into the engine's unchanged knowledge and language lists.
+- **One specialization field with a points/Karma toggle** replaces the two specialization text
+  fields per skill. The engine's one-specialization-per-skill rule now holds by construction.
+- **Correction to WP61: a Mundane character may buy Arcana (user ruling).** WP61 treated every
+  Magical *and* Pseudo-Magical Active skill as needing an Awakened character. Legacy Chummer
+  offers a mundane character the Pseudo-Magical category (Arcana); its skill list filters out only
+  "Magical Active" (`SkillsSection.cs`). The core rulebook's Magical Skills intro (p. 142) reserves
+  "magic-specific" skills for magicians, but the burnout rules (p. 279) let a burned-out magician
+  keep Arcana as an active skill while every other magical active skill turns into a knowledge
+  skill. That only makes sense if Arcana can be used without Magic. So the Magical tab is always
+  enabled, and for a Mundane character it holds only Arcana. WP148 makes the change in
+  `offered_skills`.
+- **Resonance stays visible but disabled.** Technomancers are still out of scope, so in practice it
+  is always disabled.
