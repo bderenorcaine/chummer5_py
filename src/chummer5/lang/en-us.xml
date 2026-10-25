@@ -536,48 +536,32 @@
     </string>
     <!-- Knowledge -->
     <string>
-      <key>Web_Knowledge_CategoryExamples</key>
-      <text>{category} ({attribute}: {examples})</text>
+      <key>Web_Knowledge_ActivePointsUsing</key>
+      <text>Active skill points used by Knowledge past its free points: {used}.</text>
     </string>
     <string>
-      <key>Web_Knowledge_ActivePointsHelp</key>
-      <text>Past the free points, ranks and specializations are paid from the Active skill points. A skill at rating 0 is bought with Karma: new rating × 1 Karma. A specialization costs 1 point, or 7 Karma.</text>
+      <key>Web_Knowledge_Add</key>
+      <text>Add Knowledge Skill</text>
     </string>
     <string>
-      <key>Web_Knowledge_ActivePointsUsed</key>
-      <text>Active skill points used: {used} / {available}.</text>
+      <key>Web_Knowledge_ColKnowledgePoints</key>
+      <text>Kn pts</text>
     </string>
     <string>
       <key>Web_Knowledge_ColNative</key>
       <text>Native (free)</text>
     </string>
     <string>
-      <key>Web_Knowledge_FreeRemaining</key>
-      <text>Free points remaining: {remaining} / {budget} ((Intuition + Logic) × 2).</text>
-    </string>
-    <string>
-      <key>Web_Knowledge_FreeformHelp</key>
-      <text>Freeform — type any name; the category determines the linked attribute. Suggested examples:</text>
+      <key>Web_Knowledge_DuplicateName</key>
+      <text>Two rows are named {name}; each Knowledge or Language skill needs its own name.</text>
     </string>
     <string>
       <key>Web_Knowledge_Heading</key>
       <text>Knowledge &amp; Language Skills</text>
     </string>
     <string>
-      <key>Web_Knowledge_KarmaHelp</key>
-      <text>"Karma pts" (Step Seven) raises a committed skill's rating beyond its free-point spend, at new Rating × 1 Karma per point.</text>
-    </string>
-    <string>
-      <key>Web_Knowledge_KarmaRemaining</key>
-      <text>Karma remaining for knowledge/language: {remaining} / {budget}.</text>
-    </string>
-    <string>
-      <key>Web_Knowledge_KnowledgeSkills</key>
-      <text>Knowledge skills</text>
-    </string>
-    <string>
-      <key>Web_Knowledge_LanguageSkills</key>
-      <text>Language skills</text>
+      <key>Web_Knowledge_Help</key>
+      <text>Type any name and choose its category; the category sets the linked attribute.</text>
     </string>
     <string>
       <key>Web_Knowledge_NativeLimit</key>
@@ -590,14 +574,6 @@
     <string>
       <key>Web_Knowledge_Placeholder</key>
       <text>Confirm a metatype and priorities on the Priorities page before adding knowledge/language skills.</text>
-    </string>
-    <string>
-      <key>Web_Knowledge_SuggestedLanguages</key>
-      <text>Suggested examples: {examples}.</text>
-    </string>
-    <string>
-      <key>Web_Knowledge_Update</key>
-      <text>Update knowledge &amp; language skills</text>
     </string>
     <!-- Legal: the footer's copyright, license and trademark notices (GPL section 5(d)) -->
     <string>
@@ -1551,10 +1527,6 @@
       <text>Ka pts</text>
     </string>
     <string>
-      <key>Web_Skills_ColKarmaSpec</key>
-      <text>Karma spec</text>
-    </string>
-    <string>
       <key>Web_Skills_ColPool</key>
       <text>Pool</text>
     </string>
@@ -1629,10 +1601,6 @@
     <string>
       <key>Web_Skills_SpecPaidPoints</key>
       <text>Specialization paid with skill points</text>
-    </string>
-    <string>
-      <key>Web_Skills_SpecPlaceholder</key>
-      <text>e.g. Axes</text>
     </string>
     <string>
       <key>Web_Skills_TabCombat</key>

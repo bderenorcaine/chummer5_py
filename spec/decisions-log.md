@@ -2348,3 +2348,13 @@ container that broke.
 - **The Skills counters are committed, character-wide figures.** Ka is the character's leftover
   Karma, as in the resource panel, not WP53's "Karma for skills" (leftover plus this section's own
   spend).
+
+## 2026-10-25 — WP149: Knowledge tab row order and names
+
+- **An autosave echoes Knowledge rows in posted order; only a page render sorts them** (Knowledge
+  skills, then Languages). Re-sorting on every autosave would move a row whose category just
+  became Language. Its index-based ids would then point at a different row, and htmx would
+  restore focus into the wrong field.
+- **A Knowledge or Language name may appear on one row only.** The engine's two lists allowed a
+  shared name, but Karma and specializations are keyed by name. With one table, a repeat is
+  refused up front rather than left ambiguous.

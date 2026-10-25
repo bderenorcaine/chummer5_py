@@ -37,6 +37,7 @@ from chummer5.engine.skills import (
 from chummer5.web.catalogs import (
     PRIORITIES,
     SKILLS,
+    first_example,
     offered_skill_groups,
     offered_skills,
     templates,
@@ -82,12 +83,6 @@ def dom_id(key: str) -> str:
     if not specific and all(c.isalnum() or c == "-" for c in base):
         return base
     return "x" + key.encode().hex()
-
-
-def first_example(skill: Skill) -> str | None:
-    """WP148: a skill's first suggested specialization, for an "e.g. ..." placeholder. Entries in
-    brackets ("[Focus Type]") are templates, not examples, and are skipped."""
-    return next((spec for spec in skill.specializations if not spec.startswith("[")), None)
 
 
 def _skill_allocation_context(

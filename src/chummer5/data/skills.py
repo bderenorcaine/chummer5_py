@@ -65,3 +65,15 @@ def load_skills(xml_path: Path = DEFAULT_SKILLS_PATH) -> tuple[Skill, ...]:
     if skills_elem is None:
         return ()
     return tuple(_parse_skill(s) for s in skills_elem.findall("skill"))
+
+
+def load_knowledge_skills(xml_path: Path = DEFAULT_SKILLS_PATH) -> tuple[Skill, ...]:
+    """WP149: parse every `<skill>` under `skills.xml`'s `<knowledgeskills>` -- legacy's catalog
+    of example Knowledge and Language skills (`category` is one of the four knowledge categories
+    or `Language`). Knowledge skills stay freeform (see `chummer5.data.knowledge`); this catalog
+    only feeds the Knowledge tab's "e.g. ..." placeholders. The entries carry no `<source>`."""
+    root = ET.parse(xml_path).getroot()
+    knowledge_elem = root.find("knowledgeskills")
+    if knowledge_elem is None:
+        return ()
+    return tuple(_parse_skill(s) for s in knowledge_elem.findall("skill"))

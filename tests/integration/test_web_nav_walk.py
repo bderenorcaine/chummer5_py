@@ -103,7 +103,7 @@ def test_walking_the_nav_renders_each_composite_page_whole() -> None:
         ).text
         assert 'id="skill-allocation"' in tab_html and 'id="knowledge-skills"' in tab_html
         if tab.slug == "knowledge":
-            assert re.search(r'<div id="knowledge-skills" class="panel">', tab_html)
+            assert re.search(r'<div id="knowledge-skills" class="skills-fragment">', tab_html)
         else:
             assert re.search(rf'data-skills-panel="{tab.slug}">', tab_html), tab.slug
         html = shell = tab_html

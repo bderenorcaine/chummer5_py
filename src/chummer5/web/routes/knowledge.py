@@ -1,4 +1,5 @@
-"""Knowledge/Language skills chargen step: `POST /ui/knowledge` (WP49, widened by WP53).
+"""Knowledge/Language skills chargen step: `POST /ui/knowledge` (WP49, widened by WP53). Since
+WP149 it is the Skills page's Knowledge tab: one table for Knowledge and Language skills.
 
 **WP62**: split out of the former `chummer5.web.app` -- see `spec/plan/phase-r-architecture-
 cleanup.md`'s WP58 audit for the target shape this module is part of.
@@ -7,7 +8,7 @@ cleanup.md`'s WP58 audit for the target shape this module is part of.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
@@ -18,12 +19,12 @@ from starlette.datastructures import FormData
 from chummer5.data.knowledge import (
     KNOWLEDGE_CATEGORIES,
     KNOWLEDGE_CATEGORY_NAMES,
-    SUGGESTED_LANGUAGES,
+    LANGUAGE_LINKED_ATTRIBUTE,
 )
+from chummer5.data.skills import Skill
 from chummer5.engine.character import Character
 from chummer5.engine.knowledge import (
-    KarmaKnowledgeSelection,
-    KnowledgeSelection,
+    LANGUAGE_CATEGORY,
     KnowledgeSkillPick,
     LanguageSkillPick,
     create_karma_knowledge_selection,
@@ -42,10 +43,11 @@ from chummer5.engine.skills import (
     skill_purchase_rules,
 )
 from chummer5.web.catalogs import (
-    MAX_KNOWLEDGE_ROWS,
-    MAX_LANGUAGE_ROWS,
+    KNOWLEDGE_CATALOG,
+    MAX_KNOWLEDGE_TABLE_ROWS,
     PRIORITIES,
     SKILLS,
+    first_example,
     templates,
 )
 from chummer5.web.i18n import Message
@@ -54,85 +56,145 @@ from chummer5.web.session import resolve_session, set_session_cookie
 router = APIRouter()
 
 
-def _parse_knowledge_skills(form: FormData, max_rows: int) -> tuple[KnowledgeSkillPick, ...]:
-    """Read up to `max_rows` Knowledge-skill rows off a submitted form -- mirrors
-    `chummer5.web.routes.contacts._parse_contacts`'s identical fixed-row shape. Any row whose name
-    field is blank is skipped entirely; a malformed rating is treated as 0 rather than dropping the
-    row (`create_knowledge_selection`'s own 1-6 range check is what rejects a 0, the same "let the
-    engine validate what it's already responsible for" choice `_parse_contacts` makes for
-    Connection/Loyalty).
-    """
-    picks = []
-    for i in range(max_rows):
-        name = str(form.get(f"knowledge_name_{i}") or "").strip()
-        if not name:
-            continue
+@dataclass(frozen=True)
+class KnowledgeRow:
+    """WP149: one row of the Skills page's Knowledge tab, as submitted or as committed. Knowledge
+    and Language skills share the table; `category` is one of the four knowledge categories,
+    `Language`, or blank on a row the player hasn't finished. `rating` is the Knowledge-points
+    rating (Kn pts) and `karma_points` the Karma-bought ranks (Ka pts) on top. `spec_karma` is the
+    specialization toggle (on = Karma)."""
+
+    name: str = ""
+    category: str = ""
+    native: bool = False
+    rating: int = 0
+    karma_points: int = 0
+    specialization: str = ""
+    spec_karma: bool = False
+
+    @property
+    def is_language(self) -> bool:
+        return self.category == LANGUAGE_CATEGORY
+
+    @property
+    def blank(self) -> bool:
+        return not (
+            self.name or self.category or self.rating or self.karma_points or self.specialization
+        )
+
+    @property
+    def spec_forced(self) -> bool:
+        """Only Karma can pay for the specialization: a point-funded one needs a rating of 1+ from
+        Knowledge points, unless the language is native (WP125, `_check_specialization`)."""
+        return not self.native and self.rating < 1
+
+
+def _form_int(raw: object) -> int:
+    """A malformed number reads as 0, leaving range checks to the engine (WP49's choice)."""
+    try:
+        return int(str(raw))
+    except ValueError:
+        return 0
+
+
+def _parse_rows(form: FormData) -> list[KnowledgeRow]:
+    """WP149: the Knowledge tab's one row series (`knowledge_*_<i>`), in row order, with trailing
+    blank rows dropped. A blank row in the middle stays, so no row below it changes index (its
+    ids are built from the index). Native counts only on a Language row: turning a Language row
+    into another category drops it."""
+    rows = []
+    for i in range(MAX_KNOWLEDGE_TABLE_ROWS):
         category = str(form.get(f"knowledge_category_{i}") or "")
-        try:
-            rating = int(str(form.get(f"knowledge_rating_{i}", "0")))
-        except ValueError:
-            rating = 0
-        picks.append(KnowledgeSkillPick(name=name, category=category, rating=rating))
-    return tuple(picks)
+        rows.append(
+            KnowledgeRow(
+                name=str(form.get(f"knowledge_name_{i}") or "").strip(),
+                category=category,
+                native=category == LANGUAGE_CATEGORY
+                and form.get(f"knowledge_native_{i}") is not None,
+                rating=_form_int(form.get(f"knowledge_rating_{i}", "0")),
+                karma_points=_form_int(form.get(f"knowledge_karma_{i}", "0")),
+                specialization=str(form.get(f"knowledge_spec_{i}") or "").strip(),
+                spec_karma=form.get(f"knowledge_spec_karma_{i}") is not None,
+            )
+        )
+    while rows and rows[-1].blank:
+        rows.pop()
+    return rows
 
 
-def _parse_languages(form: FormData, max_rows: int) -> tuple[LanguageSkillPick, ...]:
-    """Read up to `max_rows` Language-skill rows off a submitted form -- same shape as
-    `_parse_knowledge_skills` above, plus a `native` checkbox.
-    """
-    picks = []
-    for i in range(max_rows):
-        name = str(form.get(f"language_name_{i}") or "").strip()
-        if not name:
+@dataclass(frozen=True)
+class _Picks:
+    knowledge_skills: tuple[KnowledgeSkillPick, ...]
+    languages: tuple[LanguageSkillPick, ...]
+    karma_points: dict[str, int]
+    specializations: dict[str, str]
+    karma_specializations: dict[str, str]
+    duplicate: str | None
+
+
+def _sort_rows(rows: list[KnowledgeRow]) -> _Picks:
+    """WP149: sort the named rows into the engine's two pick lists by category, and key Karma and
+    specializations by name as the engine does (WP53/WP125). A name may appear on one row only:
+    with one table, a Knowledge skill and a Language sharing a name would make those name-keyed
+    maps ambiguous, so the first repeated name is reported instead (the engine would reject the
+    ambiguity too, but only once Karma or a specialization referred to it)."""
+    knowledge: list[KnowledgeSkillPick] = []
+    languages: list[LanguageSkillPick] = []
+    karma_points: dict[str, int] = {}
+    specializations: dict[str, str] = {}
+    karma_specializations: dict[str, str] = {}
+    seen: set[str] = set()
+    duplicate = None
+    for row in rows:
+        if not row.name:
             continue
-        native = form.get(f"language_native_{i}") is not None
-        try:
-            rating = int(str(form.get(f"language_rating_{i}", "0")))
-        except ValueError:
-            rating = 0
-        picks.append(LanguageSkillPick(name=name, rating=rating, native=native))
-    return tuple(picks)
+        if row.name in seen and duplicate is None:
+            duplicate = row.name
+        seen.add(row.name)
+        if row.is_language:
+            languages.append(LanguageSkillPick(row.name, row.rating, row.native))
+        else:
+            knowledge.append(KnowledgeSkillPick(row.name, row.category, row.rating))
+        if row.karma_points:
+            karma_points[row.name] = row.karma_points
+        if row.specialization:
+            target = karma_specializations if row.spec_karma or row.spec_forced else specializations
+            target[row.name] = row.specialization
+    return _Picks(
+        tuple(knowledge),
+        tuple(languages),
+        karma_points,
+        specializations,
+        karma_specializations,
+        duplicate,
+    )
 
 
-def _parse_karma_points_by_name(
-    form: FormData, name_prefix: str, karma_prefix: str, max_rows: int
-) -> dict[str, int]:
-    """Read `{name_prefix}{i}`/`{karma_prefix}{i}` row pairs off a submitted form into a sparse
-    `{name: karma_points}` dict (WP53) -- keyed by the row's own name, not its index, since
-    `create_karma_knowledge_selection` resolves Karma spend by name (see that function's own
-    docstring). A fresh pass over the raw form fields, independent of `_parse_knowledge_skills`/
-    `_parse_languages`'s own compacted (blank rows skipped) output -- pairing a karma field with
-    the compacted list by index would misalign the moment an earlier row is blank.
-    """
-    points: dict[str, int] = {}
-    for i in range(max_rows):
-        name = str(form.get(f"{name_prefix}{i}") or "").strip()
-        if not name:
-            continue
-        raw = form.get(f"{karma_prefix}{i}")
-        if raw is None:
-            continue
-        try:
-            value = int(str(raw))
-        except ValueError:
-            continue
-        if value != 0:
-            points[name] = value
-    return points
+def rows_from_picks(
+    knowledge_skills: tuple[KnowledgeSkillPick, ...],
+    languages: tuple[LanguageSkillPick, ...],
+    karma_points: Mapping[str, int],
+    specializations: Mapping[str, str],
+    karma_specializations: Mapping[str, str],
+) -> list[KnowledgeRow]:
+    """WP149: the committed picks as table rows, Knowledge skills first and then Languages (the
+    session's order, as the two tables had it). Only a page render uses this order; an autosave
+    echoes the rows in the order they were posted, so nothing moves while the player edits."""
 
+    def row(name: str, category: str, rating: int, native: bool) -> KnowledgeRow:
+        return KnowledgeRow(
+            name=name,
+            category=category,
+            native=native,
+            rating=rating,
+            karma_points=karma_points.get(name, 0),
+            specialization=specializations.get(name) or karma_specializations.get(name, ""),
+            spec_karma=name not in specializations and name in karma_specializations,
+        )
 
-def _parse_text_by_name(
-    form: FormData, name_prefix: str, text_prefix: str, max_rows: int
-) -> dict[str, str]:
-    """`_parse_karma_points_by_name`'s twin for a text field (WP125's specializations): a sparse
-    `{row name: text}`, blank text meaning none."""
-    texts: dict[str, str] = {}
-    for i in range(max_rows):
-        name = str(form.get(f"{name_prefix}{i}") or "").strip()
-        text = str(form.get(f"{text_prefix}{i}") or "").strip()
-        if name and text:
-            texts[name] = text
-    return texts
+    return [row(k.name, k.category, k.rating, False) for k in knowledge_skills] + [
+        row(la.name, LANGUAGE_CATEGORY, la.rating, la.native) for la in languages
+    ]
 
 
 def active_points_left(character: Character, skills_letter: str) -> int:
@@ -152,108 +214,70 @@ def active_points_left(character: Character, skills_letter: str) -> int:
     return max(0, skill_point_budget(skills_letter, PRIORITIES).skills - spent)
 
 
-def _specialized(
-    pool: int | None,
-    name: str,
-    specializations: Mapping[str, str],
-    karma_specializations: Mapping[str, str],
-) -> int | None:
-    if pool is None or not (name in specializations or name in karma_specializations):
+def _catalog_entry(name: str) -> Skill | None:
+    """The `<knowledgeskills>` entry whose name matches `name`, ignoring case."""
+    return _CATALOG_BY_NAME.get(name.casefold())
+
+
+_CATALOG_BY_NAME = {entry.name.casefold(): entry for entry in KNOWLEDGE_CATALOG}
+# WP149: an unmatched Language row's specialization example. Every catalog language suggests
+# Read/Write, Speak and a dialect.
+LANGUAGE_SPEC_EXAMPLE = "Read/Write"
+
+
+def _name_example(row: KnowledgeRow, index: int) -> Skill | None:
+    """WP149: a blank name field's "e.g. ..." -- a catalog entry from the row's category if it has
+    one, else from the whole catalog, chosen by row index so neighbouring rows differ."""
+    if row.name:
         return None
-    return pool + SPECIALIZATION_BONUS
-
-
-def _knowledge_row(
-    character: Character,
-    knowledge_skills: tuple[KnowledgeSkillPick, ...],
-    karma_points: Mapping[str, int],
-    i: int,
-    specializations: Mapping[str, str] = MappingProxyType({}),
-    karma_specializations: Mapping[str, str] = MappingProxyType({}),
-) -> dict[str, Any]:
-    """One echoed Knowledge-skill row for `_knowledge_skills.html`, incl. its dice `pool` (WP68).
-    `pool` is `None` -- rendered blank -- for a padding row past the submitted picks, a not-yet-
-    named/rated row, or a row whose `category` isn't one of the 4 real Knowledge categories (its
-    linked attribute is unknown until a valid category is chosen); otherwise it's
-    `rating + karma pts + linked attribute`, mirroring the active-skills picker's Karma-inclusive
-    pool.
-    """
-    if i >= len(knowledge_skills):
-        return {
-            "index": i,
-            "name": "",
-            "category": "",
-            "rating": "",
-            "karma_points": 0,
-            "specialization": "",
-            "karma_specialization": "",
-            "pool": None,
-            "pool_specialized": None,
-        }
-    pick = knowledge_skills[i]
-    karma = karma_points.get(pick.name, 0)
-    pool = (
-        knowledge_dice_pool(character, pick.category, pick.rating + karma)
-        if pick.category in KNOWLEDGE_CATEGORY_NAMES and pick.rating + karma >= 1
-        else None
+    entries = [e for e in KNOWLEDGE_CATALOG if e.category == row.category] or list(
+        KNOWLEDGE_CATALOG
     )
+    return entries[index % len(entries)] if entries else None
+
+
+def _spec_example(row: KnowledgeRow) -> str | None:
+    """WP149: the specialization field's "e.g. ...": the matching catalog entry's first suggested
+    specialization; Read/Write for an unmatched Language row; nothing for any other unmatched
+    name, since an example borrowed from another skill would mislead."""
+    entry = _catalog_entry(row.name) if row.name else None
+    if entry is not None:
+        example = first_example(entry)
+        if example is not None:
+            return example
+    return LANGUAGE_SPEC_EXAMPLE if row.is_language else None
+
+
+def _row_context(character: Character, row: KnowledgeRow, index: int) -> dict[str, Any]:
+    """One row for `_knowledge_skills.html`, with its dice pool. `pool` is `None` -- rendered
+    blank -- for an unnamed or unrated row, or one whose category isn't chosen yet (its linked
+    attribute is unknown); a native language has fluency "N" rather than a pool. Otherwise it is
+    `rating + Ka pts + linked attribute`, and `pool_specialized` the +2 pool when the row has a
+    specialization (WP68/WP125, shown as "X (Y)" like an Active skill's)."""
+    total = row.rating + row.karma_points
+    pool: int | None = None
+    if row.name and total >= 1:
+        if row.is_language and not row.native:
+            pool = language_dice_pool(character, total)
+        elif row.category in KNOWLEDGE_CATEGORY_NAMES:
+            pool = knowledge_dice_pool(character, row.category, total)
     return {
-        "index": i,
-        "name": pick.name,
-        "category": pick.category,
-        "rating": pick.rating,
-        "karma_points": karma,
-        "specialization": specializations.get(pick.name, ""),
-        "karma_specialization": karma_specializations.get(pick.name, ""),
+        "index": index,
+        "row": row,
+        "attribute": _LINKED_ATTRIBUTES.get(row.category),
+        "total": total,
         "pool": pool,
-        # WP125: shown as "X (Y)", like an Active skill's (WP65).
-        "pool_specialized": _specialized(pool, pick.name, specializations, karma_specializations),
+        "pool_specialized": (
+            pool + SPECIALIZATION_BONUS if pool is not None and row.specialization else None
+        ),
+        "name_example": _name_example(row, index),
+        "spec_example": _spec_example(row),
     }
 
 
-def _language_row(
-    character: Character,
-    languages: tuple[LanguageSkillPick, ...],
-    karma_points: Mapping[str, int],
-    i: int,
-    specializations: Mapping[str, str] = MappingProxyType({}),
-    karma_specializations: Mapping[str, str] = MappingProxyType({}),
-) -> dict[str, Any]:
-    """One echoed Language-skill row for `_knowledge_skills.html`, incl. its dice `pool` (WP68). A
-    native pick has fluency "N" rather than a numeric rating, so `pool` stays `None` and the
-    template renders "N"; a rated pick's `pool` is `rating + karma pts + INT`.
-    """
-    if i >= len(languages):
-        return {
-            "index": i,
-            "name": "",
-            "rating": "",
-            "native": False,
-            "karma_points": 0,
-            "specialization": "",
-            "karma_specialization": "",
-            "pool": None,
-            "pool_specialized": None,
-        }
-    pick = languages[i]
-    karma = karma_points.get(pick.name, 0)
-    pool = (
-        language_dice_pool(character, pick.rating + karma)
-        if not pick.native and pick.rating + karma >= 1
-        else None
-    )
-    return {
-        "index": i,
-        "name": pick.name,
-        "rating": pick.rating,
-        "native": pick.native,
-        "karma_points": karma,
-        "specialization": specializations.get(pick.name, ""),
-        "karma_specialization": karma_specializations.get(pick.name, ""),
-        "pool": pool,
-        # WP125: shown as "X (Y)", like an Active skill's (WP65).
-        "pool_specialized": _specialized(pool, pick.name, specializations, karma_specializations),
-    }
+_LINKED_ATTRIBUTES = {c.name: c.linked_attribute for c in KNOWLEDGE_CATEGORIES} | {
+    LANGUAGE_CATEGORY: LANGUAGE_LINKED_ATTRIBUTE
+}
 
 
 def _knowledge_selection_context(
@@ -265,72 +289,53 @@ def _knowledge_selection_context(
     karma_specializations: Mapping[str, str] = MappingProxyType({}),
     *,
     skills_letter: str,
-    error: str | None = None,
+    error: str | Message | None = None,
+    rows: list[KnowledgeRow] | None = None,
+    add_row: bool = False,
 ) -> dict[str, Any]:
     """Context for `_knowledge_skills.html`. Same echo-the-submission/re-validate-fresh shape as
-    `chummer5.web.routes.skills._skill_allocation_context` -- `knowledge_skills`/`languages` feed a
-    throwaway echo of the submission regardless of whether it actually validated; when `error` is
-    unset, re-runs `create_knowledge_selection` purely to detect whether an attribute edit since
-    the last commit shrank INT/LOG below what's already spent (WP19-style "no longer fits"
-    staleness), the same re-derive-fresh-on-every-render precedent every other carried-forward
-    selection follows.
+    `chummer5.web.routes.skills._skill_allocation_context`: when `error` is unset, re-runs
+    `create_knowledge_selection` purely to detect whether an attribute edit since the last commit
+    shrank INT/LOG below what's already spent (WP19-style "no longer fits" staleness).
 
-    **WP53**: `karma_points` -- submitted in the same form as `knowledge_skills`/`languages`,
-    keyed by pick *name* (see `chummer5.engine.knowledge`'s own WP53 paragraph for why) -- feeds a
-    *preview* `KarmaKnowledgeSelection`, the same "call the real validator against a throwaway
-    huge budget, fall back to no overlay on any structural failure" shape
-    `_skill_allocation_context` uses, since Knowledge/Language picks have no dice-pool preview to
-    compute (only a "Karma remaining" summary line and each row's own Karma-boosted total).
+    **WP53**: `karma_points` is keyed by pick *name* (see `chummer5.engine.knowledge`'s own WP53
+    paragraph for why). **WP125**: so are `specializations`/`karma_specializations`, and the spend
+    past the free pool is drawn from the Active skill points `skills_letter` leaves.
 
-    **WP125**: `specializations`/`karma_specializations` are echoed per row by pick name, and the
-    spend past the free pool is shown against the Active skill points `skills_letter` leaves.
+    **WP149**: one table for Knowledge and Language skills. `rows` is the submission in posted
+    order (an autosave's echo); a page render passes none and gets the committed picks via
+    `rows_from_picks`. Either way the table ends in one blank row, plus another when `add_row`
+    (the Add Knowledge Skill button), up to `MAX_KNOWLEDGE_TABLE_ROWS`. The Kn and Ka figures are
+    the Skills strip's counters now, so only the Active points Knowledge uses are stated here.
     """
     if character is None:
         return {"character": None, "knowledge_error": error}
-    knowledge_rows = [
-        _knowledge_row(
-            character, knowledge_skills, karma_points, i, specializations, karma_specializations
+    shown = list(
+        rows
+        if rows is not None
+        else rows_from_picks(
+            knowledge_skills, languages, karma_points, specializations, karma_specializations
         )
-        for i in range(MAX_KNOWLEDGE_ROWS)
-    ]
-    language_rows = [
-        _language_row(character, languages, karma_points, i, specializations, karma_specializations)
-        for i in range(MAX_LANGUAGE_ROWS)
-    ]
+    )
+    for _ in range(2 if add_row else 1):
+        if len(shown) < MAX_KNOWLEDGE_TABLE_ROWS:
+            shown.append(KnowledgeRow())
     free_points = free_knowledge_points(character)
     points_spent = knowledge_points_spent(knowledge_skills, languages, specializations)
     active_points_available = active_points_left(character, skills_letter)
-    preview_knowledge_selection = KnowledgeSelection(
-        knowledge_skills=knowledge_skills,
-        languages=languages,
-        free_points=free_points,
-        points_spent=points_spent,
-        native_language_limit=native_language_limit(character),
-        specializations=MappingProxyType(dict(specializations)),
-        active_points_used=max(0, points_spent - free_points),
-    )
-    try:
-        preview_karma_knowledge: KarmaKnowledgeSelection | None = create_karma_knowledge_selection(
-            replace(character, knowledge_selection=preview_knowledge_selection),
-            karma_points,
-            10**9,
-            karma_specializations,
-        )
-    except ValueError:
-        preview_karma_knowledge = None
-    karma_budget = character.karma_remaining + (
-        character.karma_knowledge_selection.karma_cost
-        if character.karma_knowledge_selection is not None
-        else 0
-    )
     budget_warning: Message | None = None
     if error is None:
+        karma_budget = character.karma_remaining + (
+            character.karma_knowledge_selection.karma_cost
+            if character.karma_knowledge_selection is not None
+            else 0
+        )
         try:
-            create_knowledge_selection(
+            selection = create_knowledge_selection(
                 character, knowledge_skills, languages, specializations, active_points_available
             )
             create_karma_knowledge_selection(
-                replace(character, knowledge_selection=preview_knowledge_selection),
+                replace(character, knowledge_selection=selection),
                 karma_points,
                 karma_budget,
                 karma_specializations,
@@ -339,26 +344,17 @@ def _knowledge_selection_context(
             budget_warning = Message.of("Web_Stale_Knowledge", error=str(exc))
     return {
         "character": character,
-        "knowledge_rows": knowledge_rows,
-        "language_rows": language_rows,
+        "knowledge_rows": [_row_context(character, row, i) for i, row in enumerate(shown)],
+        "knowledge_at_cap": len(shown) >= MAX_KNOWLEDGE_TABLE_ROWS,
         "knowledge_categories": KNOWLEDGE_CATEGORIES,
-        "suggested_languages": SUGGESTED_LANGUAGES,
+        "language_category": LANGUAGE_CATEGORY,
         "knowledge_free_points": free_points,
         "knowledge_points_spent": min(points_spent, free_points),
         # WP125: the part past the free pool, paid from the Active skill points.
         "knowledge_active_points_used": max(0, points_spent - free_points),
-        "knowledge_active_points_available": active_points_available,
         "native_language_limit": native_language_limit(character),
         "max_skill_rating": MAX_SKILL_RATING_CREATE,
         "knowledge_budget_warning": budget_warning,
-        # WP60: prefixed -- see the identical comment in
-        # `chummer5.web.routes.attributes._attribute_allocation_context`.
-        "knowledge_karma_budget": karma_budget,
-        "knowledge_karma_remaining": (
-            karma_budget - preview_karma_knowledge.karma_cost
-            if preview_karma_knowledge is not None
-            else karma_budget
-        ),
         "knowledge_error": error,
     }
 
@@ -371,76 +367,53 @@ async def submit_knowledge(request: Request) -> HTMLResponse:
         context = _knowledge_selection_context(None, (), (), skills_letter=session.skills_letter)
     else:
         form = await request.form()
-        knowledge_skills = _parse_knowledge_skills(form, MAX_KNOWLEDGE_ROWS)
-        languages = _parse_languages(form, MAX_LANGUAGE_ROWS)
-        # WP53: Karma-funded points, keyed by name, submitted in the same form.
-        karma_points = _parse_karma_points_by_name(
-            form, "knowledge_name_", "knowledge_karma_", MAX_KNOWLEDGE_ROWS
-        )
-        karma_points.update(
-            _parse_karma_points_by_name(
-                form, "language_name_", "language_karma_", MAX_LANGUAGE_ROWS
-            )
-        )
-        # WP125: specializations, point-funded and Karma-funded, keyed by name the same way.
-        specializations = _parse_text_by_name(
-            form, "knowledge_name_", "knowledge_spec_", MAX_KNOWLEDGE_ROWS
-        )
-        specializations.update(
-            _parse_text_by_name(form, "language_name_", "language_spec_", MAX_LANGUAGE_ROWS)
-        )
-        karma_specializations = _parse_text_by_name(
-            form, "knowledge_name_", "knowledge_karma_spec_", MAX_KNOWLEDGE_ROWS
-        )
-        karma_specializations.update(
-            _parse_text_by_name(form, "language_name_", "language_karma_spec_", MAX_LANGUAGE_ROWS)
-        )
+        # WP149: one row series for both kinds of skill, sorted into the engine's two lists.
+        rows = _parse_rows(form)
+        picks = _sort_rows(rows)
         previous = session.character
-        try:
-            selection = create_knowledge_selection(
-                previous,
-                knowledge_skills,
-                languages,
-                specializations,
-                active_points_left(previous, session.skills_letter),
-            )
-            karma_budget = previous.karma_remaining + (
-                previous.karma_knowledge_selection.karma_cost
-                if previous.karma_knowledge_selection is not None
-                else 0
-            )
-            karma_selection = create_karma_knowledge_selection(
-                replace(previous, knowledge_selection=selection),
-                karma_points,
-                karma_budget,
-                karma_specializations,
-            )
-        except ValueError as exc:
-            context = _knowledge_selection_context(
-                session.character,
-                knowledge_skills,
-                languages,
-                karma_points,
-                specializations,
-                karma_specializations,
-                skills_letter=session.skills_letter,
-                error=str(exc),
-            )
+        error: str | Message | None = None
+        if picks.duplicate is not None:
+            error = Message.of("Web_Knowledge_DuplicateName", name=picks.duplicate)
         else:
-            session.character = replace(
-                session.character,
-                knowledge_selection=selection,
-                karma_knowledge_selection=karma_selection,
-            )
-            context = _knowledge_selection_context(
-                session.character,
-                knowledge_skills,
-                languages,
-                karma_points,
-                specializations,
-                karma_specializations,
-                skills_letter=session.skills_letter,
-            )
+            try:
+                selection = create_knowledge_selection(
+                    previous,
+                    picks.knowledge_skills,
+                    picks.languages,
+                    picks.specializations,
+                    active_points_left(previous, session.skills_letter),
+                )
+                karma_budget = previous.karma_remaining + (
+                    previous.karma_knowledge_selection.karma_cost
+                    if previous.karma_knowledge_selection is not None
+                    else 0
+                )
+                karma_selection = create_karma_knowledge_selection(
+                    replace(previous, knowledge_selection=selection),
+                    picks.karma_points,
+                    karma_budget,
+                    picks.karma_specializations,
+                )
+            except ValueError as exc:
+                error = str(exc)
+            else:
+                session.character = replace(
+                    session.character,
+                    knowledge_selection=selection,
+                    karma_knowledge_selection=karma_selection,
+                )
+        context = _knowledge_selection_context(
+            session.character,
+            picks.knowledge_skills,
+            picks.languages,
+            picks.karma_points,
+            picks.specializations,
+            picks.karma_specializations,
+            skills_letter=session.skills_letter,
+            error=error,
+            rows=rows,
+            add_row=form.get("knowledge_add") is not None,
+        )
     response = templates.TemplateResponse(request, "_knowledge_skills.html", context)
     set_session_cookie(request, response, new_cookie)
     return response

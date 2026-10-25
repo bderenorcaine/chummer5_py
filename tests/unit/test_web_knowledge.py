@@ -1,10 +1,14 @@
 """WP49: Knowledge & Language skills UI, backed by `chummer5.engine.knowledge
-.create_knowledge_selection` directly.
+.create_knowledge_selection` directly. WP149: one table for both kinds -- a Language row is a
+`knowledge_*_<i>` row whose category is Language -- and the Kn/Ka figures are the Skills strip's
+counters.
 
 Cross-checks the UI's result against that engine function called directly with the same inputs,
 same acceptance bar as WP15/WP16's own test modules: "manual walkthrough; values match engine
 output for the same inputs."
 """
+
+import re
 
 from fastapi.testclient import TestClient
 
@@ -50,6 +54,26 @@ def _confirm_human(client: TestClient) -> None:
     assert "Confirmed: Human" in response.text
 
 
+def _counter(client: TestClient, label: str) -> str:
+    """WP148: one of the Skills strip's counters, as "remaining/budget"."""
+    strip = client.get("/ui/tabs/skills?tab=knowledge").text
+    match = re.search(
+        rf'<abbr[^>]*>{label}</abbr></dt>\s*<dd class="skills-counter__value">([^<]+)</dd>', strip
+    )
+    assert match is not None, label
+    return match.group(1)
+
+
+def _language(i: int, name: str, rating: int = 0, *, native: bool = False) -> dict[str, str]:
+    """WP149: a Language row of the Knowledge tab's table."""
+    row = {
+        f"knowledge_name_{i}": name,
+        f"knowledge_category_{i}": "Language",
+        f"knowledge_rating_{i}": str(rating),
+    }
+    return row | ({f"knowledge_native_{i}": "on"} if native else {})
+
+
 def _human_character(attribute_points: dict[str, int] | None = None):
     heritage = PRIORITIES.heritage["A"]
     human_choice = next(
@@ -78,7 +102,8 @@ def test_index_after_confirmation_shows_full_budget() -> None:
     character = _human_character()
     free_points = character.attribute_value("INT") + character.attribute_value("LOG")
     free_points *= 2
-    assert f"Free points remaining: {free_points} / {free_points}" in response.text
+    assert response.status_code == 200
+    assert _counter(client, "Kn") == f"{free_points}/{free_points}"
     assert "Native languages: up to 1 free" in response.text
 
 
@@ -92,9 +117,7 @@ def test_submitting_valid_knowledge_and_language_matches_engine_output() -> None
             "knowledge_name_0": "Corporations",
             "knowledge_category_0": "Street",
             "knowledge_rating_0": "2",
-            "language_name_0": "English",
-            "language_rating_0": "0",
-            "language_native_0": "on",
+            **_language(1, "English", native=True),
         },
     )
 
@@ -105,9 +128,8 @@ def test_submitting_valid_knowledge_and_language_matches_engine_output() -> None
         (KnowledgeSkillPick(name="Corporations", category="Street", rating=2),),
         (LanguageSkillPick(name="English", rating=0, native=True),),
     )
-    assert f"Free points remaining: {expected.free_points - expected.points_spent}" in (
-        response.text
-    )
+    remaining = expected.free_points - expected.points_spent
+    assert _counter(client, "Kn") == f"{remaining}/{expected.free_points}"
     assert 'value="Corporations"' in response.text
     assert 'value="English"' in response.text
 
@@ -124,11 +146,8 @@ def test_pool_column_renders_dice_pools_for_knowledge_and_language() -> None:
             "knowledge_name_0": "Corporations",
             "knowledge_category_0": "Street",
             "knowledge_rating_0": "2",
-            "language_name_0": "Japanese",
-            "language_rating_0": "1",
-            "language_name_1": "English",
-            "language_rating_1": "0",
-            "language_native_1": "on",
+            **_language(1, "Japanese", 1),
+            **_language(2, "English", native=True),
         },
     )
 
@@ -163,8 +182,7 @@ def test_submitting_over_budget_knowledge_is_rejected_and_state_unchanged() -> N
     # Submitted (invalid) value is echoed back, per the skill-allocation precedent.
     assert 'value="Corporations"' in response.text
 
-    index = client.get("/ui/page/skills")
-    assert "Free points remaining: 4 / 4" in index.text
+    assert _counter(client, "Kn") == "4/4"
 
 
 def test_rejects_a_second_native_language_without_bilingual() -> None:
@@ -173,14 +191,7 @@ def test_rejects_a_second_native_language_without_bilingual() -> None:
 
     response = client.post(
         "/ui/knowledge",
-        data={
-            "language_name_0": "English",
-            "language_rating_0": "0",
-            "language_native_0": "on",
-            "language_name_1": "Sperethiel",
-            "language_rating_1": "0",
-            "language_native_1": "on",
-        },
+        data=_language(0, "English", native=True) | _language(1, "Sperethiel", native=True),
     )
 
     assert "at most 1 language" in response.text
@@ -193,14 +204,7 @@ def test_bilingual_quality_allows_a_second_native_language() -> None:
 
     response = client.post(
         "/ui/knowledge",
-        data={
-            "language_name_0": "English",
-            "language_rating_0": "0",
-            "language_native_0": "on",
-            "language_name_1": "Sperethiel",
-            "language_rating_1": "0",
-            "language_native_1": "on",
-        },
+        data=_language(0, "English", native=True) | _language(1, "Sperethiel", native=True),
     )
 
     assert response.status_code == 200
@@ -248,7 +252,7 @@ def test_submitting_karma_knowledge_points_matches_engine_output() -> None:
 
     assert response.status_code == 200
     # 2->3 costs new_rating x 1 = 3 Karma.
-    assert "Karma remaining for knowledge/language: 22 / 25" in response.text
+    assert _counter(client, "Ka") == "22/25"
 
 
 def test_submitting_karma_language_points_matches_engine_output() -> None:
@@ -257,16 +261,12 @@ def test_submitting_karma_language_points_matches_engine_output() -> None:
 
     response = client.post(
         "/ui/knowledge",
-        data={
-            "language_name_0": "Japanese",
-            "language_rating_0": "1",
-            "language_karma_0": "2",
-        },
+        data=_language(0, "Japanese", 1) | {"knowledge_karma_0": "2"},
     )
 
     assert response.status_code == 200
     # 1->2 (2) + 2->3 (3) = 5 Karma.
-    assert "Karma remaining for knowledge/language: 20 / 25" in response.text
+    assert _counter(client, "Ka") == "20/25"
 
 
 def test_submitting_karma_knowledge_points_above_the_chargen_rating_cap_is_rejected() -> None:

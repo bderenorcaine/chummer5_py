@@ -143,13 +143,14 @@ def test_the_web_pages_share_the_active_pool_and_a_save_keeps_everything() -> No
             "knowledge_category_0": "Street",
             "knowledge_rating_0": "5",
             "knowledge_spec_0": "Evo",
-            "language_name_0": "Japanese",
-            "language_rating_0": "0",
-            "language_karma_0": "2",
-            "language_karma_spec_0": "Speak",
+            "knowledge_name_1": "Japanese",  # WP149: a Language row of the one table
+            "knowledge_category_1": "Language",
+            "knowledge_rating_1": "0",
+            "knowledge_karma_1": "2",
+            "knowledge_spec_1": "Speak",  # unrated by points: Karma pays (the forced toggle)
         },
     ).text
-    assert "Active skill points used: 2 / 28." in page
+    assert "Active skill points used by Knowledge past its free points: 2." in page
     assert client.get("/ui/page/skills/active").status_code == 200  # WP98's slug, now Combat
     strip = re.sub(r"\s+", " ", client.get("/ui/tabs/skills").text)  # WP148's S counter
     assert '>S</abbr></dt> <dd class="skills-counter__value">26/28</dd>' in strip

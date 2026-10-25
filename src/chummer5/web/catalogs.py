@@ -28,7 +28,7 @@ from chummer5.data.metatypes import load_metatypes
 from chummer5.data.powers import load_powers
 from chummer5.data.priorities import load_priorities
 from chummer5.data.qualities import load_qualities
-from chummer5.data.skills import Skill, load_skills
+from chummer5.data.skills import Skill, load_knowledge_skills, load_skills
 from chummer5.data.spells import load_spells
 from chummer5.data.traditions import load_traditions
 from chummer5.engine.character import Character
@@ -78,6 +78,8 @@ templates.env.globals["url_for"] = _root_relative_url_for
 METATYPES = load_metatypes()
 PRIORITIES = load_priorities()
 SKILLS = load_skills()
+# WP149: legacy's example Knowledge/Language skills, for the Knowledge tab's placeholders only.
+KNOWLEDGE_CATALOG = load_knowledge_skills()
 QUALITIES = load_qualities()
 LIFESTYLES = load_lifestyles()
 LIFESTYLE_OPTIONS = load_lifestyle_options()  # WP132
@@ -199,6 +201,8 @@ MAX_BOUND_SPIRIT_ROWS = 10
 # above any SR5-core metatype's plausible (INT+LOG)*2 budget at 1 point per row.
 MAX_KNOWLEDGE_ROWS = 12
 MAX_LANGUAGE_ROWS = 4
+# WP149: the Knowledge tab's one table holds both kinds of row, so the two caps count together.
+MAX_KNOWLEDGE_TABLE_ROWS = MAX_KNOWLEDGE_ROWS + MAX_LANGUAGE_ROWS
 
 # MVP's regular Skills-priority point-buy UI stays mundane-only for a Mundane character -- Magical
 # Active/Pseudo-Magical Active skills require being Awakened at all (not just a nonzero MAG dice
@@ -259,6 +263,12 @@ _MAGICAL_SKILLS = tuple(
     sorted((s for s in SKILLS if s.category in MAGICAL_SKILL_CATEGORIES), key=lambda s: s.name)
 )
 _PSEUDO_MAGICAL_SKILLS = tuple(s for s in _MAGICAL_SKILLS if s.category == "Pseudo-Magical Active")
+
+
+def first_example(skill: Skill) -> str | None:
+    """WP148: a skill's first suggested specialization, for an "e.g. ..." placeholder. Entries in
+    brackets ("[Focus Type]") are templates, not examples, and are skipped."""
+    return next((spec for spec in skill.specializations if not spec.startswith("[")), None)
 
 
 def offered_skills(character: Character | None) -> tuple[Skill, ...]:

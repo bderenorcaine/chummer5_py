@@ -797,7 +797,7 @@ replaces both sub-tabs with the single tab strip.
     - Add Special Skills
     - autosave updating Rating, Pool and the counters
 
-- [ ] **WP149 — Skills redesign: Knowledge tab (Knowledge and Language skills).**
+- [x] **WP149 — Skills redesign: Knowledge tab (Knowledge and Language skills).**
   *Suggested model:* Sonnet. Markup, parsing and tests on the knowledge fragment, inside WP148's
   mechanism.
   Goal: Knowledge & Languages folded into the Skills page's single Knowledge tab, as in

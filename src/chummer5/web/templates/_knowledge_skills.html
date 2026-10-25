@@ -1,176 +1,141 @@
-{# WP148: shown only on the Skills page's Knowledge tab; its own autosave keeps it showing. #}
+{# WP149 (Phase Z): the Skills page's Knowledge tab -- spec/plan/phase-z-page-redesigns.md,
+   "Redesign 4". One table for Knowledge and Language skills: Language is one more category, and
+   Native is enabled only on a Language row (the cell is always there, so changing a category
+   moves nothing). The rows end in a blank one; Add Knowledge Skill adds another, up to the cap,
+   and is disabled -- never removed -- there. There is no submit button: the form autosaves on
+   `change` and `number-input`. Messages sit under the table (standing rule 1). Every control's
+   id comes from its row index, which an autosave never changes. Shown only on the Knowledge tab;
+   its own autosave response keeps it showing. #}
 {% set tab = skills_tab | default("knowledge") %}
-<div id="knowledge-skills" class="panel"{% if tab != "knowledge" %} hidden{% endif %}>
+<div id="knowledge-skills" class="skills-fragment"{% if tab != "knowledge" %} hidden{% endif %}>
   {% if character %}
-  <details open>
-  <summary class="panel__heading">{{ _("Web_Knowledge_Heading") }}</summary>
-
-  {% if knowledge_error %}
-  <p class="error">{{ knowledge_error | tr }}</p>
-  {% endif %}
-  {% if knowledge_budget_warning %}
-  <p class="warning">{{ knowledge_budget_warning | tr }}</p>
-  {% endif %}
-
-  <p>
-    {{ _("Web_Knowledge_FreeRemaining", remaining=knowledge_free_points - knowledge_points_spent, budget=knowledge_free_points) }}
-    {{ _("Web_Knowledge_ActivePointsUsed", used=knowledge_active_points_used, available=knowledge_active_points_available) }}
-    {{ _("Web_Knowledge_NativeLimit", limit=native_language_limit) }}
-    {{ _("Web_Knowledge_KarmaRemaining", remaining=knowledge_karma_remaining, budget=knowledge_karma_budget) }}
-  </p>
-
   <form
     hx-post="/ui/knowledge"
     hx-target="#knowledge-skills"
     hx-swap="outerHTML"
     hx-trigger="change, number-input delay:400ms"
   >
-    <h3>{{ _("Web_Knowledge_KnowledgeSkills") }}</h3>
-    <p>
-      {{ _("Web_Knowledge_FreeformHelp") }}
-      {% for category in knowledge_categories %}
-      {{ _("Web_Knowledge_CategoryExamples", category=category.name | dterm("skills.xml"), attribute=_("String_Attribute" ~ category.linked_attribute ~ "Short"), examples=category.examples | join(_("Web_List_Separator"))) }}{% if not loop.last %}; {% endif %}
-      {% endfor %}
-    </p>
-    <p>{{ _("Web_Knowledge_KarmaHelp") }}</p>
-    <p>{{ _("Web_Knowledge_ActivePointsHelp") }}</p>
-    <table>
-      <thead>
-        <tr>
-          <th>{{ _("String_Name") }}</th>
-          <th>{{ _("Web_Qualities_ColCategory") }}</th>
-          <th>{{ _("String_Rating") }}</th>
-          <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
-          <th>{{ _("Web_Skills_ColSpecialization") }}</th>
-          <th>{{ _("Web_Skills_ColKarmaSpec") }}</th>
-          <th>{{ _("Web_Skills_ColPool") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in knowledge_rows %}
-        <tr>
-          <td>
-            <input type="text" name="knowledge_name_{{ row.index }}" value="{{ row.name }}" />
-          </td>
-          <td>
-            <select name="knowledge_category_{{ row.index }}">
-              <option value=""></option>
-              {% for category in knowledge_categories %}
-              <option value="{{ category.name }}" {% if row.category == category.name %}selected{% endif %}>
-                {{ category.name | dterm("skills.xml") }}
-              </option>
-              {% endfor %}
-            </select>
-          </td>
-          <td>
-            <input
-              type="number"
-              name="knowledge_rating_{{ row.index }}"
-              value="{{ row.rating }}"
-              min="0"
-              max="{{ max_skill_rating }}"
-            />
-          </td>
-          <td>
-            <input
-              type="number"
-              name="knowledge_karma_{{ row.index }}"
-              value="{{ row.karma_points }}"
-              min="0"
-              max="{{ max_skill_rating }}"
-            />
-          </td>
-          <td>
-            <input
-              type="text"
-              name="knowledge_spec_{{ row.index }}"
-              value="{{ row.specialization }}"
-              placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
-            />
-          </td>
-          <td>
-            <input
-              type="text"
-              name="knowledge_karma_spec_{{ row.index }}"
-              value="{{ row.karma_specialization }}"
-              placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
-            />
-          </td>
-          <td>{% if row.pool is not none %}{{ row.pool }}{% if row.pool_specialized is not none %} ({{ row.pool_specialized }}){% endif %}{% endif %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    <h3>{{ _("Web_Knowledge_LanguageSkills") }}</h3>
-    <p>{{ _("Web_Knowledge_SuggestedLanguages", examples=suggested_languages | map("dterm", "skills.xml") | join(_("Web_List_Separator"))) }}</p>
-    <table>
-      <thead>
-        <tr>
-          <th>{{ _("String_Name") }}</th>
-          <th>{{ _("String_Rating") }}</th>
-          <th>{{ _("Web_Knowledge_ColNative") }}</th>
-          <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
-          <th>{{ _("Web_Skills_ColSpecialization") }}</th>
-          <th>{{ _("Web_Skills_ColKarmaSpec") }}</th>
-          <th>{{ _("Web_Skills_ColPool") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in language_rows %}
-        <tr>
-          <td>
-            <input type="text" name="language_name_{{ row.index }}" value="{{ row.name }}" />
-          </td>
-          <td>
-            <input
-              type="number"
-              name="language_rating_{{ row.index }}"
-              value="{{ row.rating }}"
-              min="0"
-              max="{{ max_skill_rating }}"
-            />
-          </td>
-          <td>
-            <input
-              type="checkbox"
-              name="language_native_{{ row.index }}"
-              {% if row.native %}checked{% endif %}
-            />
-          </td>
-          <td>
-            <input
-              type="number"
-              name="language_karma_{{ row.index }}"
-              value="{{ row.karma_points }}"
-              min="0"
-              max="{{ max_skill_rating }}"
-            />
-          </td>
-          <td>
-            <input
-              type="text"
-              name="language_spec_{{ row.index }}"
-              value="{{ row.specialization }}"
-              placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
-            />
-          </td>
-          <td>
-            <input
-              type="text"
-              name="language_karma_spec_{{ row.index }}"
-              value="{{ row.karma_specialization }}"
-              placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
-            />
-          </td>
-          <td>{% if row.native %}{{ _("Web_Knowledge_NativeMarker") }}{% elif row.pool is not none %}{{ row.pool }}{% if row.pool_specialized is not none %} ({{ row.pool_specialized }}){% endif %}{% endif %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <button type="submit">{{ _("Web_Knowledge_Update") }}</button>
+    <input type="hidden" name="skills_tab" value="knowledge" />
+    <section class="skills-panel skills-panel--knowledge" data-skills-panel="knowledge">
+      <p class="skills-panel__help">
+        {{ _("Web_Knowledge_Help") }}
+        {{ _("Web_Knowledge_NativeLimit", limit=native_language_limit) }}
+      </p>
+      <p class="skills-panel__help">{{ _("Web_Knowledge_ActivePointsUsing", used=knowledge_active_points_used) }}</p>
+      <div class="skills-table">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ _("String_Name") }}</th>
+            <th>{{ _("Skill_SortCategory") }}</th>
+            <th>{{ _("Web_Attributes_ColAttribute") }}</th>
+            <th>{{ _("Web_Knowledge_ColNative") }}</th>
+            <th><abbr title="{{ _('String_KnowledgePoints') }}">{{ _("Web_Knowledge_ColKnowledgePoints") }}</abbr></th>
+            <th><abbr title="{{ _('String_Karma') }}">{{ _("Web_Skills_ColKarmaPoints") }}</abbr></th>
+            <th>{{ _("String_Rating") }}</th>
+            <th>{{ _("Web_Skills_ColSpecialization") }}</th>
+            <th>{{ _("Web_Skills_ColPool") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in knowledge_rows %}
+          {% set row = item.row %}
+          {% set i = item.index %}
+          <tr data-skill-name="{{ row.name | lower }}" data-skill-rating="{{ 1 if row.native else item.total }}">
+            <td>
+              <input
+                type="text"
+                id="knowledge-name-{{ i }}"
+                name="knowledge_name_{{ i }}"
+                value="{{ row.name }}"
+                aria-label="{{ _('String_Name') }}"
+                {% if item.name_example %}placeholder="{{ _('Web_Skills_Example', example=item.name_example | dterm('skills.xml')) }}"{% endif %}
+              />
+            </td>
+            <td>
+              <select id="knowledge-category-{{ i }}" name="knowledge_category_{{ i }}" aria-label="{{ _('Skill_SortCategory') }}">
+                <option value=""></option>
+                {% for category in knowledge_categories %}
+                <option value="{{ category.name }}" {% if row.category == category.name %}selected{% endif %}>{{ category.name | dterm("skills.xml") }}</option>
+                {% endfor %}
+                <option value="{{ language_category }}" {% if row.is_language %}selected{% endif %}>{{ language_category | dterm("skills.xml") }}</option>
+              </select>
+            </td>
+            <td>{{ _("String_Attribute" ~ item.attribute ~ "Short") if item.attribute else "—" }}</td>
+            <td>
+              <input
+                type="checkbox"
+                id="knowledge-native-{{ i }}"
+                name="knowledge_native_{{ i }}"
+                aria-label="{{ _('Web_Knowledge_ColNative') }}"
+                {% if row.native %}checked{% endif %}
+                {% if not row.is_language %}disabled{% endif %}
+              />
+            </td>
+            <td>
+              <input
+                type="number"
+                id="knowledge-rating-{{ i }}"
+                name="knowledge_rating_{{ i }}"
+                value="{{ row.rating }}"
+                min="0"
+                max="{{ max_skill_rating }}"
+                aria-label="{{ _('String_KnowledgePoints') }}"
+                {% if row.native %}disabled{% endif %}
+              />
+            </td>
+            <td>
+              <input
+                type="number"
+                id="knowledge-karma-{{ i }}"
+                name="knowledge_karma_{{ i }}"
+                value="{{ row.karma_points }}"
+                min="0"
+                max="{{ max_skill_rating }}"
+                aria-label="{{ _('String_Karma') }}"
+                {% if row.native %}disabled{% endif %}
+              />
+            </td>
+            <td>{% if row.native %}{{ _("Web_Knowledge_NativeMarker") }}{% elif row.name %}{{ item.total }}{% endif %}</td>
+            <td class="skills-spec">
+              {% with toggle_id="knowledge-spec-karma-" ~ i, toggle_name="knowledge_spec_karma_" ~ i, toggle_karma=row.spec_karma, toggle_forced=row.spec_forced %}
+              {% include "_spec_toggle.html" %}
+              {% endwith %}
+              <input
+                type="text"
+                id="knowledge-spec-{{ i }}"
+                name="knowledge_spec_{{ i }}"
+                value="{{ row.specialization }}"
+                aria-label="{{ _('Web_Skills_ColSpecialization') }}"
+                {% if item.spec_example %}placeholder="{{ _('Web_Skills_Example', example=item.spec_example | dterm('skills.xml')) }}"{% endif %}
+              />
+            </td>
+            <td>{% if item.pool is not none %}{{ item.pool }}{% if item.pool_specialized is not none %} ({{ item.pool_specialized }}){% endif %}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      <button
+        type="button"
+        class="skills-add"
+        hx-post="/ui/knowledge"
+        hx-vals='{"knowledge_add": "1"}'
+        hx-target="#knowledge-skills"
+        hx-swap="outerHTML"
+        {% if knowledge_at_cap %}disabled{% endif %}
+      >{{ _("Web_Knowledge_Add") }}</button>
+    </section>
   </form>
-  </details>
+
+  <div class="skills-messages">
+    {% if knowledge_error %}
+    <p class="error">{{ knowledge_error | tr }}</p>
+    {% endif %}
+    {% if knowledge_budget_warning %}
+    <p class="warning">{{ knowledge_budget_warning | tr }}</p>
+    {% endif %}
+  </div>
   {% else %}
   <p>{{ _("Web_Knowledge_Placeholder") }}</p>
   {% endif %}
