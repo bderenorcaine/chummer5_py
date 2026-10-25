@@ -1,6 +1,6 @@
 [← back to Implementation Plan index](../Implementation%20Plan.md)
 
-### Phase Z — Post-MVP: page redesigns (WP143-150, open-ended)
+### Phase Z — Post-MVP: page redesigns (WP143-152, open-ended)
 
 **Why now.** Raised 2026-10-05 with a hand-drawn redesign of the Priorities page
 (`examples/ui/priorities.png` / `.svg`, committed alongside this file). Phase W (WP97-106) built the
@@ -11,7 +11,7 @@ sketch at a time.
 **This phase is open-ended.** More page redesigns are likely to follow. **Add each one here** as
 its own block of WPs, with its sketch under `examples/ui/` and a dated rulings table like the
 Priorities one below. Don't open a new phase per page. Claim WP numbers from the index's "Next
-unclaimed WP number" as usual, and update the "WP143-150" range in this file's title and in the
+unclaimed WP number" as usual, and update the "WP143-152" range in this file's title and in the
 index's phase row. The **standing design rules** below apply to every redesign in this phase, not
 just Priorities. Extend them when a later sketch settles something new.
 
@@ -887,4 +887,171 @@ replaces both sub-tabs with the single tab strip.
     - the query surviving an autosave
     - a rated row set to 0 staying until the player leaves the tab
     - portrait: the dropdown, no sideways page scroll, the counters in one row
+    - the four themes, light and dark
+
+---
+
+#### Redesign 5 — Spells (WP151-152)
+
+**No sketch.** Raised 2026-10-25: "update the Spells tab of the Magic section in the same style"
+as the Skills page (Redesign 4). That page's strip, counters, panels and views are the template.
+Read Redesign 4's rulings and defaults, and the WP148–150 worklogs, before either WP below.
+
+Today's Spells fragment (`_spell_selection.html`, a WP98 sub-tab of the Magic page, shown to a
+character who `casts_spells`), top to bottom: a `<details>` wrapper; the error and stale warning
+**above** the controls; two budget sentences (free spells / known cap, and Karma); a
+"Show: all / known / unknown" select (`#spell-known-filter`, `applySpellFilter` in `app.js`); one
+collapsible table per spell category (Select, Spell, Type, Range, Duration, DV); and an "Update
+spells" button. The form already autosaves (`hx-trigger="change"`), so the button does nothing
+extra. The catalog has 93 spells in six categories: Combat, Detection, Health, Illusion,
+Manipulation, Rituals.
+
+**The user's rulings (2026-10-25):**
+
+| Question | Ruling |
+|---|---|
+| Style | **The same as the Skills page:** an angled tab strip with counters, one category per tab, and a long list per category. |
+| Tabs | **One per spell category, then Filtered, then Known.** The Skills page's Group tab has no counterpart and is dropped. Filtered stays. Skills' Rated becomes **Known**. |
+
+**Carried over from the Skills rulings.** These follow from "the same style": they are the user's
+Skills rulings, applied here.
+
+- **Autosave only.** The Update button goes.
+- **Messages at the bottom of the page**, never between sections, including on the views.
+- **Filtered and Known change only what they show.** On Spells that means checking or unchecking
+  a spell. No other controls.
+- **Portrait:** the strip becomes a dropdown at the width where it stops fitting.
+- **Limitations get flagged to the user, not logged as accepted gaps** (`CLAUDE.md`).
+
+**Defaults this file sets (not user rulings; change them here if they turn out wrong):**
+
+- **The strip lives inside the Spells sub-tab.** The Magic page keeps its WP98 sub-tab strip
+  (Talent, Spells, Adept Powers, Bound Spirits, Foci), and the Spells section adds its own
+  angled strip under it. Spells is the only Magic section with a long categorised list.
+- **The strip is part of the Spells fragment**, not a separate element as on Skills, because one
+  form owns everything on it. So each autosave response re-renders the counters directly, with no
+  `chargen-changed` re-fetch. Nothing else on the page changes these counters while Spells is
+  showing, and every tab switch is a fresh render.
+- **A category tab is a URL one level below the sub-tab**, `GET /ui/page/magic/spells/<view>`:
+  htmx into `#page`, pushed to history, and the full shell when requested directly, as WP98/WP148
+  do. `routes/pages.py` gains that third level for a section that declares views. The bare
+  `/ui/page/magic/spells` opens on the first category. Every panel is rendered, and all but the
+  current one are `hidden`, so every autosave posts every checkbox. A hidden `spells_tab` field
+  carries the view through autosave.
+- **View slugs and labels:** `combat`, `detection`, `health`, `illusion`, `manipulation`,
+  `rituals`, then `filtered` and `known`. Category tabs are labelled with the category's data term
+  (`dterm("spells.xml")`, already translated in the legacy data). Filtered and Known get `Web_`
+  keys. The page opens on Combat.
+- **Three counters, as `remaining/budget`:**
+  - **F**: free spells left (the Talent's free spells − known, floored at 0, over the budget).
+  - **C**: known-spell cap left (Magic × 2 − known, over Magic × 2).
+  - **Ka**: the character's leftover Karma (the resource panel's figure, as on Skills).
+
+  Each label gets its long name as an `<abbr>` title, and a counter below 0 takes the overspent
+  highlight. F and C sit in the strip's top-left corner, Ka at the filler's right. An Aspected
+  Magician of the Sorcery aspect gets no free spells, so F reads 0/0.
+- **Columns** stay as today, with the checkbox column renamed: Known (the checkbox, replacing "Select"), Spell, Type,
+  Range, Duration, DV. On Filtered/Known, each category section gets its own small heading, as on
+  Skills.
+- **Filtered:** a filter field at the top (outside the form, never posted) matches the
+  translated spell name. Sections with no match hide. The query survives an autosave.
+- **Known:** shows the spells known when the tab opens. Unchecking one keeps it listed until the
+  player leaves the tab (Skills' Rated behaviour).
+- **Shared code, not copies.** WP151 renames the Skills strip's page-specific pieces to shared ones,
+  in the same commit, with the Skills templates and tests updated (WP147's budget-box precedent):
+  - the `.skills-tabs*` / `.skills-tab*` / `.skills-counter*` classes become e.g. `.view-tabs*`,
+    `.view-tab*` and `.view-counter*`
+  - `_skills_counter.html` becomes a shared counter partial
+  - the strip markup becomes one macro or partial both pages include
+
+  WP152 likewise makes WP150's view code in `app.js` (`narrowSkillViews`, the filter store, the
+  fixed Rated set, the dropdown) work for any page, keyed on data attributes, not on Skills ids.
+  The Skills page must look and behave exactly as before.
+- **Column cap:** the narrowest that fits six columns, probably the 40rem of Attributes/Qualities.
+  Below it, the column fills the pane, and the table scrolls inside its own wrapper.
+
+---
+
+- [ ] **WP151 — Spells redesign: strip, counters, category tabs.**
+  *Suggested model:* Opus. It adds a URL level and extracts the shared strip.
+  Goal: the Spells sub-tab in the Skills style, for the six category tabs. Filtered, Known and the
+  portrait dropdown are WP152. Until then, the strip lists Filtered and Known as disabled tabs with
+  no link, or leaves them out. Pick whichever keeps WP152 smaller, and say which in the worklog.
+  Deliverables:
+  - **Shared strip** as in "Defaults" (classes, counter partial, strip markup), with the Skills
+    page unchanged in look and markup semantics. Update the Skills tests that select on the old
+    class names.
+  - **Third URL level**, as in "Defaults": `routes/pages.py`, plus the section's declared views
+    in `shell.py`. Read WP148's `PageTab`/`view_tab` and the WP98 decisions-log entry first. An
+    unknown view is a 404. The Magic page's own strip and its tests stay unchanged.
+  - **Template rewrite** of `_spell_selection.html`:
+    - Drop the `<details>` wrapper and the per-category `<details>`. Keep `#spell-selection` as
+      the swap target and the `spells_available` gate.
+    - The strip with counters, then one panel per category (hidden unless current), then the
+      messages at the bottom.
+    - Remove the Update button, the Show select and the budget sentences.
+    - A hidden `spells_tab` input.
+    - Stable ids (`spell-<id>`).
+  - **Route:** `submit_spells` reads and validates `spells_tab` (unknown → first category).
+    `_spell_selection_context` groups rows per category in category order and builds the
+    counters. The POST contract (`spell_id` checkboxes) is unchanged.
+  - **Retire** `Web_Spells_Chosen`, `Web_Spells_KarmaCost`, `Web_Spells_KarmaRemaining`,
+    `Web_Spells_Update` and `Web_Spells_Show*` if unused elsewhere. Retire `#spell-known-filter`
+    and `applySpellFilter` too (WP152 replaces them), along with the `spellcat:` details keys.
+  - **i18n:** counter labels and their titles (reuse legacy keys where the English matches
+    exactly, e.g. a "Free Spells" key, as the resource panel does), the Known column header.
+  - **CSS:** a "Spells page (WP151, Phase Z)" section with the column cap and the table wrapper.
+    The strip CSS is the shared one.
+  - **Tests:**
+    - each category tab showing exactly its panel, with every checkbox still in the form
+    - the bare sub-tab URL opening on Combat, a full-shell view URL, and an unknown view 404ing
+    - counter values and overspent modifiers, including a Sorcery-aspected magician's 0/0
+    - `spells_tab` surviving an autosave
+    - posting the same `spell_id`s still committing the same selection
+    - no `<details>`, no submit button, messages after the form
+    - unique ids
+    - the Skills page unchanged after the extraction (its existing tests stay green, updated
+      only for renamed classes)
+    - CSP and no-bare-text tests green
+  Depends on: WP148–150 (the Skills strip and views). Read `routes/spells.py`,
+  `_spell_selection.html`, `_skills_tabs.html` and the WP148–150 worklogs first.
+  Acceptance:
+  - pytest is green repo-wide.
+  - The worklog's manual browser checklist, marked "not run here", covers:
+    - the Spells strip under the four themes, light and dark, nested under the Magic sub-tabs
+    - tab switching and history back
+    - checking a spell updating F/C/Ka at once
+    - the overspent highlight (more spells than Magic × 2 shows the error at the bottom)
+    - the Skills strip looking exactly as before
+
+- [ ] **WP152 — Spells redesign: Filtered and Known tabs, portrait dropdown.**
+  *Suggested model:* Sonnet. Small, generalising client behaviour, plus markup.
+  Goal: the two views and the narrow-width dropdown on Spells, as in "Defaults", reusing WP150's
+  code made page-agnostic.
+  Deliverables:
+  - **Filtered and Known views:** every category section under its own heading, marked for the
+    script. Rows carry a key, the translated name and a known flag. The filter field sits at the
+    top, outside the form.
+  - **`app.js`:** generalise WP150's view code (filter store, fixed row set, section hiding,
+    dropdown) so both pages use it through data attributes. Skills behaviour unchanged. Known's
+    row set is fixed on entry. Unchecking keeps the row until the player leaves the tab.
+  - **Portrait dropdown and counter row** from the shared strip, behind the same container-query
+    idea (the breakpoint is wherever the Spells strip stops fitting).
+  - **i18n** for the two tab labels and the filter field (reuse WP150's filter keys if the
+    wording fits spells, else add `Web_Spells_*` ones).
+  - **Tests:**
+    - both views rendering all six sections with headings and data attributes
+    - the filter field only on Filtered, outside the form
+    - `spells_tab` surviving an autosave on both views
+    - the dropdown listing every view with the right `selected`
+    - the script hooks
+    - the Skills view tests still green
+  Depends on: WP151.
+  Acceptance:
+  - pytest is green repo-wide.
+  - The worklog's manual browser checklist, marked "not run here", covers:
+    - filtering across categories, and the query surviving an autosave
+    - Known keeping an unchecked spell until the player leaves the tab
+    - portrait: the dropdown, the counters in one row, no sideways page scroll
+    - Skills' Filtered/Rated and dropdown still working
     - the four themes, light and dark
