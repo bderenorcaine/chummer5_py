@@ -146,6 +146,8 @@ class StepPage:
     # that still resolve, as `(alias, tab)` pairs.
     tabs: tuple[PageTab, ...] = ()
     tab_strip: str | None = None
+    # WP150: the template after the fragments -- Skills' messages, so none sits above a control.
+    tab_footer: str | None = None
     tab_aliases: tuple[tuple[str, str], ...] = ()
 
     @property
@@ -246,6 +248,7 @@ STEP_PAGES: tuple[StepPage, ...] = (
         heading_key="Tab_Skills",
         tabs=SKILLS_TABS,
         tab_strip="_skills_tabs.html",
+        tab_footer="_skills_footer.html",
         # WP98's sub-tab slug, still linked from saved bookmarks and WP135's issue links.
         tab_aliases=(("active", "combat"),),
     ),

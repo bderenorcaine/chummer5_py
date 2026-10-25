@@ -4,6 +4,7 @@ pins what the script relies on. See `spec/plan/phase-z-page-redesigns.md`, "Rede
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -183,3 +184,121 @@ def test_the_script_has_the_hooks_the_markup_relies_on() -> None:
     css = TestClient(create_app()).get("/static/app.css").text
     assert "container-type: inline-size" in css
     assert "@container (max-width: 41rem)" in css
+
+
+# --- Follow-up (user rulings, 2026-10-25): messages at the bottom, ratings-only views ----------
+
+
+def _fragment(html: str, wrapper_id: str) -> str:
+    """One fragment's own markup: from its wrapper to the next top-level sibling."""
+    start = html.index(f'<div id="{wrapper_id}"')
+    ends = [
+        html.find(marker, start + 1)
+        for marker in ('<div id="knowledge-skills"', '<div class="skills-footer">')
+    ]
+    return html[start : min(e for e in ends if e > 0)]
+
+
+@pytest.mark.parametrize("tab", ["combat", "knowledge", "filtered", "rated"])
+def test_the_messages_sit_after_every_section_on_every_tab(tab: str) -> None:
+    client = TestClient(create_app())
+    _confirm(client)
+    _with_picks(client)
+    # Make the active-skill spend stale: Skills D (22) can't hold the 25 points below.
+    ungrouped = [s for s in SKILLS if s.skill_group is None and not s.exotic][:5]
+    ungrouped = [s for s in ungrouped if s.category not in ("Magical Active", "Resonance Active")]
+    points = dict(zip((s.id for s in ungrouped), (6, 6, 6, 6, 1), strict=False))
+    client.post("/ui/skills", data={f"skill_{sid}": str(v) for sid, v in points.items()})
+    human = next(
+        c
+        for c in metatype_choices(PRIORITIES.heritage["A"], METATYPES)
+        if c.metatype.name == "Human"
+    )
+    client.post(
+        "/ui/priorities",
+        data={
+            "heritage_letter": "A",
+            "attributes_letter": "B",
+            "skills_letter": "D",
+            "resources_letter": "C",
+            "talent_letter": "E",
+            "metatype_id": human.metatype.id,
+        },
+    )
+    html = client.get(f"/ui/page/skills/{tab}", headers=HTMX).text
+
+    footer = html.index('<div class="skills-footer">')
+    assert html.index("No longer fits") > footer
+    assert footer > html.rindex("</form>")  # after the Knowledge section too
+    assert html.index('id="knowledge-messages"') > html.index('id="skill-messages"') > footer
+    for wrapper in ("skill-allocation", "knowledge-skills"):
+        assert 'class="warning"' not in _fragment(html, wrapper)
+
+
+def test_each_post_refreshes_its_own_messages_out_of_band() -> None:
+    client = TestClient(create_app())
+    _confirm(client)
+    skills = client.post(
+        "/ui/skills", data={"skills_tab": "rated", f"skill_{PISTOLS.id}": "99"}
+    ).text
+    assert 'class="error"' not in skills[: skills.index('id="skill-messages"')]
+    assert '<div id="skill-messages" class="skills-messages" hx-swap-oob="true">' in skills
+    assert "knowledge-messages" not in skills
+
+    knowledge = client.post(
+        "/ui/knowledge",
+        data={"skills_tab": "filtered", "knowledge_name_0": "X", "knowledge_category_0": "Nope"},
+    ).text
+    assert 'class="error"' not in knowledge[: knowledge.index('id="knowledge-messages"')]
+    assert '<div id="knowledge-messages" class="skills-messages" hx-swap-oob="true">' in knowledge
+    assert "skill-messages" not in knowledge
+
+    # A page render carries the footer itself, not out-of-band copies.
+    assert "hx-swap-oob" not in client.get("/ui/page/skills").text.split("skills-footer", 1)[1]
+
+
+@pytest.mark.parametrize("tab", ["filtered", "rated"])
+def test_the_views_only_change_ratings(tab: str) -> None:
+    client = TestClient(create_app())
+    _confirm(client)
+    _with_picks(client)
+    client.post(
+        "/ui/knowledge",
+        data={
+            "knowledge_name_0": "Corporations",
+            "knowledge_category_0": "Street",
+            "knowledge_rating_0": "1",
+            "knowledge_name_1": "English",
+            "knowledge_category_1": "Language",
+            "knowledge_native_1": "on",
+        },
+    )
+    html = client.get(f"/ui/page/skills/{tab}", headers=HTMX).text
+
+    assert "skills-add" not in html  # neither Add button
+    assert (
+        'id="exotic-skill-add"'
+        not in client.post("/ui/skills", data={"skills_tab": tab, "exotic_add": "1"}).text
+    )
+    knowledge = _fragment(html, "knowledge-skills")
+    assert len(re.findall(r"<tr data-skill-key=", knowledge)) == 2  # no blank row
+    assert 'type="text" id="knowledge-name' not in knowledge
+    assert "<select" not in knowledge  # no category dropdown
+    assert '<input type="hidden" name="knowledge_name_0" value="Corporations" />' in knowledge
+    assert '<input type="hidden" name="knowledge_category_1" value="Language" />' in knowledge
+    assert '<input type="hidden" name="knowledge_native_1" value="on" />' in knowledge
+    assert 'name="knowledge_rating_0"' in knowledge  # ratings stay editable
+
+    # Posting the view's fields back (a rating change) keeps every row as it was.
+    fields = dict(
+        re.findall(r'<input type="hidden" name="(knowledge_[a-z]+_\d+)" value="([^"]*)"', knowledge)
+    )
+    client.post(
+        "/ui/knowledge",
+        data=fields | {"skills_tab": tab, "knowledge_rating_0": "2", "knowledge_karma_0": "0"},
+    )
+    saved = json.loads(client.get("/character/save").content)
+    assert saved["knowledge_skill_picks"] == [
+        {"name": "Corporations", "category": "Street", "rating": 2}
+    ]
+    assert saved["language_skill_picks"] == [{"name": "English", "rating": 0, "native": True}]

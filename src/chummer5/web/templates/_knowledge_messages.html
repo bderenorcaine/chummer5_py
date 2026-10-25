@@ -1,0 +1,10 @@
+{# WP150 follow-up: the Knowledge form's messages, in the Skills page's footer like the active
+   form's (see `_skill_messages.html`); `POST /ui/knowledge` sends them out of band. #}
+<div id="knowledge-messages" class="skills-messages"{% if oob_messages %} hx-swap-oob="true"{% endif %}>
+  {% if knowledge_error %}
+  <p class="error">{{ knowledge_error | tr }}</p>
+  {% endif %}
+  {% if knowledge_budget_warning %}
+  <p class="warning">{{ knowledge_budget_warning | tr }}</p>
+  {% endif %}
+</div>

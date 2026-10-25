@@ -456,6 +456,7 @@ async def submit_skills(request: Request) -> HTMLResponse:
             exotic_adding=form.get("exotic_add") is not None and not added,
         )
     context["skills_tab"] = skills_tab
+    context["oob_messages"] = True  # WP150: the messages live in the page's footer
     response = templates.TemplateResponse(request, "_skill_allocation.html", context)
     set_session_cookie(request, response, new_cookie)
     return response

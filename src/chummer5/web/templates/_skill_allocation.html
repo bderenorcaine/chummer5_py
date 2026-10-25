@@ -2,13 +2,14 @@
    "Redesign 4". One panel per tab (the five categories, Group, Magical, Resonance, Special); only
    the current tab's shows, the rest are `hidden` but stay in the form, so every autosave still
    posts every row. The hidden `skills_tab` input brings the same tab back after an autosave.
-   There is no submit button: the form autosaves on `change` and `number-input`. Messages sit
-   under the panel (standing rule 1). Every control has a stable id so htmx can put focus and
+   There is no submit button: the form autosaves on `change` and `number-input`. Messages are in
+   the page's footer (`_skill_messages.html`), refreshed out of band by this form's POST. Every control has a stable id so htmx can put focus and
    caret back after the `outerHTML` swap. On the Knowledge tab nothing here shows.
    WP150: the Filtered and Rated views show every panel with rows except Group, each under its own
    heading and marked `data-skills-view`; app.js narrows their rows (`data-skill-key`/`-name`/
    `-rating`) and hides a section left empty. The filter field sits outside the form, so typing in
-   it never autosaves. #}
+   it never autosaves. The views only change ratings: no add row, no Add button (user ruling,
+   2026-10-25). #}
 {% set tab = skills_tab | default("combat") %}
 {% set multi = tab in ("filtered", "rated") %}
 <div id="skill-allocation" class="skills-fragment" data-skills-tab="{{ tab }}">
@@ -208,7 +209,7 @@
             <td>{{ row.pool }}</td>
           </tr>
           {% endfor %}
-          {% if exotic_adding %}
+          {% if exotic_adding and not multi %}
           {% set new_base = exotic_bases | selectattr("id", "equalto", new_exotic.skill) | first | default(exotic_bases | first) %}
           {% set example = exotic_examples[new_base.id] %}
           <tr id="exotic-skill-add" class="skills-row--add">
@@ -242,6 +243,7 @@
         </tbody>
       </table>
       </div>
+      {% if not multi %}
       <p class="skills-panel__help">{{ _("Web_Skills_ExoticHelp") }}</p>
       <button
         type="button"
@@ -251,21 +253,17 @@
         hx-target="#skill-allocation"
         hx-swap="outerHTML"
       >{{ _("Web_Skills_AddSpecial") }}</button>
+      {% endif %}
       {% else %}
       <p class="info">{{ _("Web_Skills_NoneOffered") }}</p>
       {% endif %}
     </section>
   </form>
 
-  <div class="skills-messages"{% if tab == "knowledge" %} hidden{% endif %}>
-    {% if skill_error %}
-    <p class="error">{{ skill_error | tr }}</p>
-    {% endif %}
-    {% if skill_budget_warning %}
-    <p class="warning">{{ skill_budget_warning | tr }}</p>
-    {% endif %}
-  </div>
   {% else %}
   <p{% if tab == "knowledge" %} hidden{% endif %}>{{ _("Web_Skills_Placeholder") }}</p>
   {% endif %}
 </div>
+{% if oob_messages %}
+{% include "_skill_messages.html" %}
+{% endif %}

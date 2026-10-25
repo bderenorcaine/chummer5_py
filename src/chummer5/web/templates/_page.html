@@ -32,6 +32,9 @@
   {% for section in page.sections %}
   {% include section.fragment %}
   {% endfor %}
+  {% if page.tab_footer %}
+  {% include page.tab_footer %}
+  {% endif %}
   {% endif %}
 </div>
 {% if oob_nav %}

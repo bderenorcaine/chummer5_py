@@ -283,5 +283,8 @@ def test_no_submit_button_no_details_and_messages_at_the_bottom() -> None:
     html = client.post("/ui/knowledge", data=_row(0, "Corporations", "Nope", 1)).text
     assert "<details" not in html
     assert 'type="submit"' not in html
-    assert html.index('class="error"') > html.index("</form>")
+    messages = html.index(
+        '<div id="knowledge-messages" class="skills-messages" hx-swap-oob="true">'
+    )
+    assert html.index('class="error"') > messages > html.index("</form>")
     assert '<input type="hidden" name="skills_tab" value="knowledge" />' in html

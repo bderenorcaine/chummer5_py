@@ -1,0 +1,13 @@
+{# WP150 follow-up: the active-skills form's messages. They live in the Skills page's footer
+   (`_skills_footer.html`), under every section of every tab, not inside the fragment: on the
+   Filtered/Rated views the Knowledge section follows the active-skill sections, and a message
+   inside the fragment would sit above it (standing rule 1). `POST /ui/skills` sends this again
+   out of band (`oob_messages`), since its own swap target is only `#skill-allocation`. #}
+<div id="skill-messages" class="skills-messages"{% if oob_messages %} hx-swap-oob="true"{% endif %}>
+  {% if skill_error %}
+  <p class="error">{{ skill_error | tr }}</p>
+  {% endif %}
+  {% if skill_budget_warning %}
+  <p class="warning">{{ skill_budget_warning | tr }}</p>
+  {% endif %}
+</div>

@@ -420,6 +420,7 @@ async def submit_knowledge(request: Request) -> HTMLResponse:
     # WP150: re-render the view the post came from -- the Knowledge tab, or Filtered/Rated.
     tab = str(form.get("skills_tab") or "")
     context["skills_tab"] = tab if tab in KNOWLEDGE_VIEW_TABS else "knowledge"
+    context["oob_messages"] = True  # the messages live in the page's footer
     response = templates.TemplateResponse(request, "_knowledge_skills.html", context)
     set_session_cookie(request, response, new_cookie)
     return response

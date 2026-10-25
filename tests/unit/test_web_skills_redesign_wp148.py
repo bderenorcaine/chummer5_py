@@ -130,7 +130,8 @@ def test_the_knowledge_tab_shows_only_the_knowledge_fragment() -> None:
 
     assert _shown_panels(html) == []
     assert re.search(r'<div id="knowledge-skills"[^>]*data-skills-tab="knowledge">', html)
-    assert '<div class="skills-messages" hidden>' in html
+    # WP150: the messages are in the page's footer, after both fragments, on every tab.
+    assert html.index('id="skill-messages"') > html.index('id="knowledge-skills"')
 
 
 def test_the_page_opens_on_combat_and_the_old_slug_aliases_it() -> None:
@@ -439,8 +440,11 @@ def test_no_submit_button_no_details_and_messages_after_the_panels() -> None:
     assert "<details" not in response
     assert 'type="submit"' not in response
     assert "<button" in response  # Add Special Skills, which is type="button"
-    assert response.index('class="error"') > response.rindex("</section>")
-    assert response.index('class="error"') > response.index("</form>")
+    # WP150: the messages go out of band to the page's footer, never inside the fragment.
+    messages = response.index(
+        '<div id="skill-messages" class="skills-messages" hx-swap-oob="true">'
+    )
+    assert response.index('class="error"') > messages > response.index("</form>")
 
 
 def test_skills_tab_survives_an_autosave() -> None:

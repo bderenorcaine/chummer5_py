@@ -596,6 +596,8 @@ replaces both sub-tabs with the single tab strip.
 | Resonance tab | **Disabled for a non-Technomancer**, and visible so the tabs after it never move. Technomancers are out of scope (Project Overview), so in practice it is always disabled. It carries a disabled reason, the same way the nav's Resonance entry does. |
 | Filter and "rated only" | **Two more tabs, after Special:** a **Filtered** tab, which takes a filter string and shows the matching skills, and a **Rated** tab, which shows every skill with a rating. They replace today's filter box and checkbox. |
 | Text-field placeholders | **Every text field's placeholder is specific to its row.** Today every field shows the same "e.g. Axes". |
+| Messages on the Filtered/Rated views (after WP150) | **At the bottom of the page, like everywhere else.** WP150 first left an active-skills error between the Special and Knowledge sections. Both forms' messages now sit in a footer after every section, on every tab, and each POST refreshes its half out of band. |
+| Adding and removing skills on Filtered/Rated (after WP150) | **Not there. Those views only change ratings.** No Add buttons and no add or blank rows. A Knowledge row's name, category and Native are shown as text. |
 
 **Defaults this file sets (not user rulings; change them here if they turn out wrong):**
 

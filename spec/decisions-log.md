@@ -2364,6 +2364,12 @@ container that broke.
 - **The strip-to-dropdown switch is a container query on the page column** (`@container
   (max-width: 41rem)`), not a media query. Whether the strip fits depends on the column, and the
   sidebar takes a varying share of the window.
-- **On Filtered/Rated, an active-skills error sits between the Special and Knowledge sections.**
-  This is a known gap in standing rule 1, accepted because the two forms are separate swap targets.
-  The error only appears right under the form the player just edited.
+- **Messages at the bottom on every tab (user ruling, same day, superseding WP150's first cut).**
+  WP150 first left an active-skills error between the Special and Knowledge sections on
+  Filtered/Rated, because each form's messages lived inside its own swap target. Both message
+  regions now live in a page footer (`StepPage.tab_footer`, `_skills_footer.html`) after both
+  fragments. Each POST re-sends its own region out of band, the pattern the step nav and the
+  Priorities preview already use.
+- **Filtered and Rated only change ratings (user ruling, same day).** No Add buttons and no
+  add/blank rows. Knowledge rows show name, category and Native as text, posted back through hidden
+  fields. This removes WP150's "a row added on Rated stays hidden" limitation.
