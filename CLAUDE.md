@@ -35,6 +35,17 @@ page number and paraphrase; the verbatim text stays in `spec/rulebooks/`. Only o
 see existing worklogs for the pattern) when the chapter extraction doesn't cover it, or when a citation's
 exact page/wording still needs pinning down for `learnings.md`.
 
+## Limitations need the user's sign-off
+
+If you hit a limitation partway through a WP, stop and flag it to the user before going further.
+That means anything where the result would fall short of the WP's spec, a standing rule (such as
+Phase Z's design rules), or a user ruling. Don't work around it on your own and record the
+shortfall as an "accepted gap" or "known limit". Explain the conflict and the options you see, then
+wait for a decision. **A gap is only accepted once the user has explicitly accepted it.** When they
+do, record their ruling, with its date, in the decisions log, and in the phase file's rulings table
+if there is one. (Origin: WP150 first put an active-skills error above the Knowledge section and
+logged that as an accepted gap. The user rejected it on 2026-10-25.)
+
 ## Closing out a WP
 
 - One WP per commit, message `WPn: short description` (see `git log` for the existing style).
