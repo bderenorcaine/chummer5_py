@@ -280,7 +280,7 @@ def test_step_panels_render_open_without_the_accordion_machinery() -> None:
     assert "chargen-body" not in html
     # ... while WP64's sub-category open-state store survives, keyed as before (WP141: in
     # static/app.js, which every shell page loads).
-    skills = client.get("/ui/page/skills").text
+    gear = client.get("/ui/page/equipment/gear").text
     assert "/static/app.js" in client.get("/").text
     assert "htmx:afterSwap" in client.get("/static/app.js").text
-    assert 'data-details-key="skillcat:' in skills
+    assert 'data-details-key="' in gear

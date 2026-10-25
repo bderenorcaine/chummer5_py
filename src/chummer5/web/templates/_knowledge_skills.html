@@ -1,4 +1,6 @@
-<div id="knowledge-skills" class="panel">
+{# WP148: shown only on the Skills page's Knowledge tab; its own autosave keeps it showing. #}
+{% set tab = skills_tab | default("knowledge") %}
+<div id="knowledge-skills" class="panel"{% if tab != "knowledge" %} hidden{% endif %}>
   {% if character %}
   <details open>
   <summary class="panel__heading">{{ _("Web_Knowledge_Heading") }}</summary>

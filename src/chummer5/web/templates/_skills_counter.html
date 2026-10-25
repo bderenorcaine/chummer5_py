@@ -1,0 +1,6 @@
+{# WP148: one Skills-strip counter, "S 36/36": a short label (its long name as the tooltip) and
+   remaining/budget, highlighted when overspent. #}
+<div class="skills-counter{% if counter.over %} skills-counter--over{% endif %}">
+  <dt class="skills-counter__label"><abbr title="{{ _(counter.title_key) }}">{{ _(counter.label_key) }}</abbr></dt>
+  <dd class="skills-counter__value">{{ counter.remaining }}/{{ counter.of }}</dd>
+</div>

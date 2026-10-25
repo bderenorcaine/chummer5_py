@@ -1,5 +1,6 @@
-"""WP98: the three composite nav pages -- Skills, Magic, Equipment -- as a tab strip over their
-sections (`chummer5.web.shell.PageSection`).
+"""WP98: the composite nav pages -- Magic and Equipment (and Skills until WP148 gave it view tabs,
+see `test_web_skills_redesign_wp148.py`) -- as a tab strip over their sections
+(`chummer5.web.shell.PageSection`).
 
 The pattern (see `spec/decisions-log.md`, 2026-09-24): a tab is a link that re-renders the whole
 page with that section showing, and the page still renders *every* section's fragment, all but the
@@ -37,7 +38,6 @@ HTMX = {"HX-Request": "true"}
 
 # Each composite page's sections: (tab slug, the fragment's own wrapper id).
 COMPOSITES = {
-    "skills": (("active", "skill-allocation"), ("knowledge", "knowledge-skills")),
     "magic": (
         ("talent", "talent-selection"),
         ("spells", "spell-selection"),
@@ -113,7 +113,7 @@ def _shown_tab(html: str, page: str) -> str:
     return shown[0]
 
 
-def test_exactly_the_three_composite_pages_are_tabbed() -> None:
+def test_exactly_the_composite_pages_are_tabbed() -> None:
     tabbed = {page.slug for page in STEP_PAGES if page.tabbed}
     assert tabbed == set(COMPOSITES)
     for slug, sections in COMPOSITES.items():
@@ -169,26 +169,27 @@ def test_a_tab_link_shows_that_section_and_is_remembered_by_the_page() -> None:
     assert "page-tabs__item--current" not in _tab(html, "Gear")
 
     # Leave, come back through the nav: the page reopens on the tab the player left it on.
-    client.get("/ui/page/skills", headers=HTMX)
+    client.get("/ui/page/magic", headers=HTMX)
     html = client.get("/ui/page/equipment", headers=HTMX).text
     assert _shown_tab(html, "equipment") == "lifestyle"
-    assert _shown_tab(client.get("/ui/page/skills", headers=HTMX).text, "skills") == "active"
+    assert _shown_tab(client.get("/ui/page/magic", headers=HTMX).text, "magic") == "talent"
 
 
 def test_a_direct_tab_url_renders_the_full_shell_and_bad_tabs_404() -> None:
     client = TestClient(create_app())
     _confirm_human(client)
 
-    html = client.get("/ui/page/skills/knowledge").text
+    html = client.get("/ui/page/equipment/vehicles").text
     assert html.lstrip().lower().startswith("<!doctype html>")
     assert '<main id="page"' in html
-    assert _shown_tab(html, "skills") == "knowledge"
+    assert _shown_tab(html, "equipment") == "vehicles"
     assert "hx-swap-oob" not in html
 
-    fragment = client.get("/ui/page/skills/knowledge", headers=HTMX).text
+    fragment = client.get("/ui/page/equipment/vehicles", headers=HTMX).text
     assert "<!doctype html>" not in fragment.lower()
     assert 'hx-swap-oob="true"' in fragment  # the nav rides along, as for a page GET
 
+    assert client.get("/ui/page/equipment/no-such-tab").status_code == 404
     assert client.get("/ui/page/skills/no-such-tab").status_code == 404
     assert client.get("/ui/page/attributes/attributes").status_code == 404
     assert client.get("/ui/page/bio/anything").status_code == 404
@@ -297,11 +298,18 @@ def test_a_stale_section_is_marked_on_its_own_tab() -> None:
     # Put Skills on C (28 points) so the 25 fit, then move it to D (22) so they don't.
     _confirm_human(client, talent_letter="E", skills_letter="C", resources_letter="D")
     client.post("/ui/skills", data={f"skill_{sid}": str(v) for sid, v in points.items()})
-    assert "page-tabs__marker" not in client.get("/ui/tabs/skills").text
+    assert "skills-tab__marker" not in client.get("/ui/tabs/skills").text
 
     _confirm_human(client, talent_letter="E", skills_letter="D", resources_letter="C")
 
+    # WP148: on the Skills page's view tabs, Combat (the page's first tab) carries the
+    # active-skill warning and Knowledge its own.
     html = client.get("/ui/page/skills", headers=HTMX).text
-    assert "page-tabs__marker" in _tab(html, "Active skills")
-    assert "page-tabs__item--stale" in _tab(html, "Active skills")
-    assert "page-tabs__marker" not in _tab(html, "Knowledge & languages")
+    combat = re.search(r'<a\s[^>]*class="skills-tab[^"]*"[^>]*/skills/combat".*?</a>', html, re.S)
+    knowledge = re.search(
+        r'<a\s[^>]*class="skills-tab[^"]*"[^>]*/skills/knowledge".*?</a>', html, re.S
+    )
+    assert combat is not None and knowledge is not None
+    assert "skills-tab__marker" in combat.group(0)
+    assert "skills-tab--stale" in combat.group(0)
+    assert "skills-tab__marker" not in knowledge.group(0)

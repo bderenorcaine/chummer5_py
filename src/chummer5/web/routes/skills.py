@@ -6,7 +6,6 @@ cleanup.md`'s WP58 audit for the target shape this module is part of.
 
 from __future__ import annotations
 
-import itertools
 from collections.abc import Mapping
 from dataclasses import replace
 from types import MappingProxyType
@@ -48,6 +47,48 @@ from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
+# WP148 (Phase Z): the Skills page's panels, one per view tab (`chummer5.web.shell.SKILLS_TABS`),
+# in tab order. A category tab shows the non-exotic skills of its categories; exotic skills are
+# all on Special. Resonance Active skills are never offered (Technomancers are out of scope), so
+# that panel is always empty and its tab disabled.
+CATEGORY_TABS: tuple[tuple[str, frozenset[str]], ...] = (
+    ("combat", frozenset({"Combat Active"})),
+    ("physical", frozenset({"Physical Active"})),
+    ("social", frozenset({"Social Active"})),
+    ("technical", frozenset({"Technical Active"})),
+    ("vehicle", frozenset({"Vehicle Active"})),
+    ("magical", frozenset({"Magical Active", "Pseudo-Magical Active"})),
+    ("resonance", frozenset({"Resonance Active"})),
+)
+# Every tab this fragment knows; `knowledge` shows none of its panels. An unknown `skills_tab`
+# falls back to the first.
+SKILLS_TAB_SLUGS = frozenset(
+    {slug for slug, _ in CATEGORY_TABS} | {"group", "special", "knowledge"}
+)
+DEFAULT_SKILLS_TAB = "combat"
+
+
+def skills_tab_from(raw: object) -> str:
+    tab = str(raw or "")
+    return tab if tab in SKILLS_TAB_SLUGS else DEFAULT_SKILLS_TAB
+
+
+def dom_id(key: str) -> str:
+    """WP148: an id-safe, collision-free form of a skill key or group name, for the stable ids
+    htmx needs to restore focus after an autosave swap. A catalog id (a GUID) is used as is; an
+    exotic instance key (`"{id}|{specific}"`, with free text after the bar) or a group name gets
+    its free text hex-encoded, so no two keys can map to one id."""
+    base, _, specific = key.partition("|")
+    if not specific and all(c.isalnum() or c == "-" for c in base):
+        return base
+    return "x" + key.encode().hex()
+
+
+def first_example(skill: Skill) -> str | None:
+    """WP148: a skill's first suggested specialization, for an "e.g. ..." placeholder. Entries in
+    brackets ("[Focus Type]") are templates, not examples, and are skipped."""
+    return next((spec for spec in skill.specializations if not spec.startswith("[")), None)
+
 
 def _skill_allocation_context(
     character: Character | None,
@@ -61,6 +102,7 @@ def _skill_allocation_context(
     *,
     error: str | Message | None = None,
     new_exotic: Mapping[str, str] = MappingProxyType({}),
+    exotic_adding: bool = False,
 ) -> dict[str, Any]:
     """Context for `_skill_allocation.html`. Same echo-the-submission shape as
     `chummer5.web.routes.attributes._attribute_allocation_context`; `skill_points`/`group_points`/
@@ -93,6 +135,13 @@ def _skill_allocation_context(
     **WP124**: an exotic catalog entry gets no row of its own. Each bought instance (a
     `"{id}|{specific}"` key in `skill_points`/`karma_skill_points`) gets one in its category, and
     the "add an exotic skill" row below the tables echoes `new_exotic` until it is bought.
+
+    **WP148**: rows are grouped into one panel per Skills tab (`skill_panels`, `CATEGORY_TABS`),
+    exotic instances into `exotic_rows`. Each row carries one specialization (`spec`), with
+    `spec_karma` saying which pool pays for it and `spec_forced` when only Karma can: a point-
+    funded specialization needs a point of the skill's own (p. 129; a grouped skill can't be
+    specialized in Step Five, p. 88). `exotic_adding` (the Add Special Skills button) shows the
+    add row before it has anything in it.
     """
     if character is None:
         return {"character": None, "skill_error": error}
@@ -120,15 +169,14 @@ def _skill_allocation_context(
     )
     budget = skill_point_budget(skills_letter, PRIORITIES)
     rules = skill_purchase_rules(character)  # WP116/WP117
-    # WP61: sorted by (category, name), not just name, so `itertools.groupby` below needs no
-    # re-sorting -- mirrors `chummer5.web.routes.resources._resources_context`'s own `gear_groups`
-    # comment about `STARTER_GEAR_CATALOG` already being pre-sorted the same way.
+    # WP148: sorted by name, so each panel below comes out in name order without re-sorting --
+    # the Magical panel spans two categories (Arcana is Pseudo-Magical Active).
     offered = offered_skills(character)
     exotic_bases = [s for s in offered if s.exotic]
     offered_by_category = sorted(
         [s for s in offered if not s.exotic]
         + list(exotic_instances(exotic_bases, [*skill_points, *karma_skill_points])),
-        key=lambda s: (s.category, s.name, s.specific or ""),
+        key=lambda s: (s.name, s.specific or ""),
     )
     # WP65: a specialized skill's Pool is shown as "X (Y)" -- X the base (un-specialized) pool and
     # Y the +2-specialization pool -- rather than the single specialized value WP50 rendered (which
@@ -140,10 +188,16 @@ def _skill_allocation_context(
     skill_rows = [
         {
             "skill": skill,
+            "dom_id": dom_id(skill.id),
             "points": allocation.skill_points.get(skill.id, 0),
-            "specialization": allocation.specializations.get(skill.id, ""),
             "karma_points": karma_skill_points.get(skill.id, 0),
-            "karma_specialization": karma_specializations.get(skill.id, ""),
+            # WP148: one specialization per skill, paid from points or Karma (the toggle).
+            "spec": allocation.specializations.get(skill.id)
+            or karma_specializations.get(skill.id, ""),
+            "spec_karma": skill.id not in allocation.specializations
+            and skill.id in karma_specializations,
+            "spec_forced": allocation.skill_points.get(skill.id, 0) < 1,
+            "spec_example": first_example(skill),
             # WP82: `natural_rating` is what the two inputs above actually bought; `rating` is the
             # total once `ImprovementType.SKILL` bonuses are counted, and it can now exceed 6 (see
             # `chummer5.engine.skills.MAX_SKILL_RATING`). The template renders `natural (rating)`
@@ -166,19 +220,24 @@ def _skill_allocation_context(
         }
         for skill in offered_by_category
     ]
-    # WP61: grouped into collapsible categories for the template, same shape/pattern as
-    # `_resources_context`'s `gear_groups` (`<details>` open only if it has an active row). Zips
-    # the typed `offered_by_category` skills alongside `skill_rows`'s own dicts rather than keying
-    # off `row["skill"].category` directly -- `skill_rows`'s values are typed `object`, not `Skill`.
-    skill_row_groups = [
-        {"category": category, "rows": [row for _, row in pairs]}
-        for category, pairs in itertools.groupby(
-            zip(offered_by_category, skill_rows, strict=True), key=lambda pair: pair[0].category
-        )
+    # WP148: one panel per category tab, in tab order, each sorted by name (`offered_by_category`
+    # already is). Zips the typed `offered_by_category` skills alongside `skill_rows`'s own dicts
+    # rather than keying off `row["skill"]` -- `skill_rows`'s values are typed `object`.
+    paired = list(zip(offered_by_category, skill_rows, strict=True))
+    skill_panels = [
+        {
+            "slug": slug,
+            "rows": [row for skill, row in paired if not skill.exotic and skill.category in cats],
+        }
+        for slug, cats in CATEGORY_TABS
     ]
+    exotic_rows = [row for skill, row in paired if skill.exotic]
     group_rows = [
         {
             "name": group,
+            "dom_id": dom_id(group),
+            # WP148: the member skills, in catalog order, for the Group tab's Components column.
+            "components": [s for s in SKILLS if s.skill_group == group and not s.specific],
             "points": allocation.group_points.get(group, 0),
             "karma_points": karma_group_points.get(group, 0),
         }
@@ -210,7 +269,8 @@ def _skill_allocation_context(
     return {
         "character": display,
         "skill_rows": skill_rows,
-        "skill_row_groups": skill_row_groups,
+        "skill_panels": skill_panels,
+        "exotic_rows": exotic_rows,
         "group_rows": group_rows,
         "skills_budget": budget.skills,
         # WP117: Uncouth doubles a Social skill's points.
@@ -235,7 +295,10 @@ def _skill_allocation_context(
         ),
         "skill_error": error,
         "exotic_bases": exotic_bases,
+        "exotic_examples": {base.id: first_example(base) for base in exotic_bases},
         "new_exotic": new_exotic,
+        # WP148: the add row shows once asked for, and stays while it holds anything.
+        "exotic_adding": exotic_adding or any(new_exotic.values()),
     }
 
 
@@ -244,6 +307,25 @@ def _form_int(raw: object) -> int:
         return int(str(raw))
     except ValueError:
         return 0
+
+
+def _parse_specializations(
+    form: Any, skills: list[Skill], skill_points: Mapping[str, int]
+) -> tuple[dict[str, str], dict[str, str]]:
+    """WP148: each skill's one specialization (`spec_<id>`) and its toggle (`spec_karma_<id>`,
+    present means Karma), split into the point-funded and Karma-funded maps the engine takes. A
+    skill without a point of its own can only pay with Karma, whatever the toggle says -- the
+    same rule `_skill_allocation_context` renders the toggle forced by."""
+    texts = parse_specializations(form, (s.id for s in skills), "spec_")
+    specializations: dict[str, str] = {}
+    karma_specializations: dict[str, str] = {}
+    for skill_id, text in texts.items():
+        karma = form.get(f"spec_karma_{skill_id}") is not None
+        if karma or skill_points.get(skill_id, 0) < 1:
+            karma_specializations[skill_id] = text
+        else:
+            specializations[skill_id] = text
+    return specializations, karma_specializations
 
 
 def _parse_exotic_skills(
@@ -292,10 +374,11 @@ def _add_new_exotic(
 async def submit_skills(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
     session.current_page = "skills"  # WP61/WP97
+    form = await request.form()
+    skills_tab = skills_tab_from(form.get("skills_tab"))  # WP148: re-render the same tab
     if session.character is None:
         context = _skill_allocation_context(None, session.skills_letter, {}, {})
     else:
-        form = await request.form()
         previous = session.character
         # WP61: character-scoped, not the module-level `MUNDANE_SKILLS`/`MUNDANE_SKILL_GROUPS`
         # -- a magic-active character's submitted Magical Active skill points would otherwise
@@ -309,13 +392,12 @@ async def submit_skills(request: Request) -> HTMLResponse:
         point_keys = [s.id for s in skills_for_form if not s.exotic] + exotic_keys
         skill_points = parse_points(form, point_keys, "skill_")
         group_points = parse_points(form, groups_for_form, "group_")
-        specializations = parse_specializations(form, (s.id for s in skills_for_form), "spec_")
-        # WP53: Karma-funded points/specializations, submitted in the same form (mirrors
-        # WP52's karma_attr_{code} precedent).
+        # WP53: Karma-funded points, submitted in the same form (mirrors WP52's karma_attr_{code}
+        # precedent). WP148: a specialization's pool is its row's toggle.
         karma_skill_points = parse_points(form, point_keys, "karma_skill_")
         karma_group_points = parse_points(form, groups_for_form, "karma_group_")
-        karma_specializations = parse_specializations(
-            form, (s.id for s in skills_for_form), "karma_spec_"
+        specializations, karma_specializations = _parse_specializations(
+            form, [s for s in skills_for_form if not s.exotic], skill_points
         )
         added, duplicate = _add_new_exotic(
             new_exotic, exotic_bases, exotic_keys, skill_points, karma_skill_points
@@ -372,7 +454,9 @@ async def submit_skills(request: Request) -> HTMLResponse:
             karma_specializations,
             error=error,
             new_exotic=new_exotic,
+            exotic_adding=form.get("exotic_add") is not None and not added,
         )
+    context["skills_tab"] = skills_tab
     response = templates.TemplateResponse(request, "_skill_allocation.html", context)
     set_session_cookie(request, response, new_cookie)
     return response

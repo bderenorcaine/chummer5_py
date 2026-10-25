@@ -182,8 +182,8 @@ def test_the_point_pools_are_the_numbers_each_step_shows_on_its_own_page() -> No
     # And they agree with what the step's own page prints.
     attributes_page = client.get("/ui/page/attributes", headers=HTMX).text
     assert f'budget-box__value">{budget - 3}/{budget}<' in attributes_page
-    skills_page = client.get("/ui/page/skills", headers=HTMX).text
-    assert f"Skill points remaining: {skills.skills - 4} / {skills.skills}." in skills_page
+    skills_page = client.get("/ui/page/skills", headers=HTMX).text  # WP148: the strip's counter
+    assert f'skills-counter__value">{skills.skills - 4}/{skills.skills}<' in skills_page
 
 
 def test_an_over_budget_pool_is_flagged() -> None:

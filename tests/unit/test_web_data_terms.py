@@ -124,7 +124,8 @@ def test_german_names_reach_the_page_but_never_its_form_fields(german: None) -> 
     assert f'name="skill_{PISTOLS.id}"' in skills  # identity: the GUID, unchanged
     # The filter matches what the player types against what the player *sees*.
     assert 'data-skill-name="pistolen"' in skills
-    assert "Kampf-Aktionsfertigkeiten" in skills
+    # WP148: the categories became tabs with project labels; a group name is still a data term.
+    assert "Feuerwaffen" in client.get("/ui/page/skills/group").text
 
     gear = client.get("/ui/page/equipment/gear").text
     assert 'name="gear_Medkit"' in gear  # name-keyed gear: the English key, unchanged

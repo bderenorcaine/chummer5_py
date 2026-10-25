@@ -28,11 +28,11 @@ a logged warning. A missing translation is never blank.
    adopted legacy's Title Case "Adept Powers" and "Attribute Points" this way), or add a project
    key.
 2. **Project keys start with `Web_`**, then an area, then a name, in `CamelCase` segments:
-   `Web_Nav_Priorities`, `Web_Skills_PointsRemaining`. The prefix means a key can never collide
+   `Web_Nav_Priorities`, `Web_Skills_ColSkillPoints`. The prefix means a key can never collide
    with a legacy one, and a grep tells which layer owns it.
 3. **Interpolated text is one key with named placeholders**, never two keys concatenated:
-   `Web_Skills_PointsRemaining` = `Skill points remaining: {remaining} / {budget}.`, called as
-   `_("Web_Skills_PointsRemaining", remaining=…, budget=…)`. A language with a different word order
+   `Web_Cyberware_Essence` = `Essence remaining: {remaining} / 6 (spent {spent}).`, called as
+   `_("Web_Cyberware_Essence", remaining=…, spent=…)`. A language with a different word order
    can then move the placeholders. Legacy keys keep their positional `{0}`, which `_()` also
    accepts.
 4. **Texts are plain text.** The result is HTML-escaped like any other template value. Markup stays

@@ -1,200 +1,244 @@
-<div id="skill-allocation" class="panel">
+{# WP148 (Phase Z): the Skills page's active-skill panels -- spec/plan/phase-z-page-redesigns.md,
+   "Redesign 4". One panel per tab (the five categories, Group, Magical, Resonance, Special); only
+   the current tab's shows, the rest are `hidden` but stay in the form, so every autosave still
+   posts every row. The hidden `skills_tab` input brings the same tab back after an autosave.
+   There is no submit button: the form autosaves on `change` and `number-input`. Messages sit
+   under the panel (standing rule 1). Every control has a stable id so htmx can put focus and
+   caret back after the `outerHTML` swap. On the Knowledge tab nothing here shows. #}
+{% set tab = skills_tab | default("combat") %}
+<div id="skill-allocation" class="skills-fragment">
   {% if character %}
-  <details open>
-  <summary class="panel__heading">{{ _("Tab_Skills") }}</summary>
-
-  {% if skill_error %}
-  <p class="error">{{ skill_error | tr }}</p>
-  {% endif %}
-  {% if skill_budget_warning %}
-  <p class="warning">{{ skill_budget_warning | tr }}</p>
-  {% endif %}
-
-  <p>
-    {{ _("Web_Skills_PointsRemaining", remaining=skills_remaining, budget=skills_budget) }}
-    {{ _("Web_Skills_GroupPointsRemaining", remaining=groups_remaining, budget=groups_budget) }}
-    {{ _("Web_Skills_KarmaRemaining", remaining=skill_karma_remaining, budget=skill_karma_budget) }}
-  </p>
-
-  <label>
-    {{ _("Web_Skills_Filter") }}
-    <input type="text" id="skill-filter" placeholder="{{ _('Web_Skills_FilterPlaceholder') }}" />
-  </label>
-  <label>
-    <input type="checkbox" id="skill-rated-only" />
-    {{ _("Web_Skills_RatedOnly") }}
-  </label>
-
   <form
     hx-post="/ui/skills"
     hx-target="#skill-allocation"
     hx-swap="outerHTML"
     hx-trigger="change, number-input delay:400ms"
   >
-    <h3>{{ _("Label_SkillGroups") }}</h3>
-    <p>{{ _("Web_Skills_GroupKarmaHelp") }}</p>
-    <table>
-      <thead>
-        <tr>
-          <th>{{ _("Web_Skills_ColGroup") }}</th>
-          <th>{{ _("Web_Skills_ColPoints") }}</th>
-          <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in group_rows %}
-        <tr>
-          <td>{{ row.name | dterm("skills.xml") }}</td>
-          <td>
-            <input
-              type="number"
-              name="group_{{ row.name }}"
-              value="{{ row.points }}"
-              min="0"
-              max="{{ max_skill_rating }}"
-            />
-          </td>
-          <td>
-            <input
-              type="number"
-              name="karma_group_{{ row.name }}"
-              value="{{ row.karma_points }}"
-              min="0"
-              max="{{ max_skill_rating }}"
-            />
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <input type="hidden" name="skills_tab" value="{{ tab }}" />
 
-    <h3>{{ _("Web_Skills_Individual") }}</h3>
-    <p>{{ _("Web_Skills_GroupsWinHelp") }}</p>
-    <p>{{ _("Web_Skills_KarmaHelp") }}</p>
+    {% for panel in skill_panels %}
+    <section class="skills-panel skills-panel--{{ panel.slug }}" data-skills-panel="{{ panel.slug }}"{% if tab != panel.slug %} hidden{% endif %}>
+      {% if panel.slug == "resonance" %}
+      <p class="info">{{ _("Web_Nav_ResonanceUnsupported") }}</p>
+      {% elif not panel.rows %}
+      <p class="info">{{ _("Web_Skills_NoneOffered") }}</p>
+      {% endif %}
+      {% if panel.rows %}
+      <div class="skills-table">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ _("Web_Skills_ColSkill") }}</th>
+            <th>{{ _("Web_Attributes_ColAttribute") }}</th>
+            <th>{{ _("Web_Skills_ColGroup") }}</th>
+            <th><abbr title="{{ _('String_SkillPoints') }}">{{ _("Web_Skills_ColSkillPoints") }}</abbr></th>
+            <th><abbr title="{{ _('String_Karma') }}">{{ _("Web_Skills_ColKarmaPoints") }}</abbr></th>
+            <th>{{ _("Web_Skills_ColRating") }}</th>
+            <th>{{ _("Web_Skills_ColSpecialization") }}</th>
+            <th>{{ _("Web_Skills_ColPool") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in panel.rows %}
+          <tr data-skill-name="{{ (row.skill | dterm("skills.xml")) | lower }}" data-skill-rating="{{ row.rating }}">
+            <td>{{ row.skill | dterm("skills.xml") }}</td>
+            <td>{{ _("String_Attribute" ~ row.skill.attribute ~ "Short") }}</td>
+            <td>{{ (row.skill.skill_group | dterm("skills.xml")) if row.skill.skill_group else "—" }}</td>
+            <td>
+              <input
+                type="number"
+                id="skill-{{ row.dom_id }}"
+                name="skill_{{ row.skill.id }}"
+                value="{{ row.points }}"
+                min="0"
+                max="{{ row.max_rating }}"
+              />
+            </td>
+            <td>
+              <input
+                type="number"
+                id="karma-skill-{{ row.dom_id }}"
+                name="karma_skill_{{ row.skill.id }}"
+                value="{{ row.karma_points }}"
+                min="0"
+                max="{{ row.max_rating }}"
+              />
+            </td>
+            <td>{{ row.natural_rating }}{% if row.rating != row.natural_rating %} ({{ row.rating }}){% endif %}</td>
+            <td class="skills-spec">
+              {% include "_spec_toggle.html" %}
+              <input
+                type="text"
+                id="spec-{{ row.dom_id }}"
+                name="spec_{{ row.skill.id }}"
+                value="{{ row.spec }}"
+                aria-label="{{ _('Web_Skills_SpecAriaLabel', skill=row.skill | dterm('skills.xml')) }}"
+                {% if row.spec_example %}placeholder="{{ _('Web_Skills_Example', example=row.spec_example | dterm('skills.xml')) }}"{% endif %}
+              />
+            </td>
+            <td>{{ row.pool }}{% if row.pool_specialized is not none %} ({{ row.pool_specialized }}){% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% endif %}
+    </section>
+    {% endfor %}
 
-    <div id="skill-tables">
-      {% for group in skill_row_groups %}
-      <details
-        data-details-key="skillcat:{{ group.category }}"
-        {% if group.rows | selectattr("points", "gt", 0) | list
-           or group.rows | selectattr("karma_points", "gt", 0) | list
-           or group.rows | selectattr("specialization") | list
-           or group.rows | selectattr("karma_specialization") | list %}open{% endif %}
-      >
-        <summary>{{ group.category | dterm("skills.xml") }}</summary>
-        <table>
-          <thead>
-            <tr>
-              <th>{{ _("Web_Skills_ColSkill") }}</th>
-              <th>{{ _("Web_Attributes_ColAttribute") }}</th>
-              <th>{{ _("Web_Skills_ColGroup") }}</th>
-              <th>{{ _("Web_Skills_ColPoints") }}</th>
-              <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
-              <th>{{ _("Web_Skills_ColRating") }}</th>
-              <th>{{ _("Web_Skills_ColSpecialization") }}</th>
-              <th>{{ _("Web_Skills_ColKarmaSpec") }}</th>
-              <th>{{ _("Web_Skills_ColPool") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in group.rows %}
-            <tr data-skill-name="{{ (row.skill | dterm("skills.xml")) | lower }}{% if row.skill.specific %} {{ row.skill.specific | lower }}{% endif %}" data-skill-rating="{{ row.rating }}">
-              <td>{{ row.skill | dterm("skills.xml") }}{% if row.skill.specific %} ({{ row.skill.specific }})<input type="hidden" name="exotic_key" value="{{ row.skill.id }}" />{% endif %}</td>
-              <td>{{ _("String_Attribute" ~ row.skill.attribute ~ "Short") }}</td>
-              <td>{{ (row.skill.skill_group | dterm("skills.xml")) if row.skill.skill_group else "—" }}</td>
-              <td>
-                <input
-                  type="number"
-                  name="skill_{{ row.skill.id }}"
-                  value="{{ row.points }}"
-                  min="0"
-                  max="{{ row.max_rating }}"
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  name="karma_skill_{{ row.skill.id }}"
-                  value="{{ row.karma_points }}"
-                  min="0"
-                  max="{{ row.max_rating }}"
-                />
-              </td>
-              <td>{{ row.natural_rating }}{% if row.rating != row.natural_rating %} ({{ row.rating }}){% endif %}</td>
-              {% if row.skill.exotic %}
-              {# WP124: p. 131/147 -- an exotic skill has no specializations. #}
-              <td>—</td>
-              <td>—</td>
-              {% else %}
-              <td>
-                <input
-                  type="text"
-                  name="spec_{{ row.skill.id }}"
-                  value="{{ row.specialization }}"
-                  placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
-                />
-              </td>
-              <td>
-                <input
-                  type="text"
-                  name="karma_spec_{{ row.skill.id }}"
-                  value="{{ row.karma_specialization }}"
-                  placeholder="{{ _('Web_Skills_SpecPlaceholder') }}"
-                />
-              </td>
-              {% endif %}
-              <td>{{ row.pool }}{% if row.pool_specialized is not none %} ({{ row.pool_specialized }}){% endif %}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </details>
-      {% endfor %}
-    </div>
+    <section class="skills-panel skills-panel--group" data-skills-panel="group"{% if tab != "group" %} hidden{% endif %}>
+      {% if group_rows %}
+      <div class="skills-table">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ _("Skill_SortGroupName") }}</th>
+            <th>{{ _("Web_Skills_ColComponents") }}</th>
+            <th>{{ _("Web_Skills_ColGroupPoints") }}</th>
+            <th><abbr title="{{ _('String_Karma') }}">{{ _("Web_Skills_ColKarmaPoints") }}</abbr></th>
+            <th>{{ _("String_Rating") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in group_rows %}
+          <tr>
+            <td>{{ row.name | dterm("skills.xml") }}</td>
+            <td>{{ row.components | map("dterm", "skills.xml") | join(_("Web_List_Separator")) }}</td>
+            <td>
+              <input
+                type="number"
+                id="group-{{ row.dom_id }}"
+                name="group_{{ row.name }}"
+                value="{{ row.points }}"
+                min="0"
+                max="{{ max_skill_rating }}"
+              />
+            </td>
+            <td>
+              <input
+                type="number"
+                id="karma-group-{{ row.dom_id }}"
+                name="karma_group_{{ row.name }}"
+                value="{{ row.karma_points }}"
+                min="0"
+                max="{{ max_skill_rating }}"
+              />
+            </td>
+            <td>{{ row.points + row.karma_points }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% else %}
+      <p class="info">{{ _("Web_Skills_NoneOffered") }}</p>
+      {% endif %}
+    </section>
 
-    {% if exotic_bases %}
-    <h3>{{ _("Web_Skills_Exotic") }}</h3>
-    <p>{{ _("Web_Skills_ExoticHelp") }}</p>
-    <table id="exotic-skill-add">
-      <thead>
-        <tr>
-          <th>{{ _("Web_Skills_ColSkill") }}</th>
-          <th>{{ _("Web_Skills_ExoticSpecific") }}</th>
-          <th>{{ _("Web_Skills_ColPoints") }}</th>
-          <th>{{ _("Web_Skills_ColKarmaPoints") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>
-            <select name="exotic_new_skill">
-              {% for base in exotic_bases %}
-              <option value="{{ base.id }}" {% if new_exotic.skill == base.id %}selected{% endif %}>{{ base | dterm("skills.xml") }}</option>
-              {% endfor %}
-            </select>
-          </td>
-          <td>
-            <input
-              type="text"
-              name="exotic_new_specific"
-              value="{{ new_exotic.specific or '' }}"
-              placeholder="{{ _('Web_Skills_ExoticSpecificPlaceholder') }}"
-            />
-          </td>
-          <td>
-            <input type="number" name="exotic_new_points" value="{{ new_exotic.points or 0 }}" min="0" max="{{ max_skill_rating }}" />
-          </td>
-          <td>
-            <input type="number" name="exotic_new_karma_points" value="{{ new_exotic.karma_points or 0 }}" min="0" max="{{ max_skill_rating }}" />
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    {% endif %}
-    <button type="submit">{{ _("Web_Skills_Update") }}</button>
+    <section class="skills-panel skills-panel--special" data-skills-panel="special"{% if tab != "special" %} hidden{% endif %}>
+      {% if exotic_bases %}
+      <div class="skills-table">
+      <table id="exotic-skills">
+        <thead>
+          <tr>
+            <th>{{ _("Web_Skills_ColSkill") }}</th>
+            <th>{{ _("Web_Attributes_ColAttribute") }}</th>
+            <th>{{ _("Web_Qualities_ColDetail") }}</th>
+            <th><abbr title="{{ _('String_SkillPoints') }}">{{ _("Web_Skills_ColSkillPoints") }}</abbr></th>
+            <th><abbr title="{{ _('String_Karma') }}">{{ _("Web_Skills_ColKarmaPoints") }}</abbr></th>
+            <th>{{ _("Web_Skills_ColRating") }}</th>
+            <th>{{ _("Web_Skills_ColPool") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {# WP124: p. 131/147 -- an exotic skill has no specializations, so no toggle here. #}
+          {% for row in exotic_rows %}
+          <tr data-skill-name="{{ (row.skill | dterm("skills.xml")) | lower }} {{ row.skill.specific | lower }}" data-skill-rating="{{ row.rating }}">
+            <td>{{ row.skill | dterm("skills.xml") }}<input type="hidden" name="exotic_key" value="{{ row.skill.id }}" /></td>
+            <td>{{ _("String_Attribute" ~ row.skill.attribute ~ "Short") }}</td>
+            <td>{{ row.skill.specific }}</td>
+            <td>
+              <input
+                type="number"
+                id="skill-{{ row.dom_id }}"
+                name="skill_{{ row.skill.id }}"
+                value="{{ row.points }}"
+                min="0"
+                max="{{ row.max_rating }}"
+              />
+            </td>
+            <td>
+              <input
+                type="number"
+                id="karma-skill-{{ row.dom_id }}"
+                name="karma_skill_{{ row.skill.id }}"
+                value="{{ row.karma_points }}"
+                min="0"
+                max="{{ row.max_rating }}"
+              />
+            </td>
+            <td>{{ row.natural_rating }}{% if row.rating != row.natural_rating %} ({{ row.rating }}){% endif %}</td>
+            <td>{{ row.pool }}</td>
+          </tr>
+          {% endfor %}
+          {% if exotic_adding %}
+          {% set new_base = exotic_bases | selectattr("id", "equalto", new_exotic.skill) | first | default(exotic_bases | first) %}
+          {% set example = exotic_examples[new_base.id] %}
+          <tr id="exotic-skill-add" class="skills-row--add">
+            <td colspan="2">
+              <select id="exotic-new-skill" name="exotic_new_skill" aria-label="{{ _('Web_Skills_ColSkill') }}">
+                {% for base in exotic_bases %}
+                <option value="{{ base.id }}" {% if base.id == new_base.id %}selected{% endif %}>{{ base | dterm("skills.xml") }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <input
+                type="text"
+                id="exotic-new-specific"
+                name="exotic_new_specific"
+                value="{{ new_exotic.specific or '' }}"
+                aria-label="{{ _('Web_Skills_ExoticSpecific') }}"
+                placeholder="{{ _('Web_Skills_Example', example=(example | dterm('skills.xml')) if example else _('Web_Skills_ExoticMeleeExample')) }}"
+              />
+            </td>
+            <td>
+              <input type="number" id="exotic-new-points" name="exotic_new_points" value="{{ new_exotic.points or 0 }}" min="0" max="{{ max_skill_rating }}" aria-label="{{ _('String_SkillPoints') }}" />
+            </td>
+            <td>
+              <input type="number" id="exotic-new-karma-points" name="exotic_new_karma_points" value="{{ new_exotic.karma_points or 0 }}" min="0" max="{{ max_skill_rating }}" aria-label="{{ _('String_Karma') }}" />
+            </td>
+            <td></td>
+            <td></td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+      </div>
+      <p class="skills-panel__help">{{ _("Web_Skills_ExoticHelp") }}</p>
+      <button
+        type="button"
+        class="skills-add"
+        hx-post="/ui/skills"
+        hx-vals='{"exotic_add": "1"}'
+        hx-target="#skill-allocation"
+        hx-swap="outerHTML"
+      >{{ _("Web_Skills_AddSpecial") }}</button>
+      {% else %}
+      <p class="info">{{ _("Web_Skills_NoneOffered") }}</p>
+      {% endif %}
+    </section>
   </form>
-  </details>
+
+  <div class="skills-messages"{% if tab == "knowledge" %} hidden{% endif %}>
+    {% if skill_error %}
+    <p class="error">{{ skill_error | tr }}</p>
+    {% endif %}
+    {% if skill_budget_warning %}
+    <p class="warning">{{ skill_budget_warning | tr }}</p>
+    {% endif %}
+  </div>
   {% else %}
-  <p>{{ _("Web_Skills_Placeholder") }}</p>
+  <p{% if tab == "knowledge" %} hidden{% endif %}>{{ _("Web_Skills_Placeholder") }}</p>
   {% endif %}
 </div>

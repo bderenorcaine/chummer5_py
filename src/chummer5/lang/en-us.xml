@@ -1531,20 +1531,28 @@
     </string>
     <!-- Skills -->
     <string>
+      <key>Web_Skills_AddSpecial</key>
+      <text>Add Special Skills</text>
+    </string>
+    <string>
+      <key>Web_Skills_ColComponents</key>
+      <text>Components</text>
+    </string>
+    <string>
       <key>Web_Skills_ColGroup</key>
       <text>Group</text>
     </string>
     <string>
+      <key>Web_Skills_ColGroupPoints</key>
+      <text>Group Points</text>
+    </string>
+    <string>
       <key>Web_Skills_ColKarmaPoints</key>
-      <text>Karma pts</text>
+      <text>Ka pts</text>
     </string>
     <string>
       <key>Web_Skills_ColKarmaSpec</key>
       <text>Karma spec</text>
-    </string>
-    <string>
-      <key>Web_Skills_ColPoints</key>
-      <text>Points</text>
     </string>
     <string>
       <key>Web_Skills_ColPool</key>
@@ -1559,12 +1567,32 @@
       <text>Skill</text>
     </string>
     <string>
+      <key>Web_Skills_ColSkillPoints</key>
+      <text>S pts</text>
+    </string>
+    <string>
       <key>Web_Skills_ColSpecialization</key>
       <text>Specialization</text>
     </string>
     <string>
-      <key>Web_Skills_Exotic</key>
-      <text>Exotic skills</text>
+      <key>Web_Skills_CounterGroup</key>
+      <text>G</text>
+    </string>
+    <string>
+      <key>Web_Skills_CounterKarma</key>
+      <text>Ka</text>
+    </string>
+    <string>
+      <key>Web_Skills_CounterKnowledge</key>
+      <text>Kn</text>
+    </string>
+    <string>
+      <key>Web_Skills_CounterSkill</key>
+      <text>S</text>
+    </string>
+    <string>
+      <key>Web_Skills_Example</key>
+      <text>e.g. {example}</text>
     </string>
     <string>
       <key>Web_Skills_ExoticDuplicate</key>
@@ -1572,67 +1600,79 @@
     </string>
     <string>
       <key>Web_Skills_ExoticHelp</key>
-      <text>An exotic skill is bought once for each specific weapon or vehicle, and has no specializations. Name the item and give it points to add it; set an added skill's points to 0 to remove it.</text>
+      <text>An exotic skill is bought once for each specific weapon or vehicle, and has no specializations. Add one, name the item and give it points; set an added skill's points to 0 to remove it.</text>
+    </string>
+    <string>
+      <key>Web_Skills_ExoticMeleeExample</key>
+      <text>Monofilament Whip</text>
     </string>
     <string>
       <key>Web_Skills_ExoticSpecific</key>
       <text>Weapon or vehicle</text>
     </string>
     <string>
-      <key>Web_Skills_ExoticSpecificPlaceholder</key>
-      <text>e.g. Flamethrower</text>
-    </string>
-    <string>
-      <key>Web_Skills_Filter</key>
-      <text>Filter skills</text>
-    </string>
-    <string>
-      <key>Web_Skills_FilterPlaceholder</key>
-      <text>e.g. Automatics</text>
-    </string>
-    <string>
-      <key>Web_Skills_GroupKarmaHelp</key>
-      <text>"Karma pts" (Step Seven) raises a group's rating beyond its priority points, at new Rating × 5 Karma per point.</text>
-    </string>
-    <string>
-      <key>Web_Skills_GroupPointsRemaining</key>
-      <text>Skill group points remaining: {remaining} / {budget}.</text>
-    </string>
-    <string>
-      <key>Web_Skills_GroupsWinHelp</key>
-      <text>A skill's own points are ignored whenever its group has points spent (the group rating wins) — see the "strict skill groups" rule. A specialization costs 1 extra skill point (on top of whatever bought the rating) and only applies to a skill bought individually here — not one whose rating comes from a purchased skill group.</text>
-    </string>
-    <string>
-      <key>Web_Skills_Individual</key>
-      <text>Individual skills</text>
-    </string>
-    <string>
-      <key>Web_Skills_KarmaHelp</key>
-      <text>"Karma pts"/"Karma spec" (Step Seven) can raise or specialize a skill beyond what the columns above allow, at new Rating × 2 Karma per point / 7 Karma flat per specialization — including a skill whose rating comes from a purchased group, which permanently breaks that group from this point forward (its other members keep their current rating, but can no longer be raised together as a group).</text>
-    </string>
-    <string>
-      <key>Web_Skills_KarmaRemaining</key>
-      <text>Karma remaining for skills: {remaining} / {budget}.</text>
+      <key>Web_Skills_NoneOffered</key>
+      <text>This character can't buy any skills of this kind.</text>
     </string>
     <string>
       <key>Web_Skills_Placeholder</key>
       <text>Confirm a metatype and priorities on the Priorities page before allocating skill points.</text>
     </string>
     <string>
-      <key>Web_Skills_PointsRemaining</key>
-      <text>Skill points remaining: {remaining} / {budget}.</text>
+      <key>Web_Skills_SpecAriaLabel</key>
+      <text>{skill} specialization</text>
     </string>
     <string>
-      <key>Web_Skills_RatedOnly</key>
-      <text>Only rated skills</text>
+      <key>Web_Skills_SpecPaidKarma</key>
+      <text>Specialization paid with Karma</text>
+    </string>
+    <string>
+      <key>Web_Skills_SpecPaidPoints</key>
+      <text>Specialization paid with skill points</text>
     </string>
     <string>
       <key>Web_Skills_SpecPlaceholder</key>
       <text>e.g. Axes</text>
     </string>
     <string>
-      <key>Web_Skills_Update</key>
-      <text>Update skills</text>
+      <key>Web_Skills_TabCombat</key>
+      <text>Combat</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabGroup</key>
+      <text>Group</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabKnowledge</key>
+      <text>Knowledge</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabMagical</key>
+      <text>Magical</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabPhysical</key>
+      <text>Physical</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabResonance</key>
+      <text>Resonance</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabSocial</key>
+      <text>Social</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabSpecial</key>
+      <text>Special</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabTechnical</key>
+      <text>Technical</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabVehicle</key>
+      <text>Vehicle</text>
     </string>
     <!-- Spells -->
     <string>
@@ -1787,16 +1827,8 @@
     </string>
     <!-- Tab -->
     <string>
-      <key>Web_Tab_ActiveSkills</key>
-      <text>Active skills</text>
-    </string>
-    <string>
       <key>Web_Tab_BoundSpirits</key>
       <text>Bound spirits</text>
-    </string>
-    <string>
-      <key>Web_Tab_KnowledgeLanguages</key>
-      <text>Knowledge &amp; languages</text>
     </string>
     <string>
       <key>Web_Tab_Talent</key>

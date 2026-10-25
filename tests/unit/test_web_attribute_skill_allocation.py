@@ -57,6 +57,17 @@ def _confirm_human(client: TestClient) -> None:
     assert "Confirmed: Human" in response.text
 
 
+def _counter(client: TestClient, label: str) -> str:
+    """WP148: one of the Skills strip's counters ("S", "G", "Ka", "Kn") as "remaining/budget",
+    read off the strip the way the browser re-fetches it after an autosave."""
+    strip = client.get("/ui/tabs/skills").text
+    match = re.search(
+        rf'<abbr[^>]*>{label}</abbr></dt>\s*<dd class="skills-counter__value">([^<]+)</dd>', strip
+    )
+    assert match is not None, label
+    return match.group(1)
+
+
 def test_index_before_confirmation_shows_placeholder_not_allocation_forms() -> None:
     client = TestClient(create_app())
 
@@ -83,61 +94,17 @@ def test_index_after_confirmation_shows_allocation_forms_with_full_budget() -> N
     expected_primary_budget = PRIORITIES.attributes["B"].points
     expected_skills_budget = PRIORITIES.skills["C"].skills
     assert f"{expected_primary_budget}/{expected_primary_budget}" in attributes_page.text
-    assert f"{expected_skills_budget} / {expected_skills_budget}" in response.text
+    assert _counter(client, "S") == f"{expected_skills_budget}/{expected_skills_budget}"
     # Magic-linked skills are excluded from the mundane MVP allocation UI (see app.py's
     # MUNDANE_SKILLS comment) -- Spellcasting (Sorcery group, MAG-linked) must not appear.
     assert "Spellcasting" not in response.text
     assert "Alchemy" not in response.text
-    # WP61 correction: Assensing/Astral Combat/Arcana are Magical/Pseudo-Magical Active despite
-    # being linked to INT/WIL/LOG, not MAG -- a Mundane character must not see them either, even
-    # though the old attribute-only filter let them through.
+    # WP61 correction: Assensing/Astral Combat are Magical Active despite being linked to INT/WIL,
+    # not MAG -- a Mundane character must not see them either, even though the old attribute-only
+    # filter let them through. WP148: Arcana (Pseudo-Magical Active) is the exception -- see
+    # test_web_skills_redesign_wp148.py.
     assert "Assensing" not in response.text
     assert "Astral Combat" not in response.text
-    assert "Arcana" not in response.text
-
-
-def test_skill_picker_offers_rated_only_filter_with_per_row_rating() -> None:
-    # WP67: an "Only rated skills" checkbox narrows the picker to skills with rating > 0.
-    # It's a purely client-side filter, so the server contract is just: the checkbox renders,
-    # and every skill row carries its current rating as a data attribute for the JS to read.
-    client = TestClient(create_app())
-    _confirm_human(client)
-
-    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
-    response = client.post("/ui/skills", data={f"skill_{skill.id}": "3"})
-
-    assert response.status_code == 200
-    assert 'id="skill-rated-only"' in response.text
-    assert "Only rated skills" in response.text
-    # The rated skill's row exposes its rating; unrated rows expose 0.
-    assert 'data-skill-rating="3"' in response.text
-    assert 'data-skill-rating="0"' in response.text
-
-
-def test_skill_filter_state_survives_the_fragment_being_re_rendered() -> None:
-    # The whole #skill-allocation fragment (controls included) is re-rendered on every rating
-    # change, so both filter controls come back at their unfiltered defaults unless the client
-    # restores them -- the same swap-discards-state problem WP64's <details> store solves. The
-    # server contract is only that the re-rendered fragment carries the restore/re-apply code:
-    # the state itself lives on the client, never in the session.
-    client = TestClient(create_app())
-    _confirm_human(client)
-
-    skill = next(s for s in MUNDANE_SKILLS if s.skill_group is None)
-    response = client.post("/ui/skills", data={f"skill_{skill.id}": "3"})
-
-    assert response.status_code == 200
-    assert 'id="skill-filter"' in response.text and 'id="skill-rated-only"' in response.text
-    # WP141: the restore/re-apply code moved from an inline <script> in the fragment (which the
-    # CSP forbids) to static/app.js, which runs once per page and restores after every swap.
-    assert "<script" not in response.text
-    script = client.get("/static/app.js").text
-    # Restored from a store that outlives the swapped subtree, not from the rendered markup...
-    assert "var skillFilter = {" in script
-    assert "rated.checked = skillFilter.ratedOnly" in script
-    assert "input.value = skillFilter.query" in script
-    # ...and re-applied as soon as new content lands, so the fresh rows honour it at once.
-    assert 'document.addEventListener("htmx:load", restoreSkillFilter)' in script
 
 
 def test_submitting_valid_attribute_points_matches_engine_output() -> None:
@@ -197,7 +164,7 @@ def test_submitting_valid_skill_points_matches_engine_output() -> None:
     assert f"<td>{expected_pool}</td>" in response.text
 
     budget = PRIORITIES.skills["C"].skills
-    assert f"{budget - 3} / {budget}" in response.text
+    assert _counter(client, "S") == f"{budget - 3}/{budget}"
 
 
 def test_submitting_a_skill_group_sets_every_member_skills_rating() -> None:
@@ -212,7 +179,7 @@ def test_submitting_a_skill_group_sets_every_member_skills_rating() -> None:
     assert member_names  # sanity: the chosen group actually has mundane member skills
     # Every member skill's rating column should show 2 -- spot check via the group's own points.
     budget = PRIORITIES.skills["C"].skill_groups
-    assert f"{budget - 2} / {budget}" in response.text
+    assert _counter(client, "G") == f"{budget - 2}/{budget}"
 
 
 def test_submitting_conflicting_skill_and_group_points_is_rejected() -> None:
@@ -281,7 +248,7 @@ def test_reconfirming_priorities_with_a_still_fitting_budget_keeps_the_allocatio
     primary_budget = PRIORITIES.attributes["B"].points
     skills_budget = PRIORITIES.skills["C"].skills
     assert f"{primary_budget - 2}/{primary_budget}" in attributes_page.text
-    assert f"{skills_budget - 3} / {skills_budget}" in skills_page.text
+    assert _counter(client, "S") == f"{skills_budget - 3}/{skills_budget}"
     assert 'value="2"' in attributes_page.text  # BOD's spent points still echoed in the form
     assert "No longer fits" not in attributes_page.text
     assert "No longer fits" not in skills_page.text
@@ -359,7 +326,8 @@ def test_reconfirming_priorities_with_a_lower_skills_budget_flags_the_existing_s
     response = client.get("/ui/page/skills")  # WP97: the spend itself shows on its own page
     new_budget = PRIORITIES.skills["D"].skills
     assert new_budget == 22
-    assert f"-3 / {new_budget}" in response.text
+    assert _counter(client, "S") == f"-3/{new_budget}"
+    assert "skills-counter--over" in client.get("/ui/tabs/skills").text
     assert "No longer fits since priorities were last confirmed" in response.text
     assert "exceeds" in response.text
 
@@ -407,7 +375,7 @@ def test_submitting_a_specialization_matches_engine_output() -> None:
 
     # The specialization's 1 point is counted against the remaining budget too.
     budget = PRIORITIES.skills["C"].skills
-    assert f"{budget - 4} / {budget}" in response.text
+    assert _counter(client, "S") == f"{budget - 4}/{budget}"
 
 
 def test_submitting_a_specialization_on_an_unbought_skill_is_rejected() -> None:
@@ -421,7 +389,10 @@ def test_submitting_a_specialization_on_an_unbought_skill_is_rejected() -> None:
     assert "cannot add a specialization" in response.text
 
 
-def test_submitting_a_specialization_on_a_group_purchased_skill_is_rejected() -> None:
+def test_a_specialization_on_a_group_purchased_skill_is_paid_with_karma() -> None:
+    """WP50 rejected a point-funded specialization on a grouped skill (p. 88). WP148's toggle
+    can't ask for one: a skill without a point of its own can only pay with Karma, which breaks
+    the group (WP53) for 7 Karma."""
     client = TestClient(create_app())
     _confirm_human(client)
 
@@ -433,7 +404,8 @@ def test_submitting_a_specialization_on_a_group_purchased_skill_is_rejected() ->
     )
 
     assert response.status_code == 200
-    assert "cannot add a specialization" in response.text
+    assert "cannot add a specialization" not in response.text
+    assert _counter(client, "Ka") == "18/25"
 
 
 def test_character_sheet_shows_the_specialization_name() -> None:
@@ -504,7 +476,7 @@ def test_submitting_karma_skill_points_matches_engine_output() -> None:
     assert response.status_code == 200
     # 2->3 costs 6, 3->4 costs 8 -- 14 Karma total, out of the starting 25.
     assert f"<td>{4}</td>" in response.text
-    assert "Karma remaining for skills: 11 / 25" in response.text
+    assert _counter(client, "Ka") == "11/25"
 
 
 def test_submitting_karma_group_points_matches_engine_output() -> None:
@@ -516,7 +488,7 @@ def test_submitting_karma_group_points_matches_engine_output() -> None:
 
     assert response.status_code == 200
     # 1->2 costs new_rating x 5 = 10 Karma.
-    assert "Karma remaining for skills: 15 / 25" in response.text
+    assert _counter(client, "Ka") == "15/25"
 
 
 def test_submitting_karma_specialization_breaks_a_purchased_group() -> None:
@@ -528,11 +500,11 @@ def test_submitting_karma_specialization_breaks_a_purchased_group() -> None:
     client.post("/ui/skills", data={"group_Firearms": "2"})
 
     response = client.post(
-        "/ui/skills", data={"group_Firearms": "2", f"karma_spec_{automatics.id}": "Assault Rifles"}
+        "/ui/skills", data={"group_Firearms": "2", f"spec_{automatics.id}": "Assault Rifles"}
     )
 
     assert response.status_code == 200
-    assert "Karma remaining for skills: 18 / 25" in response.text  # 7 Karma flat
+    assert _counter(client, "Ka") == "18/25"  # 7 Karma flat
     heritage = PRIORITIES.heritage["A"]
     human_choice = next(
         c for c in metatype_choices(heritage, METATYPES) if c.metatype.name == "Human"
@@ -559,7 +531,7 @@ def test_submitting_karma_skill_points_on_group_member_breaks_the_group_without_
 
     assert response.status_code == 200
     # 2->3 costs new_rating x 2 = 6 Karma.
-    assert "Karma remaining for skills: 19 / 25" in response.text
+    assert _counter(client, "Ka") == "19/25"
     assert f"<td>{3}</td>" in response.text  # Automatics' own individually-raised rating
 
 
@@ -610,9 +582,10 @@ def test_full_page_reload_shows_each_sections_own_karma_numbers_not_knowledges()
     assert attribute_budget != skill_budget  # sanity: the two sections' own budgets really differ
 
     assert f'budget-box__value">{both_spent_remaining}/{attribute_budget}<' in attributes_page.text
-    assert (
-        f"Karma remaining for skills: {both_spent_remaining} / {skill_budget}" in skills_page.text
-    )
+    # WP148: the Skills page's Ka counter is the character's leftover Karma (the resource
+    # panel's figure), so it shows what both spends left rather than a section-own budget.
+    assert skills_page.status_code == 200
+    assert _counter(client, "Ka") == f"{both_spent_remaining}/{STARTING_KARMA}"
 
 
 def test_character_sheet_shows_karma_funded_specialization() -> None:
@@ -622,7 +595,7 @@ def test_character_sheet_shows_karma_funded_specialization() -> None:
     automatics = next(s for s in MUNDANE_SKILLS if s.name == "Automatics")
     client.post("/ui/skills", data={"group_Firearms": "2"})
     client.post(
-        "/ui/skills", data={"group_Firearms": "2", f"karma_spec_{automatics.id}": "Assault Rifles"}
+        "/ui/skills", data={"group_Firearms": "2", f"spec_{automatics.id}": "Assault Rifles"}
     )
 
     response = client.get("/character/sheet")

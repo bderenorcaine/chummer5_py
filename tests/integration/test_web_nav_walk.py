@@ -93,7 +93,22 @@ def test_walking_the_nav_renders_each_composite_page_whole() -> None:
         },
     )
 
-    for slug in ("skills", "magic", "equipment"):
+    # WP148: Skills' view tabs -- every tab renders both fragments whole, its own panel showing.
+    html = client.get(_link(shell, "step-nav__item", "/ui/page/skills"), headers=HTMX).text
+    for tab in STEP_PAGES_BY_SLUG["skills"].tabs:
+        if not tab.enabled:
+            continue  # Resonance: a disabled <span>
+        tab_html = client.get(
+            _link(html, "skills-tab", f"/ui/page/skills/{tab.slug}"), headers=HTMX
+        ).text
+        assert 'id="skill-allocation"' in tab_html and 'id="knowledge-skills"' in tab_html
+        if tab.slug == "knowledge":
+            assert re.search(r'<div id="knowledge-skills" class="panel">', tab_html)
+        else:
+            assert re.search(rf'data-skills-panel="{tab.slug}">', tab_html), tab.slug
+        html = shell = tab_html
+
+    for slug in ("magic", "equipment"):
         html = client.get(_link(shell, "step-nav__item", f"/ui/page/{slug}"), headers=HTMX).text
         _assert_whole_page(html, slug)
         # Then every tab of it, following the tab strip's own links.

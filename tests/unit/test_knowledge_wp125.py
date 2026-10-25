@@ -150,8 +150,9 @@ def test_the_web_pages_share_the_active_pool_and_a_save_keeps_everything() -> No
         },
     ).text
     assert "Active skill points used: 2 / 28." in page
-    skills = re.sub(r"\s+", " ", client.get("/ui/page/skills/active").text)
-    assert "Skill points remaining: 26 / 28" in skills
+    assert client.get("/ui/page/skills/active").status_code == 200  # WP98's slug, now Combat
+    strip = re.sub(r"\s+", " ", client.get("/ui/tabs/skills").text)  # WP148's S counter
+    assert '>S</abbr></dt> <dd class="skills-counter__value">26/28</dd>' in strip
 
     saved = json.loads(client.get("/character/save").content)
     assert saved["knowledge_specializations"] == {"Corporations": "Evo"}

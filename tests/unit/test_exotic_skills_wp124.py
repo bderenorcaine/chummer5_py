@@ -148,7 +148,7 @@ def test_the_skills_page_adds_two_instances_and_they_survive_a_save() -> None:
     client = TestClient(create_app())
     _start(client)
     page = _add(client, "Flamethrower", 3, [])
-    assert "Exotic Ranged Weapon (Flamethrower)" in page
+    assert "<td>Flamethrower</td>" in page  # WP148: the Special tab's Detail column
     assert f'name="exotic_key" value="{FLAMETHROWER}"' in page
     _add(client, "Harpoon Gun", 2, [FLAMETHROWER])
     assert _committed(client) == {FLAMETHROWER: 3, HARPOON: 2}

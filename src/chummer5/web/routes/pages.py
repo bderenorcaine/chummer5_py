@@ -23,6 +23,11 @@ fresh render (a Talent confirmation is exactly what un-empties the Spells fragme
 route re-renders a sibling), and every fragment id stays in the DOM as it was when they stacked.
 The tab strip re-fetches itself from `GET /ui/tabs/{slug}` on the same `chargen-changed` event
 the nav uses, so a tab's availability and ⚠ follow a change made on another tab.
+
+**WP148**: the Skills page's tabs are view tabs (`chummer5.web.shell.PageTab`) and use the same
+two URLs. `GET /ui/page/skills/{tab}` renders the page with both fragments showing that tab's
+panel. Its strip re-fetches `GET /ui/tabs/skills?tab=...`, the tab it was rendered for. The page
+remembers no tab: a nav click opens it on its first tab.
 """
 
 from __future__ import annotations
@@ -52,6 +57,7 @@ from chummer5.web.shell import (
     nav_context,
     resolve_tab,
     resource_panel_context,
+    skills_tabs_context,
     tabs_context,
     validation_context,
 )
@@ -69,6 +75,8 @@ def _page_or_404(slug: str) -> StepPage:
 
 
 def _section_or_404(page: StepPage, tab: str) -> None:
+    if page.tabs and page.view_tab(tab) is not None:
+        return
     if not page.tabbed or page.section(tab) is None:
         raise HTTPException(
             status_code=404, detail=f"No such section on the {page.slug!r} page: {tab!r}."
@@ -115,6 +123,9 @@ def _shell_context(
     }
     if page.tabbed:
         context |= tabs_context(session, page, chargen_ctx, resolve_tab(session, page, tab))
+    elif page.tabs:
+        current = page.view_tab(tab) if tab is not None else None
+        context |= skills_tabs_context(session, page, chargen_ctx, current or page.tabs[0].slug)
     return context
 
 
@@ -190,13 +201,22 @@ def page_tab(request: Request, slug: str, tab: str) -> HTMLResponse:
 
 
 @router.get("/ui/tabs/{slug}", response_class=HTMLResponse)
-def page_tabs(request: Request, slug: str) -> HTMLResponse:
+def page_tabs(request: Request, slug: str, tab: str | None = None) -> HTMLResponse:
     """A composite page's tab strip alone, re-fetched by the strip itself on `chargen-changed`
     (like the nav), so a change on one tab updates the others' availability and ⚠ markers.
     Marks the page's remembered tab -- the one on screen -- as current, even if the change just
-    made it unavailable: the strip must describe the pane it sits over, not pick another."""
+    made it unavailable: the strip must describe the pane it sits over, not pick another.
+
+    WP148: a view-tab strip (Skills) names its tab in the query instead, and carries the page's
+    counters, which is how they follow an autosave."""
     session, new_cookie = resolve_session(request)
     page = _page_or_404(slug)
+    if page.tabs and page.tab_strip is not None:
+        chargen_ctx = chargen_context(session, _session_priority_form_context(session))
+        current = (page.view_tab(tab) if tab is not None else None) or page.tabs[0].slug
+        context = {"page": page, **skills_tabs_context(session, page, chargen_ctx, current)}
+        response = templates.TemplateResponse(request, page.tab_strip, context)
+        return _respond(request, response, new_cookie)
     if not page.tabbed:
         raise HTTPException(status_code=404, detail=f"The {page.slug!r} page has no tabs.")
     chargen_ctx = chargen_context(session, _session_priority_form_context(session))

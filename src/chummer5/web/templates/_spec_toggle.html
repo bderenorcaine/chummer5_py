@@ -1,0 +1,20 @@
+{# WP148: a specialization's pool toggle -- off pays with skill points, on with Karma. When only
+   Karma can pay (the skill has no point of its own) it renders on and disabled; a disabled
+   checkbox doesn't post, so a hidden field carries the value instead. `row.dom_id`, `row.skill`,
+   `row.spec_karma` and `row.spec_forced` come from the row. #}
+{% set karma = row.spec_karma or row.spec_forced %}
+<label class="spec-toggle" title="{{ _('Web_Skills_SpecPaidKarma' if karma else 'Web_Skills_SpecPaidPoints') }}">
+  <input
+    type="checkbox"
+    role="switch"
+    class="spec-toggle__input"
+    id="spec-karma-{{ row.dom_id }}"
+    name="spec_karma_{{ row.skill.id }}"
+    value="1"
+    aria-label="{{ _('Web_Skills_SpecPaidKarma' if karma else 'Web_Skills_SpecPaidPoints') }}"
+    {% if karma %}checked{% endif %}
+    {% if row.spec_forced %}disabled{% endif %}
+  />
+  <span class="spec-toggle__track" aria-hidden="true"></span>
+</label>
+{% if row.spec_forced %}<input type="hidden" name="spec_karma_{{ row.skill.id }}" value="1" />{% endif %}

@@ -2329,3 +2329,22 @@ container that broke.
   `offered_skills`.
 - **Resonance stays visible but disabled.** Technomancers are still out of scope, so in practice it
   is always disabled.
+
+## 2026-10-25 — WP148: Skills page view tabs
+
+- **The Skills page's tabs are a second kind of tab, not WP98 sub-tabs.** A WP98 tab is one
+  fragment. Skills' tabs are views onto two fragments: nine of them show panels of the one
+  active-skills form, and WP150's Filtered/Rated will show parts of both forms. `shell.PageTab`
+  and `StepPage.tabs`/`tab_strip`/`tab_aliases` carry them. `StepPage.tabbed` is false for such a
+  page, so Magic and Equipment keep WP98's mechanism untouched. WP98's three constraints still
+  hold: every fragment is rendered, a tab switch is a fresh render, and the strip re-fetches on
+  `chargen-changed` (now with its tab in the query, since the page no longer remembers one).
+  WP149's planned "remove the knowledge PageSection" is moot. The knowledge fragment stays a
+  section of the page, but sections are no longer tabs here, and the two `Web_Tab_*` labels were
+  retired in WP148.
+- **A specialization on a skill without a point of its own is always Karma-funded.** The toggle
+  renders forced, and the route applies the same rule when parsing. So typing a specialization on
+  a group-bought skill now breaks the group for 7 Karma (WP53) instead of being rejected (WP50).
+- **The Skills counters are committed, character-wide figures.** Ka is the character's leftover
+  Karma, as in the resource panel, not WP53's "Karma for skills" (leftover plus this section's own
+  spend).

@@ -3,7 +3,9 @@
    alone swapped into #page, plus the nav out-of-band so its current-step marker follows.
    WP98: a composite page (more than one section) puts a tab strip over them. Every section's
    fragment is still rendered; all but the current tab's are `hidden`, and a tab link re-renders
-   this whole page rather than toggling visibility client-side (see chummer5.web.routes.pages). #}
+   this whole page rather than toggling visibility client-side (see chummer5.web.routes.pages).
+   WP148: a page with view tabs (Skills) draws its own strip and mounts its fragments unwrapped;
+   each fragment shows the panel for the current tab itself. #}
 <div class="page page--{{ page.slug }}">
   {% if page.heading_key %}
   <h1 class="page__heading">{{ _(page.heading_key) }}</h1>
@@ -24,6 +26,9 @@
   </section>
   {% endfor %}
   {% else %}
+  {% if page.tab_strip %}
+  {% include page.tab_strip %}
+  {% endif %}
   {% for section in page.sections %}
   {% include section.fragment %}
   {% endfor %}

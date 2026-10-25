@@ -9,6 +9,11 @@ fragments are mounted together as one nav *page*, which is what `STEP_PAGES` rec
 WP98 made the three pages that mount more than one fragment (Skills, Magic, Equipment) tabbed:
 each fragment is a `PageSection`, and `resolve_tab`/`tabs_context` below decide which one shows.
 
+WP148 (Phase Z) gave Skills a different kind of tab: a `PageTab` is a *view* onto the page's
+fragments (a skill category, the groups, the exotic skills, ...) rather than one fragment each, so
+the page mounts both its fragments unwrapped and each fragment shows the panel the tab names. See
+`skills_tabs_context`.
+
 Not a router module: `chummer5.web.routes.pages` owns the shell/page/nav routes, and
 `chummer5.web.routes.priorities` needs `chargen_context` too, so both import from here rather than
 from each other.
@@ -99,6 +104,24 @@ class PageSection:
 
 
 @dataclass(frozen=True)
+class PageTab:
+    """WP148: one tab of a page whose tabs are views onto its fragments, not one fragment each
+    (the Skills page, `spec/plan/phase-z-page-redesigns.md`, "Redesign 4"). Every fragment is
+    rendered on every tab; each one reads the current tab slug and shows the matching panel.
+
+    `warning_keys` mark the tab stale the way a `PageSection`'s do, and name the tab a WP19 issue
+    links to. A disabled tab (`enabled=False`) is still listed, as a `<span>` with its reason, so
+    the tabs after it never move. Every `*_key` field is an i18n key.
+    """
+
+    slug: str
+    label_key: str
+    warning_keys: tuple[str, ...] = ()
+    enabled: bool = True
+    disabled_reason_key: str | None = None
+
+
+@dataclass(frozen=True)
 class StepPage:
     """One entry in the sidebar step nav.
 
@@ -115,14 +138,29 @@ class StepPage:
     sections: tuple[PageSection, ...] = ()
     enabled: bool = True
     disabled_reason_key: str | None = None
-    # The step fragments each open with their own `<summary>` heading; only a page whose fragment
-    # has none (Export's character sheet) needs the page to supply one.
+    # The step fragments each open with their own `<summary>` heading; only a page whose fragments
+    # have none (Export's character sheet, Skills since WP148) needs the page to supply one.
     heading_key: str | None = None
     locked_note_key: str | None = None
+    # WP148: view tabs (see `PageTab`), the template that draws their strip, and old tab slugs
+    # that still resolve, as `(alias, tab)` pairs.
+    tabs: tuple[PageTab, ...] = ()
+    tab_strip: str | None = None
+    tab_aliases: tuple[tuple[str, str], ...] = ()
 
     @property
     def tabbed(self) -> bool:
-        return len(self.sections) > 1
+        """A WP98 composite page: one sub-tab per section. A page with view tabs is not one."""
+        return len(self.sections) > 1 and not self.tabs
+
+    def view_tab(self, slug: str) -> str | None:
+        """WP148: the view tab `slug` names (directly or as an alias), or None if it names none."""
+        slug = dict(self.tab_aliases).get(slug, slug)
+        return slug if any(tab.slug == slug for tab in self.tabs) else None
+
+    def tab_for_warning(self, key: str) -> str | None:
+        """WP148: the view tab whose `warning_keys` include `key`, if any."""
+        return next((tab.slug for tab in self.tabs if key in tab.warning_keys), None)
 
     @property
     def warning_keys(self) -> tuple[str, ...]:
@@ -137,6 +175,27 @@ def _single(
 ) -> tuple[PageSection, ...]:
     return (PageSection(slug, label_key, fragment, warning_keys),)
 
+
+# WP148: the Skills page's tabs, in the sketch's order (`examples/ui/skills.png`) as the user
+# amended it on 2026-10-25: one Knowledge tab for Knowledge and Language skills; Resonance listed
+# but disabled, since Technomancers are out of scope. The page opens on the first.
+SKILLS_TABS: tuple[PageTab, ...] = (
+    PageTab("combat", "Web_Skills_TabCombat", ("skill_budget_warning",)),
+    PageTab("physical", "Web_Skills_TabPhysical"),
+    PageTab("social", "Web_Skills_TabSocial"),
+    PageTab("technical", "Web_Skills_TabTechnical"),
+    PageTab("vehicle", "Web_Skills_TabVehicle"),
+    PageTab("group", "Web_Skills_TabGroup"),
+    PageTab("magical", "Web_Skills_TabMagical"),
+    PageTab(
+        "resonance",
+        "Web_Skills_TabResonance",
+        enabled=False,
+        disabled_reason_key="Web_Nav_ResonanceUnsupported",
+    ),
+    PageTab("knowledge", "Web_Skills_TabKnowledge", ("knowledge_budget_warning",)),
+    PageTab("special", "Web_Skills_TabSpecial"),
+)
 
 # The sketch's order (`examples/ui/main_ui.png`), which is also SR5's own chargen step order.
 # Skills/Magic/Equipment are the composites (Finding 4); their sections keep their old accordion
@@ -166,23 +225,26 @@ STEP_PAGES: tuple[StepPage, ...] = (
             "qualities", "String_Qualities", "_quality_selection.html", "quality_budget_warning"
         ),
     ),
+    # WP148: one page, two fragments, and a strip of view tabs over both (see `SKILLS_TABS`).
     StepPage(
         "skills",
         "Tab_Skills",
         (
             PageSection(
-                "active",
-                "Web_Tab_ActiveSkills",
-                "_skill_allocation.html",
-                ("skill_budget_warning",),
+                "skills", "Tab_Skills", "_skill_allocation.html", ("skill_budget_warning",)
             ),
             PageSection(
                 "knowledge",
-                "Web_Tab_KnowledgeLanguages",
+                "Tab_Skills",
                 "_knowledge_skills.html",
                 ("knowledge_budget_warning",),
             ),
         ),
+        heading_key="Tab_Skills",
+        tabs=SKILLS_TABS,
+        tab_strip="_skills_tabs.html",
+        # WP98's sub-tab slug, still linked from saved bookmarks and WP135's issue links.
+        tab_aliases=(("active", "combat"),),
     ),
     StepPage(
         "magic",
@@ -291,7 +353,7 @@ def validation_issues(session: ChargenSession, chargen_ctx: dict[str, Any]) -> t
             page.slug,
             "Web_Validation_Stale",
             {"warning": chargen_ctx[key]},
-            section.slug if page.tabbed else None,
+            section.slug if page.tabbed else page.tab_for_warning(key),
         )
         for page in STEP_PAGES
         for section in page.sections
@@ -404,6 +466,63 @@ def tabs_context(
         not item["available"] for item in items if not item["current"]
     )
     return {"tab_items": items, "current_tab": current_tab, "tabs_locked": locked}
+
+
+def skills_tabs_context(
+    session: ChargenSession, page: StepPage, chargen_ctx: dict[str, Any], current_tab: str
+) -> dict[str, Any]:
+    """WP148: the Skills page's strip -- its view tabs with `current_tab` marked -- and its four
+    counters, S/G at the strip's left end and Ka/Kn at its right. The counters read the same
+    committed figures as the resource panel (`resource_panel_context`), so the two always agree;
+    each is `(remaining, of)`, and an overspent one is highlighted. `skills_tab` is what both
+    fragments read to decide which panel shows."""
+    items = [
+        {
+            "tab": tab,
+            "current": tab.slug == current_tab,
+            "stale": any(chargen_ctx.get(key) for key in tab.warning_keys),
+        }
+        for tab in page.tabs
+    ]
+    counters: list[dict[str, Any]] = []
+    character = session.character
+    if character is not None:
+        counters = [
+            {
+                "label_key": "Web_Skills_CounterSkill",
+                "title_key": "String_SkillPoints",
+                "remaining": chargen_ctx["skills_remaining"],
+                "of": chargen_ctx["skills_budget"],
+            },
+            {
+                "label_key": "Web_Skills_CounterGroup",
+                "title_key": "String_SkillGroupPoints",
+                "remaining": chargen_ctx["groups_remaining"],
+                "of": chargen_ctx["groups_budget"],
+            },
+            {
+                "label_key": "Web_Skills_CounterKarma",
+                "title_key": "String_Karma",
+                "remaining": character.karma_remaining,
+                "of": STARTING_KARMA,
+            },
+            {
+                "label_key": "Web_Skills_CounterKnowledge",
+                "title_key": "String_KnowledgePoints",
+                "remaining": (
+                    chargen_ctx["knowledge_free_points"] - chargen_ctx["knowledge_points_spent"]
+                ),
+                "of": chargen_ctx["knowledge_free_points"],
+            },
+        ]
+        for counter in counters:
+            counter["over"] = counter["remaining"] < 0
+    return {
+        "skills_tab_items": items,
+        "skills_tab": current_tab,
+        "skills_counters_start": counters[:2],
+        "skills_counters_end": counters[2:],
+    }
 
 
 def resource_panel_context(session: ChargenSession, chargen_ctx: dict[str, Any]) -> dict[str, Any]:

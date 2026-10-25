@@ -220,7 +220,7 @@ def validate(
     _points(
         issues,
         "skills",
-        "active",
+        "group",  # WP148: the Skills page's Group tab
         "String_SkillGroupPoints",
         "Web_Validation_GroupPoints",
         budget.skill_groups - sum(group_points.values()),

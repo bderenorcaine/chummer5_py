@@ -248,18 +248,28 @@ MUNDANE_SKILL_GROUPS = tuple(
 # The rule now lives in the engine (`chummer5.engine.skills.skill_purchase_rules`), and these two
 # functions hide whatever it bans -- for an Adept, and for Incompetent's group and an Uncouth
 # character's Social groups too.
+#
+# **WP148 correction (decisions log, 2026-10-25).** The WP61 note above has Arcana needing an
+# Awakened character. The user ruled otherwise: Arcana is a *Pseudo*-Magical skill a mundane
+# character may learn, and legacy's `SkillsSection.cs` filter gates only "Magical Active". So a
+# Mundane character is offered the Pseudo-Magical Active skills (Arcana alone in the core book);
+# Magical Active skills still need an Awakened one. `MUNDANE_SKILLS` itself is unchanged: it is
+# also the no-character fallback, and Arcana has no skill group, so `MUNDANE_SKILL_GROUPS` is too.
 _MAGICAL_SKILLS = tuple(
     sorted((s for s in SKILLS if s.category in MAGICAL_SKILL_CATEGORIES), key=lambda s: s.name)
 )
+_PSEUDO_MAGICAL_SKILLS = tuple(s for s in _MAGICAL_SKILLS if s.category == "Pseudo-Magical Active")
 
 
 def offered_skills(character: Character | None) -> tuple[Skill, ...]:
     if character is None:
         return MUNDANE_SKILLS
-    candidates = (
-        MUNDANE_SKILLS
-        if character.magic_type is None
-        else tuple(sorted(MUNDANE_SKILLS + _MAGICAL_SKILLS, key=lambda s: s.name))
+    candidates = tuple(
+        sorted(
+            MUNDANE_SKILLS
+            + (_PSEUDO_MAGICAL_SKILLS if character.magic_type is None else _MAGICAL_SKILLS),
+            key=lambda s: s.name,
+        )
     )
     rules = skill_purchase_rules(character)  # WP118: whatever the engine would reject
     return tuple(s for s in candidates if rules.skill_blocked(s) is None)

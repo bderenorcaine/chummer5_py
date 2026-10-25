@@ -700,7 +700,7 @@ replaces both sub-tabs with the single tab strip.
 
 ---
 
-- [ ] **WP148 — Skills redesign: tab strip, counters, active-skill tabs, specialization toggle.**
+- [x] **WP148 — Skills redesign: tab strip, counters, active-skill tabs, specialization toggle.**
   *Suggested model:* Opus. It reworks the composite-page mechanism for one page and changes the
   skills POST parsing.
   Goal: the Skills page as sketched in `examples/ui/skills.png`, for every tab except Knowledge,
