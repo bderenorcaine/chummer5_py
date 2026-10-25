@@ -55,6 +55,9 @@ from chummer5.web.session import resolve_session, set_session_cookie
 
 router = APIRouter()
 
+# WP150: the Skills tabs this fragment shows on: its own, and the two views across sections.
+KNOWLEDGE_VIEW_TABS = frozenset({"knowledge", "filtered", "rated"})
+
 
 @dataclass(frozen=True)
 class KnowledgeRow:
@@ -363,10 +366,10 @@ def _knowledge_selection_context(
 async def submit_knowledge(request: Request) -> HTMLResponse:
     session, new_cookie = resolve_session(request)
     session.current_page = "skills"  # WP61/WP97
+    form = await request.form()
     if session.character is None:
         context = _knowledge_selection_context(None, (), (), skills_letter=session.skills_letter)
     else:
-        form = await request.form()
         # WP149: one row series for both kinds of skill, sorted into the engine's two lists.
         rows = _parse_rows(form)
         picks = _sort_rows(rows)
@@ -414,6 +417,9 @@ async def submit_knowledge(request: Request) -> HTMLResponse:
             rows=rows,
             add_row=form.get("knowledge_add") is not None,
         )
+    # WP150: re-render the view the post came from -- the Knowledge tab, or Filtered/Rated.
+    tab = str(form.get("skills_tab") or "")
+    context["skills_tab"] = tab if tab in KNOWLEDGE_VIEW_TABS else "knowledge"
     response = templates.TemplateResponse(request, "_knowledge_skills.html", context)
     set_session_cookie(request, response, new_cookie)
     return response

@@ -1073,6 +1073,9 @@ details[open] > .panel__heading {
 .page--skills {
   max-width: 54rem;
   margin-inline: auto;
+  /* WP150: the strip swaps for a dropdown by the column's own width (below), not the window's:
+     the sidebar nav takes a varying share of a wide window. */
+  container-type: inline-size;
 }
 
 /* The strip. Every tab is a parallelogram: a box skewed about its bottom edge, so the bottoms
@@ -1294,4 +1297,66 @@ a.skills-tab:focus-visible {
 
 .spec-toggle:has(.spec-toggle__input:disabled) {
   cursor: not-allowed;
+}
+
+/* --- Skills page: views and narrow widths (WP150, Phase Z) --------------------------------------
+   The Filtered and Rated views stack every section under a small heading, with the filter field
+   on top. Where the strip (twelve 2.2rem tabs, the 5rem lean and a 9rem filler: about 41rem) no
+   longer fits the column, it is hidden and the dropdown shows instead, with the four counters as
+   one row of equal cells above it. */
+.skills-panel__heading {
+  margin: 1rem 0 0.4rem;
+  font-family: var(--font-title);
+  font-size: 1rem;
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter-spacing);
+  color: var(--summary-fg);
+}
+
+.skills-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.skills-filter__input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+}
+
+.skills-tabs__narrow {
+  display: none;
+}
+
+.skills-counters--row {
+  position: static;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.skills-counters--row .skills-counter {
+  justify-content: center;
+  padding: 0.2rem;
+  border: var(--panel-rule-width) solid var(--rule);
+}
+
+.skills-tabs__select {
+  display: block;
+  width: 100%;
+  font: inherit;
+}
+
+@container (max-width: 41rem) {
+  .skills-tabs__strip {
+    display: none;
+  }
+
+  .skills-tabs__narrow {
+    display: block;
+  }
 }

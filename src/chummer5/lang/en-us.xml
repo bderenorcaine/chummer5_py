@@ -1583,6 +1583,14 @@
       <text>Weapon or vehicle</text>
     </string>
     <string>
+      <key>Web_Skills_FilterLabel</key>
+      <text>Filter skills</text>
+    </string>
+    <string>
+      <key>Web_Skills_FilterPlaceholder</key>
+      <text>Part of a skill's name</text>
+    </string>
+    <string>
       <key>Web_Skills_NoneOffered</key>
       <text>This character can't buy any skills of this kind.</text>
     </string>
@@ -1607,6 +1615,10 @@
       <text>Combat</text>
     </string>
     <string>
+      <key>Web_Skills_TabFiltered</key>
+      <text>Filtered</text>
+    </string>
+    <string>
       <key>Web_Skills_TabGroup</key>
       <text>Group</text>
     </string>
@@ -1621,6 +1633,10 @@
     <string>
       <key>Web_Skills_TabPhysical</key>
       <text>Physical</text>
+    </string>
+    <string>
+      <key>Web_Skills_TabRated</key>
+      <text>Rated</text>
     </string>
     <string>
       <key>Web_Skills_TabResonance</key>

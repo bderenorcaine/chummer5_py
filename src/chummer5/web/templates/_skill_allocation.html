@@ -4,10 +4,27 @@
    posts every row. The hidden `skills_tab` input brings the same tab back after an autosave.
    There is no submit button: the form autosaves on `change` and `number-input`. Messages sit
    under the panel (standing rule 1). Every control has a stable id so htmx can put focus and
-   caret back after the `outerHTML` swap. On the Knowledge tab nothing here shows. #}
+   caret back after the `outerHTML` swap. On the Knowledge tab nothing here shows.
+   WP150: the Filtered and Rated views show every panel with rows except Group, each under its own
+   heading and marked `data-skills-view`; app.js narrows their rows (`data-skill-key`/`-name`/
+   `-rating`) and hides a section left empty. The filter field sits outside the form, so typing in
+   it never autosaves. #}
 {% set tab = skills_tab | default("combat") %}
-<div id="skill-allocation" class="skills-fragment">
+{% set multi = tab in ("filtered", "rated") %}
+<div id="skill-allocation" class="skills-fragment" data-skills-tab="{{ tab }}">
   {% if character %}
+  {% if tab == "filtered" %}
+  <label class="skills-filter">
+    <span class="skills-filter__label">{{ _("Web_Skills_FilterLabel") }}</span>
+    <input
+      type="search"
+      id="skill-filter"
+      class="skills-filter__input"
+      autocomplete="off"
+      placeholder="{{ _('Web_Skills_FilterPlaceholder') }}"
+    />
+  </label>
+  {% endif %}
   <form
     hx-post="/ui/skills"
     hx-target="#skill-allocation"
@@ -17,10 +34,14 @@
     <input type="hidden" name="skills_tab" value="{{ tab }}" />
 
     {% for panel in skill_panels %}
-    <section class="skills-panel skills-panel--{{ panel.slug }}" data-skills-panel="{{ panel.slug }}"{% if tab != panel.slug %} hidden{% endif %}>
-      {% if panel.slug == "resonance" %}
+    {% set in_view = multi and panel.rows %}
+    <section class="skills-panel skills-panel--{{ panel.slug }}" data-skills-panel="{{ panel.slug }}"{% if in_view %} data-skills-view{% endif %}{% if tab != panel.slug and not in_view %} hidden{% endif %}>
+      {% if in_view %}
+      <h2 class="skills-panel__heading">{{ _(panel.label_key) }}</h2>
+      {% endif %}
+      {% if tab == panel.slug and panel.slug == "resonance" %}
       <p class="info">{{ _("Web_Nav_ResonanceUnsupported") }}</p>
-      {% elif not panel.rows %}
+      {% elif tab == panel.slug and not panel.rows %}
       <p class="info">{{ _("Web_Skills_NoneOffered") }}</p>
       {% endif %}
       {% if panel.rows %}
@@ -40,7 +61,7 @@
         </thead>
         <tbody>
           {% for row in panel.rows %}
-          <tr data-skill-name="{{ (row.skill | dterm("skills.xml")) | lower }}" data-skill-rating="{{ row.rating }}">
+          <tr data-skill-key="{{ row.dom_id }}" data-skill-name="{{ (row.skill | dterm("skills.xml")) | lower }}" data-skill-rating="{{ row.rating }}">
             <td>{{ row.skill | dterm("skills.xml") }}</td>
             <td>{{ _("String_Attribute" ~ row.skill.attribute ~ "Short") }}</td>
             <td>{{ (row.skill.skill_group | dterm("skills.xml")) if row.skill.skill_group else "—" }}</td>
@@ -137,7 +158,11 @@
       {% endif %}
     </section>
 
-    <section class="skills-panel skills-panel--special" data-skills-panel="special"{% if tab != "special" %} hidden{% endif %}>
+    {% set in_view = multi and exotic_rows %}
+    <section class="skills-panel skills-panel--special" data-skills-panel="special"{% if in_view %} data-skills-view{% endif %}{% if tab != "special" and not in_view %} hidden{% endif %}>
+      {% if in_view %}
+      <h2 class="skills-panel__heading">{{ _("Web_Skills_TabSpecial") }}</h2>
+      {% endif %}
       {% if exotic_bases %}
       <div class="skills-table">
       <table id="exotic-skills">
@@ -155,7 +180,7 @@
         <tbody>
           {# WP124: p. 131/147 -- an exotic skill has no specializations, so no toggle here. #}
           {% for row in exotic_rows %}
-          <tr data-skill-name="{{ (row.skill | dterm("skills.xml")) | lower }} {{ row.skill.specific | lower }}" data-skill-rating="{{ row.rating }}">
+          <tr data-skill-key="{{ row.dom_id }}" data-skill-name="{{ (row.skill | dterm("skills.xml")) | lower }} {{ row.skill.specific | lower }}" data-skill-rating="{{ row.rating }}">
             <td>{{ row.skill | dterm("skills.xml") }}<input type="hidden" name="exotic_key" value="{{ row.skill.id }}" /></td>
             <td>{{ _("String_Attribute" ~ row.skill.attribute ~ "Short") }}</td>
             <td>{{ row.skill.specific }}</td>

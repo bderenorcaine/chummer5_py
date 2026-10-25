@@ -195,6 +195,9 @@ SKILLS_TABS: tuple[PageTab, ...] = (
     ),
     PageTab("knowledge", "Web_Skills_TabKnowledge", ("knowledge_budget_warning",)),
     PageTab("special", "Web_Skills_TabSpecial"),
+    # WP150: views across every section but Group, narrowed by the script (`app.js`).
+    PageTab("filtered", "Web_Skills_TabFiltered"),
+    PageTab("rated", "Web_Skills_TabRated"),
 )
 
 # The sketch's order (`examples/ui/main_ui.png`), which is also SR5's own chargen step order.

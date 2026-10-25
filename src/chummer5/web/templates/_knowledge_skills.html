@@ -5,9 +5,11 @@
    and is disabled -- never removed -- there. There is no submit button: the form autosaves on
    `change` and `number-input`. Messages sit under the table (standing rule 1). Every control's
    id comes from its row index, which an autosave never changes. Shown only on the Knowledge tab;
-   its own autosave response keeps it showing. #}
+   its own autosave response keeps it showing. WP150: it is also a section of the Filtered and
+   Rated views, under its own heading. #}
 {% set tab = skills_tab | default("knowledge") %}
-<div id="knowledge-skills" class="skills-fragment"{% if tab != "knowledge" %} hidden{% endif %}>
+{% set multi = tab in ("filtered", "rated") %}
+<div id="knowledge-skills" class="skills-fragment" data-skills-tab="{{ tab }}"{% if tab != "knowledge" and not multi %} hidden{% endif %}>
   {% if character %}
   <form
     hx-post="/ui/knowledge"
@@ -15,8 +17,11 @@
     hx-swap="outerHTML"
     hx-trigger="change, number-input delay:400ms"
   >
-    <input type="hidden" name="skills_tab" value="knowledge" />
-    <section class="skills-panel skills-panel--knowledge" data-skills-panel="knowledge">
+    <input type="hidden" name="skills_tab" value="{{ tab if multi else 'knowledge' }}" />
+    <section class="skills-panel skills-panel--knowledge" data-skills-panel="knowledge"{% if multi %} data-skills-view{% endif %}>
+      {% if multi %}
+      <h2 class="skills-panel__heading">{{ _("Web_Skills_TabKnowledge") }}</h2>
+      {% endif %}
       <p class="skills-panel__help">
         {{ _("Web_Knowledge_Help") }}
         {{ _("Web_Knowledge_NativeLimit", limit=native_language_limit) }}
@@ -41,7 +46,7 @@
           {% for item in knowledge_rows %}
           {% set row = item.row %}
           {% set i = item.index %}
-          <tr data-skill-name="{{ row.name | lower }}" data-skill-rating="{{ 1 if row.native else item.total }}">
+          <tr data-skill-key="knowledge-{{ i }}" data-skill-name="{{ row.name | lower }}" data-skill-rating="{{ 1 if row.native else item.total }}">
             <td>
               <input
                 type="text"

@@ -54,39 +54,70 @@
     });
   }
 
-  // Skills. The fragment -- inputs, rows and all -- is rebuilt on every hx-post to /ui/skills, so
-  // the filter's state lives here and is restored into the fresh controls after each swap (the
-  // same shape as the <details> store above).
-  var skillFilter = { query: "", ratedOnly: false };
+  // Skills (WP150): the Filtered and Rated views. The server renders every section but Group,
+  // each marked `data-skills-view`, and every row with `data-skill-key`/`-name`/`-rating`; this
+  // only narrows them -- a row out of the view is hidden, and so is a section left empty. Both
+  // fragments rebuild themselves on every autosave, so the state lives here and is reapplied to
+  // whatever loads (the same shape as the <details> store above).
+  var skillFilter = { query: "" };
+  var ratedKeys = null; // the Rated view's rows, fixed when the tab opens
+
+  function skillsTab() {
+    var fragment = document.getElementById("skill-allocation");
+    return fragment ? fragment.getAttribute("data-skills-tab") : null;
+  }
+
+  function narrowSkillViews(keep) {
+    document.querySelectorAll("section[data-skills-view]").forEach(function (section) {
+      var anyVisible = false;
+      section.querySelectorAll("tr[data-skill-key]").forEach(function (row) {
+        var match = keep(row);
+        row.hidden = !match;
+        if (match) anyVisible = true;
+      });
+      section.hidden = !anyVisible;
+    });
+  }
 
   function applySkillFilter() {
     var input = document.getElementById("skill-filter");
-    var rated = document.getElementById("skill-rated-only");
-    if (!input || !rated) return;
-    var query = input.value.trim().toLowerCase();
-    var onlyRated = rated.checked;
+    if (!input || skillsTab() !== "filtered") return;
     skillFilter.query = input.value;
-    skillFilter.ratedOnly = onlyRated;
-    filterGroups(
-      "#skill-tables details",
-      "tr[data-skill-name]",
-      function (row) {
-        var matchesName = !query || row.dataset.skillName.includes(query);
-        var matchesRated = !onlyRated || Number(row.dataset.skillRating) > 0;
-        return matchesName && matchesRated;
-      },
-      Boolean(query || onlyRated)
-    );
+    var query = input.value.trim().toLowerCase();
+    narrowSkillViews(function (row) {
+      return !query || row.dataset.skillName.includes(query);
+    });
   }
 
+  // A fresh filter field (the Skills fragment re-rendered) gets the query back once; every load
+  // reapplies it, since a Knowledge autosave brings new rows but no new field.
   function restoreSkillFilter() {
     var input = document.getElementById("skill-filter");
-    var rated = document.getElementById("skill-rated-only");
-    if (!input || !rated || input.dataset.restored) return;
-    input.dataset.restored = "true";
-    input.value = skillFilter.query;
-    rated.checked = skillFilter.ratedOnly;
+    if (!input) return;
+    if (!input.dataset.restored) {
+      input.dataset.restored = "true";
+      input.value = skillFilter.query;
+    }
     applySkillFilter();
+  }
+
+  // Rated: the rows rated when the tab opens stay listed until the player leaves it, so a row set
+  // to 0 doesn't vanish under the cursor (standing rule 1). `entering` is a page render -- the tab
+  // link, history, a reload -- as opposed to a fragment's own autosave swap.
+  function applyRated(entering) {
+    if (skillsTab() !== "rated") {
+      ratedKeys = null;
+      return;
+    }
+    if (entering || ratedKeys === null) {
+      ratedKeys = {};
+      document.querySelectorAll("section[data-skills-view] tr[data-skill-key]").forEach(function (row) {
+        if (Number(row.dataset.skillRating) > 0) ratedKeys[row.dataset.skillKey] = true;
+      });
+    }
+    narrowSkillViews(function (row) {
+      return ratedKeys[row.dataset.skillKey] === true;
+    });
   }
 
   function applyGearFilter() {
@@ -128,12 +159,31 @@
 
   document.addEventListener("change", function (e) {
     var id = e.target && e.target.id;
-    if (id === "skill-rated-only") applySkillFilter();
-    else if (id === "spell-known-filter") applySpellFilter();
+    if (id === "spell-known-filter") applySpellFilter();
+    else if (id === "skills-tab-select") followSkillsTabSelect(e.target);
   });
 
   // `htmx:load` fires for the initial page and for every piece of swapped-in content.
-  document.addEventListener("htmx:load", restoreSkillFilter);
+  document.addEventListener("htmx:load", function (e) {
+    var elt = e.detail && e.detail.elt;
+    var entering =
+      !!elt &&
+      !!elt.querySelector &&
+      ((elt.classList && elt.classList.contains("page--skills")) ||
+        elt.querySelector(".page--skills") !== null);
+    restoreSkillFilter();
+    applyRated(entering);
+  });
+
+  // WP150: the Skills tab dropdown (narrow widths). A choice clicks the strip's own link for that
+  // tab -- hidden at this width, but still wired by htmx -- so it makes the same request and the
+  // same history entry as a tab click.
+  function followSkillsTabSelect(select) {
+    var link = document.querySelector(
+      '#skills-tabs a.skills-tab[href="' + select.value + '"]'
+    );
+    if (link) link.click();
+  }
 
   // --- WP144 (Phase Z): the Priorities page's drag-to-reorder and Sum-to-Ten spinners ----------
   // Everything rule-bearing is the server's (WP143): which letters the rows stand for, the point

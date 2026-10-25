@@ -858,7 +858,7 @@ replaces both sub-tabs with the single tab strip.
     - typing a name without losing focus
     - the counters updating after a Knowledge edit
 
-- [ ] **WP150 — Skills redesign: Filtered and Rated tabs, portrait dropdown.**
+- [x] **WP150 — Skills redesign: Filtered and Rated tabs, portrait dropdown.**
   *Suggested model:* Sonnet. Small client behaviour in `app.js`. Everything else is markup and CSS.
   Goal: the two view tabs and the portrait layout, as in "Defaults".
   Deliverables:

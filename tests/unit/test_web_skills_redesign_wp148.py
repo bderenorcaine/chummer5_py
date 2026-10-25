@@ -32,7 +32,7 @@ EXOTIC_RANGED = BY_NAME["Exotic Ranged Weapon"]
 FLAMETHROWER = exotic_skill_key(EXOTIC_RANGED.id, "Flamethrower")
 
 HTMX = {"HX-Request": "true"}
-PANEL_TABS = [t.slug for t in SKILLS_TABS if t.slug != "knowledge"]
+PANEL_TABS = [t.slug for t in SKILLS_TABS if t.slug not in ("knowledge", "filtered", "rated")]
 
 
 def _confirm(client: TestClient, *, talent_letter: str = "E", skills_letter: str = "C") -> None:
@@ -115,7 +115,7 @@ def test_each_tab_shows_its_own_panel_and_hides_the_rest(slug: str) -> None:
     html = client.get(f"/ui/page/skills/{slug}", headers=HTMX).text
 
     assert _shown_panels(html) == [slug]
-    assert 'id="knowledge-skills" class="skills-fragment" hidden' in html
+    assert re.search(r'<div id="knowledge-skills"[^>]* hidden>', html)
     current = re.search(r"<(?:a|span)\s[^>]*skills-tab--current[^>]*>", html)
     assert current is not None and 'aria-current="page"' in current.group(0)
     if slug != "resonance":  # a disabled <span>, reachable only by URL
@@ -129,7 +129,7 @@ def test_the_knowledge_tab_shows_only_the_knowledge_fragment() -> None:
     html = client.get("/ui/page/skills/knowledge", headers=HTMX).text
 
     assert _shown_panels(html) == []
-    assert '<div id="knowledge-skills" class="skills-fragment">' in html
+    assert re.search(r'<div id="knowledge-skills"[^>]*data-skills-tab="knowledge">', html)
     assert '<div class="skills-messages" hidden>' in html
 
 
@@ -459,7 +459,7 @@ def test_the_knowledge_fragment_stays_visible_after_its_own_autosave() -> None:
     client = TestClient(create_app())
     _confirm(client)
     response = client.post("/ui/knowledge", data={}).text
-    assert '<div id="knowledge-skills" class="skills-fragment">' in response
+    assert re.search(r'<div id="knowledge-skills"[^>]*data-skills-tab="knowledge">', response)
 
 
 def test_validation_issues_link_to_the_tab_that_fixes_them() -> None:

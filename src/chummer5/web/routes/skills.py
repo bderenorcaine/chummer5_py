@@ -52,19 +52,22 @@ router = APIRouter()
 # in tab order. A category tab shows the non-exotic skills of its categories; exotic skills are
 # all on Special. Resonance Active skills are never offered (Technomancers are out of scope), so
 # that panel is always empty and its tab disabled.
-CATEGORY_TABS: tuple[tuple[str, frozenset[str]], ...] = (
-    ("combat", frozenset({"Combat Active"})),
-    ("physical", frozenset({"Physical Active"})),
-    ("social", frozenset({"Social Active"})),
-    ("technical", frozenset({"Technical Active"})),
-    ("vehicle", frozenset({"Vehicle Active"})),
-    ("magical", frozenset({"Magical Active", "Pseudo-Magical Active"})),
-    ("resonance", frozenset({"Resonance Active"})),
+# Each entry also names its tab's label key, the panel's heading on the Filtered/Rated views.
+CATEGORY_TABS: tuple[tuple[str, str, frozenset[str]], ...] = (
+    ("combat", "Web_Skills_TabCombat", frozenset({"Combat Active"})),
+    ("physical", "Web_Skills_TabPhysical", frozenset({"Physical Active"})),
+    ("social", "Web_Skills_TabSocial", frozenset({"Social Active"})),
+    ("technical", "Web_Skills_TabTechnical", frozenset({"Technical Active"})),
+    ("vehicle", "Web_Skills_TabVehicle", frozenset({"Vehicle Active"})),
+    ("magical", "Web_Skills_TabMagical", frozenset({"Magical Active", "Pseudo-Magical Active"})),
+    ("resonance", "Web_Skills_TabResonance", frozenset({"Resonance Active"})),
 )
+# WP150: the views that show every section but Group at once, each under its own heading.
+MULTI_SECTION_TABS = frozenset({"filtered", "rated"})
 # Every tab this fragment knows; `knowledge` shows none of its panels. An unknown `skills_tab`
 # falls back to the first.
 SKILLS_TAB_SLUGS = frozenset(
-    {slug for slug, _ in CATEGORY_TABS} | {"group", "special", "knowledge"}
+    {slug for slug, _, _ in CATEGORY_TABS} | {"group", "special", "knowledge"} | MULTI_SECTION_TABS
 )
 DEFAULT_SKILLS_TAB = "combat"
 
@@ -222,9 +225,10 @@ def _skill_allocation_context(
     skill_panels = [
         {
             "slug": slug,
+            "label_key": label_key,
             "rows": [row for skill, row in paired if not skill.exotic and skill.category in cats],
         }
-        for slug, cats in CATEGORY_TABS
+        for slug, label_key, cats in CATEGORY_TABS
     ]
     exotic_rows = [row for skill, row in paired if skill.exotic]
     group_rows = [

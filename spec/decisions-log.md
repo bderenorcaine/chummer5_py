@@ -2358,3 +2358,12 @@ container that broke.
 - **A Knowledge or Language name may appear on one row only.** The engine's two lists allowed a
   shared name, but Karma and specializations are keyed by name. With one table, a repeat is
   refused up front rather than left ambiguous.
+
+## 2026-10-25 — WP150: Skills views and the narrow-width breakpoint
+
+- **The strip-to-dropdown switch is a container query on the page column** (`@container
+  (max-width: 41rem)`), not a media query. Whether the strip fits depends on the column, and the
+  sidebar takes a varying share of the window.
+- **On Filtered/Rated, an active-skills error sits between the Special and Knowledge sections.**
+  This is a known gap in standing rule 1, accepted because the two forms are separate swap targets.
+  The error only appears right under the form the player just edited.

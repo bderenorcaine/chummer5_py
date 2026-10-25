@@ -4,7 +4,11 @@
    above the first tab, Ka and Kn at the filler's bottom right. Each tab is a link that re-renders
    the page with that tab's panel showing (pushed to history, like WP98's sub-tabs). The disabled
    Resonance tab is a <span> carrying its reason. The strip re-fetches itself on `chargen-changed`
-   for the tab it was rendered for, which is how the counters follow an autosave. #}
+   for the tab it was rendered for, which is how the counters follow an autosave.
+   WP150: where the strip stops fitting (a container query on the page column, in app.css), it is
+   hidden and a <select> of the same tabs shows instead, with the four counters in one row above
+   it. app.js turns a choice into a click on that tab's link, so the navigation is the strip's
+   own (htmx into #page, pushed to history). #}
 <nav
   id="skills-tabs"
   class="skills-tabs"
@@ -54,5 +58,27 @@
       {% endfor %}
     </dl>
     {% endif %}
+  </div>
+  <div class="skills-tabs__narrow">
+    {% if skills_counters_start %}
+    <dl class="skills-counters skills-counters--row">
+      {% for counter in skills_counters_start + skills_counters_end %}
+      {% include "_skills_counter.html" %}
+      {% endfor %}
+    </dl>
+    {% endif %}
+    <select
+      id="skills-tab-select"
+      class="skills-tabs__select"
+      aria-label="{{ _('Web_Tabs_AriaLabel', page=_(page.label_key)) }}"
+    >
+      {% for item in skills_tab_items %}
+      <option
+        value="/ui/page/{{ page.slug }}/{{ item.tab.slug }}"
+        {% if item.current %}selected{% endif %}
+        {% if not item.tab.enabled %}disabled{% endif %}
+      >{{ _(item.tab.label_key) }}{% if item.stale %} ⚠{% endif %}</option>
+      {% endfor %}
+    </select>
   </div>
 </nav>

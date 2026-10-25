@@ -102,8 +102,12 @@ def test_walking_the_nav_renders_each_composite_page_whole() -> None:
             _link(html, "skills-tab", f"/ui/page/skills/{tab.slug}"), headers=HTMX
         ).text
         assert 'id="skill-allocation"' in tab_html and 'id="knowledge-skills"' in tab_html
-        if tab.slug == "knowledge":
-            assert re.search(r'<div id="knowledge-skills" class="skills-fragment">', tab_html)
+        if tab.slug in ("filtered", "rated"):  # WP150: views across the sections
+            assert re.search(r"data-skills-panel=\"knowledge\" data-skills-view", tab_html)
+        elif tab.slug == "knowledge":
+            assert re.search(
+                r'<div id="knowledge-skills"[^>]*data-skills-tab="knowledge">', tab_html
+            )
         else:
             assert re.search(rf'data-skills-panel="{tab.slug}">', tab_html), tab.slug
         html = shell = tab_html
