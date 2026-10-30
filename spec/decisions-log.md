@@ -2422,3 +2422,23 @@ container that broke.
 - **Each page keeps its own breakpoint** for the strip-to-dropdown swap: a container query on
   its own column. Skills: 41rem on `.page--skills`. Spells: 32rem on `.spells-page`, where its
   eight-tab strip stops fitting.
+
+## 2026-10-30 — Phase α, planning pass: an admin web page after all
+
+- **This reverses the 2026-10-03 ruling** "Admin page: still out of scope, possibly later". The
+  user asked for a small admin screen that lists the signed-up users and each one's characters.
+  The plan is `spec/plan/phase-alpha-admin-page.md` (WP153-154). The user reviews it before WP153
+  starts.
+- **User rulings.**
+  - Admins are marked by a `users.is_admin` flag, set only from the CLI (`grant-admin` /
+    `revoke-admin`), never from the web.
+  - The admin sees each user's character *list* only (names, metatype, timestamps). They cannot
+    open, download or view the sheet of anyone else's character.
+  - The page's actions are reset password and invite codes. Deleting users, backup and restore stay
+    CLI-only.
+- **Phase Y's no-sharing principle still holds for players.** Every account still sees only its own
+  characters. The admin's list is a metadata view authorized at the route, not a new unscoped
+  store method.
+- **Phase naming after Z (user ruling).** The phase after Z is **α**, not "AA", and later phases
+  continue β, γ, …. File names spell the letter in ASCII (`phase-alpha-admin-page.md`). This is
+  recorded under "How to use this plan" in `Implementation Plan.md`.

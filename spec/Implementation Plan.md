@@ -24,6 +24,9 @@ the notes below that more than one phase depends on, the repo layout, and the ph
 - Adding a new phase: give it its own `spec/plan/phase-<letter>-<slug>.md` file (see Phase Q/R/S for the
   research-intro pattern when a phase needs scoping before its WPs can be written), and add one row to the
   phase table below.
+- Phase letters after Z continue with the Greek alphabet: α, β, γ, … (user ruling 2026-10-30). The file
+  name spells the letter in ASCII (`phase-alpha-<slug>.md`, `phase-beta-<slug>.md`), and so does the
+  phase's `spec/rulebooks/learnings/phase-<letter>.md` file, if it gets one.
 
 ## Notes that shape the plan below
 
@@ -125,8 +128,9 @@ dependency in the engine — FastAPI's own pydantic use in the web layer is sepa
 | X | Closing the "Creating a Shadowrunner" gaps | done (WP107-135) | [phase-x-rulebook-completeness.md](plan/phase-x-rulebook-completeness.md) |
 | Y | Hosted multi-user deployment (accounts, invites, stored characters) | done (WP136-142) — **hosted deployment ready**; the server steps are the user's (`spec/deployment.md`) | [phase-y-hosted-deployment.md](plan/phase-y-hosted-deployment.md) |
 | Z | Page redesigns (open-ended: further page redesigns go here) | open — Priorities redesign done (WP143-145; manual browser checklists in WP144/WP145's worklogs); Attributes redesign done (WP146; browser checklist in its worklog); Qualities redesign done (WP147; browser checklist in its worklog); Skills redesign done (WP148-150; browser checklists in their worklogs); Spells redesign done (WP151-152; browser checklists in their worklogs) | [phase-z-page-redesigns.md](plan/phase-z-page-redesigns.md) |
+| α | Admin web page (users, their character lists, password reset, invites) | open — planned 2026-10-30, awaiting the user's review before WP153 starts | [phase-alpha-admin-page.md](plan/phase-alpha-admin-page.md) |
 
-Next unclaimed WP number: **WP153** (see Phase P's own file for why WP57-59 were claimed; Phase T
+Next unclaimed WP number: **WP155** (see Phase P's own file for why WP57-59 were claimed; Phase T
 claimed WP60-61 on 2026-07-24; Phase R's own WP58 audit claimed WP62-63 on 2026-07-27; Phase U/V
 claimed WP64-71 on 2026-07-27 from a second manual-testing pass — see those phase files for scope;
 Phase S's WP59 research pass claimed WP72-76 on 2026-07-29 for its synthetic-fixture WP list;
@@ -163,3 +167,6 @@ WP148-150 were added on 2026-10-25 for the Skills page redesign sketched in
 `examples/ui/skills.png` (tab strip, Knowledge & Languages folded in).
 WP151-152 were added the same day for the Spells sub-tab of the Magic page, redesigned in the
 Skills page's style (no sketch; category tabs, Filtered, Known).
+Phase α claimed **WP153-154** on 2026-10-30, for a small admin web page (users, each user's
+character list, password reset, invite codes). This reverses Phase Y's "CLI only" admin ruling; see
+that phase file's own rulings table.
